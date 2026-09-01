@@ -201,6 +201,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  private _sendErrorToWebview(errorMessage: string): void {
+    if (this._view) {
+      this._view.webview.postMessage({ command: 'error', message: errorMessage });
+    }
+    this._outputChannel.appendLine('ERROR: ' + errorMessage);
+  }
+
   private async _closePreviewTabs() {
     const tabs = vscode.window.tabGroups.all.flatMap(tg => tg.tabs);
     for (const tab of tabs) {
