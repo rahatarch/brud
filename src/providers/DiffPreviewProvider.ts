@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 
-export class AkkharCodePreviewProvider
+export class BrudCodePreviewProvider
   implements vscode.TextDocumentContentProvider
 {
   private _onDidChange = new vscode.EventEmitter<vscode.Uri>();

@@ -1,6 +1,6 @@
-# Contributing to Akkhar Code Patcher
+# Contributing to Brud
 
-Thank you for your interest in the Akkhar Orchestration Protocol. We welcome
+Thank you for your interest in the Brud surgical code patching platform. We welcome
 contributions that maintain the architectural integrity and surgical precision
 of this tool.
 

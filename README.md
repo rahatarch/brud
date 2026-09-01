@@ -1,206 +1,60 @@
-<p align="center">
-  <img src="resources/logo.png" width="120" alt="Akkhar Code Patcher Logo" />
-</p>
+<h1 align="center">Brud</h1>
 
-<h1 align="center">Akkhar Code Patcher</h1>
-
-<h3 align="center">🔪 Surgical Search &amp; Replace for AI-Generated Code</h3>
-
-<p align="center">
-  <em>One line changed. Zero bugs introduced. Every time.</em>
-</p>
+<h3 align="center">Full AI-Assisted Coding Platform — Manual Input, No API Keys</h3>
 
 <p align="center">
   <img src="https://img.shields.io/badge/VS%20Code-1.80%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.80+" />
   <img src="https://img.shields.io/badge/Price-Free-00C853?style=for-the-badge" alt="Free Forever" />
-  <img src="https://img.shields.io/badge/Built%20By-Rahat%20Hasan-FF6F00?style=for-the-badge" alt="Built By Rahat Hasan" />
-  <img src="https://img.shields.io/badge/Age-15-9C27B0?style=for-the-badge" alt="Age 15" />
-  <img src="https://img.shields.io/badge/From-Bangladesh-E91E63?style=for-the-badge" alt="From Bangladesh" />
-  <img src="https://img.shields.io/badge/License-ALPL-4CAF50?style=for-the-badge" alt="License ALPL" />
+  <img src="https://img.shields.io/badge/License-MIT-4CAF50?style=for-the-badge" alt="License MIT" />
+  <img src="https://img.shields.io/badge/Fork-Akkhar%20Code%20Patcher-FF6F00?style=for-the-badge" alt="Fork of Akkhar Code Patcher" />
+</p>
+
+<p align="center">
+  <strong>This project is a fork of the original <a href="https://github.com/akkhar-labs/akkhar-code-patcher">Akkhar Code Patcher</a> repository.</strong>
+  The original repository is no longer maintained. This fork is the official continuation of the project under a new identity.
 </p>
 
 <br />
 
-# Akkhar Code Patcher
+# Brud
 
-## Stop Fighting AI Hallucinations. Start Shipping Code.
+## AI-Assisted Coding Without the Friction
 
-You know the pain.
-
-You ask an AI chatbot to fix one function. It regenerates your entire 400-line
-file. You copy-paste it. Suddenly your indentation is broken. A semicolon is
-missing. A variable got renamed. Something that used to work... doesn't anymore.
-
-You spend more time fixing AI mistakes than writing code.
-
-**Akkhar Code Patcher ends this.**
+Brud is a full AI-assisted coding platform built for manual paste-and-apply workflows. It lets you take code changes from any AI chatbot and apply them to your codebase with precision, safety, and full control. No API keys, no subscriptions, no setup required.
 
 ---
 
-## 😤 The Pain (You Know It)
+## Features
 
-You ask your AI chatbot to fix a single function. This is what you get back:
-
-```
-Me:   "Hey AI, just change the tax rate from 0.05 to 0.08 in calculateTotal"
-
-AI:   "Sure! Here's your complete file (all 400 lines):"
-      ```javascript
-      const fs = require('fs');
-      // ... 398 lines of untouched code ...
-      function calculateTotal(price, tax) {
-        return price + 0.08;  // Wait, where did tax go?
-      }
-      // ... 50 more lines but now the indentation is WRONG ...
-      // Also I renamed 'discount' to 'discountAmount' because "it's cleaner"
-      // Good luck finding that, loser.
-      ```
-
-You:  "...I asked for ONE LINE."
-
-AI:   "😊 You're welcome!"
-```
-
-You paste the whole file. Your project breaks. You spend 2 hours debugging.
-Your variable names have been "improved." Your formatting is destroyed.
-
-**Akkhar Code Patcher: One line. Not 400. Not broken. Period.**
-
----
-
-## 💡 The Fix
-
-<table>
-  <tr>
-    <th width="50%">❌ Before (Without Akkhar)</th>
-    <th width="50%">✅ After (With Akkhar)</th>
-  </tr>
-  <tr>
-    <td>❌ AI regenerates entire 400-line file</td>
-    <td>✅ AI outputs only the 5-line change</td>
-  </tr>
-  <tr>
-    <td>❌ Copy-paste 400 lines & hope nothing breaks</td>
-    <td>✅ Copy-paste 5 lines into the patcher</td>
-  </tr>
-  <tr>
-    <td>❌ Silent bugs from renamed variables</td>
-    <td>✅ Preview every change before applying</td>
-  </tr>
-  <tr>
-    <td>❌ Indentation destroyed on every paste</td>
-    <td>✅ Auto-fix indentation built in</td>
-  </tr>
-  <tr>
-    <td>❌ Hours of debugging AI output</td>
-    <td>✅ Minutes of shipping working code</td>
-  </tr>
-  <tr>
-    <td>❌ "Why did my project break at 2 AM?"</td>
-    <td>✅ "It just works." Every. Single. Time.</td>
-  </tr>
-</table>
-
----
-
-## 📊 Why Developers Trust It
-
-<p align="center">
-  <strong>99% Fewer Silent Bugs</strong> &nbsp;&nbsp;│&nbsp;&nbsp;
-  <strong>400→5 Lines Per Change</strong> &nbsp;&nbsp;│&nbsp;&nbsp;
-  <strong>0 Dependencies Broken</strong> &nbsp;&nbsp;│&nbsp;&nbsp;
-  <strong>∞ Free Forever</strong>
-</p>
-
----
-
-## What It Does (Plain English)
-
-AI changes ONE line → You paste ONE change → The tool applies it surgically.
-
-No regenerating the whole file. No copy-pasting 400 lines. No "why did my
-project break?" moments.
-
-**It's like telling a surgeon to fix one artery — not replace your entire
-body.**
-
----
-
-## How It Works (30 Seconds)
-
-1. **Copy the AI's fix.** Your AI gives you a small search-and-replace block.
-2. **Paste it into Akkhar Code Patcher.** The sidebar in VS Code.
-3. **Click Preview.** See exactly what will change. Side-by-side. Before and
-   after.
-4. **Click Execute.** One line changes. Everything else stays the same.
-5. **Done.** No bugs. No drama. No "why did everything break?"
-
----
-
-## Why Vibe Coders Love It
-
-| Without Akkhar                  | With Akkhar                     |
-| ------------------------------- | ------------------------------- |
-| AI regenerates whole file       | AI outputs only the change      |
-| Copy-paste 400 lines            | Copy-paste 5 lines              |
-| Silent bugs everywhere          | Zero collateral damage          |
-| "Why did my project break?"     | "It just works."                |
-| Spend hours debugging AI output | Spend minutes shipping features |
-
----
-
-## 🆚 Akkhar vs The World
-
-| Feature                     | Akkhar Code Patcher | Cursor | Copilot | Free Chatbots |
-| --------------------------- | :-----------------: | :----: | :-----: | :-----------: |
-| Surgical Patching           | ✅ **Yes**          | ❌ No  | ❌ No   | ❌ No         |
-| Works With Any AI           | ✅ **Yes**          | ❌ No  | ❌ No   | ✅ Yes        |
-| Preview Before Apply        | ✅ **Yes**          | ❌ No  | ❌ No   | ❌ No         |
-| Auto-Fix Indentation        | ✅ **Yes**          | ❌ No  | ❌ No   | ❌ No         |
-| Free Forever                | ✅ **Yes**          | ❌ No  | ❌ No   | ✅ Yes        |
-
----
-
-## Real Talk: I Built This Because I Was Broke
-
-I couldn't afford Cursor or Copilot. I was using free AI chatbots. Copy-pasting
-code manually. Every single change meant regenerating entire files. I was
-spending more time fixing AI mistakes than actually building.
-
-So I built a tool that makes AI code actually WORK. Even from free chatbots.
-Even from WebUI. Even when the AI messes up the indentation.
-
-If I can build a 115K-line logistics platform with this tool and free AI
-chatbots — you can build whatever you're dreaming of too.
-
----
-
-## Features (For When You Want Details)
-
-- **Preview Before Applying:** See exactly what changes. Side-by-side diff. No
-  surprises.
-- **Atomic Undo:** All changes in one undo. Mess up? Ctrl+Z. Done.
-- **Auto-Fix Indentation:** AI messed up the spacing? The tool fixes it
-  automatically.
-- **Works With ANY AI:** Free chatbots. Paid APIs. Local models. Doesn't matter.
-- **Bottom-To-Top Execution:** Changes apply from bottom of file upward. Line
-  numbers never break.
+- **File Operations**: Specify target file paths directly in your patch blocks for multi-file patching workflows.
+- **Prompt Helper**: Built-in prompt formatting assistance to help you craft precise search-and-replace blocks.
+- **Fuzzy Matching**: Intelligent whitespace-agnostic matching that finds the correct code location even when indentation differs.
+- **AI Mistake Auto-Fix**: Automatic detection and correction of common AI-generated formatting errors and indentation mismatches.
+- **Multi-File Patch Support**: Apply patches across multiple files in a single workflow session.
+- **Patch History**: Track and review previously applied patches for audit and rollback purposes.
+- **AI Output Cleaner**: Strips extraneous AI commentary and formatting artifacts from patch blocks before processing.
+- **Confidence Indicators**: Visual feedback on match quality and patch reliability before execution.
+- **Multiple Format Support**: Compatible with various search-and-replace formats from different AI tools and platforms.
+- **Multi-Occurrence Apply**: Apply the same patch block to multiple matching locations in a file.
+- **Git Integration**: Awareness of Git state to prevent patching uncommitted or dirty files unintentionally.
+- **Syntax Validation**: Pre-apply validation that checks for syntax errors in the patched result.
+- **Template Library**: Save and reuse common patch patterns for recurring code transformations.
 
 ---
 
 ## Installation
 
-1. Open VS Code
-2. Go to Extensions (`Ctrl+Shift+X`)
-3. Search "Akkhar Code Patcher"
-4. Click Install
-5. Look for the Akkhar icon in your sidebar
+1. Open VS Code.
+2. Go to Extensions (Ctrl+Shift+X).
+3. Search "Brud".
+4. Click Install.
+5. Look for the Brud icon in your sidebar.
 
 ---
 
-## Usage (Your First Patch)
+## Usage
 
-Your AI outputs something like this:
+Your AI assistant outputs a structured patch block:
 
 ```
 File Path: src/utils.js
@@ -215,61 +69,33 @@ function calculateTotal(price, tax, discount = 0) {
 >>>>>>> REPLACE [0]
 ```
 
-1. Copy that whole block
-2. Paste into Akkhar Code Patcher sidebar
-3. Click **Preview Bulk Diff**
-4. See the change. Verify it's what you want.
-5. Click **Execute Patch**
-6. Celebrate. You just shipped without breaking anything.
+1. Copy the entire patch block from your AI output.
+2. Paste it into the Brud sidebar in VS Code.
+3. Click Preview Bulk Diff to see exactly what will change.
+4. Verify the diff in the side-by-side preview.
+5. Click Execute Patch to apply the changes.
+6. Confirm the patch was applied successfully.
 
 ---
 
-## Who This Is For
+## Contributing
 
-- **Vibe Coders** using free AI chatbots (ChatGPT Web, Claude Web, Gemini Web)
-- **Students** who can't afford $20/month subscriptions
-- **Solo Developers** building real projects without a team
-- **Anyone** tired of AI breaking their code
+Contributions are welcome. Please read CONTRIBUTING.md for guidelines on the development workflow, coding standards, and pull request process.
 
 ---
 
-## Who This Is NOT For
+## License
 
-- People who already have $20/month for Cursor or Copilot (but hey, you can use
-  this too — it's free)
-- People who enjoy debugging AI-generated silent bugs at 2 AM
-
----
-
-## Built By
-
-**Rahat Hasan** — 15-year-old solo founder from Bangladesh. I build tools for
-people who can't afford the expensive ones. This tool helped me build Truck Pai
-(115K+ lines). I hope it helps you build whatever you're dreaming of too.
-
----
-
-## Free. Forever.
-
-No subscriptions. No API keys. No "pro tier." Just a tool that works.
-
-If it saves you hours of debugging, maybe star the repo. Maybe tell a friend.
-Maybe build something amazing with it.
-
----
-
-**Stop fighting AI hallucinations. Start shipping code.**
+Brud is licensed under the MIT License. See the LICENSE file for details.
 
 ---
 
 <p align="center">
-  Built with ❤️ in Bogura, Bangladesh<br />
-  by a 15-year-old who was too broke for Cursor<br /><br />
-  <a href="https://github.com/Akkhar-Labs/akkhar-code-patcher">⭐ Star this repo</a> &nbsp;|&nbsp;
-  <a href="https://github.com/Akkhar-Labs/akkhar-code-patcher/issues">🐛 Report a bug</a> &nbsp;|&nbsp;
-  <a href="https://github.com/rahatarch">👤 Follow the builder</a>
+  <a href="https://github.com/rahatarch/brud">Star this repository</a> |
+  <a href="https://github.com/rahatarch/brud/issues">Report a bug</a> |
+  <a href="https://github.com/rahatarch">Follow the builder</a>
 </p>
 
 <p align="center">
-  <sub>© 2026 Akkhar-Labs. Principal Architect: Rahat Hasan.</sub>
+  <sub>(c) 2026 Akkhar-Labs. Principal Architect: Rahat Hasan.</sub>
 </p>

@@ -1,7 +1,7 @@
 import { PatchBlock, MatchResult } from '../types/patch';
 
 /**
- * Akkhar Code Patcher Core Engine
+ * Brud Core Engine
  * Contains pure logic for surgical matching and content reconstruction.
  * Zero dependencies on VS Code APIs to ensure portability and testability.
  */

@@ -2,16 +2,16 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { parseBlocks } from '../core/parser';
 import { findMatches, reconstructContent } from '../core/engine';
-import { AkkharCodePreviewProvider } from './DiffPreviewProvider';
+import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { PatchBlock, MatchResult } from '../types/patch';
 
-export class AkkharSRViewProvider implements vscode.WebviewViewProvider {
+export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _outputChannel: vscode.OutputChannel,
-    private readonly _previewProvider: AkkharCodePreviewProvider,
+    private readonly _previewProvider: BrudCodePreviewProvider,
   ) {}
 
   public resolveWebviewView(
@@ -96,7 +96,7 @@ export class AkkharSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     const previewContent = reconstructContent(docLines, matches);
-    const previewUri = document.uri.with({ scheme: 'akkhar-code-patcher-preview' });
+    const previewUri = document.uri.with({ scheme: 'brud-preview' });
     this._previewProvider.setContent(previewUri, previewContent);
 
     const virtualDoc = await vscode.workspace.openTextDocument(previewUri);
@@ -111,7 +111,7 @@ export class AkkharSRViewProvider implements vscode.WebviewViewProvider {
       'vscode.diff',
       document.uri,
       previewUri,
-      `Akkhar Preview: ${document.fileName} (PATCHED)`,
+      `Brud Preview: ${document.fileName} (PATCHED)`,
     );
   }
 
@@ -205,7 +205,7 @@ export class AkkharSRViewProvider implements vscode.WebviewViewProvider {
     const tabs = vscode.window.tabGroups.all.flatMap(tg => tg.tabs);
     for (const tab of tabs) {
       if (tab.input instanceof vscode.TabInputTextDiff) {
-        if (tab.input.modified.scheme === 'akkhar-code-patcher-preview') {
+        if (tab.input.modified.scheme === 'brud-preview') {
           await vscode.window.tabGroups.close(tab);
         }
       }

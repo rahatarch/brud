@@ -6,10 +6,10 @@ import * as vscode from 'vscode';
  */
 export function registerExecutePatchCommand(context: vscode.ExtensionContext) {
   const disposable = vscode.commands.registerCommand(
-    'akkhar-code-patcher.executePatch',
+    'brud.executePatch',
     () => {
       vscode.window.showInformationMessage(
-        'Akkhar Code Patcher: Ready to process patches.',
+        'Brud: Ready to process patches.',
       );
       // In a full implementation, this could trigger global orchestration logic
     },

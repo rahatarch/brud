@@ -1,24 +1,24 @@
 import * as vscode from 'vscode';
 
 /**
- * Singleton Logger Utility for Akkhar Code Patcher.
+ * Singleton Logger Utility for Brud.
  * Encapsulates the VS Code OutputChannel for centralized diagnostic logging.
  */
-export class AkkharLogger {
-  private static _instance: AkkharLogger;
+export class BrudLogger {
+  private static _instance: BrudLogger;
   private _outputChannel: vscode.OutputChannel;
 
   private constructor() {
     this._outputChannel = vscode.window.createOutputChannel(
-      'Akkhar Code Patcher Debug',
+      'Brud Debug',
     );
   }
 
-  public static getInstance(): AkkharLogger {
-    if (!AkkharLogger._instance) {
-      AkkharLogger._instance = new AkkharLogger();
+  public static getInstance(): BrudLogger {
+    if (!BrudLogger._instance) {
+      BrudLogger._instance = new BrudLogger();
     }
-    return AkkharLogger._instance;
+    return BrudLogger._instance;
   }
 
   public appendLine(message: string) {
