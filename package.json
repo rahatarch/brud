@@ -58,9 +58,11 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack",
+    "compile": "webpack && npm run build:webview",
+    "build:webview": "vite build --config webview/vite.config.ts",
+    "watch:webview": "vite build --config webview/vite.config.ts --watch",
     "watch": "webpack --watch",
-    "package": "webpack --mode production --devtool hidden-source-map",
+    "package": "webpack --mode production --devtool hidden-source-map && npm run build:webview",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
@@ -68,20 +70,29 @@
     "test": "vscode-test"
   },
   "dependencies": {
-    "js-yaml": "^4.3.2"
+    "js-yaml": "^4.3.2",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
     "@types/vscode": "^1.120.0",
+    "@vitejs/plugin-react": "^6.1.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
     "eslint": "^9.39.3",
+    "tailwindcss": "^4.3.3",
     "ts-loader": "^9.5.4",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
+    "vite": "^8.2.2",
     "webpack": "^5.105.3",
     "webpack-cli": "^6.0.1"
   }

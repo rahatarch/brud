@@ -347,10 +347,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.options = {
       enableScripts: true,
-      localResourceRoots: [this._extensionUri],
+      localResourceRoots: [
+        vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview'),
+        vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview'),
+      ],
     };
 
-    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.html = this._getReactHtmlForWebview(webviewView.webview);
 
     webviewView.webview.onDidReceiveMessage(async data => {
       switch (data.command) {
@@ -627,6 +630,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     await new Promise(resolve => (globalThis as any).setTimeout(resolve, 100));
   }
 
+  // Legacy HTML webview - kept for reference, will be removed after full migration.
   private _getHtmlForWebview(webview: vscode.Webview) {
     const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'main.html');
     const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'bridge.js'));
@@ -635,6 +639,23 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     let html = fs.readFileSync(htmlPath.fsPath, 'utf8');
     html = html.replace('{{styleUri}}', styleUri.toString());
     html = html.replace('{{scriptUri}}', scriptUri.toString());
+
+    return html;
+  }
+
+  private _getReactHtmlForWebview(webview: vscode.Webview): string {
+    const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'index.html');
+    let html = fs.readFileSync(htmlPath.fsPath, 'utf8');
+
+    html = html.replace(/<link[^>]*fonts\.googleapis\.com[^>]*>/g, '');
+    html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
+
+    const assetRegex = /(?:src|href)="(\.\/assets\/[^"]+)"/g;
+    html = html.replace(assetRegex, (match, assetPath) => {
+      const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
+      const webviewUri = webview.asWebviewUri(assetUri);
+      return match.replace(assetPath, webviewUri.toString());
+    });
 
     return html;
   }
