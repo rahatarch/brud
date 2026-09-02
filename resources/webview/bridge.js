@@ -81,6 +81,12 @@
       return;
     }
 
+    if (message.command === 'hidePreviewNavigation') {
+      previewNav.style.display = 'none';
+      previewFileInfo.textContent = '';
+      return;
+    }
+
     const div = document.createElement('div');
     div.className = message.command;
     div.textContent = message.message;

@@ -39,69 +39,205 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    let document: vscode.TextDocument;
-    try {
-      document = await vscode.workspace.openTextDocument(result.uri);
-    } catch (e) {
-      this._view?.webview.postMessage({
-        command: 'error',
-        message: `Could not open file: ${filePath}`,
-      });
-      return;
-    }
-
     const operations = this._operationsByFile.get(filePath) || [];
     const searchReplaceOps = operations.filter(op => op.kind === 'search_replace');
+    const createFileOps = operations.filter(op => op.kind === 'create_file');
 
-    if (searchReplaceOps.length === 0) {
+    if (searchReplaceOps.length === 0 && createFileOps.length > 0) {
+      const fileExtension = filePath.split('.').pop() || '';
+      const languageMap: Record<string, string> = {
+        ts: 'typescript',
+        tsx: 'typescriptreact',
+        js: 'javascript',
+        jsx: 'javascriptreact',
+        json: 'json',
+        css: 'css',
+        html: 'html',
+        md: 'markdown',
+        py: 'python',
+        rs: 'rust',
+        go: 'go',
+        java: 'java',
+        cpp: 'cpp',
+        c: 'c',
+        h: 'c',
+        hpp: 'cpp',
+        yaml: 'yaml',
+        yml: 'yaml',
+        xml: 'xml',
+        sh: 'shellscript',
+        bash: 'shellscript',
+        sql: 'sql',
+        vue: 'vue',
+        svelte: 'svelte',
+        scss: 'scss',
+        less: 'less',
+      };
+      const languageId = languageMap[fileExtension] || 'plaintext';
+
+      const emptyUri = vscode.Uri.parse('brud-preview://empty-' + Date.now() + '.' + fileExtension);
+      this._previewProvider.setContent(emptyUri, '');
+
+      const previewUri = vscode.Uri.parse('brud-preview://preview-' + Date.now() + '.' + fileExtension);
+      this._previewProvider.setContent(previewUri, createFileOps[0].content);
+
+      const emptyDoc = await vscode.workspace.openTextDocument(emptyUri);
+      if (emptyDoc.languageId !== languageId) {
+        await vscode.languages.setTextDocumentLanguage(emptyDoc, languageId);
+      }
+
+      const previewDoc = await vscode.workspace.openTextDocument(previewUri);
+      if (previewDoc.languageId !== languageId) {
+        await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
+      }
+
+      await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
+
       this._view?.webview.postMessage({
-        command: 'error',
-        message: 'No preview available for this file.',
+        command: 'updatePreviewHeader',
+        fileName: filePath,
+        fileIndex: this._currentFileIndex,
+        totalFiles: this._fileList.length,
       });
       return;
     }
 
-    const blocks: PatchBlock[] = searchReplaceOps.map(op => ({
-      index: op.index,
-      search: op.search,
-      searchMeat: op.search.replace(/\s+/g, ''),
-      replace: op.replace,
-    }));
+    if (searchReplaceOps.length > 0) {
+      let document: vscode.TextDocument;
+      try {
+        document = await vscode.workspace.openTextDocument(result.uri);
+      } catch (e) {
+        if (createFileOps.length > 0) {
+          const fileExtension = filePath.split('.').pop() || '';
+          const languageMap: Record<string, string> = {
+            ts: 'typescript',
+            tsx: 'typescriptreact',
+            js: 'javascript',
+            jsx: 'javascriptreact',
+            json: 'json',
+            css: 'css',
+            html: 'html',
+            md: 'markdown',
+            py: 'python',
+            rs: 'rust',
+            go: 'go',
+            java: 'java',
+            cpp: 'cpp',
+            c: 'c',
+            h: 'c',
+            hpp: 'cpp',
+            yaml: 'yaml',
+            yml: 'yaml',
+            xml: 'xml',
+            sh: 'shellscript',
+            bash: 'shellscript',
+            sql: 'sql',
+            vue: 'vue',
+            svelte: 'svelte',
+            scss: 'scss',
+            less: 'less',
+          };
+          const languageId = languageMap[fileExtension] || 'plaintext';
 
-    const docLines: string[] = [];
-    for (let i = 0; i < document.lineCount; i++) {
-      docLines.push(document.lineAt(i).text);
-    }
+          const emptyUri = vscode.Uri.parse('brud-preview://empty-' + Date.now() + '.' + fileExtension);
+          this._previewProvider.setContent(emptyUri, '');
 
-    const matches = findMatches(docLines, blocks, (msg, block) => {
-      this._view?.webview.postMessage({ command: 'error', message: msg });
-      if (block) {
-        this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
-        this._outputChannel.appendLine(`SEARCH_CONTENT: ${JSON.stringify(block.search)}`);
-        this._outputChannel.show(true);
+          const previewUri = vscode.Uri.parse('brud-preview://preview-' + Date.now() + '.' + fileExtension);
+          this._previewProvider.setContent(previewUri, createFileOps[0].content);
+
+          const emptyDoc = await vscode.workspace.openTextDocument(emptyUri);
+          if (emptyDoc.languageId !== languageId) {
+            await vscode.languages.setTextDocumentLanguage(emptyDoc, languageId);
+          }
+
+          const previewDoc = await vscode.workspace.openTextDocument(previewUri);
+          if (previewDoc.languageId !== languageId) {
+            await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
+          }
+
+          await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
+
+          this._view?.webview.postMessage({
+            command: 'updatePreviewHeader',
+            fileName: filePath,
+            fileIndex: this._currentFileIndex,
+            totalFiles: this._fileList.length,
+          });
+          return;
+        }
+        this._view?.webview.postMessage({
+          command: 'error',
+          message: `Could not open file: ${filePath}`,
+        });
+        this._view?.webview.postMessage({
+          command: 'updatePreviewHeader',
+          fileName: filePath,
+          fileIndex: this._currentFileIndex,
+          totalFiles: this._fileList.length,
+        });
+        return;
       }
-    });
 
-    if (!matches) {
+      const blocks: PatchBlock[] = searchReplaceOps.map(op => ({
+        index: op.index,
+        search: op.search,
+        searchMeat: op.search.replace(/\s+/g, ''),
+        replace: op.replace,
+      }));
+
+      const docLines: string[] = [];
+      for (let i = 0; i < document.lineCount; i++) {
+        docLines.push(document.lineAt(i).text);
+      }
+
+      const matches = findMatches(docLines, blocks, (msg, block) => {
+        this._view?.webview.postMessage({ command: 'error', message: msg });
+        if (block) {
+          this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
+          this._outputChannel.appendLine(`SEARCH_CONTENT: ${JSON.stringify(block.search)}`);
+          this._outputChannel.show(true);
+        }
+      });
+
+      if (!matches) {
+        this._view?.webview.postMessage({
+          command: 'updatePreviewHeader',
+          fileName: filePath,
+          fileIndex: this._currentFileIndex,
+          totalFiles: this._fileList.length,
+        });
+        return;
+      }
+
+      const previewContent = reconstructContent(docLines, matches);
+      const previewUri = document.uri.with({ scheme: 'brud-preview' });
+      this._previewProvider.setContent(previewUri, previewContent);
+
+      const virtualDoc = await vscode.workspace.openTextDocument(previewUri);
+      if (virtualDoc.languageId !== document.languageId) {
+        await vscode.languages.setTextDocumentLanguage(virtualDoc, document.languageId);
+      }
+
+      await vscode.commands.executeCommand(
+        'vscode.diff',
+        document.uri,
+        previewUri,
+        `Brud Preview: ${document.fileName} (PATCHED)`,
+      );
+
+      this._view?.webview.postMessage({
+        command: 'updatePreviewHeader',
+        fileName: filePath,
+        fileIndex: this._currentFileIndex,
+        totalFiles: this._fileList.length,
+      });
       return;
     }
 
-    const previewContent = reconstructContent(docLines, matches);
-    const previewUri = document.uri.with({ scheme: 'brud-preview' });
-    this._previewProvider.setContent(previewUri, previewContent);
-
-    const virtualDoc = await vscode.workspace.openTextDocument(previewUri);
-    if (virtualDoc.languageId !== document.languageId) {
-      await vscode.languages.setTextDocumentLanguage(virtualDoc, document.languageId);
-    }
-
-    await vscode.commands.executeCommand(
-      'vscode.diff',
-      document.uri,
-      previewUri,
-      `Brud Preview: ${document.fileName} (PATCHED)`,
-    );
-
+    this._view?.webview.postMessage({
+      command: 'error',
+      message: 'Preview not available for this operation type.',
+    });
     this._view?.webview.postMessage({
       command: 'updatePreviewHeader',
       fileName: filePath,
@@ -289,6 +425,28 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     });
   }
 
+  private async _removeFileFromPreview(filePath: string) {
+    const idx = this._fileList.indexOf(filePath);
+    if (idx === -1) {
+      return;
+    }
+
+    this._fileList.splice(idx, 1);
+    this._operationsByFile.delete(filePath);
+
+    if (this._currentFileIndex >= this._fileList.length) {
+      this._currentFileIndex = 0;
+    }
+
+    await this._closePreviewTabs();
+
+    if (this._fileList.length === 0) {
+      this._view?.webview.postMessage({ command: 'hidePreviewNavigation' });
+    } else if (idx === this._currentFileIndex) {
+      await this._showPreviewForFile(this._fileList[this._currentFileIndex]);
+    }
+  }
+
   private async _handleExecuteCurrentFile() {
     if (this._fileList.length === 0 || this._currentFileIndex < 0 || this._currentFileIndex >= this._fileList.length) {
       return;
@@ -298,6 +456,10 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     const operations = this._operationsByFile.get(filePath) || [];
     const result = await executeFileOperations(operations);
     this._reportExecutionResult(result);
+
+    if (result.success) {
+      this._removeFileFromPreview(filePath);
+    }
   }
 
   private async _handleExecuteAllFiles() {
@@ -312,6 +474,16 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
     const result = await executeFileOperations(allOperations);
     this._reportExecutionResult(result);
+
+    if (result.success) {
+      for (const filePath of this._fileList) {
+        await this._closePreviewTabs();
+      }
+      this._fileList = [];
+      this._operationsByFile.clear();
+      this._currentFileIndex = 0;
+      this._view?.webview.postMessage({ command: 'hidePreviewNavigation' });
+    }
   }
 
   private _reportExecutionResult(result: { success: boolean; message: string; errors: string[] }) {
