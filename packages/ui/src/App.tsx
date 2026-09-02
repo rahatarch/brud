@@ -81,7 +81,7 @@ function App() {
                 className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${
                     msg.type === 'user'
                       ? 'bg-surface-2 border border-border text-text'
                       : 'bg-surface-3 border border-border-subtle text-text'
