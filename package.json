@@ -44,7 +44,7 @@
         {
           "type": "webview",
           "id": "brud-view",
-          "name": "Surgical Replacer"
+          "name": "Brud: Full AI-Assisted Platform"
         }
       ]
     },
@@ -70,6 +70,7 @@
     "test": "vscode-test"
   },
   "dependencies": {
+    "@fontsource/outfit": "^5.3.0",
     "js-yaml": "^4.3.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
