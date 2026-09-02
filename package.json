@@ -65,8 +65,8 @@
   "scripts": {
     "vscode:prepublish": "npm run package",
     "compile": "webpack && npm run build:webview",
-    "build:webview": "vite build --config webview/vite.config.ts",
-    "watch:webview": "vite build --config webview/vite.config.ts --watch",
+    "build:webview": "vite build --config packages/ui/vite.config.ts",
+    "watch:webview": "vite build --config packages/ui/vite.config.ts --watch",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map && npm run build:webview",
     "compile-tests": "tsc -p . --outDir out",

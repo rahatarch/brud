@@ -3,7 +3,8 @@
   "version": "0.0.1",
   "main": "./dist/extension.js",
   "scripts": {
-    "build": "webpack"
+    "build": "webpack",
+    "watch": "webpack --watch"
   },
   "dependencies": {
     "@brud/core": "*",
