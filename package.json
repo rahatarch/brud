@@ -44,7 +44,7 @@
         {
           "type": "webview",
           "id": "brud-view",
-          "name": "Brud: Full AI-Assisted Platform"
+          "name": "Full AI-Assisted Platform"
         }
       ]
     },
@@ -72,6 +72,7 @@
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",
     "js-yaml": "^4.3.2",
+    "lucide-react": "^1.39.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zustand": "^5.0.15"

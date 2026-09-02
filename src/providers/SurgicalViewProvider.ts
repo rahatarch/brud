@@ -650,12 +650,17 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     html = html.replace(/<link[^>]*fonts\.googleapis\.com[^>]*>/g, '');
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
-    const assetRegex = /(?:src|href)="(\.\/assets\/[^"]+)"/g;
+    const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
     html = html.replace(assetRegex, (match, assetPath) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());
     });
+
+    const logoUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'images', 'brud_compressed_high.png')
+    );
+    html = html.replace('<div id="root">', `<div id="root" data-image-uri="${logoUri.toString()}">`);
 
     return html;
   }

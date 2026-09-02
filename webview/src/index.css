@@ -1,20 +1,47 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #7c5cff;
-  --color-background: #0f0f14;
-  --color-surface: #1a1a24;
-  --color-border: #2e2e44;
-  --color-text-primary: #ececf4;
-  --color-text-secondary: #9898b0;
-  --color-success: #4ade80;
-  --color-error: #f87171;
-  --color-warning: #fbbf24;
+  /* Core UI - Dark Developer Tool */
+  --color-surface: #131114;
+  --color-surface-2: #191518;
+  --color-surface-3: #211B1F;
+
+  /* Borders */
+  --color-border: #30262B;
+  --color-border-subtle: #241E21;
+
+  /* Text */
+  --color-text: #F5F2F3;
+  --color-text-secondary: #B8AFB3;
+  --color-text-muted: #766C71;
+
+  /* Brand Primary - Ember Orange */
+  --color-primary: #F28C28;
+  --color-primary-hover: #FF9F3D;
+  --color-primary-active: #D97416;
+  --color-primary-soft: #F28C281A;
+
+  /* Secondary Accent - Electric Rose */
+  --color-accent: #E83F78;
+  --color-accent-hover: #F05287;
+  --color-accent-soft: #E83F781A;
+
+  /* Status */
+  --color-success: #45C486;
+  --color-warning: #F2A93B;
+  --color-error: #F05D6F;
+  --color-info: #6FA8FF;
+
+  /* Font */
   --font-family-sans: Outfit, sans-serif;
+}
+
+@utility brand-gradient {
+  background: linear-gradient(135deg, #F7A62A 0%, #F28C28 45%, #E83F78 100%);
 }
 
 body {
   margin: 0;
-  color: var(--color-text-primary);
+  color: var(--color-text);
   font-family: var(--font-family-sans);
 }
