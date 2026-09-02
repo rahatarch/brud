@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@brud/core": "*",
+    "@brud/protocol": "*",
     "@types/vscode": "^1.80.0"
   },
   "devDependencies": {

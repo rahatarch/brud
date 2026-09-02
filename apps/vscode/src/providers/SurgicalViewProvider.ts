@@ -6,6 +6,7 @@ import { executeFileOperations } from '@brud/core';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult } from '@brud/protocol';
 
 export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -94,12 +95,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
       await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
 
-      this._view?.webview.postMessage({
+      const msg: ExtensionMessage = {
         command: 'updatePreviewHeader',
         fileName: filePath,
         fileIndex: this._currentFileIndex,
         totalFiles: this._fileList.length,
-      });
+      };
+      this._view?.webview.postMessage(msg);
       return;
     }
 
@@ -108,16 +110,15 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       try {
         document = await vscode.workspace.openTextDocument(result.uri);
       } catch {
-        this._view?.webview.postMessage({
-          command: 'error',
-          message: `Could not open file: ${filePath}`,
-        });
-        this._view?.webview.postMessage({
+        const errMsg: ExtensionMessage = { command: 'error', message: `Could not open file: ${filePath}` };
+        this._view?.webview.postMessage(errMsg);
+        const headerMsg: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
           fileIndex: this._currentFileIndex,
           totalFiles: this._fileList.length,
-        });
+        };
+        this._view?.webview.postMessage(headerMsg);
         return;
       }
 
@@ -185,12 +186,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
       await vscode.commands.executeCommand('vscode.diff', originalUri, previewUri, 'Brud Preview: ' + filePath + ' (APPENDED)');
 
-      this._view?.webview.postMessage({
+      const headerMsg: ExtensionMessage = {
         command: 'updatePreviewHeader',
         fileName: filePath,
         fileIndex: this._currentFileIndex,
         totalFiles: this._fileList.length,
-      });
+      };
+      this._view?.webview.postMessage(headerMsg);
       return;
     }
 
@@ -249,24 +251,24 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
           await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
 
-          this._view?.webview.postMessage({
+          const headerMsg: ExtensionMessage = {
             command: 'updatePreviewHeader',
             fileName: filePath,
             fileIndex: this._currentFileIndex,
             totalFiles: this._fileList.length,
-          });
+          };
+          this._view?.webview.postMessage(headerMsg);
           return;
         }
-        this._view?.webview.postMessage({
-          command: 'error',
-          message: `Could not open file: ${filePath}`,
-        });
-        this._view?.webview.postMessage({
+        const errMsg: ExtensionMessage = { command: 'error', message: `Could not open file: ${filePath}` };
+        this._view?.webview.postMessage(errMsg);
+        const headerMsg2: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
           fileIndex: this._currentFileIndex,
           totalFiles: this._fileList.length,
-        });
+        };
+        this._view?.webview.postMessage(headerMsg2);
         return;
       }
 
@@ -283,7 +285,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       }
 
       const matches = findMatches(docLines, blocks, (msg, block) => {
-        this._view?.webview.postMessage({ command: 'error', message: msg });
+        const errMsg: ExtensionMessage = { command: 'error', message: msg };
+        this._view?.webview.postMessage(errMsg);
         if (block) {
           this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
           this._outputChannel.appendLine(`SEARCH_CONTENT: ${JSON.stringify(block.search)}`);
@@ -292,12 +295,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       });
 
       if (!matches) {
-        this._view?.webview.postMessage({
+        const headerMsg: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
           fileIndex: this._currentFileIndex,
           totalFiles: this._fileList.length,
-        });
+        };
+        this._view?.webview.postMessage(headerMsg);
         return;
       }
 
@@ -317,25 +321,25 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         `Brud Preview: ${document.fileName} (PATCHED)`,
       );
 
-      this._view?.webview.postMessage({
+      const headerMsg: ExtensionMessage = {
         command: 'updatePreviewHeader',
         fileName: filePath,
         fileIndex: this._currentFileIndex,
         totalFiles: this._fileList.length,
-      });
+      };
+      this._view?.webview.postMessage(headerMsg);
       return;
     }
 
-    this._view?.webview.postMessage({
-      command: 'error',
-      message: 'Preview not available for this operation type.',
-    });
-    this._view?.webview.postMessage({
+    const errMsg: ExtensionMessage = { command: 'error', message: 'Preview not available for this operation type.' };
+    this._view?.webview.postMessage(errMsg);
+    const headerMsg2: ExtensionMessage = {
       command: 'updatePreviewHeader',
       fileName: filePath,
       fileIndex: this._currentFileIndex,
       totalFiles: this._fileList.length,
-    });
+    };
+    this._view?.webview.postMessage(headerMsg2);
   }
 
   public resolveWebviewView(
@@ -355,7 +359,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
     webviewView.webview.html = this._getReactHtmlForWebview(webviewView.webview);
 
-    webviewView.webview.onDidReceiveMessage(async data => {
+    webviewView.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
       switch (data.command) {
         case 'applyPatch':
           await this._handleApplyPatch(data.text);
@@ -401,7 +405,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     await this._showPreviewForFile(this._fileList[0]);
-    this._view?.webview.postMessage({ command: 'showPreviewNavigation' });
+    const showMsg: ExtensionMessage = { command: 'showPreviewNavigation' };
+    this._view?.webview.postMessage(showMsg);
   }
 
   private async _handlePreviewNextFile() {
@@ -512,12 +517,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       'Brud Preview: All Files (PATCHED)',
     );
 
-    this._view?.webview.postMessage({
+    const headerMsg: ExtensionMessage = {
       command: 'updatePreviewHeader',
       fileName: 'All Files',
       fileIndex: -1,
       totalFiles: this._fileList.length,
-    });
+    };
+    this._view?.webview.postMessage(headerMsg);
   }
 
   private async _removeFileFromPreview(filePath: string) {
@@ -536,7 +542,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     await this._closePreviewTabs();
 
     if (this._fileList.length === 0) {
-      this._view?.webview.postMessage({ command: 'hidePreviewNavigation' });
+      const hideMsg: ExtensionMessage = { command: 'hidePreviewNavigation' };
+      this._view?.webview.postMessage(hideMsg);
     } else if (idx === this._currentFileIndex) {
       await this._showPreviewForFile(this._fileList[this._currentFileIndex]);
     }
@@ -577,22 +584,26 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       this._fileList = [];
       this._operationsByFile.clear();
       this._currentFileIndex = 0;
-      this._view?.webview.postMessage({ command: 'hidePreviewNavigation' });
+      const hideMsg: ExtensionMessage = { command: 'hidePreviewNavigation' };
+      this._view?.webview.postMessage(hideMsg);
     }
   }
 
-  private _reportExecutionResult(result: { success: boolean; message: string; errors: string[] }) {
+  private _reportExecutionResult(result: ExecutionResult) {
     this._outputChannel.appendLine(result.message);
     for (const err of result.errors) {
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
     if (result.success && result.errors.length === 0) {
-      this._view?.webview.postMessage({ command: 'success', message: result.message });
+      const msg: ExtensionMessage = { command: 'success', message: result.message };
+      this._view?.webview.postMessage(msg);
     } else if (result.success && result.errors.length > 0) {
-      this._view?.webview.postMessage({ command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') });
+      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
+      this._view?.webview.postMessage(msg);
     } else {
-      this._view?.webview.postMessage({ command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') });
+      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
+      this._view?.webview.postMessage(msg);
     }
   }
 
@@ -613,7 +624,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
   private _sendErrorToWebview(errorMessage: string): void {
     if (this._view) {
-      this._view.webview.postMessage({ command: 'error', message: errorMessage });
+      const msg: ExtensionMessage = { command: 'error', message: errorMessage };
+      this._view.webview.postMessage(msg);
     }
     this._outputChannel.appendLine('ERROR: ' + errorMessage);
   }
