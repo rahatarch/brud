@@ -1,0 +1,13 @@
+{
+  "name": "brud-vscode",
+  "version": "0.0.1",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "build": "webpack"
+  },
+  "dependencies": {
+    "@brud/core": "*",
+    "@brud/protocol": "*",
+    "@brud/vscode-adapter": "*"
+  }
+}

@@ -1,5 +1,6 @@
 {
   "name": "brud",
+  "private": true,
   "displayName": "Brud",
   "description": "Brud: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
   "publisher": "Akkhar-Labs",
@@ -9,6 +10,11 @@
     "type": "git",
     "url": "https://github.com/rahatarch/brud.git"
   },
+  "workspaces": [
+    "packages/*",
+    "packages/adapters/*",
+    "apps/*"
+  ],
   "engines": {
     "vscode": "^1.120.0"
   },
@@ -67,7 +73,12 @@
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "vscode-test",
+    "build:core": "npm run build --workspace @brud/core",
+    "build:ui": "npm run build --workspace @brud/ui",
+    "build:protocol": "npm run build --workspace @brud/protocol",
+    "build:adapter": "npm run build --workspace @brud/vscode-adapter",
+    "build:all": "npm run build:core && npm run build:protocol && npm run build:adapter && npm run build:ui"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",
