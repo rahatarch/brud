@@ -39,9 +39,9 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
-      <div className="flex-1 overflow-y-auto px-4 py-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
         {sessionState === 'idle' && messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center px-6 py-6">
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
             <img src={imageUri} alt="Brud Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
             <h1 className="text-[24px] font-semibold text-text mb-3 text-center">
               Welcome to Brud
@@ -52,14 +52,14 @@ function App() {
             </p>
           </div>
         ) : messages.length > 0 ? (
-          <div className="max-w-[80%] mx-auto flex flex-col gap-3">
+          <div className="flex flex-col gap-3">
             {messages.map((msg) => (
               <div
                 key={msg.id}
                 className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[85%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
+                  className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap ${
                     msg.type === 'user'
                       ? 'bg-surface-2 border border-border text-text'
                       : 'bg-surface-3 border border-border-subtle text-text'
