@@ -1,4 +1,4 @@
-import { FileOperation } from '../../types/patch';
+import { FileOperation } from '../types/patch';
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT';
 

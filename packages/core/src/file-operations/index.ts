@@ -1,19 +1,12 @@
-import * as vscode from 'vscode';
 import path from 'path';
 import { FileOperation } from '../types/patch';
+import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 
-/**
- * Executes an array of FileOperation objects sequentially.
- *
- * @param operations - An array of parsed FileOperation objects to execute in order.
- * @returns A promise that resolves with an object containing:
- *   - success: Whether all or some operations succeeded.
- *   - message: A summary message describing the result.
- *   - errors: An array of error messages collected during execution.
- */
 export async function executeFileOperations(
   operations: FileOperation[],
+  fs: FileSystem,
+  workspaceFolders: string[],
 ): Promise<{ success: boolean; message: string; errors: string[] }> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'] };
@@ -25,15 +18,14 @@ export async function executeFileOperations(
     try {
       switch (operation.kind) {
         case 'search_replace': {
-          const result = validateWorkspacePath(operation.path);
+          const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(result.error);
             continue;
           }
 
-          const uri = result.uri;
-          const fileData = await vscode.workspace.fs.readFile(uri);
-          const content = Buffer.from(fileData).toString('utf8');
+          const filePath = result.resolvedPath;
+          const content = await fs.readFile(filePath);
 
           let count = 0;
           let searchIndex = content.indexOf(operation.search);
@@ -54,185 +46,163 @@ export async function executeFileOperations(
 
           const matchIndex = content.indexOf(operation.search);
           const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
-          await vscode.workspace.fs.writeFile(uri, Buffer.from(updatedContent, 'utf8'));
+          await fs.writeFile(filePath, updatedContent);
           break;
         }
 
         case 'create_file': {
-          const result = validateWorkspacePath(operation.path);
+          const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(result.error);
             continue;
           }
 
-          const uri = result.uri;
+          const filePath = result.resolvedPath;
 
-          try {
-            await vscode.workspace.fs.stat(uri);
+          if (await fs.exists(filePath)) {
             errors.push(`File already exists: ${operation.path}`);
             continue;
-          } catch {
-            // File does not exist, proceed with creation
           }
 
-          const parentDir = uri.with({ path: path.dirname(uri.path) });
-          await vscode.workspace.fs.createDirectory(parentDir);
-          await vscode.workspace.fs.writeFile(uri, Buffer.from(operation.content, 'utf8'));
+          const parentDir = path.dirname(filePath);
+          await fs.createDirectory(parentDir);
+          await fs.writeFile(filePath, operation.content);
           break;
         }
 
         case 'delete_file': {
-          const result = validateWorkspacePath(operation.path);
+          const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(result.error);
             continue;
           }
 
-          const uri = result.uri;
+          const filePath = result.resolvedPath;
 
-          try {
-            await vscode.workspace.fs.stat(uri);
-          } catch {
+          if (!(await fs.exists(filePath))) {
             errors.push(`File not found: ${operation.path}`);
             continue;
           }
 
-          await vscode.workspace.fs.delete(uri);
+          await fs.deleteFile(filePath);
           break;
         }
 
         case 'rename_file': {
-          const fromResult = validateWorkspacePath(operation.from);
+          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(fromResult.error);
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to);
+          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(toResult.error);
             continue;
           }
 
-          const sourceUri = fromResult.uri;
-          const targetUri = toResult.uri;
+          const sourcePath = fromResult.resolvedPath;
+          const targetPath = toResult.resolvedPath;
 
-          try {
-            await vscode.workspace.fs.stat(sourceUri);
-          } catch {
+          if (!(await fs.exists(sourcePath))) {
             errors.push(`Source file not found: ${operation.from}`);
             continue;
           }
 
-          try {
-            await vscode.workspace.fs.stat(targetUri);
+          if (await fs.exists(targetPath)) {
             errors.push(`Destination file already exists: ${operation.to}`);
             continue;
-          } catch {
-            // Destination does not exist, proceed with rename
           }
 
-          await vscode.workspace.fs.rename(sourceUri, targetUri);
+          await fs.renameFile(sourcePath, targetPath);
           break;
         }
 
         case 'move_file': {
-          const fromResult = validateWorkspacePath(operation.from);
+          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(fromResult.error);
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to);
+          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(toResult.error);
             continue;
           }
 
-          const sourceUri = fromResult.uri;
-          const targetUri = toResult.uri;
+          const sourcePath = fromResult.resolvedPath;
+          const targetPath = toResult.resolvedPath;
 
-          try {
-            await vscode.workspace.fs.stat(sourceUri);
-          } catch {
+          if (!(await fs.exists(sourcePath))) {
             errors.push(`Source file not found: ${operation.from}`);
             continue;
           }
 
-          try {
-            await vscode.workspace.fs.stat(targetUri);
+          if (await fs.exists(targetPath)) {
             errors.push(`Destination file already exists: ${operation.to}`);
             continue;
-          } catch {
-            // Destination does not exist, proceed with move
           }
 
-          const parentDir = targetUri.with({ path: path.dirname(targetUri.path) });
-          await vscode.workspace.fs.createDirectory(parentDir);
-          await vscode.workspace.fs.rename(sourceUri, targetUri);
+          const parentDir = path.dirname(targetPath);
+          await fs.createDirectory(parentDir);
+          await fs.renameFile(sourcePath, targetPath);
           break;
         }
 
         case 'copy_file': {
-          const fromResult = validateWorkspacePath(operation.from);
+          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(fromResult.error);
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to);
+          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(toResult.error);
             continue;
           }
 
-          const sourceUri = fromResult.uri;
-          const targetUri = toResult.uri;
+          const sourcePath = fromResult.resolvedPath;
+          const targetPath = toResult.resolvedPath;
 
-          try {
-            await vscode.workspace.fs.stat(sourceUri);
-          } catch {
+          if (!(await fs.exists(sourcePath))) {
             errors.push(`Source file not found: ${operation.from}`);
             continue;
           }
 
-          try {
-            await vscode.workspace.fs.stat(targetUri);
+          if (await fs.exists(targetPath)) {
             errors.push(`Destination file already exists: ${operation.to}`);
             continue;
-          } catch {
-            // Destination does not exist, proceed with copy
           }
 
-          const parentDir = targetUri.with({ path: path.dirname(targetUri.path) });
-          await vscode.workspace.fs.createDirectory(parentDir);
-          await vscode.workspace.fs.copy(sourceUri, targetUri);
+          const parentDir = path.dirname(targetPath);
+          await fs.createDirectory(parentDir);
+          await fs.copyFile(sourcePath, targetPath);
           break;
         }
 
         case 'append_file': {
-          const result = validateWorkspacePath(operation.path);
+          const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(result.error);
             continue;
           }
 
-          const uri = result.uri;
+          const filePath = result.resolvedPath;
 
           let existingContent = '';
-          try {
-            const fileData = await vscode.workspace.fs.readFile(uri);
-            existingContent = Buffer.from(fileData).toString('utf8');
-          } catch {
+          if (!(await fs.exists(filePath))) {
             errors.push(`File not found: ${operation.path}`);
             continue;
           }
+          existingContent = await fs.readFile(filePath);
 
           const updatedContent = operation.position === 'end'
             ? existingContent + operation.content
             : operation.content + existingContent;
 
-          await vscode.workspace.fs.writeFile(uri, Buffer.from(updatedContent, 'utf8'));
+          await fs.writeFile(filePath, updatedContent);
           break;
         }
       }

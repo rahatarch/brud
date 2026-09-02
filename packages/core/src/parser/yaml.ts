@@ -1,5 +1,5 @@
 import * as yaml from 'js-yaml';
-import { FileOperation } from '../../types/patch';
+import { FileOperation } from '../types/patch';
 
 export function parseYamlFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];

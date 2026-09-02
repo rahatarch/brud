@@ -1,7 +1,16 @@
+import { useState } from 'react';
 import { Send } from 'lucide-react';
+import type { WebviewMessage } from '@brud/protocol';
 
 function App() {
   const imageUri = document.getElementById('root')?.getAttribute('data-image-uri') || 'images/brud_compressed_high.png';
+  const [inputText, setInputText] = useState('');
+
+  const handleExecute = () => {
+    const message: WebviewMessage = { command: 'applyPatch', text: inputText };
+    window.parent.postMessage(message, '*');
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
@@ -17,10 +26,15 @@ function App() {
       <div className="p-4">
         <div className="relative">
           <textarea
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
             placeholder="Paste your Brud Prompt here..."
             className="w-full min-h-[100px] rounded-md bg-surface-2 border border-border p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none focus:border-primary"
           />
-          <button className="absolute bottom-4 right-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white w-9 h-9 rounded-md flex items-center justify-center cursor-pointer">
+          <button
+            onClick={handleExecute}
+            className="absolute bottom-4 right-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white w-9 h-9 rounded-md flex items-center justify-center cursor-pointer"
+          >
             <Send size={16} />
           </button>
         </div>

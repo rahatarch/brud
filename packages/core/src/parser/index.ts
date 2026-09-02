@@ -1,6 +1,6 @@
 import { PatchBlock, FileOperation } from '../types/patch';
-import { parseLegacyFormat } from './parsers/legacy';
-import { parseYamlFormat } from './parsers/yaml';
+import { parseLegacyFormat } from './legacy';
+import { parseYamlFormat } from './yaml';
 
 export function parseOperations(input: string): FileOperation[] {
   const trimmed = input.trim();
