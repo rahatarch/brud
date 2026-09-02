@@ -37,3 +37,45 @@ button:hover {
   color: #89d185;
   margin-bottom: 2px;
 }
+#previewNav {
+  background: #252526;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 8px;
+}
+#previewFileInfo {
+  color: #ccc;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#prevFileBtn, #nextFileBtn {
+  background: #0e639c;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+#prevFileBtn:hover, #nextFileBtn:hover {
+  background: #1177bb;
+}
+#executeCurrentBtn, #executeAllBtn, #previewAllBtn {
+  font-size: 12px;
+  padding: 6px;
+}
+#executeCurrentBtn {
+  background: #388a34;
+}
+#executeCurrentBtn:hover {
+  background: #46a03e;
+}
+#executeAllBtn {
+  background: #a33535;
+}
+#executeAllBtn:hover {
+  background: #c03e3e;
+}
+#previewAllBtn {
+  background: #7c3a9e;
+}
+#previewAllBtn:hover {
+  background: #9747c0;
+}
