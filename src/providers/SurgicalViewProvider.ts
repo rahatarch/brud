@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { parseBlocks } from '../core/parser';
+import { parseBlocks, parseOperations } from '../core/parser';
 import { findMatches, reconstructContent } from '../core/engine';
+import { executeFileOperations } from '../core/fileOperationEngine';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { PatchBlock, MatchResult } from '../types/patch';
 
@@ -117,87 +118,28 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
   private async _handleApplyPatch(text: string) {
     await this._closePreviewTabs();
-    const filePathMatch = text.match(/^File Path: (.*)/m);
-    let document: vscode.TextDocument;
 
-    if (filePathMatch) {
-      const filePath = filePathMatch[1].trim();
-      try {
-        const uri = vscode.Uri.file(filePath);
-        document = await vscode.workspace.openTextDocument(uri);
-      } catch (e) {
-        this._view?.webview.postMessage({
-          command: 'error',
-          message: `Could not open file: ${filePath}`,
-        });
-        return;
-      }
-    } else {
-      const editor = vscode.window.activeTextEditor;
-      if (!editor) {
-        this._view?.webview.postMessage({
-          command: 'error',
-          message: 'No file path provided.',
-        });
-        return;
-      }
-      document = editor.document;
-    }
-
-    const blocks = parseBlocks(text);
-    if (blocks.length === 0) {
-      this._view?.webview.postMessage({
-        command: 'error',
-        message: 'No valid blocks found.',
-      });
+    let operations;
+    try {
+      operations = parseOperations(text);
+    } catch (e) {
+      this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
     }
 
-    const docLines: string[] = [];
-    for (let i = 0; i < document.lineCount; i++) {
-      docLines.push(document.lineAt(i).text);
+    const result = await executeFileOperations(operations);
+
+    this._outputChannel.appendLine(result.message);
+    for (const err of result.errors) {
+      this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
-    const matches = findMatches(docLines, blocks, (msg, block) => {
-      this._view?.webview.postMessage({ command: 'error', message: msg });
-      if (block) {
-        this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
-        this._outputChannel.appendLine(`SEARCH_CONTENT: ${JSON.stringify(block.search)}`);
-        this._outputChannel.show(true);
-      }
-    });
-
-    if (!matches) {
-      return;
-    }
-
-    const workspaceEdit = new vscode.WorkspaceEdit();
-    matches.sort((a, b) => b.startLine - a.startLine);
-
-    for (const match of matches) {
-      const startPos = new vscode.Position(match.startLine, 0);
-      const endPos = new vscode.Position(
-        match.endLine,
-        document.lineAt(match.endLine).text.length,
-      );
-      workspaceEdit.replace(
-        document.uri,
-        new vscode.Range(startPos, endPos),
-        match.replace,
-      );
-    }
-
-    const success = await vscode.workspace.applyEdit(workspaceEdit);
-    if (success) {
-      this._view?.webview.postMessage({
-        command: 'success',
-        message: `Applied ${matches.length} patches.`,
-      });
+    if (result.success && result.errors.length === 0) {
+      this._view?.webview.postMessage({ command: 'success', message: result.message });
+    } else if (result.success && result.errors.length > 0) {
+      this._view?.webview.postMessage({ command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') });
     } else {
-      this._view?.webview.postMessage({
-        command: 'error',
-        message: 'Atomic transaction failed.',
-      });
+      this._view?.webview.postMessage({ command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') });
     }
   }
 
