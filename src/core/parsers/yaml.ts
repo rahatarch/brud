@@ -130,6 +130,28 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'append_file': {
+        const path = parsed.path as string | undefined;
+        const content = parsed.content as string | undefined;
+        if (!path) {
+          throw new Error('Missing path field in append_file operation');
+        }
+        if (content === undefined || content === null) {
+          throw new Error('Missing content field in append_file operation');
+        }
+        const position = parsed.position as string | undefined;
+        if (position !== undefined && position !== 'start' && position !== 'end') {
+          throw new Error('Position field must be "start" or "end" in append_file operation');
+        }
+        operations.push({
+          kind: 'append_file',
+          path,
+          position: (position as 'start' | 'end') || 'end',
+          index: String(index),
+          content,
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

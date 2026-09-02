@@ -1,6 +1,6 @@
 import { FileOperation } from '../../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -9,6 +9,7 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let currentState: State = 'IDLE';
   let currentIndex = '';
   let currentFilePath = '';
+  let currentPosition: 'start' | 'end' = 'end';
   let searchBuffer: string[] = [];
   let replaceBuffer: string[] = [];
   let contentBuffer: string[] = [];
@@ -90,10 +91,25 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentFilePath = '';
   }
 
+  function flushAppendFile() {
+    if (currentIndex && currentFilePath) {
+      operations.push({
+        kind: 'append_file',
+        path: currentFilePath,
+        position: currentPosition,
+        index: currentIndex,
+        content: contentBuffer.join('\n'),
+      });
+    }
+    currentFilePath = '';
+    currentPosition = 'end';
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
     currentFilePath = '';
+    currentPosition = 'end';
     searchBuffer = [];
     replaceBuffer = [];
     contentBuffer = [];
@@ -114,7 +130,10 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const endMoveFileMatch = line.match(/^>>>>>>> END MOVE_FILE \[([\w\d.-]+)\]/);
     const copyFileMatch = line.match(/^<<<<<<< COPY_FILE \[([\w\d.-]+)\]/);
     const endCopyFileMatch = line.match(/^>>>>>>> END COPY_FILE \[([\w\d.-]+)\]/);
+    const appendFileMatch = line.match(/^<<<<<<< APPEND_FILE \[([\w\d.-]+)\]/);
+    const endAppendFileMatch = line.match(/^>>>>>>> END APPEND_FILE \[([\w\d.-]+)\]/);
     const filePathMatch = line.match(/^File Path:\s*(.+)/);
+    const positionMatch = line.match(/^Position:\s*(start|end)/);
     const fromMatch = line.match(/^From:\s*(.+)/);
     const toMatch = line.match(/^To:\s*(.+)/);
 
@@ -155,6 +174,13 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         currentIndex = copyFileMatch[1];
         renameFrom = '';
         renameTo = '';
+        continue;
+      }
+      if (appendFileMatch) {
+        currentState = 'APPEND_CONTENT';
+        currentIndex = appendFileMatch[1];
+        contentBuffer = [];
+        currentPosition = 'end';
         continue;
       }
       if (filePathMatch) {
@@ -325,6 +351,29 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         renameTo = toMatch[1].trim();
         continue;
       }
+      continue;
+    }
+
+    if (currentState === 'APPEND_CONTENT') {
+      if (endAppendFileMatch) {
+        if (endAppendFileMatch[1] === currentIndex) {
+          flushAppendFile();
+        }
+        reset();
+        continue;
+      }
+      if (line.trim() === '=======') {
+        continue;
+      }
+      if (filePathMatch) {
+        currentFilePath = filePathMatch[1].trim();
+        continue;
+      }
+      if (positionMatch) {
+        currentPosition = positionMatch[1] as 'start' | 'end';
+        continue;
+      }
+      contentBuffer.push(line);
       continue;
     }
   }

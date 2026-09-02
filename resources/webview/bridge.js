@@ -92,8 +92,5 @@
     div.textContent = message.message;
     diag.appendChild(div);
 
-    if (message.command === 'success' || message.command === 'error') {
-      previewNav.style.display = 'block';
-    }
-  });
+    });
 })();

@@ -42,6 +42,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     const operations = this._operationsByFile.get(filePath) || [];
     const searchReplaceOps = operations.filter(op => op.kind === 'search_replace');
     const createFileOps = operations.filter(op => op.kind === 'create_file');
+    const appendFileOps = operations.filter(op => op.kind === 'append_file');
 
     if (searchReplaceOps.length === 0 && createFileOps.length > 0) {
       const fileExtension = filePath.split('.').pop() || '';
@@ -92,6 +93,97 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       }
 
       await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
+
+      this._view?.webview.postMessage({
+        command: 'updatePreviewHeader',
+        fileName: filePath,
+        fileIndex: this._currentFileIndex,
+        totalFiles: this._fileList.length,
+      });
+      return;
+    }
+
+    if (searchReplaceOps.length === 0 && createFileOps.length === 0 && appendFileOps.length > 0) {
+      let document: vscode.TextDocument;
+      try {
+        document = await vscode.workspace.openTextDocument(result.uri);
+      } catch {
+        this._view?.webview.postMessage({
+          command: 'error',
+          message: `Could not open file: ${filePath}`,
+        });
+        this._view?.webview.postMessage({
+          command: 'updatePreviewHeader',
+          fileName: filePath,
+          fileIndex: this._currentFileIndex,
+          totalFiles: this._fileList.length,
+        });
+        return;
+      }
+
+      const docLines: string[] = [];
+      for (let i = 0; i < document.lineCount; i++) {
+        docLines.push(document.lineAt(i).text);
+      }
+      const originalContent = docLines.join('\n');
+
+      let modifiedContent = originalContent;
+      for (const op of appendFileOps) {
+        if (op.position === 'end') {
+          modifiedContent += op.content;
+        } else {
+          modifiedContent = op.content + modifiedContent;
+        }
+      }
+
+      const fileExtension = filePath.split('.').pop() || '';
+      const languageMap: Record<string, string> = {
+        ts: 'typescript',
+        tsx: 'typescriptreact',
+        js: 'javascript',
+        jsx: 'javascriptreact',
+        json: 'json',
+        css: 'css',
+        html: 'html',
+        md: 'markdown',
+        py: 'python',
+        rs: 'rust',
+        go: 'go',
+        java: 'java',
+        cpp: 'cpp',
+        c: 'c',
+        h: 'c',
+        hpp: 'cpp',
+        yaml: 'yaml',
+        yml: 'yaml',
+        xml: 'xml',
+        sh: 'shellscript',
+        bash: 'shellscript',
+        sql: 'sql',
+        vue: 'vue',
+        svelte: 'svelte',
+        scss: 'scss',
+        less: 'less',
+      };
+      const languageId = languageMap[fileExtension] || 'plaintext';
+
+      const originalUri = vscode.Uri.parse('brud-preview://original-' + Date.now() + '.' + fileExtension);
+      this._previewProvider.setContent(originalUri, originalContent);
+
+      const previewUri = vscode.Uri.parse('brud-preview://preview-' + Date.now() + '.' + fileExtension);
+      this._previewProvider.setContent(previewUri, modifiedContent);
+
+      const originalDoc = await vscode.workspace.openTextDocument(originalUri);
+      if (originalDoc.languageId !== languageId) {
+        await vscode.languages.setTextDocumentLanguage(originalDoc, languageId);
+      }
+
+      const previewDoc = await vscode.workspace.openTextDocument(previewUri);
+      if (previewDoc.languageId !== languageId) {
+        await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
+      }
+
+      await vscode.commands.executeCommand('vscode.diff', originalUri, previewUri, 'Brud Preview: ' + filePath + ' (APPENDED)');
 
       this._view?.webview.postMessage({
         command: 'updatePreviewHeader',

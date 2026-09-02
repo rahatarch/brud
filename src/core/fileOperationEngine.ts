@@ -209,6 +209,32 @@ export async function executeFileOperations(
           await vscode.workspace.fs.copy(sourceUri, targetUri);
           break;
         }
+
+        case 'append_file': {
+          const result = validateWorkspacePath(operation.path);
+          if (!result.valid) {
+            errors.push(result.error);
+            continue;
+          }
+
+          const uri = result.uri;
+
+          let existingContent = '';
+          try {
+            const fileData = await vscode.workspace.fs.readFile(uri);
+            existingContent = Buffer.from(fileData).toString('utf8');
+          } catch {
+            errors.push(`File not found: ${operation.path}`);
+            continue;
+          }
+
+          const updatedContent = operation.position === 'end'
+            ? existingContent + operation.content
+            : operation.content + existingContent;
+
+          await vscode.workspace.fs.writeFile(uri, Buffer.from(updatedContent, 'utf8'));
+          break;
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
