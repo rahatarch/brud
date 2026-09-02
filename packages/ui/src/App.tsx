@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Send, PlusCircle, ExternalLink } from 'lucide-react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import { Send, PlusCircle, ExternalLink, Copy, Check } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
@@ -15,7 +15,15 @@ function App() {
   }
 
   const [inputText, setInputText] = useState('');
+  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
+  const chatAreaRef = useRef<HTMLDivElement>(null);
+
+  const handleCopyMessage = (messageId: string, content: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMessageId(messageId);
+    setTimeout(() => setCopiedMessageId(null), 2000);
+  };
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -33,6 +41,15 @@ function App() {
       }
     });
   }, [addReport]);
+
+  useLayoutEffect(() => {
+    if (chatAreaRef.current) {
+      chatAreaRef.current.scrollTo({
+        top: chatAreaRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [messages, sessionState]);
 
   const handleReset = () => {
     resetSession();
@@ -61,7 +78,7 @@ function App() {
           Management
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
+      <div ref={chatAreaRef} className="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
             <img src={imageUri} alt="Brud Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
@@ -78,10 +95,10 @@ function App() {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+                className={`flex flex-col ${msg.type === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${
+                  className={`max-w-[90%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${
                     msg.type === 'user'
                       ? 'bg-surface-2 border border-border text-text'
                       : 'bg-surface-3 border border-border-subtle text-text'
@@ -89,6 +106,15 @@ function App() {
                 >
                   {msg.content}
                 </div>
+                {msg.type === 'brud' && (
+                  <button
+                    onClick={() => handleCopyMessage(msg.id, msg.content)}
+                    className="ml-1 mt-1 text-text-muted hover:text-text transition-colors cursor-pointer"
+                    title="Copy message"
+                  >
+                    {copiedMessageId === msg.id ? <Check size={14} /> : <Copy size={14} />}
+                  </button>
+                )}
               </div>
             ))}
             {sessionState === 'working' && (
