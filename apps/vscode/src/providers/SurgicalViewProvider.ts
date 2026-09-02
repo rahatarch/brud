@@ -383,6 +383,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         case 'executeAllFiles':
           await this._handleExecuteAllFiles();
           break;
+        case 'openMainWindow':
+          vscode.commands.executeCommand('brud.openManagement');
+          break;
       }
     });
   }
@@ -736,7 +739,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     const logoUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'images', 'brud_compressed_high.png')
     );
-    html = html.replace('<div id="root">', `<div id="root" data-image-uri="${logoUri.toString()}">`);
+    html = html.replace('<div id="root">', `<div id="root" data-view-mode="sidebar" data-image-uri="${logoUri.toString()}">`);
 
     return html;
   }

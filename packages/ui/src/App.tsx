@@ -1,11 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Send, PlusCircle } from 'lucide-react';
+import { Send, PlusCircle, ExternalLink } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
+import MainWindowShell from './components/MainWindowShell';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
 function App() {
-  const imageUri = document.getElementById('root')?.getAttribute('data-image-uri') || 'images/brud_compressed_high.png';
+  const root = document.getElementById('root');
+  const viewMode = root?.getAttribute('data-view-mode') || 'sidebar';
+  const imageUri = root?.getAttribute('data-image-uri') || 'images/brud_compressed_high.png';
+
+  if (viewMode === 'main-window') {
+    return <MainWindowShell />;
+  }
+
   const [inputText, setInputText] = useState('');
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
 
@@ -30,6 +38,10 @@ function App() {
     resetSession();
   };
 
+  const handleOpenMainWindow = () => {
+    sendToExtension({ command: 'openMainWindow' });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -39,6 +51,16 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <div className="flex items-center justify-end px-4 py-2 border-b border-border bg-surface-2">
+        <button
+          onClick={handleOpenMainWindow}
+          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text cursor-pointer bg-surface-3 hover:bg-surface-3 border border-border-subtle rounded px-2.5 py-1.5 transition-colors"
+          title="Open Brud Management"
+        >
+          <ExternalLink size={12} />
+          Management
+        </button>
+      </div>
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">

@@ -6,6 +6,7 @@
     "build": "vite build"
   },
   "dependencies": {
+    "@brud/core": "*",
     "@brud/protocol": "*",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

@@ -8,7 +8,8 @@ export type WebviewCommand =
   | 'executeAllFiles'
   | 'hidePreviewNavigation'
   | 'showPreviewNavigation'
-  | 'updatePreviewHeader';
+  | 'updatePreviewHeader'
+  | 'openMainWindow';
 
 export type ExtensionCommand =
   | 'success'

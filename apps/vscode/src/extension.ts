@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { BrudSRViewProvider } from './providers/SurgicalViewProvider';
 import { BrudCodePreviewProvider } from './providers/DiffPreviewProvider';
+import { BrudMainWindowManager } from './providers/MainWindowProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 
@@ -18,6 +19,10 @@ export function activate(context: vscode.ExtensionContext) {
     previewProvider,
   );
 
+  const mainWindowManager = new BrudMainWindowManager(
+    context.extensionUri,
+  );
+
   // Register the Virtual Document Provider for surgical diff previews
   context.subscriptions.push(
     vscode.workspace.registerTextDocumentContentProvider(
@@ -30,6 +35,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider('brud-view', provider, {
       webviewOptions: { retainContextWhenHidden: true },
+    }),
+  );
+
+  // Register the command to open the main window
+  context.subscriptions.push(
+    vscode.commands.registerCommand('brud.openManagement', () => {
+      mainWindowManager.openMainWindow();
     }),
   );
 

@@ -59,6 +59,11 @@
         "command": "brud.executePatch",
         "title": "Brud: Execute Surgical Patch",
         "category": "Brud"
+      },
+      {
+        "command": "brud.openManagement",
+        "title": "Open Brud Management",
+        "category": "Brud"
       }
     ]
   },
