@@ -45,3 +45,23 @@ body {
   color: var(--color-text);
   font-family: var(--font-family-sans);
 }
+
+@keyframes typing-bounce {
+  0%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  50% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+.typing-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background-color: var(--color-text-muted);
+  animation: typing-bounce 1.2s ease-in-out infinite;
+}

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import { parseOperations } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
+import { executeOperationsFromVSCode } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
@@ -618,8 +619,71 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const result = await executeFileOperations(operations);
-    this._reportExecutionResult(result);
+    const result = await executeOperationsFromVSCode(operations);
+    const report = this._generateReport(operations, result);
+
+    this._outputChannel.appendLine(result.message);
+    for (const err of result.errors) {
+      this._outputChannel.appendLine(`  ERROR: ${err}`);
+    }
+
+    if (result.success && result.errors.length === 0) {
+      const msg: ExtensionMessage = { command: 'success', message: report };
+      this._view?.webview.postMessage(msg);
+    } else {
+      const msg: ExtensionMessage = { command: 'error', message: report };
+      this._view?.webview.postMessage(msg);
+    }
+  }
+
+  private _generateReport(
+    operations: FileOperation[],
+    result: { success: boolean; message: string; errors: string[] }
+  ): string {
+    const lines: string[] = [];
+
+    for (const op of operations) {
+      switch (op.kind) {
+        case 'search_replace':
+          lines.push(`Patched ${op.path} by replacing the specified content.`);
+          break;
+        case 'create_file':
+          lines.push(`Created ${op.path}.`);
+          break;
+        case 'delete_file':
+          lines.push(`Deleted ${op.path}.`);
+          break;
+        case 'rename_file':
+          lines.push(`Renamed ${op.from} to ${op.to}.`);
+          break;
+        case 'move_file':
+          lines.push(`Moved ${op.from} to ${op.to}.`);
+          break;
+        case 'copy_file':
+          lines.push(`Copied ${op.from} to ${op.to}.`);
+          break;
+        case 'append_file':
+          lines.push(`Appended content to ${op.path}.`);
+          break;
+      }
+    }
+
+    let prefix: string;
+    if (result.success && result.errors.length === 0) {
+      prefix = 'All operations completed successfully.';
+    } else if (result.success) {
+      prefix = 'Some operations completed with errors.';
+    } else {
+      prefix = 'All operations failed.';
+    }
+
+    const report = [prefix, ...lines].join('\n');
+
+    if (result.errors.length > 0) {
+      return report + '\n\nErrors:\n' + result.errors.map(e => `- ${e}`).join('\n');
+    }
+
+    return report;
   }
 
   private _sendErrorToWebview(errorMessage: string): void {
