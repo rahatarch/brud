@@ -4,7 +4,6 @@
   "description": "Brud: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
   "publisher": "Akkhar-Labs",
   "author": "Akkhar-Labs",
-  
   "version": "0.0.1",
   "repository": {
     "type": "git",
@@ -67,17 +66,22 @@
     "lint": "eslint src",
     "test": "vscode-test"
   },
+  "dependencies": {
+    "js-yaml": "^4.3.2"
+  },
   "devDependencies": {
-    "@types/vscode": "^1.120.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/mocha": "^10.0.10",
     "@types/node": "22.x",
-    "typescript-eslint": "^8.56.1",
-    "eslint": "^9.39.3",
-    "typescript": "^5.9.3",
-    "ts-loader": "^9.5.4",
-    "webpack": "^5.105.3",
-    "webpack-cli": "^6.0.1",
+    "@types/vscode": "^1.120.0",
     "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2"
+    "@vscode/test-electron": "^2.5.2",
+    "eslint": "^9.39.3",
+    "ts-loader": "^9.5.4",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1",
+    "webpack": "^5.105.3",
+    "webpack-cli": "^6.0.1"
   }
 }

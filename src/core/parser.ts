@@ -1,57 +1,39 @@
-import { PatchBlock } from '../types/patch';
+import { PatchBlock, FileOperation } from '../types/patch';
+import { parseLegacyFormat } from './parsers/legacy';
+import { parseYamlFormat } from './parsers/yaml';
 
-/**
- * Parses the raw input stream into discrete PatchBlock objects.
- * Uses a Line-by-Line scanner for high-fidelity extraction and
- * robustness against whitespace/line-ending variations.
- */
-export function parseBlocks(input: string): PatchBlock[] {
-  const blocks: PatchBlock[] = [];
-  const lines = input.split(/\r?\n/);
+export function parseOperations(input: string): FileOperation[] {
+  const trimmed = input.trim();
 
-  let currentState: 'IDLE' | 'SEARCH' | 'REPLACE' = 'IDLE';
-  let currentIndex = '';
-  let searchBuffer: string[] = [];
-  let replaceBuffer: string[] = [];
+  const legacyPatterns = [
+    '<<<<<<< SEARCH',
+    '<<<<<<< CREATE_FILE',
+    '<<<<<<< DELETE_FILE',
+    '<<<<<<< RENAME_FILE',
+    '<<<<<<< MOVE_FILE',
+    '<<<<<<< COPY_FILE',
+  ];
 
-  for (const line of lines) {
-    // Flexible marker detection (ignores trailing whitespace on the marker line)
-    const searchMatch = line.match(/^<<<<<<< SEARCH \[([\w\d.-]+)\]/);
-    const replaceMatch = line.match(/^>>>>>>> REPLACE \[([\w\d.-]+)\]/);
-
-    if (searchMatch) {
-      currentState = 'SEARCH';
-      currentIndex = searchMatch[1];
-      searchBuffer = [];
-      continue;
-    }
-
-    if (line.trim() === '=======') {
-      currentState = 'REPLACE';
-      replaceBuffer = [];
-      continue;
-    }
-
-    if (replaceMatch) {
-      if (replaceMatch[1] === currentIndex) {
-        const searchContent = searchBuffer.join('\n');
-        blocks.push({
-          index: currentIndex,
-          search: searchContent,
-          searchMeat: searchContent.replace(/\s+/g, ''),
-          replace: replaceBuffer.join('\n'),
-        });
-      }
-      currentState = 'IDLE';
-      continue;
-    }
-
-    if (currentState === 'SEARCH') {
-      searchBuffer.push(line);
-    } else if (currentState === 'REPLACE') {
-      replaceBuffer.push(line);
-    }
+  const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));
+  if (isLegacy) {
+    return parseLegacyFormat(trimmed);
   }
 
-  return blocks;
+  if (trimmed.includes('operation:') || trimmed.startsWith('---')) {
+    return parseYamlFormat(trimmed);
+  }
+
+  throw new Error('Unrecognized patch format. Please use either the legacy Brud format or YAML format.');
+}
+
+export function parseBlocks(input: string): PatchBlock[] {
+  const operations = parseOperations(input);
+  return operations
+    .filter((op): op is FileOperation & { kind: 'search_replace' } => op.kind === 'search_replace')
+    .map((op) => ({
+      index: op.index,
+      search: op.search,
+      searchMeat: op.search.replace(/\s+/g, ''),
+      replace: op.replace,
+    }));
 }
