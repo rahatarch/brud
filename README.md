@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/images/brud_super_high.png" width="200" alt="Brud Logo" />
+</p>
+
 <h1 align="center">Brud</h1>
 
 <h3 align="center">Full AI-Assisted Coding Platform — Manual Input, No API Keys</h3>

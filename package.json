@@ -26,6 +26,7 @@
     "orchestration",
     "brud"
   ],
+  "icon": "assets/images/brud_icon.png",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
@@ -34,7 +35,7 @@
         {
           "id": "brud-sidebar",
           "title": "Brud",
-          "icon": "$(search-fuzzy)"
+          "icon": "assets/images/brud_icon.svg"
         }
       ]
     },
