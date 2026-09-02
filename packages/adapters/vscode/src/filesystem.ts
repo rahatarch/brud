@@ -44,4 +44,21 @@ export class VSCodeFileSystem implements FileSystem {
     const uri = vscode.Uri.file(path);
     await vscode.workspace.fs.createDirectory(uri);
   }
+
+  async deleteDirectoryRecursive(path: string): Promise<void> {
+    const uri = vscode.Uri.file(path);
+    await vscode.workspace.fs.delete(uri, { recursive: true, useTrash: false });
+  }
+
+  async moveDirectory(from: string, to: string): Promise<void> {
+    const fromUri = vscode.Uri.file(from);
+    const toUri = vscode.Uri.file(to);
+    await vscode.workspace.fs.rename(fromUri, toUri);
+  }
+
+  async listDirectory(path: string): Promise<string[]> {
+    const uri = vscode.Uri.file(path);
+    const entries = await vscode.workspace.fs.readDirectory(uri);
+    return entries.map(([name]) => name);
+  }
 }

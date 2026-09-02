@@ -57,6 +57,28 @@ Position: end
 content to append
 >>>>>>> END APPEND_FILE [1]
 
+### 8. CREATE_DIRECTORY
+Creates a new directory with optional empty files.
+<<<<<<< CREATE_DIRECTORY [1]
+Directory Path: packages/core/src
+Files:
+  - types.ts
+  - index.ts
+>>>>>>> END CREATE_DIRECTORY [1]
+
+### 9. DELETE_DIRECTORY
+Removes a directory and all its contents.
+<<<<<<< DELETE_DIRECTORY [1]
+Directory Path: src/old
+>>>>>>> END DELETE_DIRECTORY [1]
+
+### 10. MOVE_DIRECTORY
+Moves a directory from one location to another.
+<<<<<<< MOVE_DIRECTORY [1]
+From: src/components
+To: packages/ui/components
+>>>>>>> END MOVE_DIRECTORY [1]
+
 ## Output Rules
 
 1. Output ALL Brud blocks inside a single markdown code block using triple backticks

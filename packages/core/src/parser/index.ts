@@ -13,6 +13,9 @@ export function parseOperations(input: string): FileOperation[] {
     '<<<<<<< MOVE_FILE',
     '<<<<<<< COPY_FILE',
     '<<<<<<< APPEND_FILE',
+    '<<<<<<< CREATE_DIRECTORY',
+    '<<<<<<< DELETE_DIRECTORY',
+    '<<<<<<< MOVE_DIRECTORY',
   ];
 
   const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));

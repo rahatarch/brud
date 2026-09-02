@@ -152,6 +152,49 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'create_directory': {
+        const directoryPath = parsed.directoryPath as string | undefined;
+        const files = parsed.files as string[] | undefined;
+        if (!directoryPath) {
+          throw new Error('Missing directoryPath field in create_directory operation');
+        }
+        operations.push({
+          kind: 'create_directory',
+          directoryPath,
+          files: files || [],
+          index: String(index),
+        });
+        break;
+      }
+      case 'delete_directory': {
+        const directoryPath = parsed.directoryPath as string | undefined;
+        if (!directoryPath) {
+          throw new Error('Missing directoryPath field in delete_directory operation');
+        }
+        operations.push({
+          kind: 'delete_directory',
+          directoryPath,
+          index: String(index),
+        });
+        break;
+      }
+      case 'move_directory': {
+        const from = parsed.from as string | undefined;
+        const to = parsed.to as string | undefined;
+        if (!from) {
+          throw new Error('Missing from field in move_directory operation');
+        }
+        if (!to) {
+          throw new Error('Missing to field in move_directory operation');
+        }
+        operations.push({
+          kind: 'move_directory',
+          from,
+          to,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

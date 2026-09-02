@@ -8,6 +8,9 @@ import {
   moveFilePrompt,
   copyFilePrompt,
   appendFilePrompt,
+  createDirectoryPrompt,
+  deleteDirectoryPrompt,
+  moveDirectoryPrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -61,6 +64,24 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Append File',
       description: 'Append content to the end of an existing file',
       content: appendFilePrompt,
+    },
+    {
+      id: 'create-directory',
+      title: 'Create Directory',
+      description: 'Create a new directory with optional empty files',
+      content: createDirectoryPrompt,
+    },
+    {
+      id: 'delete-directory',
+      title: 'Delete Directory',
+      description: 'Remove a directory and all its contents',
+      content: deleteDirectoryPrompt,
+    },
+    {
+      id: 'move-directory',
+      title: 'Move Directory',
+      description: 'Move a directory from one location to another',
+      content: moveDirectoryPrompt,
     },
   ],
 };

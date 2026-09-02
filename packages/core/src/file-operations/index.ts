@@ -80,11 +80,14 @@ export async function executeFileOperations(
           const filePath = result.resolvedPath;
 
           if (!(await fs.exists(filePath))) {
-            errors.push(`File not found: ${operation.path}`);
-            continue;
+            break;
           }
 
           await fs.deleteFile(filePath);
+
+          if (await fs.exists(filePath)) {
+            errors.push(`Failed to delete file: ${operation.path}`);
+          }
           break;
         }
 
@@ -203,6 +206,81 @@ export async function executeFileOperations(
             : operation.content + existingContent;
 
           await fs.writeFile(filePath, updatedContent);
+          break;
+        }
+
+        case 'create_directory': {
+          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            continue;
+          }
+
+          const directoryPath = result.resolvedPath;
+          await fs.createDirectory(directoryPath);
+
+          for (const file of operation.files) {
+            const fileResult = validateWorkspacePath(path.join(operation.directoryPath, file), workspaceFolders);
+            if (!fileResult.valid) {
+              errors.push(fileResult.error);
+              continue;
+            }
+            const filePath = fileResult.resolvedPath;
+            const parentDir = path.dirname(filePath);
+            await fs.createDirectory(parentDir);
+            await fs.writeFile(filePath, '');
+          }
+          break;
+        }
+
+        case 'delete_directory': {
+          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            continue;
+          }
+
+          const directoryPath = result.resolvedPath;
+
+          if (!(await fs.exists(directoryPath))) {
+            break;
+          }
+
+          await fs.deleteDirectoryRecursive(directoryPath);
+
+          if (await fs.exists(directoryPath)) {
+            errors.push(`Failed to delete directory: ${operation.directoryPath}`);
+          }
+          break;
+        }
+
+        case 'move_directory': {
+          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          if (!fromResult.valid) {
+            errors.push(fromResult.error);
+            continue;
+          }
+
+          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          if (!toResult.valid) {
+            errors.push(toResult.error);
+            continue;
+          }
+
+          const sourcePath = fromResult.resolvedPath;
+          const targetPath = toResult.resolvedPath;
+
+          if (!(await fs.exists(sourcePath))) {
+            errors.push(`Source directory not found: ${operation.from}`);
+            continue;
+          }
+
+          if (await fs.exists(targetPath)) {
+            errors.push(`Destination directory already exists: ${operation.to}`);
+            continue;
+          }
+
+          await fs.moveDirectory(sourcePath, targetPath);
           break;
         }
       }

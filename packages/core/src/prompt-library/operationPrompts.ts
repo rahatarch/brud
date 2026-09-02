@@ -78,3 +78,37 @@ content to append
 >>>>>>> END APPEND_FILE [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const createDirectoryPrompt = `Use CREATE_DIRECTORY to create a new directory with optional empty files.
+
+Describe the directory and files to create below:
+
+<<<<<<< CREATE_DIRECTORY [1]
+Directory Path: packages/core/src
+Files:
+  - types.ts
+  - index.ts
+>>>>>>> END CREATE_DIRECTORY [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const deleteDirectoryPrompt = `Use DELETE_DIRECTORY to remove a directory and all its contents.
+
+Describe the directory to delete below:
+
+<<<<<<< DELETE_DIRECTORY [1]
+Directory Path: src/old
+>>>>>>> END DELETE_DIRECTORY [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const moveDirectoryPrompt = `Use MOVE_DIRECTORY to move a directory from one location to another.
+
+Describe the source path and the destination path below:
+
+<<<<<<< MOVE_DIRECTORY [1]
+From: src/components
+To: packages/ui/components
+>>>>>>> END MOVE_DIRECTORY [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -15,6 +15,8 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let contentBuffer: string[] = [];
   let renameFrom = '';
   let renameTo = '';
+  let directoryFiles: string[] = [];
+  let currentDirectoryPath = '';
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -105,6 +107,43 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentPosition = 'end';
   }
 
+  function flushCreateDirectory() {
+    if (currentIndex && currentDirectoryPath) {
+      operations.push({
+        kind: 'create_directory',
+        directoryPath: currentDirectoryPath,
+        files: directoryFiles,
+        index: currentIndex,
+      });
+    }
+    currentDirectoryPath = '';
+    directoryFiles = [];
+  }
+
+  function flushDeleteDirectory() {
+    if (currentIndex && currentDirectoryPath) {
+      operations.push({
+        kind: 'delete_directory',
+        directoryPath: currentDirectoryPath,
+        index: currentIndex,
+      });
+    }
+    currentDirectoryPath = '';
+  }
+
+  function flushMoveDirectory() {
+    if (currentIndex && renameFrom && renameTo) {
+      operations.push({
+        kind: 'move_directory',
+        from: renameFrom,
+        to: renameTo,
+        index: currentIndex,
+      });
+    }
+    renameFrom = '';
+    renameTo = '';
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -115,6 +154,8 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     contentBuffer = [];
     renameFrom = '';
     renameTo = '';
+    directoryFiles = [];
+    currentDirectoryPath = '';
   }
 
   for (const line of lines) {
@@ -132,10 +173,18 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const endCopyFileMatch = line.match(/^>>>>>>> END COPY_FILE \[([\w\d.-]+)\]/);
     const appendFileMatch = line.match(/^<<<<<<< APPEND_FILE \[([\w\d.-]+)\]/);
     const endAppendFileMatch = line.match(/^>>>>>>> END APPEND_FILE \[([\w\d.-]+)\]/);
+    const createDirectoryMatch = line.match(/^<<<<<<< CREATE_DIRECTORY \[([\w\d.-]+)\]/);
+    const endCreateDirectoryMatch = line.match(/^>>>>>>> END CREATE_DIRECTORY \[([\w\d.-]+)\]/);
+    const deleteDirectoryMatch = line.match(/^<<<<<<< DELETE_DIRECTORY \[([\w\d.-]+)\]/);
+    const endDeleteDirectoryMatch = line.match(/^>>>>>>> END DELETE_DIRECTORY \[([\w\d.-]+)\]/);
+    const moveDirectoryMatch = line.match(/^<<<<<<< MOVE_DIRECTORY \[([\w\d.-]+)\]/);
+    const endMoveDirectoryMatch = line.match(/^>>>>>>> END MOVE_DIRECTORY \[([\w\d.-]+)\]/);
     const filePathMatch = line.match(/^File Path:\s*(.+)/);
     const positionMatch = line.match(/^Position:\s*(start|end)/);
     const fromMatch = line.match(/^From:\s*(.+)/);
     const toMatch = line.match(/^To:\s*(.+)/);
+    const directoryPathMatch = line.match(/^Directory Path:\s*(.+)/);
+    const filesListMatch = line.match(/^\s*-\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -181,6 +230,26 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         currentIndex = appendFileMatch[1];
         contentBuffer = [];
         currentPosition = 'end';
+        continue;
+      }
+      if (createDirectoryMatch) {
+        currentState = 'CREATE_DIRECTORY';
+        currentIndex = createDirectoryMatch[1];
+        currentDirectoryPath = '';
+        directoryFiles = [];
+        continue;
+      }
+      if (deleteDirectoryMatch) {
+        currentState = 'DELETE_DIRECTORY';
+        currentIndex = deleteDirectoryMatch[1];
+        currentDirectoryPath = '';
+        continue;
+      }
+      if (moveDirectoryMatch) {
+        currentState = 'MOVE_DIRECTORY_FROM';
+        currentIndex = moveDirectoryMatch[1];
+        renameFrom = '';
+        renameTo = '';
         continue;
       }
       if (filePathMatch) {
@@ -374,6 +443,74 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         continue;
       }
       contentBuffer.push(line);
+      continue;
+    }
+
+    if (currentState === 'CREATE_DIRECTORY') {
+      if (endCreateDirectoryMatch) {
+        if (endCreateDirectoryMatch[1] === currentIndex) {
+          flushCreateDirectory();
+        }
+        reset();
+        continue;
+      }
+      if (directoryPathMatch) {
+        currentDirectoryPath = directoryPathMatch[1].trim();
+        continue;
+      }
+      if (line.trim() === 'Files:') {
+        continue;
+      }
+      if (filesListMatch) {
+        directoryFiles.push(filesListMatch[1].trim());
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'DELETE_DIRECTORY') {
+      if (endDeleteDirectoryMatch) {
+        if (endDeleteDirectoryMatch[1] === currentIndex) {
+          flushDeleteDirectory();
+        }
+        reset();
+        continue;
+      }
+      if (directoryPathMatch) {
+        currentDirectoryPath = directoryPathMatch[1].trim();
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'MOVE_DIRECTORY_FROM') {
+      if (endMoveDirectoryMatch) {
+        if (endMoveDirectoryMatch[1] === currentIndex) {
+          flushMoveDirectory();
+        }
+        reset();
+        continue;
+      }
+      if (fromMatch) {
+        renameFrom = fromMatch[1].trim();
+        currentState = 'MOVE_DIRECTORY_TO';
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'MOVE_DIRECTORY_TO') {
+      if (endMoveDirectoryMatch) {
+        if (endMoveDirectoryMatch[1] === currentIndex) {
+          flushMoveDirectory();
+        }
+        reset();
+        continue;
+      }
+      if (toMatch) {
+        renameTo = toMatch[1].trim();
+        continue;
+      }
       continue;
     }
   }

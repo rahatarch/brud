@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { parseOperations } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
-import { executeOperationsFromVSCode } from '@brud/vscode-adapter';
+import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
@@ -26,6 +26,12 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     for (const op of operations) {
       const key = op.kind === 'rename_file' || op.kind === 'move_file' || op.kind === 'copy_file'
         ? op.from
+        : op.kind === 'create_directory'
+        ? op.directoryPath
+        : op.kind === 'delete_directory'
+        ? op.directoryPath
+        : op.kind === 'move_directory'
+        ? op.from
         : op.path;
       const existing = grouped.get(key) || [];
       existing.push(op);
@@ -35,7 +41,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async _showPreviewForFile(filePath: string) {
-    const result = validateWorkspacePath(filePath);
+    const result = validateWorkspacePath(filePath, getWorkspaceFolders());
     if (!result.valid) {
       this._sendErrorToWebview(result.error);
       return;
@@ -109,7 +115,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length === 0 && createFileOps.length === 0 && appendFileOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(result.uri);
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
       } catch {
         const errMsg: ExtensionMessage = { command: 'error', message: `Could not open file: ${filePath}` };
         this._view?.webview.postMessage(errMsg);
@@ -200,7 +206,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(result.uri);
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
       } catch (e) {
         if (createFileOps.length > 0) {
           const fileExtension = filePath.split('.').pop() || '';
@@ -363,10 +369,10 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
       switch (data.command) {
         case 'applyPatch':
-          await this._handleApplyPatch(data.text);
+          await this._handleApplyPatch(data.text ?? '');
           break;
         case 'previewPatch':
-          await this._handlePreviewPatch(data.text);
+          await this._handlePreviewPatch(data.text ?? '');
           break;
         case 'previewNextFile':
           await this._handlePreviewNextFile();
@@ -443,14 +449,14 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     const combinedParts: string[] = [];
 
     for (const filePath of this._fileList) {
-      const result = validateWorkspacePath(filePath);
+      const result = validateWorkspacePath(filePath, getWorkspaceFolders());
       if (!result.valid) {
         continue;
       }
 
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(result.uri);
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
       } catch {
         continue;
       }
@@ -494,14 +500,14 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     const combinedContent = combinedParts.join('\n\n');
-    const firstFileResult = validateWorkspacePath(this._fileList[0]);
+    const firstFileResult = validateWorkspacePath(this._fileList[0], getWorkspaceFolders());
     if (!firstFileResult.valid) {
       return;
     }
 
     let firstDocument: vscode.TextDocument;
     try {
-      firstDocument = await vscode.workspace.openTextDocument(firstFileResult.uri);
+      firstDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(firstFileResult.resolvedPath));
     } catch {
       return;
     }
@@ -560,7 +566,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
     const filePath = this._fileList[this._currentFileIndex];
     const operations = this._operationsByFile.get(filePath) || [];
-    const result = await executeFileOperations(operations);
+    const result = await executeFileOperations(operations, new VSCodeFileSystem(), getWorkspaceFolders());
     this._reportExecutionResult(result);
 
     if (result.success) {
@@ -578,7 +584,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       allOperations.push(...ops);
     }
 
-    const result = await executeFileOperations(allOperations);
+    const result = await executeFileOperations(allOperations, new VSCodeFileSystem(), getWorkspaceFolders());
     this._reportExecutionResult(result);
 
     if (result.success) {
@@ -667,6 +673,15 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'append_file':
           lines.push(`Appended content to ${op.path}.`);
+          break;
+        case 'create_directory':
+          lines.push(`Created directory ${op.directoryPath} with ${op.files.length} empty files.`);
+          break;
+        case 'delete_directory':
+          lines.push(`Deleted directory ${op.directoryPath} and all its contents.`);
+          break;
+        case 'move_directory':
+          lines.push(`Moved directory ${op.from} to ${op.to}.`);
           break;
       }
     }
