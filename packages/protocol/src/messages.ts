@@ -33,6 +33,7 @@ export interface ExtensionMessage {
   fileIndex?: number;
   totalFiles?: number;
   structure?: StructureResult;
+  structures?: StructureResult[];
 }
 
 export interface PreviewHeaderData {

@@ -14,6 +14,7 @@ export async function executeFileOperations(
   }
 
   const errors: string[] = [];
+  const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
 
   for (const operation of operations) {
     try {
@@ -304,7 +305,33 @@ export async function executeFileOperations(
           }
 
           const json = await extractDirectoryStructure(fs, directoryPath, operation.depth);
-          return { success: true, message: json, errors: [] };
+          let parsed: Record<string, any> = {};
+          try {
+            parsed = JSON.parse(json);
+          } catch {
+            // ignore parse errors for counting
+          }
+          let fileCount = 0;
+          let directoryCount = 0;
+          for (const value of Object.values(parsed)) {
+            if (Array.isArray(value)) {
+              for (const item of value) {
+                if (typeof item === 'string') {
+                  fileCount++;
+                } else if (typeof item === 'object' && item !== null) {
+                  directoryCount++;
+                }
+              }
+            }
+          }
+          extractionResults.push({
+            directoryPath: operation.directoryPath,
+            depth: operation.depth,
+            json,
+            fileCount,
+            directoryCount,
+          });
+          break;
         }
       }
     } catch (err) {
@@ -312,6 +339,18 @@ export async function executeFileOperations(
       const stack = err instanceof Error && err.stack ? `\nStack: ${err.stack}` : '';
       errors.push(`Unexpected error during ${operation.kind}: ${message}${operation.kind === 'extract_structure' ? stack : ''}`);
     }
+  }
+
+  if (extractionResults.length > 0) {
+    const allSucceeded = extractionResults.length === operations.filter(o => o.kind === 'extract_structure').length;
+    const message = JSON.stringify(extractionResults.map(r => ({
+      directoryPath: r.directoryPath,
+      depth: r.depth,
+      fileCount: r.fileCount,
+      directoryCount: r.directoryCount,
+      json: r.json,
+    })));
+    return { success: allSucceeded, message, errors };
   }
 
   const total = operations.length;

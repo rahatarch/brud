@@ -14,3 +14,7 @@ vsc-extension-quickstart.md
 **/.vscode-test.*
 webview/**
 webview/node_modules/**
+packages/*/src/**
+apps/vscode/src/**
+tests/**
+.github/**

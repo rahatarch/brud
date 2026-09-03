@@ -669,24 +669,24 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
       if (result.success) {
-        let parsedJson: any;
+        let parsedStructures: any[];
         try {
-          parsedJson = JSON.parse(result.message);
+          parsedStructures = JSON.parse(result.message);
         } catch {
-          parsedJson = {};
+          parsedStructures = [];
         }
-        const countResult = countStructure(parsedJson);
-        const structureResult: StructureResult = {
-          json: result.message,
-          directoryPath: (extractOps[0] as any).directoryPath,
-          depth: (extractOps[0] as any).depth,
-          fileCount: countResult.files,
-          directoryCount: countResult.dirs,
-        };
-        const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure from ${structureResult.directoryPath} (depth ${structureResult.depth}). Result available in the Structure panel.` };
+        const structureResults: StructureResult[] = parsedStructures.map((item: any) => ({
+          json: item.json,
+          directoryPath: item.directoryPath,
+          depth: item.depth,
+          fileCount: item.fileCount,
+          directoryCount: item.directoryCount,
+        }));
+        const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+        const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
         this._view?.webview.postMessage(successMsg);
-        this._structurePanelManager?.openStructurePanel(structureResult);
-        this._outputChannel.appendLine(`Extracted directory structure of ${structureResult.directoryPath}. Files: ${structureResult.fileCount}, Dirs: ${structureResult.directoryCount}`);
+        this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+        this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
       } else {
         this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
         this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
@@ -740,24 +740,24 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
 
     const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
     if (result.success) {
-      let parsedJson: any;
+      let parsedStructures: any[];
       try {
-        parsedJson = JSON.parse(result.message);
+        parsedStructures = JSON.parse(result.message);
       } catch {
-        parsedJson = {};
+        parsedStructures = [];
       }
-      const countResult = countStructure(parsedJson);
-      const structureResult: StructureResult = {
-        json: result.message,
-        directoryPath: (extractOps[0] as any).directoryPath,
-        depth: (extractOps[0] as any).depth,
-        fileCount: countResult.files,
-        directoryCount: countResult.dirs,
-      };
-      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure from ${structureResult.directoryPath} (depth ${structureResult.depth}). Result available in the Structure panel.` };
+      const structureResults: StructureResult[] = parsedStructures.map((item: any) => ({
+        json: item.json,
+        directoryPath: item.directoryPath,
+        depth: item.depth,
+        fileCount: item.fileCount,
+        directoryCount: item.directoryCount,
+      }));
+      const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
       this._view?.webview.postMessage(successMsg);
-      this._structurePanelManager?.openStructurePanel(structureResult);
-      this._outputChannel.appendLine(`Extracted directory structure of ${structureResult.directoryPath}. Files: ${structureResult.fileCount}, Dirs: ${structureResult.directoryCount}`);
+      this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+      this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
     } else {
       this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
       this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));

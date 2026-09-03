@@ -16,9 +16,13 @@ export class BrudStructurePanelManager {
   }
 
   public openStructurePanel(data: any) {
+    const message = Array.isArray(data)
+      ? { command: 'structureResult', structures: data }
+      : { command: 'structureResult', structure: data };
+
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
-      this._panel.webview.postMessage({ command: 'structureResult', structure: data });
+      this._panel.webview.postMessage(message);
       return;
     }
 
@@ -37,7 +41,7 @@ export class BrudStructurePanelManager {
 
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
-    this._pendingMessage = { command: 'structureResult', structure: data };
+    this._pendingMessage = message;
 
     this._panel.onDidDispose(() => {
       this._panel = undefined;
