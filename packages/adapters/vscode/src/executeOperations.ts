@@ -1,9 +1,12 @@
 import { executeFileOperations, FileOperation, validateWorkspacePath } from '@brud/core';
+import type { HistoryStore } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
 
 export async function executeOperationsFromVSCode(
-  operations: FileOperation[]
+  operations: FileOperation[],
+  historyStore?: HistoryStore,
+  originalPrompt?: string,
 ): Promise<{ success: boolean; message: string; errors: string[] }> {
   const fs = new VSCodeFileSystem();
   const workspaceFolders = getWorkspaceFolders();
@@ -16,5 +19,5 @@ export async function executeOperationsFromVSCode(
     };
   }
   
-  return executeFileOperations(operations, fs, workspaceFolders);
+  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt);
 }

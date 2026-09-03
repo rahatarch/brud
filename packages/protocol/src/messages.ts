@@ -11,7 +11,8 @@ export type WebviewCommand =
   | 'updatePreviewHeader'
   | 'openMainWindow'
   | 'extractStructure'
-  | 'ready';
+  | 'ready'
+  | 'getHistory';
 
 export type ExtensionCommand =
   | 'success'
@@ -20,7 +21,8 @@ export type ExtensionCommand =
   | 'showPreviewNavigation'
   | 'hidePreviewNavigation'
   | 'structureResult'
-  | 'codebaseMetadataResult';
+  | 'codebaseMetadataResult'
+  | 'historyResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -36,6 +38,20 @@ export interface ExtensionMessage {
   structure?: StructureResult;
   structures?: StructureResult[];
   codebaseMetadata?: CodebaseMetadataResult;
+  history?: HistorySessionResult[];
+}
+
+export interface HistorySessionResult {
+  sessionId: string;
+  timestamp: string;
+  originalPrompt: string;
+  status: 'success' | 'failure';
+  operationCount: number;
+  operationTypes: string[];
+  filesAffected: string[];
+  metadataUsed: Record<string, any>;
+  terminalCommands: string[];
+  revertCommands: string[];
 }
 
 export interface PreviewHeaderData {

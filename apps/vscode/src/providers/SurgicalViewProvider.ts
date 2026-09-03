@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import { parseOperations } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
-import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
@@ -732,7 +732,9 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
       return;
     }
 
-    const result = await executeOperationsFromVSCode(operations);
+    const folders = getWorkspaceFolders();
+    const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
+    const result = await executeOperationsFromVSCode(operations, historyStore, text);
     const report = this._generateReport(operations, result);
 
     this._outputChannel.appendLine(result.message);
