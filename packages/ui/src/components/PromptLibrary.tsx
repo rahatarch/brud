@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { getAllPrompts, getPromptById } from '@brud/core';
 import { Copy, Check, ArrowLeft, BookOpen } from 'lucide-react';
+import CustomScrollbar from './CustomScrollbar';
 
 function PromptLibrary() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
@@ -70,11 +71,11 @@ function PromptLibrary() {
 
         <p className="text-sm text-text-secondary mb-4">{prompt.description}</p>
 
-        <div className="flex-1 bg-surface-2 border border-border rounded-lg p-4 overflow-y-auto max-h-[60vh]">
+        <CustomScrollbar className="flex-1 bg-surface-2 border border-border rounded-lg p-4 max-h-[60vh]">
           <pre className="text-sm text-text-secondary font-mono whitespace-pre-wrap wrap-break-words">
             {prompt.content}
           </pre>
-        </div>
+        </CustomScrollbar>
       </div>
     );
   }

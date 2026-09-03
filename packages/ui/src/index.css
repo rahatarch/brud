@@ -65,3 +65,47 @@ body {
   background-color: var(--color-text-muted);
   animation: typing-bounce 1.2s ease-in-out infinite;
 }
+
+.brud-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+.brud-scrollbar::-webkit-scrollbar {
+  width: 4px !important;
+  height: 4px !important;
+}
+
+.brud-scrollbar::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+.brud-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-border) !important;
+  border-radius: 2px !important;
+}
+
+.brud-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted) !important;
+}
+
+.brud-scrollbar::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.brud-scrollbar::-webkit-scrollbar-corner {
+  background: transparent !important;
+}
+
+.brud-hide-native-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.brud-hide-native-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}

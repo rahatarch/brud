@@ -1,3 +1,5 @@
+import type { WebviewMessage, ExtensionMessage } from '@brud/protocol';
+
 declare function acquireVsCodeApi(): {
   postMessage(message: unknown): void;
   getState(): unknown;
@@ -5,8 +7,6 @@ declare function acquireVsCodeApi(): {
 };
 
 const vscodeApi = acquireVsCodeApi();
-
-import type { WebviewMessage, ExtensionMessage } from '@brud/protocol';
 
 export function sendToExtension(message: WebviewMessage): void {
   vscodeApi.postMessage(message);
