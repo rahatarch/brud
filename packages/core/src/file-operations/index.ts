@@ -4,11 +4,15 @@ import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
+import type { HistoryStore, SnapshotData } from '../history/index.js';
+import { createSnapshot, recordAndSaveSession, generateSessionId } from '../history/index.js';
 
 export async function executeFileOperations(
   operations: FileOperation[],
   fs: FileSystem,
   workspaceFolders: string[],
+  historyStore?: HistoryStore,
+  originalPrompt?: string,
 ): Promise<{ success: boolean; message: string; errors: string[] }> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'] };
@@ -16,6 +20,40 @@ export async function executeFileOperations(
 
   const errors: string[] = [];
   const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
+
+  let filesAffected: string[] = [];
+  let sessionId: string | undefined;
+  let preSnapshot: SnapshotData | undefined;
+
+  if (historyStore) {
+    for (const operation of operations) {
+      switch (operation.kind) {
+        case 'search_replace':
+        case 'create_file':
+        case 'delete_file':
+        case 'append_file':
+          if (!filesAffected.includes(operation.path)) {
+            filesAffected.push(operation.path);
+          }
+          break;
+        case 'rename_file':
+        case 'move_file':
+        case 'copy_file':
+          if (!filesAffected.includes(operation.from)) {
+            filesAffected.push(operation.from);
+          }
+          if (!filesAffected.includes(operation.to)) {
+            filesAffected.push(operation.to);
+          }
+          break;
+      }
+    }
+
+    const now = new Date();
+    const seq = 1;
+    sessionId = generateSessionId(now, seq);
+    preSnapshot = await createSnapshot(sessionId, 'pre', fs, filesAffected);
+  }
 
   for (const operation of operations) {
     try {
@@ -354,6 +392,8 @@ export async function executeFileOperations(
     }
   }
 
+  let result: { success: boolean; message: string; errors: string[] };
+
   if (extractionResults.length > 0) {
     const allSucceeded = extractionResults.length === operations.filter(o => o.kind === 'extract_structure').length;
     const message = JSON.stringify(extractionResults.map(r => ({
@@ -363,24 +403,38 @@ export async function executeFileOperations(
       directoryCount: r.directoryCount,
       json: r.json,
     })));
-    return { success: allSucceeded, message, errors };
+    result = { success: allSucceeded, message, errors };
+  } else {
+    const total = operations.length;
+    const errorCount = errors.length;
+    const successCount = total - errorCount;
+
+    if (errorCount === 0) {
+      result = { success: true, message: `Successfully executed ${total} file operations.`, errors: [] };
+    } else if (successCount > 0) {
+      result = {
+        success: true,
+        message: `Executed ${successCount} of ${total} operations with ${errorCount} errors.`,
+        errors,
+      };
+    } else {
+      result = { success: false, message: `All ${total} operations failed.`, errors };
+    }
   }
 
-  const total = operations.length;
-  const errorCount = errors.length;
-  const successCount = total - errorCount;
-
-  if (errorCount === 0) {
-    return { success: true, message: `Successfully executed ${total} file operations.`, errors: [] };
+  if (historyStore && sessionId && preSnapshot) {
+    const postSnapshot = await createSnapshot(sessionId, 'post', fs, filesAffected);
+    await recordAndSaveSession(
+      operations,
+      result,
+      filesAffected,
+      originalPrompt || '',
+      preSnapshot,
+      postSnapshot,
+      historyStore,
+      sessionId,
+    );
   }
 
-  if (successCount > 0) {
-    return {
-      success: true,
-      message: `Executed ${successCount} of ${total} operations with ${errorCount} errors.`,
-      errors,
-    };
-  }
-
-  return { success: false, message: `All ${total} operations failed.`, errors };
+  return result;
 }
