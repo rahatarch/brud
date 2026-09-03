@@ -359,7 +359,6 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.options = {
       enableScripts: true,
       localResourceRoots: [
-        vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview'),
         vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview'),
       ],
     };
@@ -722,19 +721,6 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       }
     }
     await new Promise(resolve => (globalThis as any).setTimeout(resolve, 100));
-  }
-
-  // Legacy HTML webview - kept for reference, will be removed after full migration.
-  private _getHtmlForWebview(webview: vscode.Webview) {
-    const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'main.html');
-    const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'bridge.js'));
-    const styleUri = webview.asWebviewUri(vscode.Uri.joinPath(this._extensionUri, 'resources', 'webview', 'styles.css'));
-
-    let html = fs.readFileSync(htmlPath.fsPath, 'utf8');
-    html = html.replace('{{styleUri}}', styleUri.toString());
-    html = html.replace('{{scriptUri}}', scriptUri.toString());
-
-    return html;
   }
 
   private _getReactHtmlForWebview(webview: vscode.Webview): string {
