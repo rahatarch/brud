@@ -16,6 +16,7 @@ export type SnapshotType = 'pre' | 'post';
 export interface SnapshotData {
   sessionId: string;
   snapshotType: SnapshotType;
+  /** For 'pre' snapshots: full file content. For 'post' snapshots: unified diffs from pre. */
   files: Map<string, string>;
   diffFromPrevious: string;
 }

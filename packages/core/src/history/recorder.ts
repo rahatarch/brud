@@ -1,3 +1,4 @@
+import { createTwoFilesPatch } from 'diff';
 import type { FileOperation } from '../types/patch.js';
 import type { FileSystem } from '../types/filesystem.js';
 import { generateSessionId } from './sessionId.js';
@@ -104,18 +105,41 @@ export async function createSnapshot(
   snapshotType: 'pre' | 'post',
   fs: FileSystem,
   filesAffected: string[],
+  preSnapshot?: SnapshotData,
 ): Promise<SnapshotData> {
   const files = new Map<string, string>();
 
-  for (const filePath of filesAffected) {
-    try {
-      const exists = await fs.exists(filePath);
-      if (exists) {
-        const content = await fs.readFile(filePath);
-        files.set(filePath, content);
+  if (snapshotType === 'pre') {
+    for (const filePath of filesAffected) {
+      try {
+        const exists = await fs.exists(filePath);
+        if (exists) {
+          const content = await fs.readFile(filePath);
+          files.set(filePath, content);
+        }
+      } catch {
+        // File may not exist yet (e.g., pre-snapshot for a file that will be created)
       }
-    } catch {
-      // File may not exist yet (e.g., pre-snapshot for a file that will be created)
+    }
+  } else {
+    for (const filePath of filesAffected) {
+      try {
+        const exists = await fs.exists(filePath);
+        if (exists) {
+          const postContent = await fs.readFile(filePath);
+          const preContent = preSnapshot?.files.get(filePath) ?? '';
+          const diff = preContent === postContent
+            ? ''
+            : createTwoFilesPatch(filePath, filePath, preContent, postContent, 'pre', 'post');
+          files.set(filePath, diff);
+        } else if (preSnapshot?.files.has(filePath)) {
+          const preContent = preSnapshot.files.get(filePath)!;
+          const diff = createTwoFilesPatch(filePath, filePath, preContent, '', 'pre', 'post');
+          files.set(filePath, diff);
+        }
+      } catch {
+        // File not accessible for post-snapshot
+      }
     }
   }
 

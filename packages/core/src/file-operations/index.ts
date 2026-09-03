@@ -423,7 +423,7 @@ export async function executeFileOperations(
   }
 
   if (historyStore && sessionId && preSnapshot) {
-    const postSnapshot = await createSnapshot(sessionId, 'post', fs, filesAffected);
+    const postSnapshot = await createSnapshot(sessionId, 'post', fs, filesAffected, preSnapshot);
     await recordAndSaveSession(
       operations,
       result,
