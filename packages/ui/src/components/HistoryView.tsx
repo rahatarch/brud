@@ -1,30 +1,54 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, Clock, FileText } from 'lucide-react';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft } from 'lucide-react';
 import type { HistorySessionResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 
-function formatDateHeader(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+function formatDateHeader(timestamp?: string): string {
+  if (!timestamp) return 'Unknown Date';
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Unknown Date';
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const target = new Date(date.getFullYear(), date.getMonth(), date.getDate());
 
-  if (target.getTime() === today.getTime()) return 'Today';
-  if (target.getTime() === yesterday.getTime()) return 'Yesterday';
-  return date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+    if (target.getTime() === today.getTime()) return 'Today';
+    if (target.getTime() === yesterday.getTime()) return 'Yesterday';
+    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  } catch {
+    return 'Unknown Date';
+  }
 }
 
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+function formatTime(timestamp?: string): string {
+  if (!timestamp) return '--:--';
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '--:--';
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '--:--';
+  }
+}
+
+function formatFullDateTime(timestamp?: string): string {
+  if (!timestamp) return 'Unknown date and time';
+  try {
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return 'Unknown date and time';
+    return date.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+      + ' at ' + date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  } catch {
+    return 'Unknown date and time';
+  }
 }
 
 function groupByDate(sessions: HistorySessionResult[]): Map<string, HistorySessionResult[]> {
   const groups = new Map<string, HistorySessionResult[]>();
   for (const session of sessions) {
-    const header = formatDateHeader(session.timestamp);
+    const header = session.timestamp ? formatDateHeader(session.timestamp) : 'Unknown Date';
     const list = groups.get(header) || [];
     list.push(session);
     groups.set(header, list);
@@ -32,9 +56,172 @@ function groupByDate(sessions: HistorySessionResult[]): Map<string, HistorySessi
   return groups;
 }
 
+function statusIcon(status?: string) {
+  switch (status || 'unknown') {
+    case 'success': return <CheckCircle size={18} className="text-green-500" />;
+    case 'aborted': return <AlertCircle size={18} className="text-yellow-500" />;
+    case 'failed': return <XCircle size={18} className="text-red-500" />;
+    default: return <XCircle size={18} className="text-red-500" />;
+  }
+}
+
+function statusBadge(status?: string) {
+  const base = 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium';
+  switch (status || 'unknown') {
+    case 'success':
+      return <span className={`${base} bg-green-500/10 text-green-500`}>Success</span>;
+    case 'aborted':
+      return <span className={`${base} bg-yellow-500/10 text-yellow-500`}>Aborted</span>;
+    case 'failed':
+      return <span className={`${base} bg-red-500/10 text-red-500`}>Failed</span>;
+    default:
+      return <span className={`${base} bg-red-500/10 text-red-500`}>Unknown</span>;
+  }
+}
+
+function formatKind(kind: string): string {
+  return kind.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function DetailView({ session, onBack }: { session: HistorySessionResult; onBack: () => void }) {
+  const sessionId = session.sessionId || 'Unknown Session';
+  const timestamp = session.timestamp;
+  const status = session.status || 'unknown';
+  const originalPrompt = session.originalPrompt || 'No prompt recorded.';
+  const operations = session.operations || [];
+  const operationCount = session.operationCount || 0;
+  const operationTypes = session.operationTypes || [];
+  const filesAffected = session.filesAffected || [];
+  const metadataUsed = session.metadataUsed || {};
+  const hasMetadata = Object.keys(metadataUsed).length > 0;
+
+  try {
+    return (
+      <div className="flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-text-secondary hover:text-text mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={16} />
+          Back to History
+        </button>
+
+        <div className="flex items-start justify-between gap-4 mb-1">
+          <div>
+            <h2 className="text-xl font-semibold text-text font-mono">{sessionId}</h2>
+            <p className="text-sm text-text-secondary mt-1">{timestamp ? formatFullDateTime(timestamp) : 'No date recorded'}</p>
+          </div>
+          {statusBadge(status)}
+        </div>
+
+        <div className="flex gap-3 mt-4">
+          <button
+            disabled
+            className="px-4 py-2 rounded-lg bg-primary/20 text-primary border border-primary/30 text-sm font-medium cursor-not-allowed"
+          >
+            Restore Pre-Patch State
+          </button>
+          <button
+            disabled
+            className="px-4 py-2 rounded-lg border border-border bg-surface text-sm text-text-secondary cursor-not-allowed opacity-60"
+          >
+            Restore Post-Patch State
+          </button>
+        </div>
+
+        <hr className="border-border my-5" />
+
+        <div className="flex flex-col gap-6">
+          <section>
+            <h3 className="text-sm font-semibold text-text mb-2">Original Brud Prompt</h3>
+            <pre className="text-sm text-text-secondary bg-surface-2 border border-border rounded-lg p-4 max-h-48 overflow-y-auto whitespace-pre-wrap font-mono">
+              {originalPrompt}
+            </pre>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-text mb-3">Operations</h3>
+            <div className="flex flex-col gap-2">
+              {operations.length > 0 ? operations.map((op, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface"
+                >
+                  <div className="shrink-0">{statusIcon(op.status)}</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className="text-sm font-medium text-text">{formatKind(op.kind || '')}</span>
+                      <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
+                    </div>
+                    {op.path && (
+                      <p className="text-xs text-text-secondary font-mono truncate">{op.path}</p>
+                    )}
+                    {op.message && (
+                      <p className="text-xs text-text-secondary mt-0.5">{op.message}</p>
+                    )}
+                  </div>
+                </div>
+              )) : (
+                <p className="text-sm text-text-secondary">
+                  {operationCount > 0
+                    ? `${operationCount} operation${operationCount !== 1 ? 's' : ''} of type${operationCount !== 1 ? 's' : ''}: ${operationTypes.join(', ')}`
+                    : 'No operation details available.'}
+                </p>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-text mb-2">Files Affected</h3>
+            {filesAffected.length > 0 ? (
+              <div className="border border-border rounded-lg divide-y divide-border">
+                {filesAffected.map((file, i) => (
+                  <div key={i} className="p-3">
+                    <p className="text-sm font-mono text-text-secondary">{file}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-text-secondary">No files affected.</p>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-sm font-semibold text-text mb-2">Metadata</h3>
+            <div className="border border-border rounded-lg bg-surface">
+              <pre className="text-sm text-text-secondary p-4 overflow-x-auto font-mono whitespace-pre-wrap">
+                {hasMetadata ? JSON.stringify(metadataUsed, null, 2) : 'No metadata recorded.'}
+              </pre>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  } catch (err) {
+    return (
+      <div className="flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-sm text-text-secondary hover:text-text mb-6 transition-colors cursor-pointer"
+        >
+          <ArrowLeft size={16} />
+          Back to History
+        </button>
+        <div className="flex flex-col items-center justify-center py-12">
+          <AlertCircle size={32} className="text-yellow-500 mb-4" />
+          <h3 className="text-lg font-medium text-text mb-2">Unable to display session details</h3>
+          <p className="text-sm text-text-secondary text-center max-w-md">
+            An unexpected error occurred while rendering this session. The session data may be from an older version of Brud.
+          </p>
+        </div>
+      </div>
+    );
+  }
+}
+
 function HistoryView() {
   const [sessions, setSessions] = useState<HistorySessionResult[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,7 +231,11 @@ function HistoryView() {
     const unsubscribe = onExtensionMessage((message) => {
       if (message.command === 'historyResult' && message.history) {
         const sorted = [...message.history].sort(
-          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          (a, b) => {
+            const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+            const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+            return tb - ta;
+          }
         );
         setSessions(sorted);
         setLoading(false);
@@ -54,7 +245,15 @@ function HistoryView() {
     return unsubscribe;
   }, []);
 
+  const handleBack = useCallback(() => {
+    setSelectedSession(null);
+  }, []);
+
   const grouped = groupByDate(sessions);
+
+  if (selectedSession) {
+    return <DetailView session={selectedSession} onBack={handleBack} />;
+  }
 
   if (loading) {
     return (
@@ -92,21 +291,20 @@ function HistoryView() {
             </h3>
             <div className="flex flex-col gap-2">
               {dateSessions.map((session) => {
-                const isSelected = selectedSessionId === session.sessionId;
+                const sid = session.sessionId || 'Unknown';
+                const sessionStatus = session.status || 'unknown';
+                const sessionTimestamp = session.timestamp;
+                const sessionPrompt = session.originalPrompt || 'No prompt recorded.';
+                const sessionOpCount = session.operationCount || 0;
+                const sessionFiles = session.filesAffected || [];
                 return (
                   <button
-                    key={session.sessionId}
-                    onClick={() => setSelectedSessionId(
-                      isSelected ? null : session.sessionId
-                    )}
-                    className={`flex items-start gap-3 p-4 rounded-lg border text-left cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'border-primary bg-surface-2'
-                        : 'border-border bg-surface hover:bg-surface-2 hover:border-border-subtle'
-                    }`}
+                    key={sid}
+                    onClick={() => setSelectedSession(session)}
+                    className="flex items-start gap-3 p-4 rounded-lg border border-border bg-surface hover:bg-surface-2 hover:border-border-subtle text-left cursor-pointer transition-colors"
                   >
                     <div className="mt-0.5 shrink-0">
-                      {session.status === 'success' ? (
+                      {sessionStatus === 'success' ? (
                         <CheckCircle size={18} className="text-green-500" />
                       ) : (
                         <XCircle size={18} className="text-red-500" />
@@ -115,25 +313,25 @@ function HistoryView() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
                         <span className="text-sm font-mono font-medium text-text">
-                          {session.sessionId}
+                          {sid}
                         </span>
                         <span className="text-xs text-text-secondary shrink-0">
-                          {formatTime(session.timestamp)}
+                          {sessionTimestamp ? formatTime(sessionTimestamp) : '--:--'}
                         </span>
                       </div>
                       <p className="text-sm text-text-secondary line-clamp-1 mb-1.5">
-                        {session.originalPrompt.length > 50
-                          ? session.originalPrompt.slice(0, 50) + '...'
-                          : session.originalPrompt}
+                        {sessionPrompt.length > 50
+                          ? sessionPrompt.slice(0, 50) + '...'
+                          : sessionPrompt}
                       </p>
                       <div className="flex items-center gap-3 text-xs text-text-secondary">
                         <span className="flex items-center gap-1">
                           <FileText size={12} />
-                          {session.operationCount} ops
+                          {sessionOpCount} ops
                         </span>
                         <span className="flex items-center gap-1">
                           <FileText size={12} />
-                          {session.filesAffected.length} files
+                          {sessionFiles.length} files
                         </span>
                       </div>
                     </div>

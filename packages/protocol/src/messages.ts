@@ -48,6 +48,7 @@ export interface HistorySessionResult {
   status: 'success' | 'failure';
   operationCount: number;
   operationTypes: string[];
+  operations: OperationResult[];
   filesAffected: string[];
   metadataUsed: Record<string, any>;
   terminalCommands: string[];

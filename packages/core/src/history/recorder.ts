@@ -2,7 +2,7 @@ import { createTwoFilesPatch } from 'diff';
 import type { FileOperation } from '../types/patch.js';
 import type { FileSystem } from '../types/filesystem.js';
 import { generateSessionId } from './sessionId.js';
-import type { HistorySession, SnapshotData, HistoryEntry } from './types.js';
+import type { HistorySession, SnapshotData, HistoryEntry, OperationResult } from './types.js';
 import type { HistoryStore } from './store.js';
 
 let sequenceCounter = 0;
@@ -12,6 +12,7 @@ export function recordSession(
   result: { success: boolean; message: string; errors: string[] },
   filesAffected: string[],
   originalPrompt: string,
+  operationResults: OperationResult[] = [],
   sessionIdOverride?: string,
 ): HistorySession {
   sequenceCounter++;
@@ -93,6 +94,7 @@ export function recordSession(
     status,
     operationCount: operations.length,
     operationTypes,
+    operations: operationResults,
     filesAffected,
     metadataUsed,
     terminalCommands: [],
@@ -159,9 +161,10 @@ export async function recordAndSaveSession(
   preSnapshot: SnapshotData,
   postSnapshot: SnapshotData,
   historyStore: HistoryStore,
+  operationResults: OperationResult[] = [],
   sessionIdOverride?: string,
 ): Promise<HistorySession> {
-  const session = recordSession(operations, result, filesAffected, originalPrompt, sessionIdOverride);
+  const session = recordSession(operations, result, filesAffected, originalPrompt, operationResults, sessionIdOverride);
 
   const entry: HistoryEntry = {
     session,

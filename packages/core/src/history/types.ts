@@ -5,10 +5,19 @@ export interface HistorySession {
   status: 'success' | 'failure';
   operationCount: number;
   operationTypes: string[];
+  operations: OperationResult[];
   filesAffected: string[];
   metadataUsed: Record<string, any>;
   terminalCommands: string[];
   revertCommands: string[];
+}
+
+export interface OperationResult {
+  operationIndex: number;
+  kind: string;
+  status: 'success' | 'aborted' | 'failed';
+  message: string;
+  path: string;
 }
 
 export type SnapshotType = 'pre' | 'post';

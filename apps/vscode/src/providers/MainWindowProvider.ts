@@ -69,6 +69,7 @@ export class BrudMainWindowManager {
       status: s.status,
       operationCount: s.operationCount,
       operationTypes: s.operationTypes,
+      operations: s.operations,
       filesAffected: s.filesAffected,
       metadataUsed: s.metadataUsed,
       terminalCommands: s.terminalCommands,

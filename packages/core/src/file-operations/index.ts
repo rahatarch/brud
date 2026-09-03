@@ -752,24 +752,38 @@ export async function executeFileOperations(
     })));
     result = { success: allSucceeded, message, errors, operationResults };
   } else {
-    const successCount = operationResults.filter(r => r.status === 'success').length;
-    const abortedCount = operationResults.filter(r => r.status === 'aborted').length;
-    const failedCount = operationResults.filter(r => r.status === 'failed').length;
-
-    let prefix: string;
-    if (failedCount === 0 && abortedCount === 0) {
-      prefix = 'All operations completed successfully.';
-    } else if (failedCount === 0 && abortedCount > 0 && successCount === 0) {
-      prefix = 'All operations aborted safely.';
-    } else if (failedCount === 0 && abortedCount > 0 && successCount > 0) {
-      prefix = 'Some operations completed, some aborted safely.';
-    } else if (failedCount > 0 && successCount === 0 && abortedCount === 0) {
-      prefix = 'All operations failed.';
+    const hasExtractOps = operations.some(o => o.kind === 'extract_structure');
+    if (hasExtractOps) {
+      const errorMessages = operationResults
+        .filter(r => r.kind === 'extract_structure')
+        .map(r => r.message)
+        .join('; ');
+      result = {
+        success: false,
+        message: 'All extraction operations failed. ' + errorMessages,
+        errors,
+        operationResults,
+      };
     } else {
-      prefix = 'Some operations failed.';
-    }
+      const successCount = operationResults.filter(r => r.status === 'success').length;
+      const abortedCount = operationResults.filter(r => r.status === 'aborted').length;
+      const failedCount = operationResults.filter(r => r.status === 'failed').length;
 
-    result = { success: failedCount === 0, message: prefix, errors, operationResults };
+      let prefix: string;
+      if (failedCount === 0 && abortedCount === 0) {
+        prefix = 'All operations completed successfully.';
+      } else if (failedCount === 0 && abortedCount > 0 && successCount === 0) {
+        prefix = 'All operations aborted safely.';
+      } else if (failedCount === 0 && abortedCount > 0 && successCount > 0) {
+        prefix = 'Some operations completed, some aborted safely.';
+      } else if (failedCount > 0 && successCount === 0 && abortedCount === 0) {
+        prefix = 'All operations failed.';
+      } else {
+        prefix = 'Some operations failed.';
+      }
+
+      result = { success: failedCount === 0, message: prefix, errors, operationResults };
+    }
   }
 
   if (historyStore && sessionId && preSnapshot) {
@@ -782,6 +796,7 @@ export async function executeFileOperations(
       preSnapshot,
       postSnapshot,
       historyStore,
+      operationResults,
       sessionId,
     );
   }
