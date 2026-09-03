@@ -32,13 +32,9 @@ function StructurePanel() {
 
   const handleCopy = useCallback(() => {
     if (!structureData) return;
-    const summary = [
-      `Path: ${structureData.directoryPath}`,
-      `Depth: ${structureData.depth === 0 ? 'unlimited' : structureData.depth}`,
-      `Files: ${structureData.fileCount}`,
-      `Dirs: ${structureData.directoryCount}`,
-    ].join('\n');
-    navigator.clipboard.writeText(`${summary}\n\n${structureData.json}`);
+    const summary = `Path: ${structureData.directoryPath} | Depth: ${structureData.depth === 0 ? 'unlimited' : structureData.depth} | Files: ${structureData.fileCount} | Dirs: ${structureData.directoryCount}`;
+    const compactJson = JSON.stringify(JSON.parse(structureData.json));
+    navigator.clipboard.writeText(`${summary}\n${compactJson}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [structureData]);
