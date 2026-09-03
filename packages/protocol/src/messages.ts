@@ -19,7 +19,8 @@ export type ExtensionCommand =
   | 'updatePreviewHeader'
   | 'showPreviewNavigation'
   | 'hidePreviewNavigation'
-  | 'structureResult';
+  | 'structureResult'
+  | 'codebaseMetadataResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -34,6 +35,7 @@ export interface ExtensionMessage {
   totalFiles?: number;
   structure?: StructureResult;
   structures?: StructureResult[];
+  codebaseMetadata?: CodebaseMetadataResult;
 }
 
 export interface PreviewHeaderData {
@@ -54,4 +56,12 @@ export interface StructureResult {
   depth: number;
   fileCount: number;
   directoryCount: number;
+}
+
+export interface CodebaseMetadataResult {
+  root: string;
+  totalFiles: number;
+  totalFolders: number;
+  mostDenseFolder: string;
+  mostDenseCount: number;
 }

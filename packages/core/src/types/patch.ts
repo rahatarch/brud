@@ -12,7 +12,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -91,4 +91,9 @@ export interface ExtractStructureOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation;
+export interface CodebaseMetadataOperation {
+  kind: 'codebase_metadata';
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation;

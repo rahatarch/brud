@@ -125,5 +125,27 @@ Depth: [number or 0 for unlimited]
 - Depth 0 means unlimited traversal of the entire directory tree
 - Depth N means N levels deep (e.g., Depth: 2 extracts the directory and its immediate children)
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
+- Multiple EXTRACT_STRUCTURE blocks can be used in a single prompt to extract several directories at once. Each block should have a unique index number.
+
+Example of multiple directories:
+
+<<<<<<< EXTRACT_STRUCTURE [1]
+Directory Path: src/modules/trip
+Depth: 2
+>>>>>>> END EXTRACT_STRUCTURE [1]
+
+<<<<<<< EXTRACT_STRUCTURE [2]
+Directory Path: src/modules/driver
+Depth: 2
+>>>>>>> END EXTRACT_STRUCTURE [2]
+
+Output ONLY the Brud blocks above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const codebaseMetadataPrompt = `Use CODEBASE_METADATA to get a quick summary of the codebase scale.
+
+This returns the total file count, folder count, and the most dense folder (the folder with the most files directly inside it). Use this to determine extraction strategy before deeper exploration.
+
+<<<<<<< CODEBASE_METADATA [1]
+>>>>>>> END CODEBASE_METADATA [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

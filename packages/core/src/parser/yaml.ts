@@ -195,6 +195,13 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'codebase_metadata': {
+        operations.push({
+          kind: 'codebase_metadata',
+          index: String(index),
+        });
+        break;
+      }
       case 'extract_structure': {
         const directoryPath = parsed.directoryPath as string | undefined;
         const depth = parsed.depth as number | undefined;

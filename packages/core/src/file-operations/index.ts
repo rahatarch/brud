@@ -3,6 +3,7 @@ import { FileOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
+import { extractCodebaseMetadata } from '../metadata-extractor';
 
 export async function executeFileOperations(
   operations: FileOperation[],
@@ -332,6 +333,18 @@ export async function executeFileOperations(
             directoryCount,
           });
           break;
+        }
+
+        case 'codebase_metadata': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for codebase metadata.');
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const metadata = await extractCodebaseMetadata(fs, workspaceRoot);
+          const message = JSON.stringify(metadata, null, 2);
+          return { success: true, message, errors };
         }
       }
     } catch (err) {

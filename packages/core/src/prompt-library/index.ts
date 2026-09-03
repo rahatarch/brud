@@ -12,6 +12,7 @@ import {
   deleteDirectoryPrompt,
   moveDirectoryPrompt,
   extractStructurePrompt,
+  codebaseMetadataPrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -89,6 +90,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Extract Directory Structure',
       description: 'Generate a token-efficient JSON map of directory contents with depth control',
       content: extractStructurePrompt,
+    },
+    {
+      id: 'codebase-metadata',
+      title: 'Codebase Metadata',
+      description: 'Get a quick summary of codebase scale and density',
+      content: codebaseMetadataPrompt,
     },
   ],
 };

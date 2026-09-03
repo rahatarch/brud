@@ -16,9 +16,12 @@ export class BrudStructurePanelManager {
   }
 
   public openStructurePanel(data: any) {
-    const message = Array.isArray(data)
-      ? { command: 'structureResult', structures: data }
-      : { command: 'structureResult', structure: data };
+    const isMetadata = data && typeof data === 'object' && 'root' in data;
+    const message = isMetadata
+      ? { command: 'structureResult', codebaseMetadata: data }
+      : Array.isArray(data)
+        ? { command: 'structureResult', structures: data }
+        : { command: 'structureResult', structure: data };
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);

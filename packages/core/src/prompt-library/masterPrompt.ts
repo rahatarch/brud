@@ -91,6 +91,11 @@ Depth: [number or 0 for unlimited]
 - Depth N means N levels deep
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
 
+### 12. CODEBASE_METADATA
+Returns a summary of the codebase scale (total files, folders, most dense folder) to help determine extraction strategy before deeper exploration.
+<<<<<<< CODEBASE_METADATA [1]
+>>>>>>> END CODEBASE_METADATA [1]
+
 ## Output Rules
 
 1. Output ALL Brud blocks inside a single markdown code block using triple backticks

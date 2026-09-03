@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -183,6 +183,8 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const endMoveDirectoryMatch = line.match(/^>>>>>>> END MOVE_DIRECTORY \[([\w\d.-]+)\]/);
     const extractStructureMatch = line.match(/^<<<<<<< EXTRACT_STRUCTURE \[([\w\d.-]+)\]/);
     const endExtractStructureMatch = line.match(/^>>>>>>> END EXTRACT_STRUCTURE \[([\w\d.-]+)\]/);
+    const codebaseMetadataMatch = line.match(/^<<<<<<< CODEBASE_METADATA \[([\w\d.-]+)\]/);
+    const endCodebaseMetadataMatch = line.match(/^>>>>>>> END CODEBASE_METADATA \[([\w\d.-]+)\]/);
     const filePathMatch = line.match(/^File Path:\s*(.+)/);
     const positionMatch = line.match(/^Position:\s*(start|end)/);
     const fromMatch = line.match(/^From:\s*(.+)/);
@@ -261,6 +263,11 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         currentState = 'EXTRACT_STRUCTURE';
         currentIndex = extractStructureMatch[1];
         currentDirectoryPath = '';
+        continue;
+      }
+      if (codebaseMetadataMatch) {
+        currentState = 'CODEBASE_METADATA';
+        currentIndex = codebaseMetadataMatch[1];
         continue;
       }
       if (filePathMatch) {
@@ -545,6 +552,20 @@ export function parseLegacyFormat(input: string): FileOperation[] {
       }
       if (depthMatch) {
         currentDepth = parseInt(depthMatch[1].trim(), 10);
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'CODEBASE_METADATA') {
+      if (endCodebaseMetadataMatch) {
+        if (endCodebaseMetadataMatch[1] === currentIndex) {
+          operations.push({
+            kind: 'codebase_metadata',
+            index: currentIndex,
+          });
+        }
+        reset();
         continue;
       }
       continue;

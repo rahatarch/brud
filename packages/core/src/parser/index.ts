@@ -17,6 +17,7 @@ export function parseOperations(input: string): FileOperation[] {
     '<<<<<<< DELETE_DIRECTORY',
     '<<<<<<< MOVE_DIRECTORY',
     '<<<<<<< EXTRACT_STRUCTURE',
+    '<<<<<<< CODEBASE_METADATA',
   ];
 
   const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));

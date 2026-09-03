@@ -8,7 +8,7 @@ import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, StructureResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -60,6 +60,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? op.from
         : op.kind === 'extract_structure'
         ? op.directoryPath
+        : op.kind === 'codebase_metadata'
+        ? '__codebase_metadata__'
         : op.path;
       const existing = grouped.get(key) || [];
       existing.push(op);
@@ -700,6 +702,36 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
       return;
     }
 
+    const metadataOps = operations.filter(op => op.kind === 'codebase_metadata');
+    if (metadataOps.length > 0) {
+      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for codebase_metadata');
+      const result = await executeFileOperations(metadataOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
+      if (result.success) {
+        let metadata: CodebaseMetadataResult;
+        try {
+          metadata = JSON.parse(result.message);
+        } catch {
+          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse codebase metadata result.' };
+          this._view?.webview.postMessage(errMsg);
+          return;
+        }
+        const report = `Analyzed codebase metadata: ${metadata.root} contains ${metadata.totalFiles} files in ${metadata.totalFolders} folders. Most dense folder: ${metadata.mostDenseFolder} with ${metadata.mostDenseCount} files.`;
+        const successMsg: ExtensionMessage = { command: 'success', message: report };
+        this._view?.webview.postMessage(successMsg);
+        this._structurePanelManager?.openStructurePanel(metadata);
+        this._outputChannel.appendLine(`Codebase metadata: ${JSON.stringify(metadata)}`);
+      } else {
+        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+        this._outputChannel.appendLine('Operations: ' + JSON.stringify(metadataOps));
+        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+        this._outputChannel.show(true);
+        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
+        this._view?.webview.postMessage(errMsg);
+      }
+      return;
+    }
+
     const result = await executeOperationsFromVSCode(operations);
     const report = this._generateReport(operations, result);
 
@@ -810,6 +842,9 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
           break;
         case 'extract_structure':
           lines.push(`Extracted directory structure of ${op.directoryPath} at depth ${op.depth}.`);
+          break;
+        case 'codebase_metadata':
+          lines.push(`Analyzed codebase metadata: [root] contains [totalFiles] files in [totalFolders] folders. Most dense folder: [mostDenseFolder] with [mostDenseCount] files.`);
           break;
       }
     }
