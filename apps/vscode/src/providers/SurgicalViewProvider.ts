@@ -8,7 +8,7 @@ import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -637,13 +637,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
-    if (result.success && result.errors.length === 0) {
+    if (result.success) {
       const msg: ExtensionMessage = { command: 'success', message: result.message };
       this._view?.webview.postMessage(msg);
-    } else if (result.success && result.errors.length > 0) {
-      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
-      this._view?.webview.postMessage(msg);
-      this._outputChannel.show(true);
     } else {
       const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
       this._view?.webview.postMessage(msg);
@@ -742,7 +738,7 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
-    if (result.success && result.errors.length === 0) {
+    if (result.success) {
       const msg: ExtensionMessage = { command: 'success', message: report };
       this._view?.webview.postMessage(msg);
     } else {
@@ -806,63 +802,21 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
 
   private _generateReport(
     operations: FileOperation[],
-    result: { success: boolean; message: string; errors: string[] }
+    result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] }
   ): string {
     const lines: string[] = [];
 
-    for (const op of operations) {
-      switch (op.kind) {
-        case 'search_replace':
-          lines.push(`Patched ${op.path} by replacing the specified content.`);
-          break;
-        case 'create_file':
-          lines.push(`Created ${op.path}.`);
-          break;
-        case 'delete_file':
-          lines.push(`Deleted ${op.path}.`);
-          break;
-        case 'rename_file':
-          lines.push(`Renamed ${op.from} to ${op.to}.`);
-          break;
-        case 'move_file':
-          lines.push(`Moved ${op.from} to ${op.to}.`);
-          break;
-        case 'copy_file':
-          lines.push(`Copied ${op.from} to ${op.to}.`);
-          break;
-        case 'append_file':
-          lines.push(`Appended content to ${op.path}.`);
-          break;
-        case 'create_directory':
-          lines.push(`Created directory ${op.directoryPath} with ${op.files.length} empty files.`);
-          break;
-        case 'delete_directory':
-          lines.push(`Deleted directory ${op.directoryPath} and all its contents.`);
-          break;
-        case 'move_directory':
-          lines.push(`Moved directory ${op.from} to ${op.to}.`);
-          break;
-        case 'extract_structure':
-          lines.push(`Extracted directory structure of ${op.directoryPath} at depth ${op.depth}.`);
-          break;
-        case 'codebase_metadata':
-          lines.push(`Analyzed codebase metadata: [root] contains [totalFiles] files in [totalFolders] folders. Most dense folder: [mostDenseFolder] with [mostDenseCount] files.`);
-          break;
-      }
+    for (const opResult of result.operationResults) {
+      lines.push(opResult.message);
     }
 
-    let prefix: string;
-    if (result.success && result.errors.length === 0) {
-      prefix = 'All operations completed successfully.';
-    } else if (result.success) {
-      prefix = 'Some operations completed with errors.';
-    } else {
-      prefix = 'All operations failed.';
-    }
+    const report = [result.message, ...lines].join('\n');
 
-    const report = [prefix, ...lines].join('\n');
+    const failedCount = result.operationResults
+      ? result.operationResults.filter(r => r.status === 'failed').length
+      : 0;
 
-    if (result.errors.length > 0) {
+    if (failedCount > 0) {
       return report + '\n\nErrors:\n' + result.errors.map(e => `- ${e}`).join('\n');
     }
 

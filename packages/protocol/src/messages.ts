@@ -60,10 +60,19 @@ export interface PreviewHeaderData {
   totalFiles: number;
 }
 
+export interface OperationResult {
+  operationIndex: number;
+  kind: string;
+  status: 'success' | 'aborted' | 'failed';
+  message: string;
+  path: string;
+}
+
 export interface ExecutionResult {
   success: boolean;
   message: string;
   errors: string[];
+  operationResults: OperationResult[];
 }
 
 export interface StructureResult {
