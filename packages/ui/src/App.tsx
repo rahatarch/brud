@@ -86,7 +86,7 @@ function App() {
         <button
           onClick={handleOpenMainWindow}
           className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text cursor-pointer bg-surface-3 hover:bg-surface-3 border border-border-subtle rounded px-2.5 py-1.5 transition-colors"
-          title="Open Brud Management"
+          title="Open Brud Code Management"
         >
           <ExternalLink size={12} />
           Management
@@ -95,12 +95,12 @@ function App() {
       <CustomScrollbar ref={chatAreaRef} className="flex-1 px-4 py-4">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
-            <img src={imageUri} alt="Brud Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
+            <img src={imageUri} alt="Brud Code Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
             <h1 className="text-[24px] font-semibold text-text mb-3 text-center">
-              Welcome to Brud
+              Welcome to Brud Code
             </h1>
             <p className="text-[14px] text-text-secondary text-center max-w-[360px] leading-[1.5]">
-              Brud is a full AI-assisted coding platform. Paste your Brud Prompt to
+              Brud Code is a full AI-assisted coding platform. Paste your Brud Prompt to
               control your codebase automatically.
             </p>
             <div className="flex flex-row items-center justify-center gap-3 mt-5">
@@ -161,7 +161,7 @@ function App() {
             className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-hover active:bg-primary-active text-white rounded-lg px-4 py-3 cursor-pointer text-sm font-medium"
           >
             <PlusCircle size={16} />
-            Create New Brud Session
+            Create New Brud Code Session
           </button>
         ) : (
           <div className="relative">

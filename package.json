@@ -1,8 +1,8 @@
 {
   "name": "brud",
   "private": true,
-  "displayName": "Brud",
-  "description": "Brud: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
+  "displayName": "Brud Code",
+  "description": "Brud Code: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
   "publisher": "Akkhar-Labs",
   "author": "Akkhar-Labs",
   "version": "0.0.1",
@@ -40,7 +40,7 @@
       "activitybar": [
         {
           "id": "brud-sidebar",
-          "title": "Brud",
+          "title": "Brud Code",
           "icon": "assets/images/brud_icon.svg"
         }
       ]
@@ -50,20 +50,20 @@
         {
           "type": "webview",
           "id": "brud-view",
-          "name": "Full AI-Assisted Platform"
+          "name": "Brud Code"
         }
       ]
     },
     "commands": [
       {
         "command": "brud.executePatch",
-        "title": "Brud: Execute Surgical Patch",
-        "category": "Brud"
+        "title": "Brud Code: Execute Surgical Patch",
+        "category": "Brud Code"
       },
       {
         "command": "brud.openManagement",
-        "title": "Open Brud Management",
-        "category": "Brud"
+        "title": "Open Brud Code Management",
+        "category": "Brud Code"
       }
     ]
   },

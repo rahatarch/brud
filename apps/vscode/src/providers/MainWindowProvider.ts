@@ -20,7 +20,7 @@ export class BrudMainWindowManager {
 
     this._panel = vscode.window.createWebviewPanel(
       'brud-main-window',
-      'Brud Management',
+      'Brud Code Management',
       vscode.ViewColumn.One,
       {
         enableScripts: true,

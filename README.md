@@ -1,8 +1,8 @@
 <p align="center">
-  <img src="assets/images/brud_super_high.png" width="200" alt="Brud Logo" />
+  <img src="assets/images/brud_super_high.png" width="200" alt="Brud Code Logo" />
 </p>
 
-<h1 align="center">Brud</h1>
+<h1 align="center">Brud Code</h1>
 
 <h3 align="center">Full AI-Assisted Coding Platform — Manual Input, No API Keys</h3>
 
@@ -20,7 +20,7 @@
 
 <br />
 
-# Brud
+# Brud Code
 
 ## AI-Assisted Coding Without the Friction
 
@@ -50,9 +50,9 @@ Brud is a full AI-assisted coding platform built for manual paste-and-apply work
 
 1. Open VS Code.
 2. Go to Extensions (Ctrl+Shift+X).
-3. Search "Brud".
+3. Search "Brud Code".
 4. Click Install.
-5. Look for the Brud icon in your sidebar.
+5. Look for the Brud Code icon in your sidebar.
 
 ---
 
@@ -74,7 +74,7 @@ function calculateTotal(price, tax, discount = 0) {
 ```
 
 1. Copy the entire patch block from your AI output.
-2. Paste it into the Brud sidebar in VS Code.
+2. Paste it into the Brud Code sidebar in VS Code.
 3. Click Preview Bulk Diff to see exactly what will change.
 4. Verify the diff in the side-by-side preview.
 5. Click Execute Patch to apply the changes.
@@ -90,7 +90,7 @@ Contributions are welcome. Please read CONTRIBUTING.md for guidelines on the dev
 
 ## License
 
-Brud is licensed under the MIT License. See the LICENSE file for details.
+Brud Code is licensed under the MIT License. See the LICENSE file for details.
 
 ---
 

@@ -31,7 +31,7 @@ export class BrudStructurePanelManager {
 
     this._panel = vscode.window.createWebviewPanel(
       'brud-structure-panel',
-      'Brud Structure Extraction',
+      'Brud Code Structure Extraction',
       vscode.ViewColumn.One,
       {
         enableScripts: true,

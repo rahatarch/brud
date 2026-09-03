@@ -130,7 +130,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
       }
 
-      await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
+      await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Code Preview: ' + filePath + ' (NEW FILE)');
 
       const msg: ExtensionMessage = {
         command: 'updatePreviewHeader',
@@ -221,7 +221,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
       }
 
-      await vscode.commands.executeCommand('vscode.diff', originalUri, previewUri, 'Brud Preview: ' + filePath + ' (APPENDED)');
+      await vscode.commands.executeCommand('vscode.diff', originalUri, previewUri, 'Brud Code Preview: ' + filePath + ' (APPENDED)');
 
       const headerMsg: ExtensionMessage = {
         command: 'updatePreviewHeader',
@@ -286,7 +286,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
             await vscode.languages.setTextDocumentLanguage(previewDoc, languageId);
           }
 
-          await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Preview: ' + filePath + ' (NEW FILE)');
+          await vscode.commands.executeCommand('vscode.diff', emptyUri, previewUri, 'Brud Code Preview: ' + filePath + ' (NEW FILE)');
 
           const headerMsg: ExtensionMessage = {
             command: 'updatePreviewHeader',
@@ -355,7 +355,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         'vscode.diff',
         document.uri,
         previewUri,
-        `Brud Preview: ${document.fileName} (PATCHED)`,
+        `Brud Code Preview: ${document.fileName} (PATCHED)`,
       );
 
       const headerMsg: ExtensionMessage = {
@@ -556,7 +556,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       'vscode.diff',
       firstDocument.uri,
       previewUri,
-      'Brud Preview: All Files (PATCHED)',
+      'Brud Code Preview: All Files (PATCHED)',
     );
 
     const headerMsg: ExtensionMessage = {
