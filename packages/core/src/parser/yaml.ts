@@ -195,6 +195,20 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'extract_structure': {
+        const directoryPath = parsed.directoryPath as string | undefined;
+        const depth = parsed.depth as number | undefined;
+        if (!directoryPath) {
+          throw new Error('Missing directoryPath field in extract_structure operation');
+        }
+        operations.push({
+          kind: 'extract_structure',
+          directoryPath,
+          depth: depth ?? 0,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

@@ -9,14 +9,17 @@ export type WebviewCommand =
   | 'hidePreviewNavigation'
   | 'showPreviewNavigation'
   | 'updatePreviewHeader'
-  | 'openMainWindow';
+  | 'openMainWindow'
+  | 'extractStructure'
+  | 'ready';
 
 export type ExtensionCommand =
   | 'success'
   | 'error'
   | 'updatePreviewHeader'
   | 'showPreviewNavigation'
-  | 'hidePreviewNavigation';
+  | 'hidePreviewNavigation'
+  | 'structureResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -29,6 +32,7 @@ export interface ExtensionMessage {
   fileName?: string;
   fileIndex?: number;
   totalFiles?: number;
+  structure?: StructureResult;
 }
 
 export interface PreviewHeaderData {
@@ -41,4 +45,12 @@ export interface ExecutionResult {
   success: boolean;
   message: string;
   errors: string[];
+}
+
+export interface StructureResult {
+  json: string;
+  directoryPath: string;
+  depth: number;
+  fileCount: number;
+  directoryCount: number;
 }

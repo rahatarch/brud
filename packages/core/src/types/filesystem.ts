@@ -9,4 +9,5 @@ export interface FileSystem {
   deleteDirectoryRecursive(path: string): Promise<void>;
   moveDirectory(from: string, to: string): Promise<void>;
   listDirectory(path: string): Promise<string[]>;
+  listDirectoryContents(path: string): Promise<{ name: string; isDirectory: boolean }[]>;
 }

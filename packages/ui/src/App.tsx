@@ -3,6 +3,7 @@ import { Send, PlusCircle, ExternalLink, Copy, Check } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
+import StructurePanel from './components/StructurePanel';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
 function App() {
@@ -12,6 +13,10 @@ function App() {
 
   if (viewMode === 'main-window') {
     return <MainWindowShell />;
+  }
+
+  if (viewMode === 'structure-panel') {
+    return <StructurePanel />;
   }
 
   const [inputText, setInputText] = useState('');

@@ -12,7 +12,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'create_directory' | 'delete_directory' | 'move_directory';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -84,4 +84,11 @@ export interface MoveDirectoryOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation;
+export interface ExtractStructureOperation {
+  kind: 'extract_structure';
+  directoryPath: string;
+  depth: number;
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation;

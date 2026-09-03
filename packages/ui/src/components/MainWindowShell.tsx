@@ -31,6 +31,22 @@ function MainWindowShell() {
 
   const current = tabContent[activeTab];
 
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'prompt-library':
+        return <PromptLibrary />;
+      default:
+        return (
+          <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
+            <h2 className="text-2xl font-semibold text-text mb-3">{current.title}</h2>
+            <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed">
+              {current.description}
+            </p>
+          </div>
+        );
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       <div className="flex items-center border-b border-border bg-surface-2 px-4 gap-0">
@@ -49,16 +65,7 @@ function MainWindowShell() {
         ))}
       </div>
 
-      {activeTab === 'prompt-library' ? (
-        <PromptLibrary />
-      ) : (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
-          <h2 className="text-2xl font-semibold text-text mb-3">{current.title}</h2>
-          <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed">
-            {current.description}
-          </p>
-        </div>
-      )}
+      {renderTabContent()}
     </div>
   );
 }

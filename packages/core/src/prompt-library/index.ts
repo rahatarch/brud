@@ -11,6 +11,7 @@ import {
   createDirectoryPrompt,
   deleteDirectoryPrompt,
   moveDirectoryPrompt,
+  extractStructurePrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -82,6 +83,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Move Directory',
       description: 'Move a directory from one location to another',
       content: moveDirectoryPrompt,
+    },
+    {
+      id: 'extract-structure',
+      title: 'Extract Directory Structure',
+      description: 'Generate a token-efficient JSON map of directory contents with depth control',
+      content: extractStructurePrompt,
     },
   ],
 };

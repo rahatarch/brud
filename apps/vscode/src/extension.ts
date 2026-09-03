@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { BrudSRViewProvider } from './providers/SurgicalViewProvider';
 import { BrudCodePreviewProvider } from './providers/DiffPreviewProvider';
 import { BrudMainWindowManager } from './providers/MainWindowProvider';
+import { BrudStructurePanelManager } from './providers/StructurePanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 
@@ -13,14 +14,20 @@ export function activate(context: vscode.ExtensionContext) {
   const logger = BrudLogger.getInstance();
   const previewProvider = new BrudCodePreviewProvider();
 
+  const mainWindowManager = new BrudMainWindowManager(
+    context.extensionUri,
+  );
+
+  const structurePanelManager = new BrudStructurePanelManager(
+    context.extensionUri,
+  );
+
   const provider = new BrudSRViewProvider(
     context.extensionUri,
     logger.channel,
     previewProvider,
-  );
-
-  const mainWindowManager = new BrudMainWindowManager(
-    context.extensionUri,
+    mainWindowManager,
+    structurePanelManager,
   );
 
   // Register the Virtual Document Provider for surgical diff previews

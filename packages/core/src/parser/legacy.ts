@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -17,6 +17,7 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let renameTo = '';
   let directoryFiles: string[] = [];
   let currentDirectoryPath = '';
+  let currentDepth = 0;
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -156,6 +157,7 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     renameTo = '';
     directoryFiles = [];
     currentDirectoryPath = '';
+    currentDepth = 0;
   }
 
   for (const line of lines) {
@@ -179,11 +181,14 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const endDeleteDirectoryMatch = line.match(/^>>>>>>> END DELETE_DIRECTORY \[([\w\d.-]+)\]/);
     const moveDirectoryMatch = line.match(/^<<<<<<< MOVE_DIRECTORY \[([\w\d.-]+)\]/);
     const endMoveDirectoryMatch = line.match(/^>>>>>>> END MOVE_DIRECTORY \[([\w\d.-]+)\]/);
+    const extractStructureMatch = line.match(/^<<<<<<< EXTRACT_STRUCTURE \[([\w\d.-]+)\]/);
+    const endExtractStructureMatch = line.match(/^>>>>>>> END EXTRACT_STRUCTURE \[([\w\d.-]+)\]/);
     const filePathMatch = line.match(/^File Path:\s*(.+)/);
     const positionMatch = line.match(/^Position:\s*(start|end)/);
     const fromMatch = line.match(/^From:\s*(.+)/);
     const toMatch = line.match(/^To:\s*(.+)/);
     const directoryPathMatch = line.match(/^Directory Path:\s*(.+)/);
+    const depthMatch = line.match(/^Depth:\s*(.+)/);
     const filesListMatch = line.match(/^\s*-\s*(.+)/);
 
     if (currentState === 'IDLE') {
@@ -250,6 +255,12 @@ export function parseLegacyFormat(input: string): FileOperation[] {
         currentIndex = moveDirectoryMatch[1];
         renameFrom = '';
         renameTo = '';
+        continue;
+      }
+      if (extractStructureMatch) {
+        currentState = 'EXTRACT_STRUCTURE';
+        currentIndex = extractStructureMatch[1];
+        currentDirectoryPath = '';
         continue;
       }
       if (filePathMatch) {
@@ -509,6 +520,31 @@ export function parseLegacyFormat(input: string): FileOperation[] {
       }
       if (toMatch) {
         renameTo = toMatch[1].trim();
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'EXTRACT_STRUCTURE') {
+      if (endExtractStructureMatch) {
+        if (endExtractStructureMatch[1] === currentIndex) {
+          const depth = currentDirectoryPath ? 0 : 0;
+          operations.push({
+            kind: 'extract_structure',
+            directoryPath: currentDirectoryPath || '.',
+            depth: currentDepth !== undefined ? currentDepth : 0,
+            index: currentIndex,
+          });
+        }
+        reset();
+        continue;
+      }
+      if (directoryPathMatch) {
+        currentDirectoryPath = directoryPathMatch[1].trim();
+        continue;
+      }
+      if (depthMatch) {
+        currentDepth = parseInt(depthMatch[1].trim(), 10);
         continue;
       }
       continue;

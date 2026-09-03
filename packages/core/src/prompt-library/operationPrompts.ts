@@ -112,3 +112,18 @@ To: packages/ui/components
 >>>>>>> END MOVE_DIRECTORY [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const extractStructurePrompt = `Use EXTRACT_STRUCTURE to extract a token-efficient JSON map of directory contents with depth control.
+
+Describe the directory you want to extract below:
+
+<<<<<<< EXTRACT_STRUCTURE [1]
+Directory Path: [path]
+Depth: [number or 0 for unlimited]
+>>>>>>> END EXTRACT_STRUCTURE [1]
+
+- Depth 0 means unlimited traversal of the entire directory tree
+- Depth N means N levels deep (e.g., Depth: 2 extracts the directory and its immediate children)
+- Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

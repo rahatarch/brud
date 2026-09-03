@@ -79,6 +79,18 @@ From: src/components
 To: packages/ui/components
 >>>>>>> END MOVE_DIRECTORY [1]
 
+### 11. EXTRACT_STRUCTURE
+Extracts directory structure as a token-efficient JSON map.
+<<<<<<< EXTRACT_STRUCTURE [1]
+Directory Path: [path]
+Depth: [number or 0 for unlimited]
+>>>>>>> END EXTRACT_STRUCTURE [1]
+
+- Extracts the directory tree as a JSON object
+- Depth 0 means unlimited traversal of the entire directory tree
+- Depth N means N levels deep
+- Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
+
 ## Output Rules
 
 1. Output ALL Brud blocks inside a single markdown code block using triple backticks

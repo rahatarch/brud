@@ -61,4 +61,13 @@ export class VSCodeFileSystem implements FileSystem {
     const entries = await vscode.workspace.fs.readDirectory(uri);
     return entries.map(([name]) => name);
   }
+
+  async listDirectoryContents(path: string): Promise<{ name: string; isDirectory: boolean }[]> {
+    const uri = vscode.Uri.file(path);
+    const entries = await vscode.workspace.fs.readDirectory(uri);
+    return entries.map(([name, type]) => ({
+      name,
+      isDirectory: type === vscode.FileType.Directory,
+    }));
+  }
 }

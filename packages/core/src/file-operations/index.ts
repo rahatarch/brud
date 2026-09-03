@@ -2,6 +2,7 @@ import path from 'path';
 import { FileOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
+import { extractDirectoryStructure } from '../structure-extractor';
 
 export async function executeFileOperations(
   operations: FileOperation[],
@@ -283,10 +284,33 @@ export async function executeFileOperations(
           await fs.moveDirectory(sourcePath, targetPath);
           break;
         }
+
+        case 'extract_structure': {
+          console.error('DEBUG extract_structure: directoryPath=' + operation.directoryPath + ', depth=' + operation.depth);
+          console.error('DEBUG extract_structure: workspaceFolders=' + JSON.stringify(workspaceFolders));
+          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
+          if (!result.valid) {
+            errors.push(result.error);
+            continue;
+          }
+
+          const directoryPath = result.resolvedPath;
+          const exists = await fs.exists(directoryPath);
+          console.error('DEBUG extract_structure: fs.exists result=' + exists);
+          if (!exists) {
+            errors.push(`Directory not found: ${operation.directoryPath}`);
+            continue;
+          }
+
+          const json = await extractDirectoryStructure(fs, directoryPath, operation.depth);
+          return { success: true, message: json, errors: [] };
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      errors.push(`Unexpected error during ${operation.kind}: ${message}`);
+      const stack = err instanceof Error && err.stack ? `\nStack: ${err.stack}` : '';
+      errors.push(`Unexpected error during ${operation.kind}: ${message}${operation.kind === 'extract_structure' ? stack : ''}`);
     }
   }
 

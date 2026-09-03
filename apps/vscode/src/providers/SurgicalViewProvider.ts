@@ -7,19 +7,45 @@ import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem } fr
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult } from '@brud/protocol';
+import { extractDirectoryStructure } from '@brud/core';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, StructureResult } from '@brud/protocol';
+
+function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
+  for (const value of Object.values(obj)) {
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === 'string') {
+          files++;
+        } else if (typeof item === 'object' && item !== null) {
+          dirs++;
+          const result = countStructure(item, files, dirs);
+          files = result.files;
+          dirs = result.dirs;
+        }
+      }
+    }
+  }
+  return { files, dirs };
+}
 
 export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
   private _operationsByFile: Map<string, FileOperation[]> = new Map();
   private _fileList: string[] = [];
   private _currentFileIndex: number = 0;
+  private _mainWindowProvider: any;
+  private _structurePanelManager: any;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _outputChannel: vscode.OutputChannel,
     private readonly _previewProvider: BrudCodePreviewProvider,
-  ) {}
+    mainWindowProvider?: any,
+    structurePanelManager?: any,
+  ) {
+    this._mainWindowProvider = mainWindowProvider;
+    this._structurePanelManager = structurePanelManager;
+  }
 
   private _groupOperationsByFile(operations: FileOperation[]): Map<string, FileOperation[]> {
     const grouped = new Map<string, FileOperation[]>();
@@ -32,6 +58,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? op.directoryPath
         : op.kind === 'move_directory'
         ? op.from
+        : op.kind === 'extract_structure'
+        ? op.directoryPath
         : op.path;
       const existing = grouped.get(key) || [];
       existing.push(op);
@@ -388,6 +416,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         case 'executeAllFiles':
           await this._handleExecuteAllFiles();
           break;
+        case 'extractStructure':
+          await this._handleExtractStructure(data.text ?? '');
+          break;
         case 'openMainWindow':
           vscode.commands.executeCommand('brud.openManagement');
           break;
@@ -610,20 +641,62 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     } else if (result.success && result.errors.length > 0) {
       const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
       this._view?.webview.postMessage(msg);
+      this._outputChannel.show(true);
     } else {
       const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
       this._view?.webview.postMessage(msg);
+      this._outputChannel.show(true);
     }
   }
 
   private async _handleApplyPatch(text: string) {
     await this._closePreviewTabs();
+    this._outputChannel.appendLine('DEBUG: Before parseOperations');
 
     let operations;
     try {
       operations = parseOperations(text);
+      this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
+      this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
       this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
+      return;
+    }
+
+    const extractOps = operations.filter(op => op.kind === 'extract_structure');
+    if (extractOps.length > 0) {
+      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for extract_structure');
+      const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
+      if (result.success) {
+        let parsedJson: any;
+        try {
+          parsedJson = JSON.parse(result.message);
+        } catch {
+          parsedJson = {};
+        }
+        const countResult = countStructure(parsedJson);
+        const structureResult: StructureResult = {
+          json: result.message,
+          directoryPath: (extractOps[0] as any).directoryPath,
+          depth: (extractOps[0] as any).depth,
+          fileCount: countResult.files,
+          directoryCount: countResult.dirs,
+        };
+        const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure from ${structureResult.directoryPath} (depth ${structureResult.depth}). Result available in the Structure panel.` };
+        this._view?.webview.postMessage(successMsg);
+        this._structurePanelManager?.openStructurePanel(structureResult);
+        this._outputChannel.appendLine(`Extracted directory structure of ${structureResult.directoryPath}. Files: ${structureResult.fileCount}, Dirs: ${structureResult.directoryCount}`);
+      } else {
+        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+        this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
+        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+        this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
+        this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
+        this._outputChannel.show(true);
+const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
+        this._view?.webview.postMessage(errMsg);
+      }
       return;
     }
 
@@ -639,8 +712,61 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       const msg: ExtensionMessage = { command: 'success', message: report };
       this._view?.webview.postMessage(msg);
     } else {
+      this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+      this._outputChannel.appendLine('Operations: ' + JSON.stringify(operations));
+      this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+      this._outputChannel.show(true);
       const msg: ExtensionMessage = { command: 'error', message: report };
       this._view?.webview.postMessage(msg);
+    }
+  }
+
+  private async _handleExtractStructure(text: string) {
+    await this._closePreviewTabs();
+
+    let operations;
+    try {
+      operations = parseOperations(text);
+    } catch (e) {
+      this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
+      return;
+    }
+
+    const extractOps = operations.filter(op => op.kind === 'extract_structure');
+    if (extractOps.length === 0) {
+      this._sendErrorToWebview('No extract_structure operations found.');
+      return;
+    }
+
+    const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
+    if (result.success) {
+      let parsedJson: any;
+      try {
+        parsedJson = JSON.parse(result.message);
+      } catch {
+        parsedJson = {};
+      }
+      const countResult = countStructure(parsedJson);
+      const structureResult: StructureResult = {
+        json: result.message,
+        directoryPath: (extractOps[0] as any).directoryPath,
+        depth: (extractOps[0] as any).depth,
+        fileCount: countResult.files,
+        directoryCount: countResult.dirs,
+      };
+      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure from ${structureResult.directoryPath} (depth ${structureResult.depth}). Result available in the Structure panel.` };
+      this._view?.webview.postMessage(successMsg);
+      this._structurePanelManager?.openStructurePanel(structureResult);
+      this._outputChannel.appendLine(`Extracted directory structure of ${structureResult.directoryPath}. Files: ${structureResult.fileCount}, Dirs: ${structureResult.directoryCount}`);
+    } else {
+      this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+      this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
+      this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+      this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
+      this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
+      this._outputChannel.show(true);
+      const errMsg: ExtensionMessage = { command: 'error', message: result.message };
+      this._view?.webview.postMessage(errMsg);
     }
   }
 
@@ -681,6 +807,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
           break;
         case 'move_directory':
           lines.push(`Moved directory ${op.from} to ${op.to}.`);
+          break;
+        case 'extract_structure':
+          lines.push(`Extracted directory structure of ${op.directoryPath} at depth ${op.depth}.`);
           break;
       }
     }
