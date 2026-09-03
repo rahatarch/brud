@@ -1,13 +1,19 @@
 import { useState } from 'react';
 import { getAllPrompts, getPromptById } from '@brud/core';
-import { Copy, Check, ArrowLeft, BookOpen } from 'lucide-react';
+import { Copy, Check, ArrowLeft, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
 import CustomScrollbar from './CustomScrollbar';
 
 function PromptLibrary() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
+  const PROMPTS_PER_PAGE = 10;
   const prompts = getAllPrompts();
+  const totalPages = Math.ceil(prompts.length / PROMPTS_PER_PAGE);
+  const startIndex = (currentPage - 1) * PROMPTS_PER_PAGE;
+  const endIndex = startIndex + PROMPTS_PER_PAGE;
+  const visiblePrompts = prompts.slice(startIndex, endIndex);
 
   const handleSelectPrompt = (id: string) => {
     setSelectedPromptId(id);
@@ -17,6 +23,7 @@ function PromptLibrary() {
   const handleBack = () => {
     setSelectedPromptId(null);
     setCopiedPromptId(null);
+    setCurrentPage(1);
   };
 
   const handleCopy = async (id: string, content: string) => {
@@ -93,8 +100,9 @@ function PromptLibrary() {
       {prompts.length === 0 ? (
         <p className="text-sm text-text-secondary">No prompts available.</p>
       ) : (
+        <>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {prompts.map((prompt) => (
+            {visiblePrompts.map((prompt) => (
             <button
               key={prompt.id}
               onClick={() => handleSelectPrompt(prompt.id)}
@@ -105,6 +113,30 @@ function PromptLibrary() {
             </button>
           ))}
         </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-6">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-border bg-surface hover:bg-surface-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft size={16} />
+                Previous
+              </button>
+              <span className="text-sm text-text-secondary">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-border bg-surface hover:bg-surface-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
