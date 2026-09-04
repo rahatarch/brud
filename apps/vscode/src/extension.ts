@@ -5,6 +5,7 @@ import { BrudMainWindowManager } from './providers/MainWindowProvider';
 import { BrudStructurePanelManager } from './providers/StructurePanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
+import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
 
 /**
  * Entry point for the Brud extension.
@@ -54,6 +55,19 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Register implementation-agnostic commands
   registerExecutePatchCommand(context);
+
+  // Run retention cleanup on activation
+  const workspaceFolders = vscode.workspace.workspaceFolders;
+  if (workspaceFolders && workspaceFolders.length > 0) {
+    const workspaceRoot = workspaceFolders[0].uri.fsPath;
+    const fileSystem = new VSCodeFileSystem();
+    const historyStore = new WorkspaceHistoryStore(workspaceRoot, fileSystem);
+    historyStore.runRetentionCleanup().then(deleted => {
+      if (deleted > 0) {
+        logger.appendLine(`History cleanup: removed ${deleted} old session(s)`);
+      }
+    });
+  }
 }
 
 export function deactivate() {}

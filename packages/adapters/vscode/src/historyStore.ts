@@ -120,10 +120,51 @@ export class WorkspaceHistoryStore implements HistoryStore {
     }
   }
 
+  private get cleanupStateFile(): string {
+    return path.join(this.historyDir, 'cleanup.json');
+  }
+
+  private async getCleanupState(): Promise<{ lastCleanup: string | null }> {
+    const exists = await this.fileSystem.exists(this.cleanupStateFile);
+    if (!exists) {
+      return { lastCleanup: null };
+    }
+    const raw = await this.fileSystem.readFile(this.cleanupStateFile);
+    return JSON.parse(raw);
+  }
+
+  private async updateCleanupState(): Promise<void> {
+    const state = { lastCleanup: new Date().toISOString() };
+    await this.fileSystem.writeFile(this.cleanupStateFile, JSON.stringify(state, null, 2));
+  }
+
+  private async isCleanupDue(): Promise<boolean> {
+    const state = await this.getCleanupState();
+    if (state.lastCleanup === null) {
+      return true;
+    }
+    const lastCleanup = new Date(state.lastCleanup);
+    const today = new Date();
+    return lastCleanup.getDate() !== today.getDate() ||
+      lastCleanup.getMonth() !== today.getMonth() ||
+      lastCleanup.getFullYear() !== today.getFullYear();
+  }
+
+  async runRetentionCleanup(): Promise<number> {
+    if (!(await this.isCleanupDue())) {
+      return 0;
+    }
+    const deleted = await this.cleanupOldSessions(3);
+    await this.updateCleanupState();
+    return deleted;
+  }
+
   async saveSession(entry: HistoryEntry): Promise<void> {
     if (!this.brudDirEnsured) {
       await this.ensureBrudDirectory();
     }
+
+    await this.runRetentionCleanup();
 
     await this.updateVscodeSettings();
     await this.updateGitignore();
