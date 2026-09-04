@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft } from 'lucide-react';
-import type { HistorySessionResult } from '@brud/protocol';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2 } from 'lucide-react';
+import type { HistorySessionResult, RevertSessionResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 
 function formatDateHeader(timestamp?: string): string {
@@ -94,6 +94,44 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
   const filesAffected = session.filesAffected || [];
   const metadataUsed = session.metadataUsed || {};
   const hasMetadata = Object.keys(metadataUsed).length > 0;
+  const [revertLoading, setRevertLoading] = useState<'pre' | 'post' | null>(null);
+  const [revertResult, setRevertResult] = useState<RevertSessionResult | null>(null);
+  const [revertDismissed, setRevertDismissed] = useState(false);
+
+  useEffect(() => {
+    const unsubscribe = onExtensionMessage((message) => {
+      if (message.command === 'revertResult' && message.revertResult) {
+        setRevertResult(message.revertResult);
+        setRevertLoading(null);
+        if (message.revertResult.success) {
+          setTimeout(() => {
+            onBack();
+          }, 2000);
+        }
+      }
+    });
+    return unsubscribe;
+  }, [onBack]);
+
+  const handleRevert = useCallback((targetState: 'pre' | 'post') => {
+    const label = targetState === 'pre' ? 'pre-patch' : 'post-patch';
+    const confirmed = window.confirm(
+      `Are you sure you want to revert to the ${label} state?\n\n` +
+      `Session: ${sessionId}\n` +
+      `This will restore ${filesAffected.length} file(s) to their ${label} state.`
+    );
+    if (!confirmed) return;
+
+    setRevertLoading(targetState);
+    setRevertResult(null);
+    setRevertDismissed(false);
+    sendToExtension({ command: 'revertSession', sessionId, targetState });
+  }, [sessionId, filesAffected.length]);
+
+  const dismissResult = useCallback(() => {
+    setRevertResult(null);
+    setRevertDismissed(true);
+  }, []);
 
   try {
     return (
@@ -116,18 +154,75 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
 
         <div className="flex gap-3 mt-4">
           <button
-            disabled
-            className="px-4 py-2 rounded-lg bg-primary/20 text-primary border border-primary/30 text-sm font-medium cursor-not-allowed"
+            onClick={() => handleRevert('pre')}
+            disabled={revertLoading !== null}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              revertLoading === 'pre'
+                ? 'bg-primary/30 text-primary border border-primary/30 cursor-wait'
+                : 'bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 cursor-pointer'
+            }`}
           >
-            Restore Pre-Patch State
+            {revertLoading === 'pre' ? (
+              <span className="flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                Reverting...
+              </span>
+            ) : (
+              'Restore Pre-Patch State'
+            )}
           </button>
           <button
-            disabled
-            className="px-4 py-2 rounded-lg border border-border bg-surface text-sm text-text-secondary cursor-not-allowed opacity-60"
+            onClick={() => handleRevert('post')}
+            disabled={revertLoading !== null}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              revertLoading === 'post'
+                ? 'bg-primary/30 text-primary border border-primary/30 cursor-wait'
+                : 'border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text cursor-pointer'
+            }`}
           >
-            Restore Post-Patch State
+            {revertLoading === 'post' ? (
+              <span className="flex items-center gap-2">
+                <Loader2 size={14} className="animate-spin" />
+                Reverting...
+              </span>
+            ) : (
+              'Restore Post-Patch State'
+            )}
           </button>
         </div>
+
+        {revertResult && !revertDismissed && (
+          <div className={`mt-4 p-4 rounded-lg border ${
+            revertResult.success
+              ? 'bg-green-500/10 border-green-500/30 text-green-500'
+              : 'bg-red-500/10 border-red-500/30 text-red-500'
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {revertResult.success ? 'Revert Successful' : 'Revert Failed'}
+                </p>
+                <p className="text-sm mt-1 opacity-80">{revertResult.message}</p>
+                {revertResult.errors.length > 0 && (
+                  <ul className="mt-2 text-xs space-y-1">
+                    {revertResult.errors.map((err, i) => (
+                      <li key={i} className="opacity-70">- {err}</li>
+                    ))}
+                  </ul>
+                )}
+                {revertResult.success && (
+                  <p className="text-xs mt-2 opacity-60">Returning to history list...</p>
+                )}
+              </div>
+              <button
+                onClick={dismissResult}
+                className="shrink-0 text-sm opacity-60 hover:opacity-100 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
 
         <hr className="border-border my-5" />
 
@@ -223,6 +318,7 @@ function HistoryView() {
   const [sessions, setSessions] = useState<HistorySessionResult[]>([]);
   const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -243,10 +339,11 @@ function HistoryView() {
     });
 
     return unsubscribe;
-  }, []);
+  }, [refreshKey]);
 
   const handleBack = useCallback(() => {
     setSelectedSession(null);
+    setRefreshKey(k => k + 1);
   }, []);
 
   const grouped = groupByDate(sessions);

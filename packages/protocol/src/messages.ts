@@ -12,7 +12,8 @@ export type WebviewCommand =
   | 'openMainWindow'
   | 'extractStructure'
   | 'ready'
-  | 'getHistory';
+  | 'getHistory'
+  | 'revertSession';
 
 export type ExtensionCommand =
   | 'success'
@@ -22,11 +23,14 @@ export type ExtensionCommand =
   | 'hidePreviewNavigation'
   | 'structureResult'
   | 'codebaseMetadataResult'
-  | 'historyResult';
+  | 'historyResult'
+  | 'revertResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
   text?: string;
+  sessionId?: string;
+  targetState?: 'pre' | 'post';
 }
 
 export interface ExtensionMessage {
@@ -39,6 +43,7 @@ export interface ExtensionMessage {
   structures?: StructureResult[];
   codebaseMetadata?: CodebaseMetadataResult;
   history?: HistorySessionResult[];
+  revertResult?: RevertSessionResult;
 }
 
 export interface HistorySessionResult {
@@ -90,4 +95,10 @@ export interface CodebaseMetadataResult {
   totalFolders: number;
   mostDenseFolder: string;
   mostDenseCount: number;
+}
+
+export interface RevertSessionResult {
+  success: boolean;
+  message: string;
+  errors: string[];
 }

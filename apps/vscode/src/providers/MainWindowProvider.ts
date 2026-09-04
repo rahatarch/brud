@@ -51,6 +51,9 @@ export class BrudMainWindowManager {
         case 'getHistory':
           await this._handleGetHistory();
           break;
+        case 'revertSession':
+          await this._handleRevertSession(data.sessionId, data.targetState);
+          break;
       }
     });
   }
@@ -77,6 +80,19 @@ export class BrudMainWindowManager {
     }));
 
     this._panel?.webview.postMessage({ command: 'historyResult', history } satisfies ExtensionMessage);
+  }
+
+  private async _handleRevertSession(sessionId?: string, targetState?: 'pre' | 'post'): Promise<void> {
+    if (!this._historyStore || !sessionId || !targetState) {
+      this._panel?.webview.postMessage({
+        command: 'revertResult',
+        revertResult: { success: false, message: 'Missing sessionId or targetState', errors: ['Invalid revert request'] },
+      } satisfies ExtensionMessage);
+      return;
+    }
+
+    const result = await this._historyStore.revertSession(sessionId, targetState);
+    this._panel?.webview.postMessage({ command: 'revertResult', revertResult: result } satisfies ExtensionMessage);
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
