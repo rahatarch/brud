@@ -76,6 +76,31 @@ Brud is a manual paste-and-apply AI coding platform. You paste AI-generated code
 
 ---
 
+## Who Is Brud Code For
+
+### For Students
+Brud Code is free. No subscriptions, no API keys, no credit card required. If you are learning to code and using free AI chatbots like ChatGPT or Claude, Brud Code lets you apply AI-generated code changes safely without breaking your project. You do not need a paid AI coding tool to ship real projects.
+
+### For Indie Hackers
+You are building products solo, often with limited budget. Brud Code gives you the power of AI-assisted development using the free AI tools you already have. You can scaffold features, refactor code, and manage large codebases without paying for Cursor or Copilot. Every session is recorded, every change is revertable, and your work is protected.
+
+### For Freelancers
+You work on multiple client projects with tight deadlines. Brud Code helps you understand unfamiliar codebases quickly with structure extraction, make surgical changes with confidence, and keep an audit trail of everything you did. The history and revert system means you never lose work or break a client's codebase.
+
+### For Developers Who Cannot Afford Premium Tools
+Most AI coding assistants cost 20 dollars per month or more. If that is too expensive for you, Brud Code is built specifically for you. You can use any free AI chatbot, copy the Brud block, paste it into Brud Code, and apply changes with surgical precision. Full features, no paywall.
+
+### For Developers in Emerging Economies
+Software subscriptions priced in US dollars are often unaffordable in many countries. Brud Code is free forever, works offline with your chosen AI tool, and does not require any API keys. It is built by someone who understands what it means to build without budget.
+
+### For Teams That Need Audit Trails
+Brud Code records every session, every operation, every revert, and every deletion with timestamps and actor information. If you need to know what changed, when it changed, and who changed it, Brud Code gives you that transparency.
+
+### For Anyone Building Serious Projects
+Brud Code is not a toy. It has a real history system, real revert capabilities, real snapshot management, and a real audit trail. If you are building something that matters, Brud Code helps you move fast without breaking things.
+
+---
+
 ## Quick Start
 
 1. **Install** the Brud Code VSIX from the [Releases page](https://github.com/rahatarch/brud/releases) or search "Brud Code" in VS Code Extensions.
