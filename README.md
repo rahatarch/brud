@@ -7,6 +7,7 @@
 <h3 align="center">AI-Assisted Coding Platform — Manual Paste, Surgical Apply, Full Control</h3>
 
 <p align="center">
+  <img src="https://img.shields.io/github/actions/workflow/status/rahatarch/brud/ci.yml?style=for-the-badge&logo=github&logoColor=white" alt="CI" />
   <img src="https://img.shields.io/badge/VS%20Code-1.80%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.80+" />
   <img src="https://img.shields.io/badge/Price-Free-00C853?style=for-the-badge" alt="Free Forever" />
   <img src="https://img.shields.io/badge/No%20API%20Keys-Required-FF6F00?style=for-the-badge" alt="No API Keys Required" />
