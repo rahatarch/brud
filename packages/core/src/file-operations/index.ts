@@ -89,6 +89,11 @@ export async function executeFileOperations(
           }
           break;
         }
+        case 'append_file_multi':
+        case 'search_replace_multi': {
+          // Files resolved at execution time via search
+          break;
+        }
       }
     }
 
@@ -855,6 +860,189 @@ operationResults.push({
             path: operation.directory || '',
           });
           return { success: true, message: resultJson, errors, operationResults };
+        }
+
+        case 'append_file_multi': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'append_file_multi',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'append_file_multi',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const appendQuery: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const appendResponse = await searchFiles(fs, appendQuery);
+          const matchedFiles = appendResponse.results.map(r => path.resolve(searchDirectory, r.path));
+
+          const modifiedFiles: string[] = [];
+          const skippedFiles: string[] = [];
+          const failedFiles: string[] = [];
+
+          for (const filePath of matchedFiles) {
+            try {
+              let existingContent = '';
+              if (!(await fs.exists(filePath))) {
+                failedFiles.push(filePath);
+                continue;
+              }
+              existingContent = await fs.readFile(filePath);
+
+              const updatedContent = operation.position === 'end'
+                ? existingContent + operation.content
+                : operation.content + existingContent;
+
+              await fs.writeFile(filePath, updatedContent);
+              modifiedFiles.push(filePath);
+            } catch {
+              failedFiles.push(filePath);
+            }
+          }
+
+          if (modifiedFiles.length > 0 && !filesAffected.includes) {
+            for (const f of modifiedFiles) {
+              if (!filesAffected.includes(f)) {
+                filesAffected.push(f);
+              }
+            }
+          }
+
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'append_file_multi',
+            status: failedFiles.length === 0 ? 'success' : 'failed',
+            message: `Appended content to ${modifiedFiles.length} files.`,
+            path: operation.directory || '',
+          });
+          break;
+        }
+
+        case 'search_replace_multi': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_replace_multi',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_replace_multi',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const srQuery: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const srResponse = await searchFiles(fs, srQuery);
+          const matchedFiles = srResponse.results.map(r => path.resolve(searchDirectory, r.path));
+
+          const modifiedFiles: string[] = [];
+          const skippedFiles: string[] = [];
+          const failedFiles: string[] = [];
+
+          for (const filePath of matchedFiles) {
+            try {
+              const content = await fs.readFile(filePath);
+
+              let count = 0;
+              let searchIndex = content.indexOf(operation.search);
+              while (searchIndex !== -1) {
+                count++;
+                searchIndex = content.indexOf(operation.search, searchIndex + 1);
+              }
+
+              if (count === 0) {
+                skippedFiles.push(filePath);
+                continue;
+              }
+
+              if (count > 1) {
+                skippedFiles.push(filePath);
+                continue;
+              }
+
+              const matchIndex = content.indexOf(operation.search);
+              const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
+              await fs.writeFile(filePath, updatedContent);
+              modifiedFiles.push(filePath);
+            } catch {
+              failedFiles.push(filePath);
+            }
+          }
+
+          if (modifiedFiles.length > 0) {
+            for (const f of modifiedFiles) {
+              if (!filesAffected.includes(f)) {
+                filesAffected.push(f);
+              }
+            }
+          }
+
+          const skipMsg = skippedFiles.length > 0 ? ` Skipped ${skippedFiles.length} files.` : '';
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'search_replace_multi',
+            status: failedFiles.length === 0 ? 'success' : 'failed',
+            message: `Patched ${modifiedFiles.length} files.${skipMsg}`,
+            path: operation.directory || '',
+          });
+          break;
         }
       }
     } catch (err) {

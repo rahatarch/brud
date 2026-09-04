@@ -12,7 +12,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -107,4 +107,28 @@ export interface SearchFilesOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation;
+export interface AppendFileMultiOperation {
+  kind: 'append_file_multi';
+  patterns: string[];
+  excludePatterns?: string[];
+  directory?: string;
+  recursive: boolean;
+  maxResults: number;
+  position: 'start' | 'end';
+  content: string;
+  index: string;
+}
+
+export interface SearchReplaceMultiOperation {
+  kind: 'search_replace_multi';
+  patterns: string[];
+  excludePatterns?: string[];
+  directory?: string;
+  recursive: boolean;
+  maxResults: number;
+  search: string;
+  replace: string;
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation;

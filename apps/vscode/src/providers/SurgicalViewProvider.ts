@@ -64,6 +64,10 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? '__codebase_metadata__'
         : op.kind === 'search_files'
         ? '__search_files__'
+        : op.kind === 'append_file_multi'
+        ? '__append_file_multi__'
+        : op.kind === 'search_replace_multi'
+        ? '__search_replace_multi__'
         : op.path;
       const existing = grouped.get(key) || [];
       existing.push(op);
