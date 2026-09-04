@@ -80,6 +80,7 @@
     "lint": "eslint src",
     "test": "vscode-test",
     "test:core": "node --import tsx --test packages/core/src/**/*.test.ts",
+    "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
     "build:core": "npm run build --workspace @brud/core",
     "build:ui": "npm run build --workspace @brud/ui",
     "build:protocol": "npm run build --workspace @brud/protocol",

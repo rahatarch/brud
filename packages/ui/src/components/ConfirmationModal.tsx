@@ -8,6 +8,7 @@ interface ConfirmationModalProps {
   cancelLabel?: string;
   onConfirm: () => void;
   onCancel: () => void;
+  children?: React.ReactNode;
 }
 
 export default function ConfirmationModal({
@@ -18,6 +19,7 @@ export default function ConfirmationModal({
   cancelLabel = 'Cancel',
   onConfirm,
   onCancel,
+  children,
 }: ConfirmationModalProps) {
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -48,6 +50,7 @@ export default function ConfirmationModal({
       >
         <h3 className="text-lg font-semibold text-text">{title}</h3>
         <p className="text-sm text-text-secondary mt-2">{message}</p>
+        {children && <div className="mt-4">{children}</div>}
         <div className="flex gap-3 justify-end mt-6">
           <button
             onClick={onCancel}

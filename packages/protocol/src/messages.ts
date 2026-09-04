@@ -17,7 +17,11 @@ export type WebviewCommand =
   | 'revertSession'
   | 'revertOperations'
   | 'deleteSingleSession'
-  | 'wipeHistory';
+  | 'wipeHistory'
+  | 'softDeleteSession'
+  | 'restoreSession'
+  | 'getTrashedSessions'
+  | 'permanentDelete';
 
 export type ExtensionCommand =
   | 'success'
@@ -32,7 +36,9 @@ export type ExtensionCommand =
   | 'revertOperationsResult'
   | 'revertHistoryResult'
   | 'sessionDeleted'
-  | 'historyWiped';
+  | 'historyWiped'
+  | 'trashedSessionsResult'
+  | 'sessionRestored';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -41,6 +47,7 @@ export interface WebviewMessage {
   targetState?: 'pre' | 'post';
   operationIds?: string[];
   triggeredBy?: 'user' | 'system';
+  permanentDelete?: boolean;
 }
 
 export interface ExtensionMessage {
@@ -57,6 +64,7 @@ export interface ExtensionMessage {
   revertOperationsResult?: RevertSessionResult;
   revertHistory?: RevertHistoryData[];
   deletedCount?: number;
+  trashedSessions?: HistorySessionResult[];
 }
 
 export interface HistorySessionResult {
@@ -71,6 +79,20 @@ export interface HistorySessionResult {
   metadataUsed: Record<string, any>;
   terminalCommands: string[];
   revertCommands: string[];
+  isDeleted?: boolean;
+  deletedAt?: string;
+  expiresAt?: string;
+  deletedBy?: 'user' | 'system';
+  deleteReason?: 'manual_delete' | 'manual_wipe' | 'retention_cleanup';
+  renewedAt?: string;
+  softDeleteHistory?: SoftDeleteEventResult[];
+}
+
+export interface SoftDeleteEventResult {
+  action: 'soft_delete' | 'restore';
+  at: string;
+  by: 'user' | 'system';
+  reason?: 'manual_delete' | 'manual_wipe' | 'retention_cleanup';
 }
 
 export interface PreviewHeaderData {

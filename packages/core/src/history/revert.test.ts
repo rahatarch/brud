@@ -1,123 +1,12 @@
-import { describe, it, before } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
+import * as fs from 'fs/promises';
+import * as pathModule from 'path';
 import { createTwoFilesPatch } from 'diff';
-import type { FileSystem } from '../types/filesystem.js';
-import type { HistoryStore } from './store.js';
+import { NodeFileSystem } from '../testing/nodeFileSystem.js';
+import { TestHistoryStore } from '../testing/testHistoryStore.js';
 import type { HistoryEntry, OperationResult, RevertHistoryEntry, SnapshotData } from './types.js';
 import { revertOperations } from './revert.js';
-
-const WORKSPACE = '/workspace';
-
-class MockFileSystem implements FileSystem {
-  files: Map<string, string> = new Map();
-  dirs: Set<string> = new Set();
-  ops: string[] = [];
-
-  async readFile(path: string): Promise<string> {
-    const content = this.files.get(path);
-    if (content === undefined) throw new Error(`File not found: ${path}`);
-    return content;
-  }
-
-  async writeFile(path: string, content: string): Promise<void> {
-    this.files.set(path, content);
-    this.ops.push(`writeFile:${path}`);
-  }
-
-  async deleteFile(path: string): Promise<void> {
-    this.files.delete(path);
-    this.ops.push(`deleteFile:${path}`);
-  }
-
-  async renameFile(from: string, to: string): Promise<void> {
-    const content = this.files.get(from);
-    if (content !== undefined) {
-      this.files.delete(from);
-      this.files.set(to, content);
-    }
-    this.ops.push(`renameFile:${from}->${to}`);
-  }
-
-  async copyFile(from: string, to: string): Promise<void> {
-    const content = this.files.get(from);
-    if (content !== undefined) {
-      this.files.set(to, content);
-    }
-    this.ops.push(`copyFile:${from}->${to}`);
-  }
-
-  async exists(path: string): Promise<boolean> {
-    return this.files.has(path) || this.dirs.has(path);
-  }
-
-  async createDirectory(path: string): Promise<void> {
-    this.dirs.add(path);
-    this.ops.push(`createDirectory:${path}`);
-  }
-
-  async deleteDirectoryRecursive(path: string): Promise<void> {
-    this.dirs.delete(path);
-    for (const key of [...this.files.keys()]) {
-      if (key.startsWith(path + '/')) {
-        this.files.delete(key);
-      }
-    }
-    this.ops.push(`deleteDirectoryRecursive:${path}`);
-  }
-
-  async moveDirectory(from: string, to: string): Promise<void> {
-    if (this.dirs.has(from)) {
-      this.dirs.delete(from);
-      this.dirs.add(to);
-    }
-    for (const [key, val] of [...this.files.entries()]) {
-      if (key.startsWith(from + '/')) {
-        this.files.delete(key);
-        this.files.set(key.replace(from, to), val);
-      }
-    }
-    this.ops.push(`moveDirectory:${from}->${to}`);
-  }
-
-  async listDirectory(_path: string): Promise<string[]> {
-    return [];
-  }
-
-  async listDirectoryContents(_path: string): Promise<{ name: string; isDirectory: boolean }[]> {
-    return [];
-  }
-
-  reset(): void {
-    this.files.clear();
-    this.dirs.clear();
-    this.ops = [];
-  }
-}
-
-class MockHistoryStore implements HistoryStore {
-  sessions: Map<string, HistoryEntry> = new Map();
-  revertEntries: RevertHistoryEntry[] = [];
-
-  async saveSession(entry: HistoryEntry): Promise<void> {
-    this.sessions.set(entry.session.sessionId, entry);
-  }
-
-  async getSession(sessionId: string): Promise<HistoryEntry | undefined> {
-    return this.sessions.get(sessionId);
-  }
-
-  async getAllSessions() { return []; }
-  async deleteSession(_id: string) {}
-  async deleteSingleSession(_id: string, _triggeredBy: 'user' | 'system') { return 0; }
-  async getSessionsByDateRange(_start: Date, _end: Date) { return []; }
-  async getRecentSessions(_limit: number) { return []; }
-  async cleanupOldSessions(_retentionMonths: number) { return 0; }
-  async wipeAllHistory() { return 0; }
-  async saveRevertHistory(_sessionId: string, entry: RevertHistoryEntry) {
-    this.revertEntries.push(entry);
-  }
-  async getRevertHistory(_sessionId: string) { return { sessionId: _sessionId, reverts: [] }; }
-}
 
 function makeOp(overrides: Partial<OperationResult> & { kind: string }): OperationResult {
   return {
@@ -173,33 +62,40 @@ function makeDiff(oldStr: string, newStr: string): string {
 }
 
 describe('revertOperations', () => {
-  let fs: MockFileSystem;
-  let store: MockHistoryStore;
-  const workspaceFolders = [WORKSPACE];
+  let tempDir: string;
+  let nodeFs: NodeFileSystem;
+  let store: TestHistoryStore;
+  let workspaceFolders: string[];
   let revertEntries: RevertHistoryEntry[] = [];
 
-  before(() => {
-    fs = new MockFileSystem();
-    store = new MockHistoryStore();
-    revertEntries = [];
+  before(async () => {
+    tempDir = await fs.mkdtemp('/tmp/brud-revert-test-');
+    nodeFs = new NodeFileSystem();
+    store = new TestHistoryStore(tempDir, nodeFs);
+    workspaceFolders = [tempDir];
   });
 
-  function reset(): void {
-    fs.reset();
-    store.sessions.clear();
-    store.revertEntries = [];
-    revertEntries = [];
-  }
+  after(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
 
   function onRevertComplete(entry: RevertHistoryEntry): void {
     revertEntries.push(entry);
   }
 
+  async function cleanTempDir(): Promise<void> {
+    const entries = await fs.readdir(tempDir);
+    for (const entry of entries) {
+      await fs.rm(pathModule.join(tempDir, entry), { recursive: true, force: true });
+    }
+    revertEntries = [];
+  }
+
   // ── CREATE_FILE ──
 
   it('CREATE_FILE revert to pre: file should be deleted', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/newfile.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'newfile.txt');
     const op = makeOp({ kind: 'create_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -207,19 +103,19 @@ describe('revertOperations', () => {
       makeSnapshot({ [filePath]: makeDiff('', 'hello world') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'hello world');
+    await nodeFs.writeFile(filePath, 'hello world');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(filePath), false);
+    assert.strictEqual(await nodeFs.exists(filePath), false);
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].targetState, 'pre');
   });
 
   it('CREATE_FILE revert to post: file should be restored with content', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/newfile.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'newfile.txt');
     const op = makeOp({ kind: 'create_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -228,10 +124,10 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'post', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'hello world');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'hello world');
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].targetState, 'post');
   });
@@ -239,8 +135,8 @@ describe('revertOperations', () => {
   // ── DELETE_FILE ──
 
   it('DELETE_FILE revert to pre: file should be restored', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/oldfile.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'oldfile.txt');
     const op = makeOp({ kind: 'delete_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -249,16 +145,16 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'content to restore');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'content to restore');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   it('DELETE_FILE revert to post: file should stay deleted', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/oldfile.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'oldfile.txt');
     const op = makeOp({ kind: 'delete_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -267,18 +163,18 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'post', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(filePath), false);
+    assert.strictEqual(await nodeFs.exists(filePath), false);
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── SEARCH_REPLACE ──
 
   it('SEARCH_REPLACE revert to pre: original content restored', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/search.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'search.txt');
     const op = makeOp({ kind: 'search_replace', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -286,18 +182,18 @@ describe('revertOperations', () => {
       makeSnapshot({ [filePath]: makeDiff('original content', 'new content') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'new content');
+    await nodeFs.writeFile(filePath, 'new content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'original content');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'original content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   it('SEARCH_REPLACE revert to post: new content restored', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/search.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'search.txt');
     const op = makeOp({ kind: 'search_replace', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -305,20 +201,20 @@ describe('revertOperations', () => {
       makeSnapshot({ [filePath]: makeDiff('original content', 'new content') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'original content');
+    await nodeFs.writeFile(filePath, 'original content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'post', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'new content');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'new content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── APPEND_FILE ──
 
   it('APPEND_FILE revert to pre: appended content removed', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/append.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'append.txt');
     const op = makeOp({ kind: 'append_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -326,37 +222,37 @@ describe('revertOperations', () => {
       makeSnapshot({ [filePath]: makeDiff('base\ntext', 'base\ntext\nappended') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'base\ntext\nappended');
+    await nodeFs.writeFile(filePath, 'base\ntext\nappended');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'base\ntext');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'base\ntext');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   it('APPEND_FILE revert to pre: file was created during session, should be deleted', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/created-and-appended.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'created-and-appended.txt');
     const op = makeOp({ kind: 'append_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
-      makeSnapshot({}), // file does NOT exist in pre-snapshot
+      makeSnapshot({}),
       makeSnapshot({ [filePath]: makeDiff('', 'appended content') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'appended content');
+    await nodeFs.writeFile(filePath, 'appended content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(filePath), false, 'file should be deleted when reverting to pre');
+    assert.strictEqual(await nodeFs.exists(filePath), false, 'file should be deleted when reverting to pre');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   it('APPEND_FILE revert to post: appended content kept', async () => {
-    reset();
-    const filePath = `${WORKSPACE}/append.txt`;
+    await cleanTempDir();
+    const filePath = pathModule.join(tempDir, 'append.txt');
     const op = makeOp({ kind: 'append_file', path: filePath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -364,21 +260,21 @@ describe('revertOperations', () => {
       makeSnapshot({ [filePath]: makeDiff('base\ntext', 'base\ntext\nappended') }, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(filePath, 'base\ntext');
+    await nodeFs.writeFile(filePath, 'base\ntext');
 
-    const result = await revertOperations('test-session', [op.operationId], 'post', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.get(filePath), 'base\ntext\nappended');
+    assert.strictEqual(await nodeFs.readFile(filePath), 'base\ntext\nappended');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── RENAME_FILE ──
 
   it('RENAME_FILE revert to pre: file renamed back', async () => {
-    reset();
-    const from = `${WORKSPACE}/oldName.txt`;
-    const to = `${WORKSPACE}/newName.txt`;
+    await cleanTempDir();
+    const from = pathModule.join(tempDir, 'oldName.txt');
+    const to = pathModule.join(tempDir, 'newName.txt');
     const op = makeOp({ kind: 'rename_file', from, to, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -386,20 +282,20 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(to, 'file content');
+    await nodeFs.writeFile(to, 'file content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(to), false);
-    assert.strictEqual(fs.files.get(from), 'file content');
+    assert.strictEqual(await nodeFs.exists(to), false);
+    assert.strictEqual(await nodeFs.readFile(from), 'file content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   it('RENAME_FILE revert to post: file keeps new name', async () => {
-    reset();
-    const from = `${WORKSPACE}/oldName.txt`;
-    const to = `${WORKSPACE}/newName.txt`;
+    await cleanTempDir();
+    const from = pathModule.join(tempDir, 'oldName.txt');
+    const to = pathModule.join(tempDir, 'newName.txt');
     const op = makeOp({ kind: 'rename_file', from, to, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -407,22 +303,22 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(from, 'file content');
+    await nodeFs.writeFile(from, 'file content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'post', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(from), false);
-    assert.strictEqual(fs.files.get(to), 'file content');
+    assert.strictEqual(await nodeFs.exists(from), false);
+    assert.strictEqual(await nodeFs.readFile(to), 'file content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── MOVE_FILE ──
 
   it('MOVE_FILE revert to pre: file moved back', async () => {
-    reset();
-    const from = `${WORKSPACE}/subdirA/file.txt`;
-    const to = `${WORKSPACE}/subdirB/file.txt`;
+    await cleanTempDir();
+    const from = pathModule.join(tempDir, 'subdirA', 'file.txt');
+    const to = pathModule.join(tempDir, 'subdirB', 'file.txt');
     const op = makeOp({ kind: 'move_file', from, to, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -430,22 +326,22 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(to, 'content');
+    await nodeFs.writeFile(to, 'content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(to), false);
-    assert.strictEqual(fs.files.get(from), 'content');
+    assert.strictEqual(await nodeFs.exists(to), false);
+    assert.strictEqual(await nodeFs.readFile(from), 'content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── COPY_FILE ──
 
   it('COPY_FILE revert to pre: copy removed', async () => {
-    reset();
-    const from = `${WORKSPACE}/source.txt`;
-    const to = `${WORKSPACE}/copy.txt`;
+    await cleanTempDir();
+    const from = pathModule.join(tempDir, 'source.txt');
+    const to = pathModule.join(tempDir, 'copy.txt');
     const op = makeOp({ kind: 'copy_file', from, to, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -453,22 +349,22 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.files.set(from, 'source content');
-    fs.files.set(to, 'source content');
+    await nodeFs.writeFile(from, 'source content');
+    await nodeFs.writeFile(to, 'source content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.files.has(to), false);
-    assert.strictEqual(fs.files.get(from), 'source content');
+    assert.strictEqual(await nodeFs.exists(to), false);
+    assert.strictEqual(await nodeFs.readFile(from), 'source content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── CREATE_DIRECTORY ──
 
   it('CREATE_DIRECTORY revert to pre: directory removed', async () => {
-    reset();
-    const dirPath = `${WORKSPACE}/newdir`;
+    await cleanTempDir();
+    const dirPath = pathModule.join(tempDir, 'newdir');
     const op = makeOp({ kind: 'create_directory', directoryPath: dirPath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -476,22 +372,22 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.dirs.add(dirPath);
+    await nodeFs.createDirectory(dirPath);
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.dirs.has(dirPath), false);
+    assert.strictEqual(await nodeFs.exists(dirPath), false);
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── DELETE_DIRECTORY ──
 
   it('DELETE_DIRECTORY revert to pre: directory restored', async () => {
-    reset();
-    const dirPath = `${WORKSPACE}/deleteddir`;
-    const file1 = `${dirPath}/a.txt`;
-    const file2 = `${dirPath}/sub/b.txt`;
+    await cleanTempDir();
+    const dirPath = pathModule.join(tempDir, 'deleteddir');
+    const file1 = pathModule.join(dirPath, 'a.txt');
+    const file2 = pathModule.join(dirPath, 'sub', 'b.txt');
     const op = makeOp({ kind: 'delete_directory', directoryPath: dirPath, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -500,21 +396,21 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.dirs.has(dirPath), true);
-    assert.strictEqual(fs.files.get(file1), 'file a');
-    assert.strictEqual(fs.files.get(file2), 'file b');
+    assert.strictEqual(await nodeFs.exists(dirPath), true);
+    assert.strictEqual(await nodeFs.readFile(file1), 'file a');
+    assert.strictEqual(await nodeFs.readFile(file2), 'file b');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── MOVE_DIRECTORY ──
 
   it('MOVE_DIRECTORY revert to pre: directory moved back', async () => {
-    reset();
-    const from = `${WORKSPACE}/oldDir`;
-    const to = `${WORKSPACE}/newDir`;
+    await cleanTempDir();
+    const from = pathModule.join(tempDir, 'oldDir');
+    const to = pathModule.join(tempDir, 'newDir');
     const op = makeOp({ kind: 'move_directory', from, to, operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -522,23 +418,23 @@ describe('revertOperations', () => {
       makeSnapshot({}, 'post'),
     );
     await store.saveSession(entry);
-    fs.dirs.add(to);
-    fs.files.set(`${to}/file.txt`, 'content');
+    await nodeFs.createDirectory(to);
+    await nodeFs.writeFile(pathModule.join(to, 'file.txt'), 'content');
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, true);
-    assert.strictEqual(fs.dirs.has(to), false);
-    assert.strictEqual(fs.dirs.has(from), true);
-    assert.strictEqual(fs.files.get(`${from}/file.txt`), 'content');
+    assert.strictEqual(await nodeFs.exists(to), false);
+    assert.strictEqual(await nodeFs.exists(from), true);
+    assert.strictEqual(await nodeFs.readFile(pathModule.join(from, 'file.txt')), 'content');
     assert.strictEqual(revertEntries.length, 1);
   });
 
   // ── EXTRACT_STRUCTURE (cannot revert) ──
 
   it('EXTRACT_STRUCTURE: cannot revert (error expected)', async () => {
-    reset();
-    const op = makeOp({ kind: 'extract_structure', directoryPath: '/workspace', operationIndex: 0 });
+    await cleanTempDir();
+    const op = makeOp({ kind: 'extract_structure', directoryPath: tempDir, operationIndex: 0 });
     const entry = makeEntry(
       [op],
       makeSnapshot({}),
@@ -546,10 +442,10 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, false);
-    assert.ok(result.errors.some(e => e.includes('Cannot revert operation kind')));
+    assert.ok(result.errors.some((e: string) => e.includes('Cannot revert operation kind')));
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].status, 'failed');
   });
@@ -557,7 +453,7 @@ describe('revertOperations', () => {
   // ── CODEBASE_METADATA (cannot revert) ──
 
   it('CODEBASE_METADATA: cannot revert (error expected)', async () => {
-    reset();
+    await cleanTempDir();
     const op = makeOp({ kind: 'codebase_metadata', operationIndex: 0 });
     const entry = makeEntry(
       [op],
@@ -566,10 +462,10 @@ describe('revertOperations', () => {
     );
     await store.saveSession(entry);
 
-    const result = await revertOperations('test-session', [op.operationId], 'pre', store, fs, workspaceFolders, onRevertComplete);
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, false);
-    assert.ok(result.errors.some(e => e.includes('Cannot revert operation kind')));
+    assert.ok(result.errors.some((e: string) => e.includes('Cannot revert operation kind')));
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].status, 'failed');
   });

@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory, DeleteHistoryEntry, DeleteHistory } from '@brud/core';
+import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory, DeleteHistoryEntry, DeleteHistory, SoftDeleteEvent } from '@brud/core';
 import { revertSession } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 import { getWorkspaceFolders } from './workspace';
@@ -51,7 +51,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
     return path.join(this.historyDir, 'delete-history.json');
   }
 
-  private generateDeleteId(): string {
+  private generateDeleteId(prefix: string = 'DEL'): string {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -59,7 +59,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
     const hh = String(now.getHours()).padStart(2, '0');
     const mm = String(now.getMinutes()).padStart(2, '0');
     const ss = String(now.getSeconds()).padStart(2, '0');
-    return `DEL-${y}${m}${d}-${hh}${mm}${ss}`;
+    return `${prefix}-${y}${m}${d}-${hh}${mm}${ss}`;
   }
 
   async getDeleteHistory(): Promise<DeleteHistory> {
@@ -74,13 +74,102 @@ export class WorkspaceHistoryStore implements HistoryStore {
 
   async recordDeleteHistory(entry: Omit<DeleteHistoryEntry, 'deleteId' | 'timestamp'>): Promise<void> {
     const history = await this.getDeleteHistory();
-    const deleteEntry: DeleteHistoryEntry = {
+    const deleteEntry = {
       deleteId: this.generateDeleteId(),
       timestamp: new Date().toISOString(),
       ...entry,
-    };
+    } as DeleteHistoryEntry;
     history.deletions.push(deleteEntry);
     await this.fileSystem.writeFile(this.getDeleteHistoryPath(), JSON.stringify(history, null, 2));
+  }
+
+  async softDeleteSession(sessionId: string, deletedBy: 'user' | 'system', reason: 'manual_delete' | 'manual_wipe' | 'retention_cleanup'): Promise<void> {
+    const sessionPath = this.sessionFile(sessionId);
+    if (!(await this.fileSystem.exists(sessionPath))) {
+      return;
+    }
+
+    const raw = await this.fileSystem.readFile(sessionPath);
+    const session: HistorySession = JSON.parse(raw);
+
+    const now = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    const event: SoftDeleteEvent = {
+      action: 'soft_delete',
+      at: now,
+      by: deletedBy,
+      reason,
+    };
+
+    session.isDeleted = true;
+    session.deletedAt = now;
+    session.expiresAt = expiresAt;
+    session.deletedBy = deletedBy;
+    session.deleteReason = reason;
+    if (!session.softDeleteHistory) {
+      session.softDeleteHistory = [];
+    }
+    session.softDeleteHistory.push(event);
+
+    await this.fileSystem.writeFile(sessionPath, JSON.stringify(session, null, 2));
+
+    await this.recordDeleteHistory({
+      sessionId,
+      action: 'soft_delete',
+      deletedBy,
+      reason,
+      expiresAt,
+    });
+  }
+
+  async restoreSession(sessionId: string): Promise<void> {
+    const sessionPath = this.sessionFile(sessionId);
+    if (!(await this.fileSystem.exists(sessionPath))) {
+      return;
+    }
+
+    const raw = await this.fileSystem.readFile(sessionPath);
+    const session: HistorySession = JSON.parse(raw);
+
+    const now = new Date().toISOString();
+
+    const event: SoftDeleteEvent = {
+      action: 'restore',
+      at: now,
+      by: 'user',
+    };
+
+    session.isDeleted = false;
+    session.deletedAt = undefined;
+    session.expiresAt = undefined;
+    session.deletedBy = undefined;
+    session.deleteReason = undefined;
+    session.renewedAt = now;
+    if (!session.softDeleteHistory) {
+      session.softDeleteHistory = [];
+    }
+    session.softDeleteHistory.push(event);
+
+    await this.fileSystem.writeFile(sessionPath, JSON.stringify(session, null, 2));
+
+    await this.recordDeleteHistory({
+      sessionId,
+      action: 'restore',
+      restoredBy: 'user',
+    });
+  }
+
+  async getTrashedSessions(): Promise<HistorySession[]> {
+    const all = await this.getAllSessionsIncludingTrashed();
+    const now = new Date().getTime();
+    return all.filter(s => s.isDeleted === true && s.expiresAt && new Date(s.expiresAt).getTime() > now);
+  }
+
+  async getExpiredSessions(): Promise<HistorySession[]> {
+    const all = await this.getAllSessionsIncludingTrashed();
+    const now = new Date().getTime();
+    return all.filter(s => s.isDeleted === true && s.expiresAt && new Date(s.expiresAt).getTime() <= now);
   }
 
   async recordFailedAttempt(attemptedPhrase: string, expectedPhrase: string): Promise<void> {
@@ -96,7 +185,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
         failedAttempts: [],
       });
     }
-    const currentEntry = history.deletions[history.deletions.length - 1];
+    const currentEntry = history.deletions[history.deletions.length - 1] as Extract<DeleteHistoryEntry, { deletedCount: number }>;
     if (!currentEntry.failedAttempts) {
       currentEntry.failedAttempts = [];
     }
@@ -298,6 +387,11 @@ export class WorkspaceHistoryStore implements HistoryStore {
   }
 
   async getAllSessions(): Promise<HistorySession[]> {
+    const all = await this.getAllSessionsIncludingTrashed();
+    return all.filter(s => s.isDeleted !== true);
+  }
+
+  private async getAllSessionsIncludingTrashed(): Promise<HistorySession[]> {
     const sessionsDirExists = await this.fileSystem.exists(this.sessionsDir);
     if (!sessionsDirExists) {
       return [];
@@ -329,28 +423,33 @@ export class WorkspaceHistoryStore implements HistoryStore {
     await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(sessionId));
   }
 
-  async deleteSingleSession(sessionId: string, triggeredBy: 'user' | 'system'): Promise<number> {
-    const sessionPath = this.sessionFile(sessionId);
-    let createdAt = '';
-    if (await this.fileSystem.exists(sessionPath)) {
-      try {
-        const raw = await this.fileSystem.readFile(sessionPath);
-        const session: HistorySession = JSON.parse(raw);
-        createdAt = session.timestamp;
-      } catch {
-        // If session.json is corrupt, proceed without creation timestamp
+  async deleteSingleSession(sessionId: string, triggeredBy: 'user' | 'system', permanentDelete?: boolean): Promise<number> {
+    if (permanentDelete) {
+      const sessionPath = this.sessionFile(sessionId);
+      let createdAt = '';
+      if (await this.fileSystem.exists(sessionPath)) {
+        try {
+          const raw = await this.fileSystem.readFile(sessionPath);
+          const session: HistorySession = JSON.parse(raw);
+          createdAt = session.timestamp;
+        } catch {
+          // If session.json is corrupt, proceed without creation timestamp
+        }
       }
+
+      await this.deleteSession(sessionId);
+
+      await this.recordDeleteHistory({
+        deletedCount: 1,
+        deletedSessions: [{ sessionId, createdAt }],
+        reason: 'manual_delete',
+        triggeredBy,
+      });
+
+      return 1;
     }
 
-    await this.deleteSession(sessionId);
-
-    await this.recordDeleteHistory({
-      deletedCount: 1,
-      deletedSessions: [{ sessionId, createdAt }],
-      reason: 'manual_delete',
-      triggeredBy,
-    });
-
+    await this.softDeleteSession(sessionId, triggeredBy, 'manual_delete');
     return 1;
   }
 
@@ -373,28 +472,41 @@ export class WorkspaceHistoryStore implements HistoryStore {
     cutoff.setMonth(cutoff.getMonth() - retentionMonths);
     const cutoffTime = cutoff.getTime();
 
-    const deletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+    let deletedCount = 0;
 
-    for (const session of all) {
-      if (new Date(session.timestamp).getTime() < cutoffTime) {
-        deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
-        await this.deleteSession(session.sessionId);
-      }
+    // Permanent delete expired trashed sessions
+    const expired = await this.getExpiredSessions();
+    for (const session of expired) {
+      await this.deleteSession(session.sessionId);
+      deletedCount++;
     }
 
-    if (deletedSessions.length > 0) {
+    if (expired.length > 0) {
       await this.recordDeleteHistory({
-        deletedCount: deletedSessions.length,
-        deletedSessions,
+        deletedCount: expired.length,
+        deletedSessions: expired.map(s => ({ sessionId: s.sessionId, createdAt: s.timestamp })),
         reason: 'retention_cleanup',
         triggeredBy: 'system',
       });
     }
 
-    return deletedSessions.length;
+    // Soft-delete old sessions using renewedAt if present
+    const softDeletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+    for (const session of all) {
+      if (session.isDeleted) continue;
+
+      const ageReference = session.renewedAt || session.timestamp;
+      if (new Date(ageReference).getTime() < cutoffTime) {
+        softDeletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
+        await this.softDeleteSession(session.sessionId, 'system', 'retention_cleanup');
+        deletedCount++;
+      }
+    }
+
+    return deletedCount;
   }
 
-  async wipeAllHistory(): Promise<number> {
+  async wipeAllHistory(permanentDelete?: boolean): Promise<number> {
     const sessionsDirExists = await this.fileSystem.exists(this.sessionsDir);
     if (!sessionsDirExists) {
       return 0;
@@ -403,34 +515,46 @@ export class WorkspaceHistoryStore implements HistoryStore {
     const entries = await this.fileSystem.listDirectoryContents(this.sessionsDir);
     const sessionDirs = entries.filter(e => e.isDirectory).map(e => e.name);
 
-    const deletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+    if (permanentDelete) {
+      const deletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+
+      for (const dir of sessionDirs) {
+        try {
+          const sessionPath = this.sessionFile(dir);
+          if (await this.fileSystem.exists(sessionPath)) {
+            const raw = await this.fileSystem.readFile(sessionPath);
+            const session: HistorySession = JSON.parse(raw);
+            deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
+          } else {
+            deletedSessions.push({ sessionId: dir, createdAt: '' });
+          }
+        } catch {
+          deletedSessions.push({ sessionId: dir, createdAt: '' });
+        }
+        await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(dir));
+      }
+
+      await this.fileSystem.deleteDirectoryRecursive(this.sessionsDir);
+
+      if (deletedSessions.length > 0) {
+        await this.recordDeleteHistory({
+          deletedCount: deletedSessions.length,
+          deletedSessions,
+          reason: 'manual_wipe',
+          triggeredBy: 'user',
+          confirmationPhrase: 'DELETE ALL HISTORY',
+        });
+      }
+
+      return sessionDirs.length;
+    }
 
     for (const dir of sessionDirs) {
       try {
-        const sessionPath = this.sessionFile(dir);
-        if (await this.fileSystem.exists(sessionPath)) {
-          const raw = await this.fileSystem.readFile(sessionPath);
-          const session: HistorySession = JSON.parse(raw);
-          deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
-        } else {
-          deletedSessions.push({ sessionId: dir, createdAt: '' });
-        }
+        await this.softDeleteSession(dir, 'user', 'manual_wipe');
       } catch {
-        deletedSessions.push({ sessionId: dir, createdAt: '' });
+        // Skip invalid sessions
       }
-      await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(dir));
-    }
-
-    await this.fileSystem.deleteDirectoryRecursive(this.sessionsDir);
-
-    if (deletedSessions.length > 0) {
-      await this.recordDeleteHistory({
-        deletedCount: deletedSessions.length,
-        deletedSessions,
-        reason: 'manual_wipe',
-        triggeredBy: 'user',
-        confirmationPhrase: 'DELETE ALL HISTORY',
-      });
     }
 
     return sessionDirs.length;

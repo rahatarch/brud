@@ -64,6 +64,18 @@ export class BrudMainWindowManager {
         case 'deleteSingleSession':
           await this._handleDeleteSingleSession(data.sessionId, data.triggeredBy);
           break;
+        case 'softDeleteSession':
+          await this._handleDeleteSingleSession(data.sessionId, data.triggeredBy);
+          break;
+        case 'getTrashedSessions':
+          await this._handleGetTrashedSessions();
+          break;
+        case 'restoreSession':
+          await this._handleRestoreSession(data.sessionId);
+          break;
+        case 'permanentDelete':
+          await this._handlePermanentDelete(data.sessionId);
+          break;
         case 'wipeHistory':
           await this._handleWipeHistory();
           break;
@@ -157,6 +169,56 @@ export class BrudMainWindowManager {
     }
 
     const deletedCount = await this._historyStore.deleteSingleSession(sessionId, triggeredBy);
+    this._panel?.webview.postMessage({ command: 'sessionDeleted', deletedCount } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetTrashedSessions(): Promise<void> {
+    if (!this._historyStore) {
+      this._panel?.webview.postMessage({ command: 'trashedSessionsResult', trashedSessions: [] } satisfies ExtensionMessage);
+      return;
+    }
+
+    const trashedSessions = await this._historyStore.getTrashedSessions();
+    const trashed: HistorySessionResult[] = trashedSessions.map(s => ({
+      sessionId: s.sessionId,
+      timestamp: s.timestamp,
+      originalPrompt: s.originalPrompt,
+      status: s.status,
+      operationCount: s.operationCount,
+      operationTypes: s.operationTypes,
+      operations: s.operations,
+      filesAffected: s.filesAffected,
+      metadataUsed: s.metadataUsed,
+      terminalCommands: s.terminalCommands,
+      revertCommands: s.revertCommands,
+      isDeleted: s.isDeleted,
+      deletedAt: s.deletedAt,
+      expiresAt: s.expiresAt,
+      deletedBy: s.deletedBy,
+      deleteReason: s.deleteReason,
+      renewedAt: s.renewedAt,
+      softDeleteHistory: s.softDeleteHistory,
+    }));
+
+    this._panel?.webview.postMessage({ command: 'trashedSessionsResult', trashedSessions: trashed } satisfies ExtensionMessage);
+  }
+
+  private async _handleRestoreSession(sessionId?: string): Promise<void> {
+    if (!this._historyStore || !sessionId) {
+      return;
+    }
+
+    await this._historyStore.restoreSession(sessionId);
+    this._panel?.webview.postMessage({ command: 'sessionRestored' } satisfies ExtensionMessage);
+  }
+
+  private async _handlePermanentDelete(sessionId?: string): Promise<void> {
+    if (!this._historyStore || !sessionId) {
+      this._panel?.webview.postMessage({ command: 'sessionDeleted', deletedCount: 0 } satisfies ExtensionMessage);
+      return;
+    }
+
+    const deletedCount = await this._historyStore.deleteSingleSession(sessionId, 'user', true);
     this._panel?.webview.postMessage({ command: 'sessionDeleted', deletedCount } satisfies ExtensionMessage);
   }
 

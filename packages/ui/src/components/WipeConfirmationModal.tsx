@@ -6,7 +6,7 @@ const REQUIRED_PHRASE = 'DELETE ALL HISTORY';
 interface WipeConfirmationModalProps {
   isOpen: boolean;
   sessionCount: number;
-  onConfirm: () => void;
+  onConfirm: (permanentDelete: boolean) => void;
   onCancel: () => void;
 }
 
@@ -17,11 +17,13 @@ export default function WipeConfirmationModal({
   onCancel,
 }: WipeConfirmationModalProps) {
   const [inputValue, setInputValue] = useState('');
+  const [protectionEnabled, setProtectionEnabled] = useState(true);
   const isMatch = inputValue === REQUIRED_PHRASE;
 
   useEffect(() => {
     if (isOpen) {
       setInputValue('');
+      setProtectionEnabled(true);
     }
   }, [isOpen]);
 
@@ -60,12 +62,22 @@ export default function WipeConfirmationModal({
         </div>
 
         <p className="text-sm text-text-secondary mb-2">
-          This will permanently delete all Brud history. This action cannot be undone.
+          This will delete all Brud history. When 7-day protection is enabled, sessions will be recoverable for 7 days.
         </p>
 
         <p className="text-sm text-text-secondary mb-4">
           <span className="font-semibold text-red-500">{sessionCount}</span> session{sessionCount !== 1 ? 's' : ''} will be deleted.
         </p>
+
+        <label className="flex items-center gap-2 mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={protectionEnabled}
+            onChange={(e) => setProtectionEnabled(e.target.checked)}
+            className="rounded border-border bg-surface-2 text-primary focus:ring-primary/30"
+          />
+          <span className="text-sm text-text-secondary">7-day protection (recoverable)</span>
+        </label>
 
         <label className="block text-sm font-medium text-text-secondary mb-2">
           Type <span className="font-mono text-red-500 font-bold">{REQUIRED_PHRASE}</span> to confirm:
@@ -87,7 +99,7 @@ export default function WipeConfirmationModal({
             Cancel
           </button>
           <button
-            onClick={onConfirm}
+            onClick={() => onConfirm(!protectionEnabled)}
             disabled={!isMatch}
             className={`px-4 py-2 rounded-lg text-sm transition-colors cursor-pointer ${
               isMatch
@@ -95,7 +107,7 @@ export default function WipeConfirmationModal({
                 : 'bg-red-600/30 text-red-300 border border-red-700/30 cursor-not-allowed'
             }`}
           >
-            Delete All History
+            {protectionEnabled ? 'Soft Delete All' : 'Delete All History'}
           </button>
         </div>
       </div>

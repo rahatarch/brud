@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare } from 'lucide-react';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare, X } from 'lucide-react';
 import type { HistorySessionResult, RevertSessionResult, RevertHistoryData } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -663,22 +663,164 @@ function RevertDetailView({
   );
 }
 
+function formatDaysRemaining(expiresAt?: string): string {
+  if (!expiresAt) return '';
+  try {
+    const now = new Date();
+    const expiry = new Date(expiresAt);
+    const diffMs = expiry.getTime() - now.getTime();
+    if (diffMs <= 0) return 'Expired';
+    const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    if (days > 0) return `${days}d ${hours}h remaining`;
+    return `${hours}h remaining`;
+  } catch {
+    return '';
+  }
+}
+
+function ScheduledDeletesModal({
+  isOpen,
+  trashedSessions,
+  onRestore,
+  onPermanentDelete,
+  onClose,
+  onRefresh,
+}: {
+  isOpen: boolean;
+  trashedSessions: HistorySessionResult[];
+  onRestore: (sessionId: string) => void;
+  onPermanentDelete: (sessionId: string) => void;
+  onClose: () => void;
+  onRefresh: () => void;
+}) {
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      onRefresh();
+    }
+  }, [isOpen, onRefresh]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, onClose]);
+
+  const handleRestore = async (sessionId: string) => {
+    setActionLoading(sessionId);
+    onRestore(sessionId);
+  };
+
+  const handlePermanentDelete = async (sessionId: string) => {
+    setActionLoading(sessionId);
+    onPermanentDelete(sessionId);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      onClick={onClose}
+    >
+      <div
+        className="bg-surface border border-border rounded-lg w-full max-w-2xl mx-4 max-h-[80vh] flex flex-col shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h2 className="text-lg font-semibold text-text">Scheduled Deletes</h2>
+          <button
+            onClick={onClose}
+            className="p-1.5 rounded-md text-text-secondary hover:text-text hover:bg-surface-2 transition-colors cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6">
+          {trashedSessions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Trash2 size={40} className="text-text-secondary mb-4 opacity-50" />
+              <p className="text-sm text-text-secondary">No scheduled deletes</p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {trashedSessions.map((session) => (
+                <div
+                  key={session.sessionId}
+                  className="flex items-start gap-4 p-4 rounded-lg border border-border bg-surface"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-mono font-medium text-text">{session.sessionId}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      <p className="text-xs text-text-secondary">
+                        Deleted: {formatFullDateTime(session.deletedAt)}
+                      </p>
+                      {session.expiresAt && (
+                        <p className="text-xs text-text-secondary">
+                          Permanent deletion: {formatFullDateTime(session.expiresAt)}
+                        </p>
+                      )}
+                      {session.expiresAt && (
+                        <p className="text-xs font-medium text-yellow-500">
+                          {formatDaysRemaining(session.expiresAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <button
+                      onClick={() => handleRestore(session.sessionId)}
+                      disabled={actionLoading === session.sessionId}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-green-500/10 text-green-500 border border-green-500/30 hover:bg-green-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {actionLoading === session.sessionId ? 'Restoring...' : 'Restore'}
+                    </button>
+                    <button
+                      onClick={() => handlePermanentDelete(session.sessionId)}
+                      disabled={actionLoading === session.sessionId}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {actionLoading === session.sessionId ? 'Deleting...' : 'Delete Permanently'}
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HistoryView() {
   const [sessions, setSessions] = useState<HistorySessionResult[]>([]);
+  const [trashedSessions, setTrashedSessions] = useState<HistorySessionResult[]>([]);
   const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
   const [viewState, setViewState] = useState<'list' | 'detail' | 'reverts' | 'revertDetail'>('list');
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showWipeModal, setShowWipeModal] = useState(false);
+  const [showScheduledDeletes, setShowScheduledDeletes] = useState(false);
   const [revertHistory, setRevertHistory] = useState<RevertHistoryData[] | null>(null);
   const [revertHistoryLoading, setRevertHistoryLoading] = useState(false);
   const [selectedRevert, setSelectedRevert] = useState<RevertHistoryData | null>(null);
   const [sessionToDelete, setSessionToDelete] = useState<HistorySessionResult | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [protectionEnabled, setProtectionEnabled] = useState(true);
 
   useEffect(() => {
     setLoading(true);
     sendToExtension({ command: 'getHistory' });
+    sendToExtension({ command: 'getTrashedSessions' });
 
     const unsubscribe = onExtensionMessage((message) => {
       if (message.command === 'historyResult' && message.history) {
@@ -692,6 +834,9 @@ function HistoryView() {
         setSessions(sorted);
         setLoading(false);
       }
+      if (message.command === 'trashedSessionsResult' && message.trashedSessions) {
+        setTrashedSessions(message.trashedSessions);
+      }
       if (message.command === 'historyWiped') {
         setSessions([]);
         setLoading(false);
@@ -701,6 +846,9 @@ function HistoryView() {
         setRefreshKey(k => k + 1);
         setSessionToDelete(null);
         setDeleteLoading(false);
+      }
+      if (message.command === 'sessionRestored') {
+        setRefreshKey(k => k + 1);
       }
       if (message.command === 'revertHistoryResult' && message.revertHistory) {
         setRevertHistory(message.revertHistory);
@@ -753,15 +901,40 @@ function HistoryView() {
   const handleConfirmDelete = useCallback(() => {
     if (!sessionToDelete) return;
     setDeleteLoading(true);
-    sendToExtension({
-      command: 'deleteSingleSession',
-      sessionId: sessionToDelete.sessionId,
-      triggeredBy: 'user',
-    });
-  }, [sessionToDelete]);
+    if (protectionEnabled) {
+      sendToExtension({
+        command: 'softDeleteSession',
+        sessionId: sessionToDelete.sessionId,
+        triggeredBy: 'user',
+      });
+    } else {
+      sendToExtension({
+        command: 'deleteSingleSession',
+        sessionId: sessionToDelete.sessionId,
+        triggeredBy: 'user',
+        permanentDelete: true,
+      });
+    }
+  }, [sessionToDelete, protectionEnabled]);
+
+  const handleWipeConfirm = useCallback((permanentDelete: boolean) => {
+    sendToExtension({ command: 'wipeHistory', permanentDelete });
+  }, []);
 
   const handleCancelDelete = useCallback(() => {
     setSessionToDelete(null);
+  }, []);
+
+  const handleRestoreSession = useCallback((sessionId: string) => {
+    sendToExtension({ command: 'restoreSession', sessionId });
+  }, []);
+
+  const handlePermanentDeleteSession = useCallback((sessionId: string) => {
+    sendToExtension({ command: 'permanentDelete', sessionId });
+  }, []);
+
+  const handleRefreshTrash = useCallback(() => {
+    sendToExtension({ command: 'getTrashedSessions' });
   }, []);
 
   const grouped = groupByDate(sessions);
@@ -806,9 +979,26 @@ function HistoryView() {
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
         <History size={48} className="text-text-secondary mb-4" />
         <h3 className="text-lg font-medium text-text mb-2">No sessions recorded yet</h3>
-        <p className="text-sm text-text-secondary text-center max-w-sm">
+        <p className="text-sm text-text-secondary text-center max-w-sm mb-6">
           Brud sessions will appear here once you start using Brud in this workspace.
         </p>
+        {trashedSessions.length > 0 && (
+          <button
+            onClick={() => setShowScheduledDeletes(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
+          >
+            <Trash2 size={16} />
+            Scheduled Deletes ({trashedSessions.length})
+          </button>
+        )}
+        <ScheduledDeletesModal
+          isOpen={showScheduledDeletes}
+          trashedSessions={trashedSessions}
+          onRestore={handleRestoreSession}
+          onPermanentDelete={handlePermanentDeleteSession}
+          onClose={() => setShowScheduledDeletes(false)}
+          onRefresh={handleRefreshTrash}
+        />
       </div>
     );
   }
@@ -818,7 +1008,14 @@ function HistoryView() {
       <div className="flex items-center gap-3 mb-6">
         <History size={24} className="text-text" />
         <h2 className="text-2xl font-semibold text-text">History</h2>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            onClick={() => setShowScheduledDeletes(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
+          >
+            <Trash2 size={16} />
+            Scheduled Deletes{trashedSessions.length > 0 && ` (${trashedSessions.length})`}
+          </button>
           <button
             onClick={() => setShowWipeModal(true)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-500/60 text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-colors cursor-pointer"
@@ -896,11 +1093,20 @@ function HistoryView() {
         ))}
       </div>
 
+      <ScheduledDeletesModal
+        isOpen={showScheduledDeletes}
+        trashedSessions={trashedSessions}
+        onRestore={handleRestoreSession}
+        onPermanentDelete={handlePermanentDeleteSession}
+        onClose={() => setShowScheduledDeletes(false)}
+        onRefresh={handleRefreshTrash}
+      />
+
       <WipeConfirmationModal
         isOpen={showWipeModal}
         sessionCount={sessions.length}
-        onConfirm={() => {
-          sendToExtension({ command: 'wipeHistory' });
+        onConfirm={(permanentDelete) => {
+          handleWipeConfirm(permanentDelete);
         }}
         onCancel={() => setShowWipeModal(false)}
       />
@@ -908,12 +1114,22 @@ function HistoryView() {
       <ConfirmationModal
         isOpen={sessionToDelete !== null}
         title="Delete Session"
-        message={`Are you sure you want to delete session ${sessionToDelete?.sessionId || ''}? This action cannot be undone.`}
+        message={`Are you sure you want to delete session ${sessionToDelete?.sessionId || ''}?`}
         confirmLabel={deleteLoading ? 'Deleting...' : 'Delete'}
         cancelLabel="Cancel"
         onConfirm={handleConfirmDelete}
         onCancel={handleCancelDelete}
-      />
+      >
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={protectionEnabled}
+            onChange={(e) => setProtectionEnabled(e.target.checked)}
+            className="rounded border-border bg-surface-2 text-primary focus:ring-primary/30"
+          />
+          <span className="text-sm text-text-secondary">7-day protection (recoverable)</span>
+        </label>
+      </ConfirmationModal>
     </div>
   );
 }
