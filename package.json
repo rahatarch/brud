@@ -77,7 +77,7 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src",
+    "lint": "eslint packages apps tests",
     "test": "vscode-test",
     "test:core": "node --import tsx --test packages/core/src/**/*.test.ts",
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
