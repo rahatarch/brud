@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2 } from 'lucide-react';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
 import type { HistorySessionResult, RevertSessionResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
+import WipeConfirmationModal from './WipeConfirmationModal';
 
 function formatDateHeader(timestamp?: string): string {
   if (!timestamp) return 'Unknown Date';
@@ -337,6 +338,7 @@ function HistoryView() {
   const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [showWipeModal, setShowWipeModal] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -353,6 +355,11 @@ function HistoryView() {
         );
         setSessions(sorted);
         setLoading(false);
+      }
+      if (message.command === 'historyWiped') {
+        setSessions([]);
+        setLoading(false);
+        setShowWipeModal(false);
       }
     });
 
@@ -396,6 +403,15 @@ function HistoryView() {
       <div className="flex items-center gap-3 mb-6">
         <History size={24} className="text-text" />
         <h2 className="text-2xl font-semibold text-text">History</h2>
+        <div className="ml-auto">
+          <button
+            onClick={() => setShowWipeModal(true)}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-500/60 text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-colors cursor-pointer"
+          >
+            <AlertTriangle size={16} />
+            Wipe Out History
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-6">
@@ -457,6 +473,15 @@ function HistoryView() {
           </div>
         ))}
       </div>
+
+      <WipeConfirmationModal
+        isOpen={showWipeModal}
+        sessionCount={sessions.length}
+        onConfirm={() => {
+          sendToExtension({ command: 'wipeHistory' });
+        }}
+        onCancel={() => setShowWipeModal(false)}
+      />
     </div>
   );
 }

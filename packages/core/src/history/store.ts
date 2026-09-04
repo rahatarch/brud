@@ -8,4 +8,5 @@ export interface HistoryStore {
   getSessionsByDateRange(start: Date, end: Date): Promise<HistorySession[]>;
   getRecentSessions(limit: number): Promise<HistorySession[]>;
   cleanupOldSessions(retentionMonths: number): Promise<number>;
+  wipeAllHistory(): Promise<number>;
 }

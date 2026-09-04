@@ -13,7 +13,8 @@ export type WebviewCommand =
   | 'extractStructure'
   | 'ready'
   | 'getHistory'
-  | 'revertSession';
+  | 'revertSession'
+  | 'wipeHistory';
 
 export type ExtensionCommand =
   | 'success'
@@ -24,7 +25,8 @@ export type ExtensionCommand =
   | 'structureResult'
   | 'codebaseMetadataResult'
   | 'historyResult'
-  | 'revertResult';
+  | 'revertResult'
+  | 'historyWiped';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -44,6 +46,7 @@ export interface ExtensionMessage {
   codebaseMetadata?: CodebaseMetadataResult;
   history?: HistorySessionResult[];
   revertResult?: RevertSessionResult;
+  deletedCount?: number;
 }
 
 export interface HistorySessionResult {

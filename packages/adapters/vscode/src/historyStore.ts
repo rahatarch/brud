@@ -294,6 +294,24 @@ export class WorkspaceHistoryStore implements HistoryStore {
     return deletedCount;
   }
 
+  async wipeAllHistory(): Promise<number> {
+    const sessionsDirExists = await this.fileSystem.exists(this.sessionsDir);
+    if (!sessionsDirExists) {
+      return 0;
+    }
+
+    const entries = await this.fileSystem.listDirectoryContents(this.sessionsDir);
+    const sessionDirs = entries.filter(e => e.isDirectory).map(e => e.name);
+
+    for (const dir of sessionDirs) {
+      await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(dir));
+    }
+
+    await this.fileSystem.deleteDirectoryRecursive(this.sessionsDir);
+
+    return sessionDirs.length;
+  }
+
   async revertSession(sessionId: string, targetState: 'pre' | 'post'): Promise<RevertResult> {
     const entry = await this.getSession(sessionId);
     if (!entry) {

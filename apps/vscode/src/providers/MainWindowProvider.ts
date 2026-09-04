@@ -54,6 +54,9 @@ export class BrudMainWindowManager {
         case 'revertSession':
           await this._handleRevertSession(data.sessionId, data.targetState);
           break;
+        case 'wipeHistory':
+          await this._handleWipeHistory();
+          break;
       }
     });
   }
@@ -93,6 +96,16 @@ export class BrudMainWindowManager {
 
     const result = await this._historyStore.revertSession(sessionId, targetState);
     this._panel?.webview.postMessage({ command: 'revertResult', revertResult: result } satisfies ExtensionMessage);
+  }
+
+  private async _handleWipeHistory(): Promise<void> {
+    if (!this._historyStore) {
+      this._panel?.webview.postMessage({ command: 'historyWiped', deletedCount: 0, history: [] } satisfies ExtensionMessage);
+      return;
+    }
+
+    const deletedCount = await this._historyStore.wipeAllHistory();
+    this._panel?.webview.postMessage({ command: 'historyWiped', deletedCount, history: [] } satisfies ExtensionMessage);
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
