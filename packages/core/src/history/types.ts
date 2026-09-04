@@ -53,3 +53,19 @@ export interface RevertHistory {
   sessionId: string;
   reverts: RevertHistoryEntry[];
 }
+
+export interface DeleteHistoryEntry {
+  deleteId: string;
+  timestamp: string;
+  deletedCount: number;
+  deletedSessions: Array<{ sessionId: string; createdAt: string }>;
+  reason: 'retention_cleanup' | 'manual_wipe' | 'manual_delete';
+  triggeredBy: 'system' | 'user';
+  confirmationPhrase?: string;
+  failedAttempts?: Array<{ timestamp: string; attemptedPhrase: string; expectedPhrase: string }>;
+}
+
+export interface DeleteHistory {
+  workspace: string;
+  deletions: DeleteHistoryEntry[];
+}

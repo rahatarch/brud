@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory } from '@brud/core';
+import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory, DeleteHistoryEntry, DeleteHistory } from '@brud/core';
 import { revertSession } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 import { getWorkspaceFolders } from './workspace';
@@ -45,6 +45,67 @@ export class WorkspaceHistoryStore implements HistoryStore {
 
   private revertsFile(sessionId: string): string {
     return path.join(this.sessionDir(sessionId), 'reverts.json');
+  }
+
+  private getDeleteHistoryPath(): string {
+    return path.join(this.historyDir, 'delete-history.json');
+  }
+
+  private generateDeleteId(): string {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    const ss = String(now.getSeconds()).padStart(2, '0');
+    return `DEL-${y}${m}${d}-${hh}${mm}${ss}`;
+  }
+
+  async getDeleteHistory(): Promise<DeleteHistory> {
+    const filePath = this.getDeleteHistoryPath();
+    const exists = await this.fileSystem.exists(filePath);
+    if (!exists) {
+      return { workspace: this.workspaceRoot, deletions: [] };
+    }
+    const raw = await this.fileSystem.readFile(filePath);
+    return JSON.parse(raw);
+  }
+
+  async recordDeleteHistory(entry: Omit<DeleteHistoryEntry, 'deleteId' | 'timestamp'>): Promise<void> {
+    const history = await this.getDeleteHistory();
+    const deleteEntry: DeleteHistoryEntry = {
+      deleteId: this.generateDeleteId(),
+      timestamp: new Date().toISOString(),
+      ...entry,
+    };
+    history.deletions.push(deleteEntry);
+    await this.fileSystem.writeFile(this.getDeleteHistoryPath(), JSON.stringify(history, null, 2));
+  }
+
+  async recordFailedAttempt(attemptedPhrase: string, expectedPhrase: string): Promise<void> {
+    const history = await this.getDeleteHistory();
+    if (history.deletions.length === 0) {
+      history.deletions.push({
+        deleteId: this.generateDeleteId(),
+        timestamp: new Date().toISOString(),
+        deletedCount: 0,
+        deletedSessions: [],
+        reason: 'manual_wipe',
+        triggeredBy: 'user',
+        failedAttempts: [],
+      });
+    }
+    const currentEntry = history.deletions[history.deletions.length - 1];
+    if (!currentEntry.failedAttempts) {
+      currentEntry.failedAttempts = [];
+    }
+    currentEntry.failedAttempts.push({
+      timestamp: new Date().toISOString(),
+      attemptedPhrase,
+      expectedPhrase,
+    });
+    await this.fileSystem.writeFile(this.getDeleteHistoryPath(), JSON.stringify(history, null, 2));
   }
 
   private mapToObject(map: Map<string, string>): Record<string, string> {
@@ -287,15 +348,25 @@ export class WorkspaceHistoryStore implements HistoryStore {
     cutoff.setMonth(cutoff.getMonth() - retentionMonths);
     const cutoffTime = cutoff.getTime();
 
-    let deletedCount = 0;
+    const deletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+
     for (const session of all) {
       if (new Date(session.timestamp).getTime() < cutoffTime) {
+        deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
         await this.deleteSession(session.sessionId);
-        deletedCount++;
       }
     }
 
-    return deletedCount;
+    if (deletedSessions.length > 0) {
+      await this.recordDeleteHistory({
+        deletedCount: deletedSessions.length,
+        deletedSessions,
+        reason: 'retention_cleanup',
+        triggeredBy: 'system',
+      });
+    }
+
+    return deletedSessions.length;
   }
 
   async wipeAllHistory(): Promise<number> {
@@ -307,11 +378,35 @@ export class WorkspaceHistoryStore implements HistoryStore {
     const entries = await this.fileSystem.listDirectoryContents(this.sessionsDir);
     const sessionDirs = entries.filter(e => e.isDirectory).map(e => e.name);
 
+    const deletedSessions: Array<{ sessionId: string; createdAt: string }> = [];
+
     for (const dir of sessionDirs) {
+      try {
+        const sessionPath = this.sessionFile(dir);
+        if (await this.fileSystem.exists(sessionPath)) {
+          const raw = await this.fileSystem.readFile(sessionPath);
+          const session: HistorySession = JSON.parse(raw);
+          deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
+        } else {
+          deletedSessions.push({ sessionId: dir, createdAt: '' });
+        }
+      } catch {
+        deletedSessions.push({ sessionId: dir, createdAt: '' });
+      }
       await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(dir));
     }
 
     await this.fileSystem.deleteDirectoryRecursive(this.sessionsDir);
+
+    if (deletedSessions.length > 0) {
+      await this.recordDeleteHistory({
+        deletedCount: deletedSessions.length,
+        deletedSessions,
+        reason: 'manual_wipe',
+        triggeredBy: 'user',
+        confirmationPhrase: 'DELETE ALL HISTORY',
+      });
+    }
 
     return sessionDirs.length;
   }
