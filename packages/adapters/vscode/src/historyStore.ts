@@ -1,14 +1,23 @@
+import * as vscode from 'vscode';
 import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 
 export class WorkspaceHistoryStore implements HistoryStore {
+  private brudDirEnsured = false;
+
   constructor(
     private workspaceRoot: string,
     private fileSystem: FileSystem,
-  ) {}
+  ) {
+    this.ensureBrudDirectory().catch(() => {});
+  }
+
+  private get brudDir(): string {
+    return `${this.workspaceRoot}/.brud`;
+  }
 
   private get historyDir(): string {
-    return `${this.workspaceRoot}/.brud/history`;
+    return `${this.brudDir}/history`;
   }
 
   private get sessionsDir(): string {
@@ -43,7 +52,80 @@ export class WorkspaceHistoryStore implements HistoryStore {
     return new Map(Object.entries(obj));
   }
 
+  private async ensureBrudDirectory(): Promise<void> {
+    const brudDirExists = await this.fileSystem.exists(this.brudDir);
+    if (!brudDirExists) {
+      await this.fileSystem.createDirectory(this.brudDir);
+    }
+
+    this.brudDirEnsured = true;
+  }
+
+  private async ensureWarningFile(): Promise<void> {
+    const warningPath = `${this.brudDir}/WARNING.txt`;
+    const warningExists = await this.fileSystem.exists(warningPath);
+    if (!warningExists) {
+      await this.fileSystem.writeFile(
+        warningPath,
+        'This directory is managed by Brud Code.\n' +
+        'It contains workspace history, session snapshots, and revert data.\n' +
+        'Do not modify or delete this directory manually.\n' +
+        'Brud Code uses this data to provide revert functionality and session history.\n',
+      );
+    }
+  }
+
+  private async updateVscodeSettings(): Promise<void> {
+    try {
+      const config = vscode.workspace.getConfiguration('files', null);
+      const currentExclude = config.get<Record<string, boolean>>('exclude', {});
+      if (!currentExclude['.brud']) {
+        await config.update('exclude', { ...currentExclude, '.brud': true }, vscode.ConfigurationTarget.Workspace);
+      }
+
+      const currentWatcherExclude = config.get<Record<string, boolean>>('watcherExclude', {});
+      if (!currentWatcherExclude['.brud']) {
+        await config.update('watcherExclude', { ...currentWatcherExclude, '.brud': true }, vscode.ConfigurationTarget.Workspace);
+      }
+
+      const searchConfig = vscode.workspace.getConfiguration('search', null);
+      const currentSearchExclude = searchConfig.get<Record<string, boolean>>('exclude', {});
+      if (!currentSearchExclude['.brud']) {
+        await searchConfig.update('exclude', { ...currentSearchExclude, '.brud': true }, vscode.ConfigurationTarget.Workspace);
+      }
+    } catch {
+      // VS Code settings update is best-effort
+    }
+  }
+
+  private async updateGitignore(): Promise<void> {
+    try {
+      const gitignorePath = `${this.workspaceRoot}/.gitignore`;
+      const gitignoreExists = await this.fileSystem.exists(gitignorePath);
+
+      let content = '';
+      if (gitignoreExists) {
+        content = await this.fileSystem.readFile(gitignorePath);
+      }
+
+      if (!content.includes('.brud/')) {
+        content += '\n# Brud Code workspace history\n.brud/\n';
+        await this.fileSystem.writeFile(gitignorePath, content);
+      }
+    } catch {
+      // Gitignore update is best-effort
+    }
+  }
+
   async saveSession(entry: HistoryEntry): Promise<void> {
+    if (!this.brudDirEnsured) {
+      await this.ensureBrudDirectory();
+    }
+
+    await this.updateVscodeSettings();
+    await this.updateGitignore();
+    await this.ensureWarningFile();
+
     const { session, preSnapshot, postSnapshot } = entry;
     const dir = this.sessionDir(session.sessionId);
 
