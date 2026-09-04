@@ -325,8 +325,19 @@ export async function revertSession(
           break;
         }
 
+        case 'append_file_multi':
+        case 'search_replace_multi': {
+          const allFiles = new Set([...preFiles.keys(), ...postFiles.keys()]);
+          for (const filePath of allFiles) {
+            await revertFileContent(filePath, targetState, preFiles, postFiles, fs, errors);
+          }
+          revertedOperationIds.push(op.operationId);
+          break;
+        }
+
         case 'extract_structure':
         case 'codebase_metadata':
+        case 'search_files':
           break;
 
         default:
@@ -649,6 +660,16 @@ export async function revertOperations(
               }
             }
           }
+          break;
+        }
+
+        case 'append_file_multi':
+        case 'search_replace_multi': {
+          const allFiles = new Set([...preFiles.keys(), ...postFiles.keys()]);
+          for (const filePath of allFiles) {
+            await revertFileContent(filePath, targetState, preFiles, postFiles, fs, errors);
+          }
+          revertedOpIds.push(op.operationId);
           break;
         }
 

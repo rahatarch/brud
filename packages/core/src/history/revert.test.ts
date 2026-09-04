@@ -469,4 +469,112 @@ describe('revertOperations', () => {
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].status, 'failed');
   });
+
+  // ── APPEND_FILE_MULTI ──
+
+  it('APPEND_FILE_MULTI revert to pre: all files restored to original', async () => {
+    await cleanTempDir();
+    const file1 = pathModule.join(tempDir, 'a.txt');
+    const file2 = pathModule.join(tempDir, 'b.txt');
+    const op = makeOp({ kind: 'append_file_multi', path: tempDir, operationIndex: 0 });
+    const entry = makeEntry(
+      [op],
+      makeSnapshot({ [file1]: 'original a', [file2]: 'original b' }),
+      makeSnapshot({
+        [file1]: makeDiff('original a', 'original a\n\nappended'),
+        [file2]: makeDiff('original b', 'original b\n\nappended'),
+      }, 'post'),
+    );
+    await store.saveSession(entry);
+    await nodeFs.writeFile(file1, 'original a\n\nappended');
+    await nodeFs.writeFile(file2, 'original b\n\nappended');
+
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(await nodeFs.readFile(file1), 'original a');
+    assert.strictEqual(await nodeFs.readFile(file2), 'original b');
+    assert.strictEqual(revertEntries.length, 1);
+    assert.strictEqual(revertEntries[0].targetState, 'pre');
+  });
+
+  it('APPEND_FILE_MULTI revert to post: all files have appended content', async () => {
+    await cleanTempDir();
+    const file1 = pathModule.join(tempDir, 'a.txt');
+    const file2 = pathModule.join(tempDir, 'b.txt');
+    const op = makeOp({ kind: 'append_file_multi', path: tempDir, operationIndex: 0 });
+    const entry = makeEntry(
+      [op],
+      makeSnapshot({ [file1]: 'original a', [file2]: 'original b' }),
+      makeSnapshot({
+        [file1]: makeDiff('original a', 'original a\n\nappended'),
+        [file2]: makeDiff('original b', 'original b\n\nappended'),
+      }, 'post'),
+    );
+    await store.saveSession(entry);
+    await nodeFs.writeFile(file1, 'original a');
+    await nodeFs.writeFile(file2, 'original b');
+
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(await nodeFs.readFile(file1), 'original a\n\nappended');
+    assert.strictEqual(await nodeFs.readFile(file2), 'original b\n\nappended');
+    assert.strictEqual(revertEntries.length, 1);
+    assert.strictEqual(revertEntries[0].targetState, 'post');
+  });
+
+  // ── SEARCH_REPLACE_MULTI ──
+
+  it('SEARCH_REPLACE_MULTI revert to pre: all files restored to original', async () => {
+    await cleanTempDir();
+    const file1 = pathModule.join(tempDir, 'x.txt');
+    const file2 = pathModule.join(tempDir, 'y.txt');
+    const op = makeOp({ kind: 'search_replace_multi', path: tempDir, operationIndex: 0 });
+    const entry = makeEntry(
+      [op],
+      makeSnapshot({ [file1]: 'old text', [file2]: 'old text' }),
+      makeSnapshot({
+        [file1]: makeDiff('old text', 'new text'),
+        [file2]: makeDiff('old text', 'new text'),
+      }, 'post'),
+    );
+    await store.saveSession(entry);
+    await nodeFs.writeFile(file1, 'new text');
+    await nodeFs.writeFile(file2, 'new text');
+
+    const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(await nodeFs.readFile(file1), 'old text');
+    assert.strictEqual(await nodeFs.readFile(file2), 'old text');
+    assert.strictEqual(revertEntries.length, 1);
+    assert.strictEqual(revertEntries[0].targetState, 'pre');
+  });
+
+  it('SEARCH_REPLACE_MULTI revert to post: all files have replaced content', async () => {
+    await cleanTempDir();
+    const file1 = pathModule.join(tempDir, 'x.txt');
+    const file2 = pathModule.join(tempDir, 'y.txt');
+    const op = makeOp({ kind: 'search_replace_multi', path: tempDir, operationIndex: 0 });
+    const entry = makeEntry(
+      [op],
+      makeSnapshot({ [file1]: 'old text', [file2]: 'old text' }),
+      makeSnapshot({
+        [file1]: makeDiff('old text', 'new text'),
+        [file2]: makeDiff('old text', 'new text'),
+      }, 'post'),
+    );
+    await store.saveSession(entry);
+    await nodeFs.writeFile(file1, 'old text');
+    await nodeFs.writeFile(file2, 'old text');
+
+    const result = await revertOperations('test-session', [op.operationId], 'post', store, nodeFs, workspaceFolders, onRevertComplete);
+
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(await nodeFs.readFile(file1), 'new text');
+    assert.strictEqual(await nodeFs.readFile(file2), 'new text');
+    assert.strictEqual(revertEntries.length, 1);
+    assert.strictEqual(revertEntries[0].targetState, 'post');
+  });
 });

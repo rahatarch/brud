@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -18,6 +18,14 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let directoryFiles: string[] = [];
   let currentDirectoryPath = '';
   let currentDepth = 0;
+  let currentSearchPatterns: string[] = [];
+  let currentSearchExclude: string[] = [];
+  let currentSearchScope = '';
+  let currentSearchMaxResults = 500;
+  let currentMultiPosition: 'start' | 'end' = 'end';
+  let currentMultiSearch = '';
+  let currentMultiReplace = '';
+  let multiBuffer: string[] = [];
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -145,6 +153,68 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     renameTo = '';
   }
 
+  function flushSearchFiles() {
+    if (currentIndex && currentSearchPatterns.length > 0) {
+      operations.push({
+        kind: 'search_files',
+        patterns: currentSearchPatterns,
+        excludePatterns: currentSearchExclude.length > 0 ? currentSearchExclude : undefined,
+        directory: currentSearchScope || undefined,
+        recursive: true,
+        maxResults: currentSearchMaxResults,
+        index: currentIndex,
+      });
+    }
+    currentSearchPatterns = [];
+    currentSearchExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
+  }
+
+  function flushAppendFileMulti() {
+    if (currentIndex && currentSearchPatterns.length > 0) {
+      operations.push({
+        kind: 'append_file_multi',
+        patterns: [...currentSearchPatterns],
+        excludePatterns: currentSearchExclude.length > 0 ? [...currentSearchExclude] : undefined,
+        directory: currentSearchScope || undefined,
+        recursive: true,
+        maxResults: currentSearchMaxResults,
+        position: currentMultiPosition,
+        content: multiBuffer.join('\n'),
+        index: currentIndex,
+      });
+    }
+    currentSearchPatterns = [];
+    currentSearchExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
+    currentMultiPosition = 'end';
+    multiBuffer = [];
+  }
+
+  function flushSearchReplaceMulti() {
+    if (currentIndex && currentSearchPatterns.length > 0 && currentMultiSearch) {
+      operations.push({
+        kind: 'search_replace_multi',
+        patterns: [...currentSearchPatterns],
+        excludePatterns: currentSearchExclude.length > 0 ? [...currentSearchExclude] : undefined,
+        directory: currentSearchScope || undefined,
+        recursive: true,
+        maxResults: currentSearchMaxResults,
+        search: currentMultiSearch,
+        replace: currentMultiReplace,
+        index: currentIndex,
+      });
+    }
+    currentSearchPatterns = [];
+    currentSearchExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
+    currentMultiSearch = '';
+    currentMultiReplace = '';
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -158,6 +228,10 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     directoryFiles = [];
     currentDirectoryPath = '';
     currentDepth = 0;
+    currentSearchPatterns = [];
+    currentSearchExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
   }
 
   for (const line of lines) {
@@ -185,6 +259,12 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const endExtractStructureMatch = line.match(/^>>>>>>> END EXTRACT_STRUCTURE \[([\w\d.-]+)\]/);
     const codebaseMetadataMatch = line.match(/^<<<<<<< CODEBASE_METADATA \[([\w\d.-]+)\]/);
     const endCodebaseMetadataMatch = line.match(/^>>>>>>> END CODEBASE_METADATA \[([\w\d.-]+)\]/);
+    const searchFilesMatch = line.match(/^<<<<<<< SEARCH_FILES \[([\w\d.-]+)\]/);
+    const endSearchFilesMatch = line.match(/^>>>>>>> END SEARCH_FILES \[([\w\d.-]+)\]/);
+    const appendFileMultiMatch = line.match(/^<<<<<<< APPEND_FILE_MULTI \[([\w\d.-]+)\]/);
+    const endAppendFileMultiMatch = line.match(/^>>>>>>> END APPEND_FILE_MULTI \[([\w\d.-]+)\]/);
+    const searchReplaceMultiMatch = line.match(/^<<<<<<< SEARCH_REPLACE_MULTI \[([\w\d.-]+)\]/);
+    const endSearchReplaceMultiMatch = line.match(/^>>>>>>> END SEARCH_REPLACE_MULTI \[([\w\d.-]+)\]/);
     const filePathMatch = line.match(/^File Path:\s*(.+)/);
     const positionMatch = line.match(/^Position:\s*(start|end)/);
     const fromMatch = line.match(/^From:\s*(.+)/);
@@ -192,6 +272,12 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const directoryPathMatch = line.match(/^Directory Path:\s*(.+)/);
     const depthMatch = line.match(/^Depth:\s*(.+)/);
     const filesListMatch = line.match(/^\s*-\s*(.+)/);
+    const patternMatch = line.match(/^Pattern:\s*(.+)/);
+    const excludeMatch = line.match(/^Exclude:\s*(.+)/);
+    const scopeMatch = line.match(/^Scope:\s*(.+)/);
+    const maxResultsMatch = line.match(/^MaxResults:\s*(.+)/);
+    const searchFieldMatch = line.match(/^Search:\s*(.+)/);
+    const replaceFieldMatch = line.match(/^Replace:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -268,6 +354,41 @@ export function parseLegacyFormat(input: string): FileOperation[] {
       if (codebaseMetadataMatch) {
         currentState = 'CODEBASE_METADATA';
         currentIndex = codebaseMetadataMatch[1];
+        continue;
+      }
+if (searchFilesMatch) {
+        currentState = 'SEARCH_FILES';
+        currentIndex = searchFilesMatch[1];
+        currentSearchPatterns = [];
+    currentSearchExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
+    currentMultiPosition = 'end';
+    currentMultiSearch = '';
+    currentMultiReplace = '';
+    multiBuffer = [];
+        continue;
+      }
+      if (appendFileMultiMatch) {
+        currentState = 'APPEND_FILE_MULTI';
+        currentIndex = appendFileMultiMatch[1];
+        currentSearchPatterns = [];
+        currentSearchExclude = [];
+        currentSearchScope = '';
+        currentSearchMaxResults = 500;
+        currentMultiPosition = 'end';
+        multiBuffer = [];
+        continue;
+      }
+      if (searchReplaceMultiMatch) {
+        currentState = 'SEARCH_REPLACE_MULTI';
+        currentIndex = searchReplaceMultiMatch[1];
+        currentSearchPatterns = [];
+        currentSearchExclude = [];
+        currentSearchScope = '';
+        currentSearchMaxResults = 500;
+        currentMultiSearch = '';
+        currentMultiReplace = '';
         continue;
       }
       if (filePathMatch) {
@@ -566,6 +687,103 @@ export function parseLegacyFormat(input: string): FileOperation[] {
           });
         }
         reset();
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'SEARCH_FILES') {
+      if (endSearchFilesMatch) {
+        if (endSearchFilesMatch[1] === currentIndex) {
+          flushSearchFiles();
+        }
+        reset();
+        continue;
+      }
+      if (patternMatch) {
+        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (excludeMatch) {
+        currentSearchExclude = excludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (scopeMatch) {
+        currentSearchScope = scopeMatch[1].trim();
+        continue;
+      }
+      if (maxResultsMatch) {
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'APPEND_FILE_MULTI') {
+      if (endAppendFileMultiMatch) {
+        if (endAppendFileMultiMatch[1] === currentIndex) {
+          flushAppendFileMulti();
+        }
+        reset();
+        continue;
+      }
+      if (line.trim() === '=======') {
+        continue;
+      }
+      if (patternMatch) {
+        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (excludeMatch) {
+        currentSearchExclude = excludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (scopeMatch) {
+        currentSearchScope = scopeMatch[1].trim();
+        continue;
+      }
+      if (positionMatch) {
+        currentMultiPosition = positionMatch[1] as 'start' | 'end';
+        continue;
+      }
+      if (maxResultsMatch) {
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        continue;
+      }
+      multiBuffer.push(line);
+      continue;
+    }
+
+    if (currentState === 'SEARCH_REPLACE_MULTI') {
+      if (endSearchReplaceMultiMatch) {
+        if (endSearchReplaceMultiMatch[1] === currentIndex) {
+          flushSearchReplaceMulti();
+        }
+        reset();
+        continue;
+      }
+      if (patternMatch) {
+        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (excludeMatch) {
+        currentSearchExclude = excludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (scopeMatch) {
+        currentSearchScope = scopeMatch[1].trim();
+        continue;
+      }
+      if (searchFieldMatch) {
+        currentMultiSearch = searchFieldMatch[1];
+        continue;
+      }
+      if (replaceFieldMatch) {
+        currentMultiReplace = replaceFieldMatch[1];
+        continue;
+      }
+      if (maxResultsMatch) {
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
         continue;
       }
       continue;

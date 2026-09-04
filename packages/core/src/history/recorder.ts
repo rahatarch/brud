@@ -83,6 +83,10 @@ export function recordSession(
       case 'codebase_metadata':
         entry.index = op.index;
         break;
+      case 'search_files':
+        entry.patterns = op.patterns;
+        entry.index = op.index;
+        break;
     }
     metadataUsed[op.kind].push(entry);
   }

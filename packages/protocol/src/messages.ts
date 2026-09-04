@@ -38,7 +38,8 @@ export type ExtensionCommand =
   | 'sessionDeleted'
   | 'historyWiped'
   | 'trashedSessionsResult'
-  | 'sessionRestored';
+  | 'sessionRestored'
+  | 'searchFilesResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -65,6 +66,7 @@ export interface ExtensionMessage {
   revertHistory?: RevertHistoryData[];
   deletedCount?: number;
   trashedSessions?: HistorySessionResult[];
+  searchResults?: SearchFilesResult;
 }
 
 export interface HistorySessionResult {
@@ -131,6 +133,12 @@ export interface CodebaseMetadataResult {
   totalFolders: number;
   mostDenseFolder: string;
   mostDenseCount: number;
+}
+
+export interface SearchFilesResult {
+  results: Array<{ path: string; name: string; extension: string; directory: string; size: number }>;
+  totalMatches: number;
+  truncated: boolean;
 }
 
 export interface RevertSessionResult {

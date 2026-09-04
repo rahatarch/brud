@@ -8,10 +8,13 @@ import {
   moveFilePrompt,
   copyFilePrompt,
   appendFilePrompt,
+  appendFileMultiPrompt,
+  searchReplaceMultiPrompt,
   createDirectoryPrompt,
   deleteDirectoryPrompt,
   moveDirectoryPrompt,
   extractStructurePrompt,
+  searchFilesPrompt,
   codebaseMetadataPrompt,
 } from './operationPrompts';
 
@@ -68,6 +71,18 @@ export const brudPromptLibrary: PromptLibrary = {
       content: appendFilePrompt,
     },
     {
+      id: 'append-file-multi',
+      title: 'Append to Multiple Files',
+      description: 'Append content to multiple files matching a pattern',
+      content: appendFileMultiPrompt,
+    },
+    {
+      id: 'search-replace-multi',
+      title: 'Replace in Multiple Files',
+      description: 'Search and replace text across multiple files',
+      content: searchReplaceMultiPrompt,
+    },
+    {
       id: 'create-directory',
       title: 'Create Directory',
       description: 'Create a new directory with optional empty files',
@@ -90,6 +105,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Extract Directory Structure',
       description: 'Generate a token-efficient JSON map of directory contents with depth control',
       content: extractStructurePrompt,
+    },
+    {
+      id: 'search-files',
+      title: 'Search Files',
+      description: 'Find files by name, pattern, or extension',
+      content: searchFilesPrompt,
     },
     {
       id: 'codebase-metadata',

@@ -141,11 +141,57 @@ Depth: 2
 
 Output ONLY the Brud blocks above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
 
+export const searchFilesPrompt = `Use SEARCH_FILES to find files by name, pattern, or extension.
+
+Describe the files you want to search for below:
+
+<<<<<<< SEARCH_FILES [1]
+Pattern: **/*.ts
+Exclude: *.test.ts
+Scope: src
+MaxResults: 500
+>>>>>>> END SEARCH_FILES [1]
+
+- Pattern: glob patterns or simple words (comma-separated for multiple)
+- Exclude: patterns to skip (optional)
+- Scope: directory to search (optional, default workspace root)
+- MaxResults: maximum files to return (optional, default 500)
+- Returns file paths, names, extensions, and sizes
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
 export const codebaseMetadataPrompt = `Use CODEBASE_METADATA to get a quick summary of the codebase scale.
 
 This returns the total file count, folder count, and the most dense folder (the folder with the most files directly inside it). Use this to determine extraction strategy before deeper exploration.
 
 <<<<<<< CODEBASE_METADATA [1]
 >>>>>>> END CODEBASE_METADATA [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const appendFileMultiPrompt = `Use APPEND_FILE_MULTI to append content to multiple files at once.
+
+Describe the pattern, scope, and content to append below:
+
+<<<<<<< APPEND_FILE_MULTI [1]
+Pattern: **/*.ts
+Scope: src
+Position: end
+=======
+content to append
+>>>>>>> END APPEND_FILE_MULTI [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const searchReplaceMultiPrompt = `Use SEARCH_REPLACE_MULTI to find and replace text across multiple files.
+
+Describe the pattern, scope, search text, and replacement text below:
+
+<<<<<<< SEARCH_REPLACE_MULTI [1]
+Pattern: **/*.ts
+Scope: src
+Search: old text
+Replace: new text
+>>>>>>> END SEARCH_REPLACE_MULTI [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

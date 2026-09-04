@@ -77,7 +77,7 @@
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint src",
+    "lint": "eslint packages apps tests",
     "test": "vscode-test",
     "test:core": "node --import tsx --test packages/core/src/**/*.test.ts",
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
@@ -85,7 +85,9 @@
     "build:ui": "npm run build --workspace @brud/ui",
     "build:protocol": "npm run build --workspace @brud/protocol",
     "build:adapter": "npm run build --workspace @brud/vscode-adapter",
-    "build:all": "npm run build:core && npm run build:protocol && npm run build:adapter && npm run build:ui"
+    "build:all": "npm run build:core && npm run build:protocol && npm run build:adapter && npm run build:ui",
+    "ci": "npm run build:all && npm run test:core && npm run test:integration && npm run lint",
+    "ci:quick": "npm run build:core && npm run test:core"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",

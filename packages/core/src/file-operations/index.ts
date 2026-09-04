@@ -4,6 +4,8 @@ import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
+import { searchFiles } from '../search/fileSearch';
+import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
 
@@ -60,9 +62,11 @@ export async function executeFileOperations(
   let filesAffected: string[] = [];
   let sessionId: string | undefined;
   let preSnapshot: SnapshotData | undefined;
+  const preResolvedMultiFiles: Map<number, string[]> = new Map();
 
   if (historyStore) {
-    for (const operation of operations) {
+    for (let i = 0; i < operations.length; i++) {
+      const operation = operations[i];
       switch (operation.kind) {
         case 'search_replace':
         case 'create_file':
@@ -85,6 +89,35 @@ export async function executeFileOperations(
           if (toResult.valid && !filesAffected.includes(toResult.resolvedPath)) {
             filesAffected.push(toResult.resolvedPath);
           }
+          break;
+        }
+        case 'append_file_multi':
+        case 'search_replace_multi': {
+          if (workspaceFolders.length === 0) {
+            break;
+          }
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            break;
+          }
+          const query: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+          const response = await searchFiles(fs, query);
+          const matchedFiles = response.results.map(r => path.resolve(searchDirectory, r.path));
+          for (const f of matchedFiles) {
+            if (!filesAffected.includes(f)) {
+              filesAffected.push(f);
+            }
+          }
+          preResolvedMultiFiles.set(i, matchedFiles);
           break;
         }
       }
@@ -517,8 +550,8 @@ export async function executeFileOperations(
           existingContent = await fs.readFile(filePath);
 
           const updatedContent = operation.position === 'end'
-            ? existingContent + operation.content
-            : operation.content + existingContent;
+            ? existingContent + '\n\n' + operation.content
+            : operation.content + '\n\n' + existingContent;
 
           await fs.writeFile(filePath, updatedContent);
           operationResults.push({
@@ -799,6 +832,245 @@ operationResults.push({
             path: workspaceRoot,
           });
           return { success: true, message, errors, operationResults };
+        }
+
+        case 'search_files': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_files',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_files',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const query: FileSearchQuery = {
+            patterns: operation.patterns,
+            extensions: operation.extensions,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const response = await searchFiles(fs, query);
+          const resultJson = JSON.stringify(response, null, 2);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'search_files',
+            status: 'success',
+            message: `Found ${response.totalMatches} files matching pattern.`,
+            path: operation.directory || '',
+          });
+          return { success: true, message: resultJson, errors, operationResults };
+        }
+
+        case 'append_file_multi': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'append_file_multi',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'append_file_multi',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const appendQuery: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const matchedFiles = preResolvedMultiFiles.has(i)
+            ? preResolvedMultiFiles.get(i)!
+            : (await searchFiles(fs, appendQuery)).results.map(r => path.resolve(searchDirectory, r.path));
+
+          const modifiedFiles: string[] = [];
+          const skippedFiles: string[] = [];
+          const failedFiles: string[] = [];
+
+          for (const filePath of matchedFiles) {
+            try {
+              let existingContent = '';
+              if (!(await fs.exists(filePath))) {
+                failedFiles.push(filePath);
+                continue;
+              }
+              existingContent = await fs.readFile(filePath);
+
+              const updatedContent = operation.position === 'end'
+                ? existingContent + '\n\n' + operation.content
+                : operation.content + '\n\n' + existingContent;
+
+              await fs.writeFile(filePath, updatedContent);
+              modifiedFiles.push(filePath);
+            } catch {
+              failedFiles.push(filePath);
+            }
+          }
+
+          if (modifiedFiles.length > 0) {
+            for (const f of modifiedFiles) {
+              if (!filesAffected.includes(f)) {
+                filesAffected.push(f);
+              }
+            }
+          }
+
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'append_file_multi',
+            status: failedFiles.length === 0 ? 'success' : 'failed',
+            message: `Appended content to ${modifiedFiles.length} files.`,
+            path: operation.directory || '',
+          });
+          break;
+        }
+
+        case 'search_replace_multi': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_replace_multi',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_replace_multi',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const srQuery: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const matchedFiles = preResolvedMultiFiles.has(i)
+            ? preResolvedMultiFiles.get(i)!
+            : (await searchFiles(fs, srQuery)).results.map(r => path.resolve(searchDirectory, r.path));
+
+          const modifiedFiles: string[] = [];
+          const skippedFiles: string[] = [];
+          const failedFiles: string[] = [];
+
+          for (const filePath of matchedFiles) {
+            try {
+              const content = await fs.readFile(filePath);
+
+              let count = 0;
+              let searchIndex = content.indexOf(operation.search);
+              while (searchIndex !== -1) {
+                count++;
+                searchIndex = content.indexOf(operation.search, searchIndex + 1);
+              }
+
+              if (count === 0) {
+                skippedFiles.push(filePath);
+                continue;
+              }
+
+              if (count > 1) {
+                skippedFiles.push(filePath);
+                continue;
+              }
+
+              const matchIndex = content.indexOf(operation.search);
+              const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
+              await fs.writeFile(filePath, updatedContent);
+              modifiedFiles.push(filePath);
+            } catch {
+              failedFiles.push(filePath);
+            }
+          }
+
+          if (modifiedFiles.length > 0) {
+            for (const f of modifiedFiles) {
+              if (!filesAffected.includes(f)) {
+                filesAffected.push(f);
+              }
+            }
+          }
+
+          const skipMsg = skippedFiles.length > 0 ? ` Skipped ${skippedFiles.length} files.` : '';
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'search_replace_multi',
+            status: failedFiles.length === 0 ? 'success' : 'failed',
+            message: `Patched ${modifiedFiles.length} files.${skipMsg}`,
+            path: operation.directory || '',
+          });
+          break;
         }
       }
     } catch (err) {

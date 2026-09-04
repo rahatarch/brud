@@ -216,6 +216,85 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'search_files': {
+        const patterns = parsed.patterns as string[] | undefined;
+        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+          throw new Error('Missing or empty patterns field in search_files operation');
+        }
+        const extensions = parsed.extensions as string[] | undefined;
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const directory = parsed.directory as string | undefined;
+        const maxResults = parsed.maxResults as number | undefined;
+        operations.push({
+          kind: 'search_files',
+          patterns,
+          extensions: extensions && Array.isArray(extensions) ? extensions : undefined,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          directory: directory || undefined,
+          recursive: true,
+          maxResults: maxResults ?? 500,
+          index: String(index),
+        });
+        break;
+      }
+      case 'append_file_multi': {
+        const patterns = parsed.patterns as string[] | undefined;
+        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+          throw new Error('Missing or empty patterns field in append_file_multi operation');
+        }
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const directory = parsed.directory as string | undefined;
+        const position = parsed.position as string | undefined;
+        if (position !== undefined && position !== 'start' && position !== 'end') {
+          throw new Error('Position field must be "start" or "end" in append_file_multi operation');
+        }
+        const content = parsed.content as string | undefined;
+        if (content === undefined || content === null) {
+          throw new Error('Missing content field in append_file_multi operation');
+        }
+        const maxResults = parsed.maxResults as number | undefined;
+        operations.push({
+          kind: 'append_file_multi',
+          patterns,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          directory: directory || undefined,
+          recursive: true,
+          maxResults: maxResults ?? 500,
+          position: (position as 'start' | 'end') || 'end',
+          content,
+          index: String(index),
+        });
+        break;
+      }
+      case 'search_replace_multi': {
+        const patterns = parsed.patterns as string[] | undefined;
+        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+          throw new Error('Missing or empty patterns field in search_replace_multi operation');
+        }
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const directory = parsed.directory as string | undefined;
+        const search = parsed.search as string | undefined;
+        if (search === undefined || search === null) {
+          throw new Error('Missing search field in search_replace_multi operation');
+        }
+        const replace = parsed.replace as string | undefined;
+        if (replace === undefined || replace === null) {
+          throw new Error('Missing replace field in search_replace_multi operation');
+        }
+        const maxResults = parsed.maxResults as number | undefined;
+        operations.push({
+          kind: 'search_replace_multi',
+          patterns,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          directory: directory || undefined,
+          recursive: true,
+          maxResults: maxResults ?? 500,
+          search,
+          replace,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

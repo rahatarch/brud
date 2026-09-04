@@ -300,7 +300,7 @@ describe('Integration Tests (Real File Operations)', () => {
       assert.strictEqual(result.success, true);
 
       const diskContent = await nodeFs.readFile(resolvedPath);
-      assert.strictEqual(diskContent, initialContent + content, 'appended content should be on disk');
+      assert.strictEqual(diskContent, initialContent + '\n\n' + content, 'appended content should be on disk');
 
       const sessions = await store.getAllSessions();
       const sessionId = sessions[0].sessionId;
@@ -463,8 +463,8 @@ describe('Integration Tests (Real File Operations)', () => {
       assert.strictEqual(await nodeFs.exists(resolvedDir), true, 'directory should exist');
       assert.strictEqual(await nodeFs.exists(resolvedFile1), true, 'file1 should exist');
       assert.strictEqual(await nodeFs.exists(resolvedFile2), true, 'file2 should exist');
-      assert.strictEqual(await nodeFs.readFile(resolvedFile1), 'content1');
-      assert.strictEqual(await nodeFs.readFile(resolvedFile2), 'content2');
+      assert.strictEqual(await nodeFs.readFile(resolvedFile1), '\n\ncontent1');
+      assert.strictEqual(await nodeFs.readFile(resolvedFile2), '\n\ncontent2');
 
       const sessions = await store.getAllSessions();
       const sessionId = sessions[0].sessionId;
@@ -510,9 +510,9 @@ describe('Integration Tests (Real File Operations)', () => {
       const resolvedFile3 = pathModule.join(tempDir, file3RelPath);
 
       assert.strictEqual(await nodeFs.exists(resolvedDir), true);
-      assert.strictEqual(await nodeFs.readFile(resolvedFile1), 'AAA');
-      assert.strictEqual(await nodeFs.readFile(resolvedFile2), 'BBB');
-      assert.strictEqual(await nodeFs.readFile(resolvedFile3), 'CCC');
+      assert.strictEqual(await nodeFs.readFile(resolvedFile1), '\n\nAAA');
+      assert.strictEqual(await nodeFs.readFile(resolvedFile2), '\n\nBBB');
+      assert.strictEqual(await nodeFs.readFile(resolvedFile3), '\n\nCCC');
 
       const sessions = await store.getAllSessions();
       const sessionId = sessions[0].sessionId;

@@ -62,6 +62,12 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? op.directoryPath
         : op.kind === 'codebase_metadata'
         ? '__codebase_metadata__'
+        : op.kind === 'search_files'
+        ? '__search_files__'
+        : op.kind === 'append_file_multi'
+        ? '__append_file_multi__'
+        : op.kind === 'search_replace_multi'
+        ? '__search_replace_multi__'
         : op.path;
       const existing = grouped.get(key) || [];
       existing.push(op);
@@ -730,6 +736,36 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       } else {
         this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
         this._outputChannel.appendLine('Operations: ' + JSON.stringify(metadataOps));
+        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+        this._outputChannel.show(true);
+        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
+        this._view?.webview.postMessage(errMsg);
+      }
+      return;
+    }
+
+    const searchOps = operations.filter(op => op.kind === 'search_files');
+    if (searchOps.length > 0) {
+      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for search_files');
+      const result = await executeFileOperations(searchOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
+      if (result.success) {
+        let searchData: any;
+        try {
+          searchData = JSON.parse(result.message);
+        } catch {
+          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse search results.' };
+          this._view?.webview.postMessage(errMsg);
+          return;
+        }
+        const report = `Found ${searchData.totalMatches} files matching pattern.`;
+        const successMsg: ExtensionMessage = { command: 'success', message: report };
+        this._view?.webview.postMessage(successMsg);
+        this._structurePanelManager?.openSearchResultsPanel(searchData);
+        this._outputChannel.appendLine(`Search results: ${JSON.stringify(searchData)}`);
+      } else {
+        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+        this._outputChannel.appendLine('Operations: ' + JSON.stringify(searchOps));
         this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
         this._outputChannel.show(true);
         const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };

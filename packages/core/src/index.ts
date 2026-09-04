@@ -8,3 +8,4 @@ export * from './utils/pathResolver';
 export * from './prompt-library';
 export * from './structure-extractor';
 export * from './history';
+export * from './search';
