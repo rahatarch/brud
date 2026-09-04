@@ -30,7 +30,7 @@ export class NodeFileSystem implements FileSystem {
     }
   }
   async createDirectory(dirPath: string): Promise<void> {
-    return fs.mkdir(dirPath, { recursive: true });
+    await fs.mkdir(dirPath, { recursive: true });
   }
   async deleteDirectoryRecursive(dirPath: string): Promise<void> {
     return fs.rm(dirPath, { recursive: true, force: true });
