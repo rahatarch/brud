@@ -1,3 +1,4 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult } from '@brud/core';
 import { revertSession } from '@brud/core';
@@ -15,31 +16,31 @@ export class WorkspaceHistoryStore implements HistoryStore {
   }
 
   private get brudDir(): string {
-    return `${this.workspaceRoot}/.brud`;
+    return path.join(this.workspaceRoot, '.brud');
   }
 
   private get historyDir(): string {
-    return `${this.brudDir}/history`;
+    return path.join(this.brudDir, 'history');
   }
 
   private get sessionsDir(): string {
-    return `${this.historyDir}/sessions`;
+    return path.join(this.historyDir, 'sessions');
   }
 
   private sessionDir(sessionId: string): string {
-    return `${this.sessionsDir}/${sessionId}`;
+    return path.join(this.sessionsDir, sessionId);
   }
 
   private sessionFile(sessionId: string): string {
-    return `${this.sessionDir(sessionId)}/session.json`;
+    return path.join(this.sessionDir(sessionId), 'session.json');
   }
 
   private preFile(sessionId: string): string {
-    return `${this.sessionDir(sessionId)}/pre.json`;
+    return path.join(this.sessionDir(sessionId), 'pre.json');
   }
 
   private postFile(sessionId: string): string {
-    return `${this.sessionDir(sessionId)}/post.json`;
+    return path.join(this.sessionDir(sessionId), 'post.json');
   }
 
   private mapToObject(map: Map<string, string>): Record<string, string> {
@@ -64,7 +65,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
   }
 
   private async ensureWarningFile(): Promise<void> {
-    const warningPath = `${this.brudDir}/WARNING.txt`;
+    const warningPath = path.join(this.brudDir, 'WARNING.txt');
     const warningExists = await this.fileSystem.exists(warningPath);
     if (!warningExists) {
       await this.fileSystem.writeFile(
@@ -102,7 +103,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
 
   private async updateGitignore(): Promise<void> {
     try {
-      const gitignorePath = `${this.workspaceRoot}/.gitignore`;
+      const gitignorePath = path.join(this.workspaceRoot, '.gitignore');
       const gitignoreExists = await this.fileSystem.exists(gitignorePath);
 
       let content = '';

@@ -1,3 +1,4 @@
+import path from 'path';
 import { FileSystem } from '../types/filesystem';
 
 const IGNORED_DIRECTORIES = new Set([
@@ -29,13 +30,13 @@ async function buildStructure(
 
     if (entry.isDirectory) {
       if (maxDepth === 0) {
-        const subNode = await buildStructure(fs, `${dirPath}/${entry.name}`, currentDepth + 1, maxDepth);
+        const subNode = await buildStructure(fs, path.join(dirPath, entry.name), currentDepth + 1, maxDepth);
         children.push({ [entry.name]: subNode[entry.name] });
       } else if (currentDepth === 0) {
-        const subNode = await buildStructure(fs, `${dirPath}/${entry.name}`, currentDepth + 1, maxDepth);
+        const subNode = await buildStructure(fs, path.join(dirPath, entry.name), currentDepth + 1, maxDepth);
         children.push({ [entry.name]: subNode[entry.name] });
       } else if (currentDepth + 1 < maxDepth) {
-        const subNode = await buildStructure(fs, `${dirPath}/${entry.name}`, currentDepth + 1, maxDepth);
+        const subNode = await buildStructure(fs, path.join(dirPath, entry.name), currentDepth + 1, maxDepth);
         children.push({ [entry.name]: subNode[entry.name] });
       } else if (currentDepth + 1 === maxDepth) {
         children.push({ [entry.name]: [] });
@@ -45,7 +46,7 @@ async function buildStructure(
     }
   }
 
-  const dirName = dirPath.split('/').filter(Boolean).pop() || dirPath;
+  const dirName = path.basename(dirPath) || dirPath;
   return { [dirName]: children };
 }
 

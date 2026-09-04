@@ -728,7 +728,7 @@ operationResults.push({
           }
 
           const workspaceRoot = workspaceFolders[0];
-          const metadata = await extractCodebaseMetadata(fs, workspaceRoot);
+          const metadata = await extractCodebaseMetadata(fs, path.resolve(workspaceRoot));
           const message = JSON.stringify(metadata, null, 2);
           operationResults.push({
             operationIndex: i,

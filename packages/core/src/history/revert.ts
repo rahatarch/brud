@@ -104,7 +104,7 @@ export async function revertSession(
                 errors.push(`Failed to apply diff for ${resolvedPath}`);
                 break;
               }
-              const parentDir = resolvedPath.substring(0, resolvedPath.lastIndexOf('/'));
+              const parentDir = path.dirname(resolvedPath);
               if (parentDir) {
                 await fs.createDirectory(parentDir);
               }
@@ -124,7 +124,7 @@ export async function revertSession(
           if (targetState === 'pre') {
             const preContent = preFiles.get(resolvedPath);
             if (preContent !== undefined) {
-              const parentDir = resolvedPath.substring(0, resolvedPath.lastIndexOf('/'));
+              const parentDir = path.dirname(resolvedPath);
               if (parentDir) {
                 await fs.createDirectory(parentDir);
               }
@@ -169,7 +169,7 @@ export async function revertSession(
             if (!toResult.valid) { errors.push(toResult.error); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
-                const parentDir = fromResult.resolvedPath.substring(0, fromResult.resolvedPath.lastIndexOf('/'));
+                const parentDir = path.dirname(fromResult.resolvedPath);
                 if (parentDir) {
                   await fs.createDirectory(parentDir);
                 }
@@ -177,7 +177,7 @@ export async function revertSession(
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
-                const parentDir = toResult.resolvedPath.substring(0, toResult.resolvedPath.lastIndexOf('/'));
+                const parentDir = path.dirname(toResult.resolvedPath);
                 if (parentDir) {
                   await fs.createDirectory(parentDir);
                 }
@@ -202,7 +202,7 @@ export async function revertSession(
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
-                const parentDir = toResult.resolvedPath.substring(0, toResult.resolvedPath.lastIndexOf('/'));
+                const parentDir = path.dirname(toResult.resolvedPath);
                 if (parentDir) {
                   await fs.createDirectory(parentDir);
                 }
@@ -233,8 +233,8 @@ export async function revertSession(
             await fs.createDirectory(resolvedDirPath);
             const files = op.files || [];
             for (const file of files) {
-              const filePath = resolvedDirPath + '/' + file;
-              const parentDir = filePath.substring(0, filePath.lastIndexOf('/'));
+              const filePath = path.join(resolvedDirPath, file);
+              const parentDir = path.dirname(filePath);
               await fs.createDirectory(parentDir);
               await fs.writeFile(filePath, '');
             }
@@ -256,8 +256,9 @@ export async function revertSession(
           if (targetState === 'pre') {
             await fs.createDirectory(resolvedDirPath);
             for (const [filePath, content] of preFiles) {
-              if (filePath.startsWith(resolvedDirPath + '/') || filePath === resolvedDirPath) {
-                const parentDir = filePath.substring(0, filePath.lastIndexOf('/'));
+              const relative = path.relative(resolvedDirPath, filePath);
+              if (relative === '' || !relative.startsWith('..')) {
+                const parentDir = path.dirname(filePath);
                 await fs.createDirectory(parentDir);
                 if (content) {
                   await fs.writeFile(filePath, content);
@@ -282,7 +283,7 @@ export async function revertSession(
             if (!toResult.valid) { errors.push(toResult.error); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
-                const parentDir = fromResult.resolvedPath.substring(0, fromResult.resolvedPath.lastIndexOf('/'));
+                const parentDir = path.dirname(fromResult.resolvedPath);
                 if (parentDir) {
                   await fs.createDirectory(parentDir);
                 }
@@ -290,7 +291,7 @@ export async function revertSession(
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
-                const parentDir = toResult.resolvedPath.substring(0, toResult.resolvedPath.lastIndexOf('/'));
+                const parentDir = path.dirname(toResult.resolvedPath);
                 if (parentDir) {
                   await fs.createDirectory(parentDir);
                 }
