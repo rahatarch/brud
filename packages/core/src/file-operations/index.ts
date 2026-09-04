@@ -62,9 +62,11 @@ export async function executeFileOperations(
   let filesAffected: string[] = [];
   let sessionId: string | undefined;
   let preSnapshot: SnapshotData | undefined;
+  const preResolvedMultiFiles: Map<number, string[]> = new Map();
 
   if (historyStore) {
-    for (const operation of operations) {
+    for (let i = 0; i < operations.length; i++) {
+      const operation = operations[i];
       switch (operation.kind) {
         case 'search_replace':
         case 'create_file':
@@ -91,7 +93,31 @@ export async function executeFileOperations(
         }
         case 'append_file_multi':
         case 'search_replace_multi': {
-          // Files resolved at execution time via search
+          if (workspaceFolders.length === 0) {
+            break;
+          }
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            break;
+          }
+          const query: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+          const response = await searchFiles(fs, query);
+          const matchedFiles = response.results.map(r => path.resolve(searchDirectory, r.path));
+          for (const f of matchedFiles) {
+            if (!filesAffected.includes(f)) {
+              filesAffected.push(f);
+            }
+          }
+          preResolvedMultiFiles.set(i, matchedFiles);
           break;
         }
       }
@@ -902,8 +928,9 @@ operationResults.push({
             maxResults: operation.maxResults,
           };
 
-          const appendResponse = await searchFiles(fs, appendQuery);
-          const matchedFiles = appendResponse.results.map(r => path.resolve(searchDirectory, r.path));
+          const matchedFiles = preResolvedMultiFiles.has(i)
+            ? preResolvedMultiFiles.get(i)!
+            : (await searchFiles(fs, appendQuery)).results.map(r => path.resolve(searchDirectory, r.path));
 
           const modifiedFiles: string[] = [];
           const skippedFiles: string[] = [];
@@ -929,7 +956,7 @@ operationResults.push({
             }
           }
 
-          if (modifiedFiles.length > 0 && !filesAffected.includes) {
+          if (modifiedFiles.length > 0) {
             for (const f of modifiedFiles) {
               if (!filesAffected.includes(f)) {
                 filesAffected.push(f);
@@ -988,8 +1015,9 @@ operationResults.push({
             maxResults: operation.maxResults,
           };
 
-          const srResponse = await searchFiles(fs, srQuery);
-          const matchedFiles = srResponse.results.map(r => path.resolve(searchDirectory, r.path));
+          const matchedFiles = preResolvedMultiFiles.has(i)
+            ? preResolvedMultiFiles.get(i)!
+            : (await searchFiles(fs, srQuery)).results.map(r => path.resolve(searchDirectory, r.path));
 
           const modifiedFiles: string[] = [];
           const skippedFiles: string[] = [];
