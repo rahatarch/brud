@@ -327,6 +327,7 @@ export async function revertSession(
 
         case 'extract_structure':
         case 'codebase_metadata':
+        case 'search_files':
           break;
 
         default:

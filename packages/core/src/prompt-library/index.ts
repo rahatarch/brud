@@ -12,6 +12,7 @@ import {
   deleteDirectoryPrompt,
   moveDirectoryPrompt,
   extractStructurePrompt,
+  searchFilesPrompt,
   codebaseMetadataPrompt,
 } from './operationPrompts';
 
@@ -90,6 +91,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Extract Directory Structure',
       description: 'Generate a token-efficient JSON map of directory contents with depth control',
       content: extractStructurePrompt,
+    },
+    {
+      id: 'search-files',
+      title: 'Search Files',
+      description: 'Find files by name, pattern, or extension',
+      content: searchFilesPrompt,
     },
     {
       id: 'codebase-metadata',

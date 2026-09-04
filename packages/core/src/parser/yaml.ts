@@ -216,6 +216,27 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'search_files': {
+        const patterns = parsed.patterns as string[] | undefined;
+        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+          throw new Error('Missing or empty patterns field in search_files operation');
+        }
+        const extensions = parsed.extensions as string[] | undefined;
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const directory = parsed.directory as string | undefined;
+        const maxResults = parsed.maxResults as number | undefined;
+        operations.push({
+          kind: 'search_files',
+          patterns,
+          extensions: extensions && Array.isArray(extensions) ? extensions : undefined,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          directory: directory || undefined,
+          recursive: true,
+          maxResults: maxResults ?? 500,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

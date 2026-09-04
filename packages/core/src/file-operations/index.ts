@@ -4,6 +4,8 @@ import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
+import { searchFiles } from '../search/fileSearch';
+import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
 
@@ -799,6 +801,60 @@ operationResults.push({
             path: workspaceRoot,
           });
           return { success: true, message, errors, operationResults };
+        }
+
+        case 'search_files': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file search.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_files',
+              status: 'aborted',
+              message: 'No workspace root available for file search.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'search_files',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const query: FileSearchQuery = {
+            patterns: operation.patterns,
+            extensions: operation.extensions,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const response = await searchFiles(fs, query);
+          const resultJson = JSON.stringify(response, null, 2);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'search_files',
+            status: 'success',
+            message: `Found ${response.totalMatches} files matching pattern.`,
+            path: operation.directory || '',
+          });
+          return { success: true, message: resultJson, errors, operationResults };
         }
       }
     } catch (err) {

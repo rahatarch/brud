@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, FileText } from 'lucide-react';
 import CustomScrollbar from './CustomScrollbar';
 import { sendToExtension } from '../bridge/vscodeBridge';
 
@@ -19,9 +19,30 @@ interface CodebaseMetadataResult {
   mostDenseCount: number;
 }
 
+interface SearchFileItem {
+  path: string;
+  name: string;
+  extension: string;
+  directory: string;
+  size: number;
+}
+
+interface SearchFilesResult {
+  results: SearchFileItem[];
+  totalMatches: number;
+  truncated: boolean;
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function StructurePanel() {
   const [structures, setStructures] = useState<StructureData[]>([]);
   const [metadata, setMetadata] = useState<CodebaseMetadataResult | null>(null);
+  const [searchResults, setSearchResults] = useState<SearchFilesResult | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
@@ -35,13 +56,20 @@ function StructurePanel() {
         if (message.codebaseMetadata) {
           setMetadata(message.codebaseMetadata);
           setStructures([]);
+          setSearchResults(null);
         } else if (message.structures) {
           setStructures(message.structures);
           setMetadata(null);
+          setSearchResults(null);
         } else if (message.structure) {
           setStructures([message.structure]);
           setMetadata(null);
+          setSearchResults(null);
         }
+      } else if (message.command === 'searchFilesResult') {
+        setSearchResults(message.searchResults);
+        setStructures([]);
+        setMetadata(null);
       }
     }
 
@@ -50,7 +78,10 @@ function StructurePanel() {
   }, []);
 
   const handleCopy = useCallback(() => {
-    if (metadata) {
+    if (searchResults) {
+      const text = searchResults.results.map(r => r.path).join('\n');
+      navigator.clipboard.writeText(text);
+    } else if (metadata) {
       const compactJson = JSON.stringify(metadata);
       navigator.clipboard.writeText(compactJson);
     } else if (structures.length > 0) {
@@ -63,9 +94,9 @@ function StructurePanel() {
     }
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  }, [structures, metadata]);
+  }, [structures, metadata, searchResults]);
 
-  if (structures.length === 0 && !metadata) {
+  if (structures.length === 0 && !metadata && !searchResults) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
         <h1 className="text-2xl font-semibold text-text mb-3">Structure Extraction Result</h1>
@@ -80,19 +111,41 @@ function StructurePanel() {
     <div className="min-h-screen flex flex-col bg-surface">
       <div className="border-b border-border bg-surface-2 px-6 py-4 flex items-center justify-between shrink-0">
         <h1 className="text-xl font-semibold text-text">
-          {metadata ? 'Codebase Metadata' : 'Structure Extraction Result'}
+          {searchResults ? 'Search Results' : metadata ? 'Codebase Metadata' : 'Structure Extraction Result'}
         </h1>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? 'Copied!' : metadata ? 'Copy JSON' : 'Copy All JSON'}
+          {copied ? 'Copied!' : searchResults ? 'Copy Paths' : metadata ? 'Copy JSON' : 'Copy All JSON'}
         </button>
       </div>
 
       <CustomScrollbar className="flex-1">
-        {metadata ? (
+        {searchResults ? (
+          <div>
+            <div className="px-6 py-3 border-b border-border bg-surface-2 text-sm text-text-secondary">
+              {searchResults.truncated
+                ? `Found ${searchResults.totalMatches} files, showing first ${searchResults.results.length}`
+                : `Found ${searchResults.totalMatches} files`}
+            </div>
+            <div className="divide-y divide-border">
+              {searchResults.results.map((file, index) => (
+                <div key={index} className="flex items-center gap-3 px-6 py-3 hover:bg-surface-2 transition-colors">
+                  <FileText size={14} className="text-text-tertiary shrink-0" />
+                  <span className="text-xs text-text font-mono flex-1 truncate">{file.path}</span>
+                  <span className="text-xs text-text-secondary tabular-nums shrink-0">{formatSize(file.size)}</span>
+                  {file.extension && (
+                    <span className="text-xs text-text-tertiary bg-surface-2 border border-border rounded px-1.5 py-0.5 font-mono shrink-0">
+                      {file.extension}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : metadata ? (
           <div>
             <div className="flex items-center gap-6 px-6 py-3 border-b border-border bg-surface-2 text-sm text-text-secondary">
               <span>

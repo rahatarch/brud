@@ -91,7 +91,22 @@ Depth: [number or 0 for unlimited]
 - Depth N means N levels deep
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
 
-### 12. CODEBASE_METADATA
+### 12. SEARCH_FILES
+Searches for files by name, pattern, or extension.
+<<<<<<< SEARCH_FILES [1]
+Pattern: **/*.ts
+Exclude: *.test.ts
+Scope: src
+MaxResults: 500
+>>>>>>> END SEARCH_FILES [1]
+
+- Pattern: glob patterns or simple words (comma-separated for multiple)
+- Exclude: patterns to skip (optional)
+- Scope: directory to search (optional, default workspace root)
+- MaxResults: maximum files to return (optional, default 500)
+- Returns file paths, names, extensions, and sizes
+
+### 13. CODEBASE_METADATA
 Returns a summary of the codebase scale (total files, folders, most dense folder) to help determine extraction strategy before deeper exploration.
 <<<<<<< CODEBASE_METADATA [1]
 >>>>>>> END CODEBASE_METADATA [1]

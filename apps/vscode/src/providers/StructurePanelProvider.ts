@@ -58,6 +58,44 @@ export class BrudStructurePanelManager {
     });
   }
 
+  public openSearchResultsPanel(searchResults: any) {
+    const message = { command: 'searchFilesResult', searchResults };
+
+    if (this._panel) {
+      this._panel.reveal(vscode.ViewColumn.One);
+      this._panel.webview.postMessage(message);
+      return;
+    }
+
+    this._panel = vscode.window.createWebviewPanel(
+      'brud-structure-panel',
+      'Brud Code Structure Extraction',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview'),
+        ],
+      },
+    );
+
+    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+
+    this._pendingMessage = message;
+
+    this._panel.onDidDispose(() => {
+      this._panel = undefined;
+    });
+
+    this._panel.webview.onDidReceiveMessage((message) => {
+      if (message.command === 'ready' && this._pendingMessage) {
+        this._panel?.webview.postMessage(this._pendingMessage);
+        this._pendingMessage = null;
+      }
+    });
+  }
+
   private _getHtmlForWebview(webview: vscode.Webview): string {
     const htmlPath = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'index.html');
     let html = fs.readFileSync(htmlPath.fsPath, 'utf8');
