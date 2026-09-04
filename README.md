@@ -4,13 +4,13 @@
 
 <h1 align="center">Brud Code</h1>
 
-<h3 align="center">Full AI-Assisted Coding Platform — Manual Input, No API Keys</h3>
+<h3 align="center">AI-Assisted Coding Platform — Manual Paste, Surgical Apply, Full Control</h3>
 
 <p align="center">
   <img src="https://img.shields.io/badge/VS%20Code-1.80%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.80+" />
   <img src="https://img.shields.io/badge/Price-Free-00C853?style=for-the-badge" alt="Free Forever" />
+  <img src="https://img.shields.io/badge/No%20API%20Keys-Required-FF6F00?style=for-the-badge" alt="No API Keys Required" />
   <img src="https://img.shields.io/badge/License-MIT-4CAF50?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/badge/Fork-Akkhar%20Code%20Patcher-FF6F00?style=for-the-badge" alt="Fork of Akkhar Code Patcher" />
 </p>
 
 <p align="center">
@@ -22,27 +22,67 @@
 
 # Brud Code
 
-## AI-Assisted Coding Without the Friction
+## What Brud Code Does
 
-Brud is a full AI-assisted coding platform built for manual paste-and-apply workflows. It lets you take code changes from any AI chatbot and apply them to your codebase with precision, safety, and full control. No API keys, no subscriptions, no setup required.
+Brud is a manual paste-and-apply AI coding platform. You paste AI-generated code changes into Brud, and it executes them surgically on your codebase — with precision, safety, and full control.
+
+- **Paste AI output, Brud executes it.** No copy-paste-drift, no missed lines, no manual editing.
+- **Works with any free AI chatbot.** ChatGPT, Claude, Gemini, DeepSeek — whatever you already use.
+- **Zero API keys.** No OpenAI keys, no Anthropic keys, no third-party tokens.
+- **No subscriptions for full functionality.** Everything is free, forever.
 
 ---
 
 ## Features
 
-- **File Operations**: Specify target file paths directly in your patch blocks for multi-file patching workflows.
-- **Prompt Helper**: Built-in prompt formatting assistance to help you craft precise search-and-replace blocks.
-- **Fuzzy Matching**: Intelligent whitespace-agnostic matching that finds the correct code location even when indentation differs.
-- **AI Mistake Auto-Fix**: Automatic detection and correction of common AI-generated formatting errors and indentation mismatches.
-- **Multi-File Patch Support**: Apply patches across multiple files in a single workflow session.
-- **Patch History**: Track and review previously applied patches for audit and rollback purposes.
-- **AI Output Cleaner**: Strips extraneous AI commentary and formatting artifacts from patch blocks before processing.
-- **Confidence Indicators**: Visual feedback on match quality and patch reliability before execution.
-- **Multiple Format Support**: Compatible with various search-and-replace formats from different AI tools and platforms.
-- **Multi-Occurrence Apply**: Apply the same patch block to multiple matching locations in a file.
-- **Git Integration**: Awareness of Git state to prevent patching uncommitted or dirty files unintentionally.
-- **Syntax Validation**: Pre-apply validation that checks for syntax errors in the patched result.
-- **Template Library**: Save and reuse common patch patterns for recurring code transformations.
+### File Operations
+- Create files and directories
+- Delete files and directories
+- Rename, move, and copy files
+- Append content to files
+- Search and replace code with precision
+- All operations are workspace-safe — nothing touches files outside your project
+
+### Codebase Discovery
+- Extract directory structure as token-efficient JSON — perfect for sending to AI
+- Get codebase metadata (total files, total folders, most dense folder)
+- Extract multiple directories in a single prompt
+- Share your project structure with AI without wasting tokens on file contents
+
+### History and Revert
+- Every session is automatically recorded with full detail
+- Revert entire sessions or individual operations
+- 7-day trash protection for deleted sessions
+- Restore deleted sessions anytime within the grace period
+- Complete audit trail — know exactly what changed and when
+
+### Prompt Library
+- Ready-made prompts for free AI chatbots (ChatGPT, Claude, Gemini, etc.)
+- Master system prompt that teaches AI how to output Brud-compatible blocks
+- Operation-specific prompts for create, delete, rename, search-and-replace, and more
+- One-click copy — paste directly into your AI chat
+
+---
+
+## Why Brud Code
+
+- **Zero API keys required.** No signups, no billing, no rate limits.
+- **Works with free AI chatbots.** Use whatever AI you already have open.
+- **Token-efficient.** AI only outputs the Brud instruction block, not the entire file — saves tokens and works with smaller context windows.
+- **Surgical precision.** Brud only changes what you specify. No hallucinations, no drift, no surprise edits.
+- **Full history with revert.** Accidentally broke something? Revert instantly. Never lose work again.
+- **Professional UI.** Built for developers who want control, not black-box automation.
+
+---
+
+## Quick Start
+
+1. **Install** the Brud Code VSIX from the [Releases page](https://github.com/rahatarch/brud/releases) or search "Brud Code" in VS Code Extensions.
+2. **Open** the Brud Code sidebar (click the Brud icon in the activity bar).
+3. **Copy a Brud Prompt** from the Prompt Library or ask your AI to output one.
+4. **Paste** the prompt into the Brud Code input panel.
+5. **Click Execute** to apply the changes.
+6. **Review** the results in the diff view and history panel.
 
 ---
 
@@ -58,27 +98,42 @@ Brud is a full AI-assisted coding platform built for manual paste-and-apply work
 
 ## Usage
 
-Your AI assistant outputs a structured patch block:
+Brud Code works with **any AI assistant** — ChatGPT, Claude, Gemini, or any free web AI. You don't need API keys or paid subscriptions.
 
-```
-File Path: src/utils.js
-<<<<<<< SEARCH [0]
-function calculateTotal(price, tax) {
-  return price + tax;
-}
-=======
-function calculateTotal(price, tax, discount = 0) {
-  return price + tax - discount;
-}
->>>>>>> REPLACE [0]
-```
+### Recommended: Start with the Prompt Library
 
-1. Copy the entire patch block from your AI output.
-2. Paste it into the Brud Code sidebar in VS Code.
-3. Click Preview Bulk Diff to see exactly what will change.
-4. Verify the diff in the side-by-side preview.
-5. Click Execute Patch to apply the changes.
-6. Confirm the patch was applied successfully.
+The Prompt Library is the fastest way to get started:
+
+1. **Install Brud Code** from the VS Code marketplace.
+2. **Open the Prompt Library** from the welcome screen or the Management window.
+3. **Browse ready-made prompts** for different operations (create, search/replace, append, delete, etc.).
+4. **Copy the Master System Prompt** and share it with your AI assistant — this teaches the AI how to output Brud-compatible blocks.
+
+### Workflow
+
+1. **Give the Master System Prompt** to your AI assistant once. It tells the AI how to format code changes.
+2. **Tell the AI what you want to change** in your codebase (e.g., "Add a discount parameter to the calculateTotal function").
+3. **The AI outputs a Brud block** inside a code fence. Example:
+
+   ```brud
+   File Path: src/utils.js
+   <<<<<<< SEARCH [0]
+   function calculateTotal(price, tax) {
+     return price + tax;
+   }
+   =======
+   function calculateTotal(price, tax, discount = 0) {
+     return price + tax - discount;
+   }
+   >>>>>>> REPLACE [0]
+   ```
+
+4. **Copy the Brud block** from the AI response.
+5. **Paste it into the Brud Code sidebar** in VS Code.
+6. **Preview and Execute** — review the diff, then apply the change.
+7. **Review the report** — Brud shows you exactly what changed and lets you revert if needed.
+
+> The Prompt Library contains operation-specific prompts for CREATE_FILE, SEARCH/REPLACE, APPEND_FILE, DELETE_FILE, directory operations, and structure extraction. Use these prompts to get exactly the output you need from your AI.
 
 ---
 
