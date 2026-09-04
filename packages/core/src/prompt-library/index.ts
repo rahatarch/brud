@@ -8,6 +8,8 @@ import {
   moveFilePrompt,
   copyFilePrompt,
   appendFilePrompt,
+  appendFileMultiPrompt,
+  searchReplaceMultiPrompt,
   createDirectoryPrompt,
   deleteDirectoryPrompt,
   moveDirectoryPrompt,
@@ -67,6 +69,18 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Append File',
       description: 'Append content to the end of an existing file',
       content: appendFilePrompt,
+    },
+    {
+      id: 'append-file-multi',
+      title: 'Append to Multiple Files',
+      description: 'Append content to multiple files matching a pattern',
+      content: appendFileMultiPrompt,
+    },
+    {
+      id: 'search-replace-multi',
+      title: 'Replace in Multiple Files',
+      description: 'Search and replace text across multiple files',
+      content: searchReplaceMultiPrompt,
     },
     {
       id: 'create-directory',

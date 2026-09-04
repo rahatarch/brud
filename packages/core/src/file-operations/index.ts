@@ -524,8 +524,8 @@ export async function executeFileOperations(
           existingContent = await fs.readFile(filePath);
 
           const updatedContent = operation.position === 'end'
-            ? existingContent + operation.content
-            : operation.content + existingContent;
+            ? existingContent + '\n\n' + operation.content
+            : operation.content + '\n\n' + existingContent;
 
           await fs.writeFile(filePath, updatedContent);
           operationResults.push({
@@ -919,8 +919,8 @@ operationResults.push({
               existingContent = await fs.readFile(filePath);
 
               const updatedContent = operation.position === 'end'
-                ? existingContent + operation.content
-                : operation.content + existingContent;
+                ? existingContent + '\n\n' + operation.content
+                : operation.content + '\n\n' + existingContent;
 
               await fs.writeFile(filePath, updatedContent);
               modifiedFiles.push(filePath);

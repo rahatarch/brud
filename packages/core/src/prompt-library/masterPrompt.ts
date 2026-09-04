@@ -57,7 +57,26 @@ Position: end
 content to append
 >>>>>>> END APPEND_FILE [1]
 
-### 8. CREATE_DIRECTORY
+### 8. APPEND_FILE_MULTI
+Appends content to multiple files matching a pattern.
+<<<<<<< APPEND_FILE_MULTI [1]
+Pattern: **/*.ts
+Scope: src
+Position: end
+=======
+content to append
+>>>>>>> END APPEND_FILE_MULTI [1]
+
+### 9. SEARCH_REPLACE_MULTI
+Searches for existing content and replaces it with new content across multiple files.
+<<<<<<< SEARCH_REPLACE_MULTI [1]
+Pattern: **/*.ts
+Scope: src
+Search: old text
+Replace: new text
+>>>>>>> END SEARCH_REPLACE_MULTI [1]
+
+### 10. CREATE_DIRECTORY
 Creates a new directory with optional empty files.
 <<<<<<< CREATE_DIRECTORY [1]
 Directory Path: packages/core/src
@@ -66,20 +85,20 @@ Files:
   - index.ts
 >>>>>>> END CREATE_DIRECTORY [1]
 
-### 9. DELETE_DIRECTORY
+### 11. DELETE_DIRECTORY
 Removes a directory and all its contents.
 <<<<<<< DELETE_DIRECTORY [1]
 Directory Path: src/old
 >>>>>>> END DELETE_DIRECTORY [1]
 
-### 10. MOVE_DIRECTORY
+### 12. MOVE_DIRECTORY
 Moves a directory from one location to another.
 <<<<<<< MOVE_DIRECTORY [1]
 From: src/components
 To: packages/ui/components
 >>>>>>> END MOVE_DIRECTORY [1]
 
-### 11. EXTRACT_STRUCTURE
+### 13. EXTRACT_STRUCTURE
 Extracts directory structure as a token-efficient JSON map.
 <<<<<<< EXTRACT_STRUCTURE [1]
 Directory Path: [path]
@@ -91,7 +110,7 @@ Depth: [number or 0 for unlimited]
 - Depth N means N levels deep
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
 
-### 12. SEARCH_FILES
+### 14. SEARCH_FILES
 Searches for files by name, pattern, or extension.
 <<<<<<< SEARCH_FILES [1]
 Pattern: **/*.ts
@@ -106,7 +125,7 @@ MaxResults: 500
 - MaxResults: maximum files to return (optional, default 500)
 - Returns file paths, names, extensions, and sizes
 
-### 13. CODEBASE_METADATA
+### 15. CODEBASE_METADATA
 Returns a summary of the codebase scale (total files, folders, most dense folder) to help determine extraction strategy before deeper exploration.
 <<<<<<< CODEBASE_METADATA [1]
 >>>>>>> END CODEBASE_METADATA [1]
