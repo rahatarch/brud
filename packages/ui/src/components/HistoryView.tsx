@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare } from 'lucide-react';
 import type { HistorySessionResult, RevertSessionResult, RevertHistoryData } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -93,7 +93,6 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
   const operations = session.operations || [];
   const operationCount = session.operationCount || 0;
   const operationTypes = session.operationTypes || [];
-  const filesAffected = session.filesAffected || [];
   const metadataUsed = session.metadataUsed || {};
   const hasMetadata = Object.keys(metadataUsed).length > 0;
   const [revertLoading, setRevertLoading] = useState<'pre' | 'post' | null>(null);
@@ -103,6 +102,27 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
   const [pendingTargetState, setPendingTargetState] = useState<'pre' | 'post' | null>(null);
   const [revertHistory, setRevertHistory] = useState<RevertHistoryData[] | null>(null);
   const [revertHistoryLoading, setRevertHistoryLoading] = useState(false);
+  const NON_REVERTABLE_KINDS = new Set(['extract_structure', 'codebase_metadata']);
+
+  const [selectedOperationIds, setSelectedOperationIds] = useState<Set<string>>(new Set());
+  const [showIndividualRevertModal, setShowIndividualRevertModal] = useState(false);
+  const [pendingIndividualTarget, setPendingIndividualTarget] = useState<'pre' | 'post' | null>(null);
+  const [individualRevertResult, setIndividualRevertResult] = useState<RevertSessionResult | null>(null);
+  const [individualRevertLoading, setIndividualRevertLoading] = useState(false);
+
+  const toggleOperation = useCallback((operationId: string) => {
+    setSelectedOperationIds(prev => {
+      const next = new Set(prev);
+      if (next.has(operationId)) {
+        next.delete(operationId);
+      } else {
+        next.add(operationId);
+      }
+      return next;
+    });
+  }, []);
+
+  const hasSelectedOperations = selectedOperationIds.size > 0;
 
   useEffect(() => {
     setRevertHistory(null);
@@ -124,6 +144,16 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
           setTimeout(() => {
             onBack();
           }, 2000);
+        }
+      }
+      if (message.command === 'revertOperationsResult' && message.revertOperationsResult) {
+        setIndividualRevertResult(message.revertOperationsResult);
+        setIndividualRevertLoading(false);
+        if (message.revertOperationsResult.success) {
+          setSelectedOperationIds(new Set());
+          setRevertHistory(null);
+          setRevertHistoryLoading(true);
+          sendToExtension({ command: 'getRevertHistory', sessionId });
         }
       }
     });
@@ -150,9 +180,37 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
     setPendingTargetState(null);
   }, []);
 
+  const handleIndividualRevert = useCallback((targetState: 'pre' | 'post') => {
+    setPendingIndividualTarget(targetState);
+    setShowIndividualRevertModal(true);
+  }, []);
+
+  const handleConfirmIndividualRevert = useCallback(() => {
+    if (!pendingIndividualTarget || selectedOperationIds.size === 0) return;
+    setShowIndividualRevertModal(false);
+    setIndividualRevertLoading(true);
+    setIndividualRevertResult(null);
+    sendToExtension({
+      command: 'revertOperations',
+      sessionId,
+      targetState: pendingIndividualTarget,
+      operationIds: Array.from(selectedOperationIds),
+    });
+    setPendingIndividualTarget(null);
+  }, [pendingIndividualTarget, selectedOperationIds, sessionId]);
+
+  const handleCancelIndividualRevert = useCallback(() => {
+    setShowIndividualRevertModal(false);
+    setPendingIndividualTarget(null);
+  }, []);
+
   const dismissResult = useCallback(() => {
     setRevertResult(null);
     setRevertDismissed(true);
+  }, []);
+
+  const dismissIndividualResult = useCallback(() => {
+    setIndividualRevertResult(null);
   }, []);
 
   try {
@@ -253,6 +311,36 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
           </div>
         )}
 
+        {individualRevertResult && (
+          <div className={`mt-4 p-4 rounded-lg border ${
+            individualRevertResult.success
+              ? 'bg-green-500/10 border-green-500/30 text-green-500'
+              : 'bg-red-500/10 border-red-500/30 text-red-500'
+          }`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                <p className="text-sm font-medium">
+                  {individualRevertResult.success ? 'Individual Revert Successful' : 'Individual Revert Failed'}
+                </p>
+                <p className="text-sm mt-1 opacity-80">{individualRevertResult.message}</p>
+                {individualRevertResult.errors.length > 0 && (
+                  <ul className="mt-2 text-xs space-y-1">
+                    {individualRevertResult.errors.map((err, i) => (
+                      <li key={i} className="opacity-70">- {err}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <button
+                onClick={dismissIndividualResult}
+                className="shrink-0 text-sm opacity-60 hover:opacity-100 cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
+
         <hr className="border-border my-5" />
 
         <div className="flex flex-col gap-6">
@@ -264,49 +352,75 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
           </section>
 
           <section>
-            <h3 className="text-sm font-semibold text-text mb-3">Operations</h3>
-            <div className="flex flex-col gap-2">
-              {operations.length > 0 ? operations.map((op, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-surface"
-                >
-                  <div className="shrink-0">{statusIcon(op.status)}</div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-sm font-medium text-text">{formatKind(op.kind || '')}</span>
-                      <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
-                    </div>
-                    {op.path && (
-                      <p className="text-xs text-text-secondary font-mono truncate">{op.path}</p>
-                    )}
-                    {op.message && (
-                      <p className="text-xs text-text-secondary mt-0.5">{op.message}</p>
-                    )}
-                  </div>
-                </div>
-              )) : (
-                <p className="text-sm text-text-secondary">
-                  {operationCount > 0
-                    ? `${operationCount} operation${operationCount !== 1 ? 's' : ''} of type${operationCount !== 1 ? 's' : ''}: ${operationTypes.join(', ')}`
-                    : 'No operation details available.'}
-                </p>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="text-sm font-semibold text-text mb-2">Files Affected</h3>
-            {filesAffected.length > 0 ? (
+            <h3 className="text-sm font-semibold text-text mb-2">Operations</h3>
+            {operations.length > 0 ? (
               <div className="border border-border rounded-lg divide-y divide-border">
-                {filesAffected.map((file, i) => (
-                  <div key={i} className="p-3">
-                    <p className="text-sm font-mono text-text-secondary">{file}</p>
-                  </div>
-                ))}
+                {operations.map((op, i) => {
+                  const isNonRevertable = NON_REVERTABLE_KINDS.has(op.kind);
+                  const isChecked = selectedOperationIds.has(op.operationId);
+                  return (
+                    <div key={op.operationId || i} className="p-3 flex items-center gap-3">
+                      {isNonRevertable ? (
+                        <div className="shrink-0 text-text-secondary opacity-40" title="This operation cannot be reverted">
+                          <Square size={18} />
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => toggleOperation(op.operationId)}
+                          className="shrink-0 text-text-secondary hover:text-text transition-colors cursor-pointer"
+                        >
+                          {isChecked ? <CheckSquare size={18} /> : <Square size={18} />}
+                        </button>
+                      )}
+                      <div className="shrink-0">{statusIcon(op.status)}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-medium text-text">{formatKind(op.kind || '')}</span>
+                          <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
+                          {op.operationId && (
+                            <span className="text-xs font-mono text-text-secondary opacity-60">{op.operationId}</span>
+                          )}
+                        </div>
+                        {op.path && (
+                          <p className="text-xs text-text-secondary font-mono truncate">{op.path}</p>
+                        )}
+                        {op.message && (
+                          <p className="text-xs text-text-secondary mt-0.5">{op.message}</p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <p className="text-sm text-text-secondary">No files affected.</p>
+              <p className="text-sm text-text-secondary">
+                {operationCount > 0
+                  ? `${operationCount} operation${operationCount !== 1 ? 's' : ''} of type${operationCount !== 1 ? 's' : ''}: ${operationTypes.join(', ')}`
+                  : 'No operation details available.'}
+              </p>
+            )}
+            {hasSelectedOperations && !individualRevertLoading && (
+              <div className="flex items-center gap-2 mt-3">
+                <span className="text-xs text-text-secondary">{selectedOperationIds.size} operation(s) selected</span>
+                <button
+                  onClick={() => handleIndividualRevert('pre')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors cursor-pointer"
+                >
+                  Revert Selected to Pre-Patch
+                </button>
+                <button
+                  onClick={() => handleIndividualRevert('post')}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
+                >
+                  Revert Selected to Post-Patch
+                </button>
+              </div>
+            )}
+            {individualRevertLoading && (
+              <div className="flex items-center gap-2 mt-3 text-sm text-text-secondary">
+                <Loader2 size={14} className="animate-spin" />
+                Reverting selected operations...
+              </div>
             )}
           </section>
 
@@ -323,11 +437,21 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
         <ConfirmationModal
           isOpen={showConfirmModal}
           title="Confirm Revert"
-          message="This will restore files to their pre-patch state. This action cannot be undone. Continue?"
+          message="This will restore all files to their pre-patch state. This action cannot be undone. Continue?"
           confirmLabel="Restore"
           cancelLabel="Cancel"
           onConfirm={handleConfirmRevert}
           onCancel={handleCancelRevert}
+        />
+
+        <ConfirmationModal
+          isOpen={showIndividualRevertModal}
+          title="Confirm Individual Revert"
+          message={`This will revert ${selectedOperationIds.size} operation(s) to ${pendingIndividualTarget === 'pre' ? 'pre-patch' : 'post-patch'} state. This action cannot be undone. Continue?`}
+          confirmLabel="Revert Selected"
+          cancelLabel="Cancel"
+          onConfirm={handleConfirmIndividualRevert}
+          onCancel={handleCancelIndividualRevert}
         />
       </div>
     );
@@ -358,11 +482,13 @@ function RevertHistoryPage({
   revertHistory,
   revertHistoryLoading,
   onBack,
+  onViewRevertDetail,
 }: {
   session: HistorySessionResult;
   revertHistory: RevertHistoryData[] | null;
   revertHistoryLoading: boolean;
   onBack: () => void;
+  onViewRevertDetail: (revert: RevertHistoryData) => void;
 }) {
   const REVERTS_PER_PAGE = 10;
   const [currentPage, setCurrentPage] = useState(1);
@@ -397,9 +523,10 @@ function RevertHistoryPage({
         <>
           <div className="flex flex-col gap-2 mb-6">
             {visibleReverts.map((revert) => (
-              <div
+              <button
                 key={revert.revertId}
-                className="flex items-start gap-3 p-3 rounded-lg border border-border bg-surface"
+                onClick={() => onViewRevertDetail(revert)}
+                className="flex items-start gap-3 p-3 rounded-lg border border-border bg-surface hover:bg-surface-2 hover:border-border-subtle text-left cursor-pointer transition-colors"
               >
                 <div className="shrink-0 mt-0.5">
                   {revert.status === 'success' ? (
@@ -418,13 +545,13 @@ function RevertHistoryPage({
                     </span>
                   </div>
                   <p className="text-xs text-text-secondary">
-                    {revert.filesRestored.length} file{revert.filesRestored.length !== 1 ? 's' : ''} restored
+                    {revert.revertedOperationIds.length} operation{revert.revertedOperationIds.length !== 1 ? 's' : ''} reverted
                   </p>
                   {revert.errorMessage && (
                     <p className="text-xs text-red-500 mt-0.5">{revert.errorMessage}</p>
                   )}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
           {totalPages > 1 && (
@@ -456,15 +583,98 @@ function RevertHistoryPage({
   );
 }
 
+function RevertDetailView({
+  session,
+  revert,
+  onBack,
+}: {
+  session: HistorySessionResult;
+  revert: RevertHistoryData;
+  onBack: () => void;
+}) {
+  const operations = session.operations || [];
+  const revertedOperations = operations.filter((op) =>
+    revert.revertedOperationIds.includes(op.operationId)
+  );
+
+  return (
+    <div className="flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-sm text-text-secondary hover:text-text mb-6 transition-colors cursor-pointer"
+      >
+        <ArrowLeft size={16} />
+        Back to Revert History
+      </button>
+
+      <h2 className="text-xl font-semibold text-text font-mono mb-1">{revert.revertId}</h2>
+      <p className="text-sm text-text-secondary mb-6">{formatFullDateTime(revert.timestamp)}</p>
+
+      <div className="flex items-center gap-3 mb-6">
+        <span className="text-sm font-medium text-text">Target State:</span>
+        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-primary/10 text-primary border border-primary/30">
+          {revert.targetState === 'pre' ? 'Pre-Patch' : 'Post-Patch'}
+        </span>
+        {statusBadge(revert.status)}
+      </div>
+
+      {revert.errorMessage && (
+        <div className="mb-6 p-4 rounded-lg border bg-red-500/10 border-red-500/30 text-red-500">
+          <p className="text-sm">{revert.errorMessage}</p>
+        </div>
+      )}
+
+      <hr className="border-border mb-5" />
+
+      <section>
+        <h3 className="text-sm font-semibold text-text mb-3">
+          Reverted Operations ({revertedOperations.length})
+        </h3>
+        {revertedOperations.length > 0 ? (
+          <div className="border border-border rounded-lg divide-y divide-border">
+            {revertedOperations.map((op, i) => (
+              <div key={op.operationId || i} className="p-3 flex items-center gap-3">
+                <div className="shrink-0">{statusIcon(op.status)}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm font-medium text-text">{formatKind(op.kind || '')}</span>
+                    <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
+                    {op.operationId && (
+                      <span className="text-xs font-mono text-text-secondary opacity-60">{op.operationId}</span>
+                    )}
+                  </div>
+                  {op.path && (
+                    <p className="text-xs text-text-secondary font-mono truncate">{op.path}</p>
+                  )}
+                  {op.message && (
+                    <p className="text-xs text-text-secondary mt-0.5">{op.message}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-text-secondary">
+            No operation details found for this revert. Operation IDs may reference operations that have been cleaned up.
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function HistoryView() {
   const [sessions, setSessions] = useState<HistorySessionResult[]>([]);
   const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
-  const [viewState, setViewState] = useState<'list' | 'detail' | 'reverts'>('list');
+  const [viewState, setViewState] = useState<'list' | 'detail' | 'reverts' | 'revertDetail'>('list');
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showWipeModal, setShowWipeModal] = useState(false);
   const [revertHistory, setRevertHistory] = useState<RevertHistoryData[] | null>(null);
   const [revertHistoryLoading, setRevertHistoryLoading] = useState(false);
+  const [selectedRevert, setSelectedRevert] = useState<RevertHistoryData | null>(null);
+  const [sessionToDelete, setSessionToDelete] = useState<HistorySessionResult | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -486,6 +696,11 @@ function HistoryView() {
         setSessions([]);
         setLoading(false);
         setShowWipeModal(false);
+      }
+      if (message.command === 'sessionDeleted') {
+        setRefreshKey(k => k + 1);
+        setSessionToDelete(null);
+        setDeleteLoading(false);
       }
       if (message.command === 'revertHistoryResult' && message.revertHistory) {
         setRevertHistory(message.revertHistory);
@@ -515,12 +730,51 @@ function HistoryView() {
     setViewState('reverts');
   }, [selectedSession]);
 
+  const handleViewRevertDetail = useCallback((revert: RevertHistoryData) => {
+    setSelectedRevert(revert);
+    setViewState('revertDetail');
+  }, []);
+
+  const handleBackToRevertHistory = useCallback(() => {
+    setSelectedRevert(null);
+    setViewState('reverts');
+  }, []);
+
   const handleSelectSession = useCallback((session: HistorySessionResult) => {
     setSelectedSession(session);
     setViewState('detail');
   }, []);
 
+  const handleDeleteSession = useCallback((e: React.MouseEvent, session: HistorySessionResult) => {
+    e.stopPropagation();
+    setSessionToDelete(session);
+  }, []);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!sessionToDelete) return;
+    setDeleteLoading(true);
+    sendToExtension({
+      command: 'deleteSingleSession',
+      sessionId: sessionToDelete.sessionId,
+      triggeredBy: 'user',
+    });
+  }, [sessionToDelete]);
+
+  const handleCancelDelete = useCallback(() => {
+    setSessionToDelete(null);
+  }, []);
+
   const grouped = groupByDate(sessions);
+
+  if (viewState === 'revertDetail' && selectedSession && selectedRevert) {
+    return (
+      <RevertDetailView
+        session={selectedSession}
+        revert={selectedRevert}
+        onBack={handleBackToRevertHistory}
+      />
+    );
+  }
 
   if (viewState === 'reverts' && selectedSession) {
     return (
@@ -529,6 +783,7 @@ function HistoryView() {
         revertHistory={revertHistory}
         revertHistoryLoading={revertHistoryLoading}
         onBack={handleBackToDetail}
+        onViewRevertDetail={handleViewRevertDetail}
       />
     );
   }
@@ -592,7 +847,7 @@ function HistoryView() {
                   <button
                     key={sid}
                     onClick={() => handleSelectSession(session)}
-                    className="flex items-start gap-3 p-4 rounded-lg border border-border bg-surface hover:bg-surface-2 hover:border-border-subtle text-left cursor-pointer transition-colors"
+                    className="flex items-start gap-3 p-4 rounded-lg border border-border bg-surface hover:bg-surface-2 hover:border-border-subtle text-left cursor-pointer transition-colors group"
                   >
                     <div className="mt-0.5 shrink-0">
                       {sessionStatus === 'success' ? (
@@ -626,6 +881,13 @@ function HistoryView() {
                         </span>
                       </div>
                     </div>
+                    <button
+                      onClick={(e) => handleDeleteSession(e, session)}
+                      className="shrink-0 p-1.5 rounded-md text-text-secondary opacity-0 group-hover:opacity-100 hover:bg-red-500/10 hover:text-red-500 transition-all cursor-pointer"
+                      title="Delete session"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   </button>
                 );
               })}
@@ -641,6 +903,16 @@ function HistoryView() {
           sendToExtension({ command: 'wipeHistory' });
         }}
         onCancel={() => setShowWipeModal(false)}
+      />
+
+      <ConfirmationModal
+        isOpen={sessionToDelete !== null}
+        title="Delete Session"
+        message={`Are you sure you want to delete session ${sessionToDelete?.sessionId || ''}? This action cannot be undone.`}
+        confirmLabel={deleteLoading ? 'Deleting...' : 'Delete'}
+        cancelLabel="Cancel"
+        onConfirm={handleConfirmDelete}
+        onCancel={handleCancelDelete}
       />
     </div>
   );

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData } from '@brud/protocol';
+import { revertOperations } from '@brud/core';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
@@ -57,6 +58,12 @@ export class BrudMainWindowManager {
         case 'revertSession':
           await this._handleRevertSession(data.sessionId, data.targetState);
           break;
+        case 'revertOperations':
+          await this._handleRevertOperations(data.sessionId, data.operationIds, data.targetState);
+          break;
+        case 'deleteSingleSession':
+          await this._handleDeleteSingleSession(data.sessionId, data.triggeredBy);
+          break;
         case 'wipeHistory':
           await this._handleWipeHistory();
           break;
@@ -99,7 +106,7 @@ export class BrudMainWindowManager {
       revertId: r.revertId,
       timestamp: r.timestamp,
       targetState: r.targetState,
-      filesRestored: r.filesRestored,
+      revertedOperationIds: r.revertedOperationIds,
       status: r.status,
       errorMessage: r.errorMessage,
     }));
@@ -118,6 +125,39 @@ export class BrudMainWindowManager {
 
     const result = await this._historyStore.revertSession(sessionId, targetState);
     this._panel?.webview.postMessage({ command: 'revertResult', revertResult: result } satisfies ExtensionMessage);
+  }
+
+  private async _handleRevertOperations(sessionId?: string, operationIds?: string[], targetState?: 'pre' | 'post'): Promise<void> {
+    if (!this._historyStore || !sessionId || !operationIds || !targetState) {
+      this._panel?.webview.postMessage({
+        command: 'revertOperationsResult',
+        revertOperationsResult: { success: false, message: 'Missing sessionId, operationIds, or targetState', errors: ['Invalid revert request'] },
+      } satisfies ExtensionMessage);
+      return;
+    }
+
+    const result = await revertOperations(
+      sessionId,
+      operationIds,
+      targetState,
+      this._historyStore,
+      this._historyStore['fileSystem'],
+      getWorkspaceFolders(),
+      (revertEntry) => {
+        this._historyStore!.saveRevertHistory(sessionId, revertEntry).catch(() => {});
+      },
+    );
+    this._panel?.webview.postMessage({ command: 'revertOperationsResult', revertOperationsResult: result } satisfies ExtensionMessage);
+  }
+
+  private async _handleDeleteSingleSession(sessionId?: string, triggeredBy?: 'user' | 'system'): Promise<void> {
+    if (!this._historyStore || !sessionId || !triggeredBy) {
+      this._panel?.webview.postMessage({ command: 'sessionDeleted', deletedCount: 0 } satisfies ExtensionMessage);
+      return;
+    }
+
+    const deletedCount = await this._historyStore.deleteSingleSession(sessionId, triggeredBy);
+    this._panel?.webview.postMessage({ command: 'sessionDeleted', deletedCount } satisfies ExtensionMessage);
   }
 
   private async _handleWipeHistory(): Promise<void> {

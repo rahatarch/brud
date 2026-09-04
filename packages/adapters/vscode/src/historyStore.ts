@@ -329,6 +329,31 @@ export class WorkspaceHistoryStore implements HistoryStore {
     await this.fileSystem.deleteDirectoryRecursive(this.sessionDir(sessionId));
   }
 
+  async deleteSingleSession(sessionId: string, triggeredBy: 'user' | 'system'): Promise<number> {
+    const sessionPath = this.sessionFile(sessionId);
+    let createdAt = '';
+    if (await this.fileSystem.exists(sessionPath)) {
+      try {
+        const raw = await this.fileSystem.readFile(sessionPath);
+        const session: HistorySession = JSON.parse(raw);
+        createdAt = session.timestamp;
+      } catch {
+        // If session.json is corrupt, proceed without creation timestamp
+      }
+    }
+
+    await this.deleteSession(sessionId);
+
+    await this.recordDeleteHistory({
+      deletedCount: 1,
+      deletedSessions: [{ sessionId, createdAt }],
+      reason: 'manual_delete',
+      triggeredBy,
+    });
+
+    return 1;
+  }
+
   async getSessionsByDateRange(start: Date, end: Date): Promise<HistorySession[]> {
     const all = await this.getAllSessions();
     return all.filter(session => {
@@ -418,7 +443,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
         success: false,
         message: `Session ${sessionId} not found`,
         errors: [`Session ${sessionId} does not exist in history`],
-        filesRestored: [],
+        revertedOperationIds: [],
       };
     }
 

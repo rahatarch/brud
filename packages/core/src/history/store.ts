@@ -5,6 +5,7 @@ export interface HistoryStore {
   getSession(sessionId: string): Promise<HistoryEntry | undefined>;
   getAllSessions(): Promise<HistorySession[]>;
   deleteSession(sessionId: string): Promise<void>;
+  deleteSingleSession(sessionId: string, triggeredBy: 'user' | 'system'): Promise<number>;
   getSessionsByDateRange(start: Date, end: Date): Promise<HistorySession[]>;
   getRecentSessions(limit: number): Promise<HistorySession[]>;
   cleanupOldSessions(retentionMonths: number): Promise<number>;

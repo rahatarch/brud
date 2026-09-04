@@ -13,6 +13,7 @@ export interface HistorySession {
 }
 
 export interface OperationResult {
+  operationId: string;
   operationIndex: number;
   kind: string;
   status: 'success' | 'aborted' | 'failed';
@@ -44,7 +45,7 @@ export interface RevertHistoryEntry {
   revertId: string;
   timestamp: string;
   targetState: 'pre' | 'post';
-  filesRestored: string[];
+  revertedOperationIds: string[];
   status: 'success' | 'failed';
   errorMessage?: string;
 }

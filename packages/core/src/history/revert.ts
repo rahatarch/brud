@@ -2,13 +2,14 @@ import { applyPatch, parsePatch } from 'diff';
 import * as path from 'path';
 import type { HistoryEntry, OperationResult, RevertHistoryEntry } from './types.js';
 import type { FileSystem } from '../types/filesystem.js';
+import type { HistoryStore } from './store.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
 
 export interface RevertResult {
   success: boolean;
   message: string;
   errors: string[];
-  filesRestored: string[];
+  revertedOperationIds: string[];
 }
 
 function applyDiff(content: string, diff: string): string | false {
@@ -34,6 +35,8 @@ async function revertFileContent(
     const preContent = preFiles.get(filePath);
     if (preContent !== undefined) {
       await fs.writeFile(filePath, preContent);
+    } else if (await fs.exists(filePath)) {
+      await fs.deleteFile(filePath);
     }
   } else {
     const postDiff = postFiles.get(filePath);
@@ -66,7 +69,7 @@ export async function revertSession(
   onRevertComplete?: (revertEntry: RevertHistoryEntry) => void,
 ): Promise<RevertResult> {
   const errors: string[] = [];
-  const filesRestored: string[] = [];
+  const revertedOperationIds: string[] = [];
   const { session, preSnapshot, postSnapshot } = entry;
   const preFiles = preSnapshot.files;
   const postFiles = postSnapshot.files;
@@ -84,7 +87,7 @@ export async function revertSession(
             break;
           }
           await revertFileContent(result.resolvedPath, targetState, preFiles, postFiles, fs, errors);
-          filesRestored.push(result.resolvedPath);
+          revertedOperationIds.push(op.operationId);
           break;
         }
 
@@ -98,7 +101,7 @@ export async function revertSession(
           if (targetState === 'pre') {
             if (await fs.exists(resolvedPath)) {
               await fs.deleteFile(resolvedPath);
-              filesRestored.push(resolvedPath);
+              revertedOperationIds.push(op.operationId);
             }
           } else {
             const postDiff = postFiles.get(resolvedPath);
@@ -114,7 +117,7 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
               }
               await fs.writeFile(resolvedPath, reconstructed);
-              filesRestored.push(resolvedPath);
+              revertedOperationIds.push(op.operationId);
             }
           }
           break;
@@ -135,12 +138,12 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
               }
               await fs.writeFile(resolvedPath, preContent);
-              filesRestored.push(resolvedPath);
+              revertedOperationIds.push(op.operationId);
             }
           } else {
             if (await fs.exists(resolvedPath)) {
               await fs.deleteFile(resolvedPath);
-              filesRestored.push(resolvedPath);
+              revertedOperationIds.push(op.operationId);
             }
           }
           break;
@@ -157,12 +160,12 @@ export async function revertSession(
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
-                filesRestored.push(fromResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
                 await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
-                filesRestored.push(toResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             }
           }
@@ -184,7 +187,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
-                filesRestored.push(fromResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -193,7 +196,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
-                filesRestored.push(toResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             }
           }
@@ -211,7 +214,7 @@ export async function revertSession(
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.deleteFile(toResult.resolvedPath);
-                filesRestored.push(toResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -221,7 +224,7 @@ export async function revertSession(
                 }
                 const content = await fs.readFile(fromResult.resolvedPath);
                 await fs.writeFile(toResult.resolvedPath, content);
-                filesRestored.push(toResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             }
           }
@@ -242,7 +245,7 @@ export async function revertSession(
           if (targetState === 'pre') {
             if (await fs.exists(resolvedDirPath)) {
               await fs.deleteDirectoryRecursive(resolvedDirPath);
-              filesRestored.push(resolvedDirPath);
+              revertedOperationIds.push(op.operationId);
             }
           } else {
             await fs.createDirectory(resolvedDirPath);
@@ -252,7 +255,7 @@ export async function revertSession(
               const parentDir = path.dirname(filePath);
               await fs.createDirectory(parentDir);
               await fs.writeFile(filePath, '');
-              filesRestored.push(filePath);
+              revertedOperationIds.push(op.operationId);
             }
           }
           break;
@@ -278,14 +281,14 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
                 if (content) {
                   await fs.writeFile(filePath, content);
-                  filesRestored.push(filePath);
+                  revertedOperationIds.push(op.operationId);
                 }
               }
             }
           } else {
             if (await fs.exists(resolvedDirPath)) {
               await fs.deleteDirectoryRecursive(resolvedDirPath);
-              filesRestored.push(resolvedDirPath);
+              revertedOperationIds.push(op.operationId);
             }
           }
           break;
@@ -306,7 +309,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.moveDirectory(toResult.resolvedPath, fromResult.resolvedPath);
-                filesRestored.push(fromResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -315,7 +318,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.moveDirectory(fromResult.resolvedPath, toResult.resolvedPath);
-                filesRestored.push(toResult.resolvedPath);
+                revertedOperationIds.push(op.operationId);
               }
             }
           }
@@ -346,14 +349,14 @@ export async function revertSession(
       success: false,
       message: `Revert to ${targetState}-patch state completed with ${errors.length} error(s)`,
       errors,
-      filesRestored,
+      revertedOperationIds,
     };
   } else {
     result = {
       success: true,
       message: `Successfully reverted to ${targetState}-patch state (${session.operations.length} operations reversed)`,
       errors: [],
-      filesRestored,
+      revertedOperationIds,
     };
   }
 
@@ -361,7 +364,330 @@ export async function revertSession(
     revertId,
     timestamp: now.toISOString(),
     targetState,
-    filesRestored,
+    revertedOperationIds,
+    status: result.success ? 'success' : 'failed',
+    errorMessage: result.success ? undefined : errors.join('; '),
+  };
+
+  if (onRevertComplete) {
+    onRevertComplete(revertEntry);
+  }
+
+  return result;
+}
+
+export async function revertOperations(
+  sessionId: string,
+  operationIds: string[],
+  targetState: 'pre' | 'post',
+  historyStore: HistoryStore,
+  fs: FileSystem,
+  workspaceFolders: string[],
+  onRevertComplete?: (revertEntry: RevertHistoryEntry) => void,
+): Promise<RevertResult> {
+  const entry = await historyStore.getSession(sessionId);
+  if (!entry) {
+    return {
+      success: false,
+      message: `Session ${sessionId} not found`,
+      errors: [`Session ${sessionId} does not exist in history`],
+      revertedOperationIds: [],
+    };
+  }
+
+  const errors: string[] = [];
+  const revertedOpIds: string[] = [];
+  const { session, preSnapshot, postSnapshot } = entry;
+  const preFiles = preSnapshot.files;
+  const postFiles = postSnapshot.files;
+
+  const opsToRevert = session.operations.filter(op => operationIds.includes(op.operationId) && op.status === 'success');
+
+  for (const op of opsToRevert) {
+    try {
+      switch (op.kind) {
+        case 'search_replace':
+        case 'append_file': {
+          const result = validateWorkspacePath(op.path, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            break;
+          }
+          await revertFileContent(result.resolvedPath, targetState, preFiles, postFiles, fs, errors);
+          revertedOpIds.push(op.operationId);
+          break;
+        }
+
+        case 'create_file': {
+          const result = validateWorkspacePath(op.path, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            break;
+          }
+          const resolvedPath = result.resolvedPath;
+          if (targetState === 'pre') {
+            if (await fs.exists(resolvedPath)) {
+              await fs.deleteFile(resolvedPath);
+              revertedOpIds.push(op.operationId);
+            }
+          } else {
+            const postDiff = postFiles.get(resolvedPath);
+            if (postDiff !== undefined) {
+              const preContent = preFiles.get(resolvedPath) ?? '';
+              const reconstructed = applyDiff(preContent, postDiff);
+              if (reconstructed === false) {
+                errors.push(`Failed to apply diff for ${resolvedPath}`);
+                break;
+              }
+              const parentDir = path.dirname(resolvedPath);
+              if (parentDir) {
+                await fs.createDirectory(parentDir);
+              }
+              await fs.writeFile(resolvedPath, reconstructed);
+              revertedOpIds.push(op.operationId);
+            }
+          }
+          break;
+        }
+
+        case 'delete_file': {
+          const result = validateWorkspacePath(op.path, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            break;
+          }
+          const resolvedPath = result.resolvedPath;
+          if (targetState === 'pre') {
+            const preContent = preFiles.get(resolvedPath);
+            if (preContent !== undefined) {
+              const parentDir = path.dirname(resolvedPath);
+              if (parentDir) {
+                await fs.createDirectory(parentDir);
+              }
+              await fs.writeFile(resolvedPath, preContent);
+              revertedOpIds.push(op.operationId);
+            }
+          } else {
+            if (await fs.exists(resolvedPath)) {
+              await fs.deleteFile(resolvedPath);
+              revertedOpIds.push(op.operationId);
+            }
+          }
+          break;
+        }
+
+        case 'rename_file': {
+          const from = op.from;
+          const to = op.to;
+          if (from && to) {
+            const fromResult = validateWorkspacePath(from, workspaceFolders);
+            const toResult = validateWorkspacePath(to, workspaceFolders);
+            if (!fromResult.valid) { errors.push(fromResult.error); break; }
+            if (!toResult.valid) { errors.push(toResult.error); break; }
+            if (targetState === 'pre') {
+              if (await fs.exists(toResult.resolvedPath)) {
+                await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            } else {
+              if (await fs.exists(fromResult.resolvedPath)) {
+                await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            }
+          }
+          break;
+        }
+
+        case 'move_file': {
+          const from = op.from;
+          const to = op.to;
+          if (from && to) {
+            const fromResult = validateWorkspacePath(from, workspaceFolders);
+            const toResult = validateWorkspacePath(to, workspaceFolders);
+            if (!fromResult.valid) { errors.push(fromResult.error); break; }
+            if (!toResult.valid) { errors.push(toResult.error); break; }
+            if (targetState === 'pre') {
+              if (await fs.exists(toResult.resolvedPath)) {
+                const parentDir = path.dirname(fromResult.resolvedPath);
+                if (parentDir) {
+                  await fs.createDirectory(parentDir);
+                }
+                await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            } else {
+              if (await fs.exists(fromResult.resolvedPath)) {
+                const parentDir = path.dirname(toResult.resolvedPath);
+                if (parentDir) {
+                  await fs.createDirectory(parentDir);
+                }
+                await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            }
+          }
+          break;
+        }
+
+        case 'copy_file': {
+          const from = op.from;
+          const to = op.to;
+          if (from && to) {
+            const fromResult = validateWorkspacePath(from, workspaceFolders);
+            const toResult = validateWorkspacePath(to, workspaceFolders);
+            if (!fromResult.valid) { errors.push(fromResult.error); break; }
+            if (!toResult.valid) { errors.push(toResult.error); break; }
+            if (targetState === 'pre') {
+              if (await fs.exists(toResult.resolvedPath)) {
+                await fs.deleteFile(toResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            } else {
+              if (await fs.exists(fromResult.resolvedPath)) {
+                const parentDir = path.dirname(toResult.resolvedPath);
+                if (parentDir) {
+                  await fs.createDirectory(parentDir);
+                }
+                const content = await fs.readFile(fromResult.resolvedPath);
+                await fs.writeFile(toResult.resolvedPath, content);
+                revertedOpIds.push(op.operationId);
+              }
+            }
+          }
+          break;
+        }
+
+        case 'create_directory': {
+          const dirPath = op.directoryPath;
+          if (!dirPath) break;
+
+          const result = validateWorkspacePath(dirPath, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            break;
+          }
+          const resolvedDirPath = result.resolvedPath;
+
+          if (targetState === 'pre') {
+            if (await fs.exists(resolvedDirPath)) {
+              await fs.deleteDirectoryRecursive(resolvedDirPath);
+              revertedOpIds.push(op.operationId);
+            }
+          } else {
+            await fs.createDirectory(resolvedDirPath);
+            const files = op.files || [];
+            for (const file of files) {
+              const filePath = path.join(resolvedDirPath, file);
+              const parentDir = path.dirname(filePath);
+              await fs.createDirectory(parentDir);
+              await fs.writeFile(filePath, '');
+              revertedOpIds.push(op.operationId);
+            }
+          }
+          break;
+        }
+
+        case 'delete_directory': {
+          const dirPath = op.directoryPath;
+          if (!dirPath) break;
+
+          const result = validateWorkspacePath(dirPath, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            break;
+          }
+          const resolvedDirPath = result.resolvedPath;
+
+          if (targetState === 'pre') {
+            await fs.createDirectory(resolvedDirPath);
+            for (const [filePath, content] of preFiles) {
+              const relative = path.relative(resolvedDirPath, filePath);
+              if (relative === '' || !relative.startsWith('..')) {
+                const parentDir = path.dirname(filePath);
+                await fs.createDirectory(parentDir);
+                if (content) {
+                  await fs.writeFile(filePath, content);
+                  revertedOpIds.push(op.operationId);
+                }
+              }
+            }
+          } else {
+            if (await fs.exists(resolvedDirPath)) {
+              await fs.deleteDirectoryRecursive(resolvedDirPath);
+              revertedOpIds.push(op.operationId);
+            }
+          }
+          break;
+        }
+
+        case 'move_directory': {
+          const from = op.from;
+          const to = op.to;
+          if (from && to) {
+            const fromResult = validateWorkspacePath(from, workspaceFolders);
+            const toResult = validateWorkspacePath(to, workspaceFolders);
+            if (!fromResult.valid) { errors.push(fromResult.error); break; }
+            if (!toResult.valid) { errors.push(toResult.error); break; }
+            if (targetState === 'pre') {
+              if (await fs.exists(toResult.resolvedPath)) {
+                const parentDir = path.dirname(fromResult.resolvedPath);
+                if (parentDir) {
+                  await fs.createDirectory(parentDir);
+                }
+                await fs.moveDirectory(toResult.resolvedPath, fromResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            } else {
+              if (await fs.exists(fromResult.resolvedPath)) {
+                const parentDir = path.dirname(toResult.resolvedPath);
+                if (parentDir) {
+                  await fs.createDirectory(parentDir);
+                }
+                await fs.moveDirectory(fromResult.resolvedPath, toResult.resolvedPath);
+                revertedOpIds.push(op.operationId);
+              }
+            }
+          }
+          break;
+        }
+
+        default:
+          errors.push(`Cannot revert operation kind: ${op.kind}`);
+          break;
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      errors.push(`Failed to revert ${op.kind} (${op.path}): ${message}`);
+    }
+  }
+
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const revertId = `REVERT-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+  let result: RevertResult;
+  if (errors.length > 0) {
+    result = {
+      success: false,
+      message: `Revert of ${revertedOpIds.length} operation(s) completed with ${errors.length} error(s)`,
+      errors,
+      revertedOperationIds: revertedOpIds,
+    };
+  } else {
+    result = {
+      success: true,
+      message: `Successfully reverted ${revertedOpIds.length} operation(s) to ${targetState}-patch state`,
+      errors: [],
+      revertedOperationIds: revertedOpIds,
+    };
+  }
+
+  const revertEntry: RevertHistoryEntry = {
+    revertId,
+    timestamp: now.toISOString(),
+    targetState,
+    revertedOperationIds: revertedOpIds,
     status: result.success ? 'success' : 'failed',
     errorMessage: result.success ? undefined : errors.join('; '),
   };

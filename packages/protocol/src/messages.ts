@@ -15,6 +15,8 @@ export type WebviewCommand =
   | 'getHistory'
   | 'getRevertHistory'
   | 'revertSession'
+  | 'revertOperations'
+  | 'deleteSingleSession'
   | 'wipeHistory';
 
 export type ExtensionCommand =
@@ -27,7 +29,9 @@ export type ExtensionCommand =
   | 'codebaseMetadataResult'
   | 'historyResult'
   | 'revertResult'
+  | 'revertOperationsResult'
   | 'revertHistoryResult'
+  | 'sessionDeleted'
   | 'historyWiped';
 
 export interface WebviewMessage {
@@ -35,6 +39,8 @@ export interface WebviewMessage {
   text?: string;
   sessionId?: string;
   targetState?: 'pre' | 'post';
+  operationIds?: string[];
+  triggeredBy?: 'user' | 'system';
 }
 
 export interface ExtensionMessage {
@@ -48,6 +54,7 @@ export interface ExtensionMessage {
   codebaseMetadata?: CodebaseMetadataResult;
   history?: HistorySessionResult[];
   revertResult?: RevertSessionResult;
+  revertOperationsResult?: RevertSessionResult;
   revertHistory?: RevertHistoryData[];
   deletedCount?: number;
 }
@@ -73,6 +80,7 @@ export interface PreviewHeaderData {
 }
 
 export interface OperationResult {
+  operationId: string;
   operationIndex: number;
   kind: string;
   status: 'success' | 'aborted' | 'failed';
@@ -113,7 +121,7 @@ export interface RevertHistoryData {
   revertId: string;
   timestamp: string;
   targetState: 'pre' | 'post';
-  filesRestored: string[];
+  revertedOperationIds: string[];
   status: 'success' | 'failed';
   errorMessage?: string;
 }

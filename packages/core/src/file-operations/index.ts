@@ -7,7 +7,23 @@ import { extractCodebaseMetadata } from '../metadata-extractor';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
 
+let operationIdCounter = 0;
+
+function generateOperationId(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  const hh = String(now.getHours()).padStart(2, '0');
+  const mm = String(now.getMinutes()).padStart(2, '0');
+  const ss = String(now.getSeconds()).padStart(2, '0');
+  operationIdCounter++;
+  const seq = String(operationIdCounter).padStart(3, '0');
+  return `OP-${y}${m}${d}-${hh}${mm}${ss}-${seq}`;
+}
+
 export interface OperationResult {
+  operationId: string;
   operationIndex: number;
   kind: string;
   status: 'success' | 'aborted' | 'failed';
@@ -91,6 +107,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'search_replace',
               status: 'failed',
               message: result.error,
@@ -113,6 +130,7 @@ export async function executeFileOperations(
             errors.push(`Search text not found in file: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'search_replace',
               status: 'aborted',
               message: `Search text not found in ${operation.path}. No changes made.`,
@@ -125,6 +143,7 @@ export async function executeFileOperations(
             errors.push(`Multiple matches found for search text in file: ${operation.path}. Please provide more context to make the search unique.`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'search_replace',
               status: 'aborted',
               message: `Multiple matches found in ${operation.path}. Patch aborted to avoid ambiguity.`,
@@ -138,6 +157,7 @@ export async function executeFileOperations(
           await fs.writeFile(filePath, updatedContent);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'search_replace',
             status: 'success',
             message: `Patched ${operation.path}.`,
@@ -152,6 +172,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'create_file',
               status: 'failed',
               message: result.error,
@@ -166,6 +187,7 @@ export async function executeFileOperations(
             errors.push(`File already exists: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'create_file',
               status: 'aborted',
               message: `File already exists: ${operation.path}. Creation aborted, existing content preserved.`,
@@ -179,6 +201,7 @@ export async function executeFileOperations(
           await fs.writeFile(filePath, operation.content);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'create_file',
             status: 'success',
             message: `Created ${operation.path}.`,
@@ -193,6 +216,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_file',
               status: 'failed',
               message: result.error,
@@ -206,6 +230,7 @@ export async function executeFileOperations(
           if (!(await fs.exists(filePath))) {
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_file',
               status: 'success',
               message: `${operation.path} does not exist. Nothing to delete.`,
@@ -220,6 +245,7 @@ export async function executeFileOperations(
             errors.push(`Failed to delete file: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_file',
               status: 'failed',
               message: `Failed to delete ${operation.path}.`,
@@ -228,6 +254,7 @@ export async function executeFileOperations(
           } else {
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_file',
               status: 'success',
               message: `Deleted ${operation.path}.`,
@@ -243,6 +270,7 @@ export async function executeFileOperations(
             errors.push(fromResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'failed',
               message: fromResult.error,
@@ -256,6 +284,7 @@ export async function executeFileOperations(
             errors.push(toResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'failed',
               message: toResult.error,
@@ -271,6 +300,7 @@ export async function executeFileOperations(
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'aborted',
               message: `Source file not found: ${operation.from}. Rename aborted.`,
@@ -283,6 +313,7 @@ export async function executeFileOperations(
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'aborted',
               message: `Destination file already exists: ${operation.to}. Rename aborted.`,
@@ -294,6 +325,7 @@ export async function executeFileOperations(
           await fs.renameFile(sourcePath, targetPath);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'rename_file',
             status: 'success',
             message: `Renamed ${operation.from} to ${operation.to}.`,
@@ -310,6 +342,7 @@ export async function executeFileOperations(
             errors.push(fromResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_file',
               status: 'failed',
               message: fromResult.error,
@@ -323,6 +356,7 @@ export async function executeFileOperations(
             errors.push(toResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_file',
               status: 'failed',
               message: toResult.error,
@@ -338,6 +372,7 @@ export async function executeFileOperations(
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_file',
               status: 'aborted',
               message: `Source file not found: ${operation.from}. Move aborted.`,
@@ -350,6 +385,7 @@ export async function executeFileOperations(
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_file',
               status: 'aborted',
               message: `Destination file already exists: ${operation.to}. Move aborted.`,
@@ -363,6 +399,7 @@ export async function executeFileOperations(
           await fs.renameFile(sourcePath, targetPath);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'move_file',
             status: 'success',
             message: `Moved ${operation.from} to ${operation.to}.`,
@@ -379,6 +416,7 @@ export async function executeFileOperations(
             errors.push(fromResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'failed',
               message: fromResult.error,
@@ -392,6 +430,7 @@ export async function executeFileOperations(
             errors.push(toResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'failed',
               message: toResult.error,
@@ -407,6 +446,7 @@ export async function executeFileOperations(
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'aborted',
               message: `Source file not found: ${operation.from}. Copy aborted.`,
@@ -419,6 +459,7 @@ export async function executeFileOperations(
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'aborted',
               message: `Destination file already exists: ${operation.to}. Copy aborted.`,
@@ -432,6 +473,7 @@ export async function executeFileOperations(
           await fs.copyFile(sourcePath, targetPath);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'copy_file',
             status: 'success',
             message: `Copied ${operation.from} to ${operation.to}.`,
@@ -448,6 +490,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'append_file',
               status: 'failed',
               message: result.error,
@@ -463,6 +506,7 @@ export async function executeFileOperations(
             errors.push(`File not found: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'append_file',
               status: 'aborted',
               message: `File not found: ${operation.path}. Append aborted.`,
@@ -479,6 +523,7 @@ export async function executeFileOperations(
           await fs.writeFile(filePath, updatedContent);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'append_file',
             status: 'success',
             message: `Appended content to ${operation.path}.`,
@@ -493,6 +538,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'create_directory',
               status: 'failed',
               message: result.error,
@@ -517,6 +563,7 @@ export async function executeFileOperations(
           }
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'create_directory',
             status: 'success',
             message: `Created directory ${operation.directoryPath} with ${operation.files.length} files.`,
@@ -533,6 +580,7 @@ export async function executeFileOperations(
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_directory',
               status: 'failed',
               message: result.error,
@@ -546,6 +594,7 @@ export async function executeFileOperations(
           if (!(await fs.exists(directoryPath))) {
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_directory',
               status: 'success',
               message: `${operation.directoryPath} does not exist. Nothing to delete.`,
@@ -560,6 +609,7 @@ export async function executeFileOperations(
             errors.push(`Failed to delete directory: ${operation.directoryPath}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'delete_directory',
               status: 'failed',
               message: `Failed to delete directory ${operation.directoryPath}.`,
@@ -568,6 +618,7 @@ export async function executeFileOperations(
           } else {
 operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'delete_directory',
             status: 'success',
             message: `Deleted directory ${operation.directoryPath} and all its contents.`,
@@ -584,6 +635,7 @@ operationResults.push({
             errors.push(fromResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'failed',
               message: fromResult.error,
@@ -597,6 +649,7 @@ operationResults.push({
             errors.push(toResult.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'failed',
               message: toResult.error,
@@ -612,6 +665,7 @@ operationResults.push({
             errors.push(`Source directory not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'aborted',
               message: `Source directory not found: ${operation.from}. Move aborted.`,
@@ -624,6 +678,7 @@ operationResults.push({
             errors.push(`Destination directory already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'aborted',
               message: `Destination directory already exists: ${operation.to}. Move aborted.`,
@@ -635,6 +690,7 @@ operationResults.push({
           await fs.moveDirectory(sourcePath, targetPath);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'move_directory',
             status: 'success',
             message: `Moved directory ${operation.from} to ${operation.to}.`,
@@ -654,6 +710,7 @@ operationResults.push({
             errors.push(result.error);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'extract_structure',
               status: 'failed',
               message: result.error,
@@ -669,6 +726,7 @@ operationResults.push({
             errors.push(`Directory not found: ${operation.directoryPath}`);
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'extract_structure',
               status: 'aborted',
               message: `Directory not found: ${operation.directoryPath}. Extraction aborted.`,
@@ -706,6 +764,7 @@ operationResults.push({
           });
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'extract_structure',
             status: 'success',
             message: `Extracted directory structure of ${operation.directoryPath} at depth ${operation.depth}.`,
@@ -719,6 +778,7 @@ operationResults.push({
             errors.push('No workspace root available for codebase metadata.');
             operationResults.push({
               operationIndex: i,
+              operationId: generateOperationId(),
               kind: 'codebase_metadata',
               status: 'aborted',
               message: 'No workspace root available for codebase metadata.',
@@ -732,6 +792,7 @@ operationResults.push({
           const message = JSON.stringify(metadata, null, 2);
           operationResults.push({
             operationIndex: i,
+              operationId: generateOperationId(),
             kind: 'codebase_metadata',
             status: 'success',
             message: `Analyzed codebase metadata for ${workspaceRoot}.`,
@@ -746,6 +807,7 @@ operationResults.push({
       errors.push(`Unexpected error during ${operation.kind}: ${message}${operation.kind === 'extract_structure' ? stack : ''}`);
       operationResults.push({
         operationIndex: i,
+              operationId: generateOperationId(),
         kind: operation.kind,
         status: 'failed',
         message: `Unexpected error: ${message}`,
