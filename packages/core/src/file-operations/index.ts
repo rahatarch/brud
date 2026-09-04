@@ -13,6 +13,10 @@ export interface OperationResult {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
+  from?: string;
+  to?: string;
+  directoryPath?: string;
+  files?: string[];
 }
 
 export interface FileOperationResult {
@@ -294,6 +298,8 @@ export async function executeFileOperations(
             status: 'success',
             message: `Renamed ${operation.from} to ${operation.to}.`,
             path: operation.from,
+            from: operation.from,
+            to: operation.to,
           });
           break;
         }
@@ -361,6 +367,8 @@ export async function executeFileOperations(
             status: 'success',
             message: `Moved ${operation.from} to ${operation.to}.`,
             path: operation.from,
+            from: operation.from,
+            to: operation.to,
           });
           break;
         }
@@ -428,6 +436,8 @@ export async function executeFileOperations(
             status: 'success',
             message: `Copied ${operation.from} to ${operation.to}.`,
             path: operation.from,
+            from: operation.from,
+            to: operation.to,
           });
           break;
         }
@@ -511,6 +521,8 @@ export async function executeFileOperations(
             status: 'success',
             message: `Created directory ${operation.directoryPath} with ${operation.files.length} files.`,
             path: operation.directoryPath,
+            directoryPath: operation.directoryPath,
+            files: operation.files,
           });
           break;
         }
@@ -554,13 +566,14 @@ export async function executeFileOperations(
               path: operation.directoryPath,
             });
           } else {
-            operationResults.push({
-              operationIndex: i,
-              kind: 'delete_directory',
-              status: 'success',
-              message: `Deleted directory ${operation.directoryPath} and all its contents.`,
-              path: operation.directoryPath,
-            });
+operationResults.push({
+            operationIndex: i,
+            kind: 'delete_directory',
+            status: 'success',
+            message: `Deleted directory ${operation.directoryPath} and all its contents.`,
+            path: operation.directoryPath,
+            directoryPath: operation.directoryPath,
+          });
           }
           break;
         }
@@ -626,6 +639,8 @@ export async function executeFileOperations(
             status: 'success',
             message: `Moved directory ${operation.from} to ${operation.to}.`,
             path: operation.from,
+            from: operation.from,
+            to: operation.to,
           });
           break;
         }

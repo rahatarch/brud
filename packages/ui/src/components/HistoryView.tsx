@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2 } from 'lucide-react';
 import type { HistorySessionResult, RevertSessionResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
+import ConfirmationModal from './ConfirmationModal';
 
 function formatDateHeader(timestamp?: string): string {
   if (!timestamp) return 'Unknown Date';
@@ -97,6 +98,8 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
   const [revertLoading, setRevertLoading] = useState<'pre' | 'post' | null>(null);
   const [revertResult, setRevertResult] = useState<RevertSessionResult | null>(null);
   const [revertDismissed, setRevertDismissed] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingTargetState, setPendingTargetState] = useState<'pre' | 'post' | null>(null);
 
   useEffect(() => {
     const unsubscribe = onExtensionMessage((message) => {
@@ -114,19 +117,24 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
   }, [onBack]);
 
   const handleRevert = useCallback((targetState: 'pre' | 'post') => {
-    const label = targetState === 'pre' ? 'pre-patch' : 'post-patch';
-    const confirmed = window.confirm(
-      `Are you sure you want to revert to the ${label} state?\n\n` +
-      `Session: ${sessionId}\n` +
-      `This will restore ${filesAffected.length} file(s) to their ${label} state.`
-    );
-    if (!confirmed) return;
+    setPendingTargetState(targetState);
+    setShowConfirmModal(true);
+  }, []);
 
-    setRevertLoading(targetState);
+  const handleConfirmRevert = useCallback(() => {
+    if (!pendingTargetState) return;
+    setShowConfirmModal(false);
+    setRevertLoading(pendingTargetState);
     setRevertResult(null);
     setRevertDismissed(false);
-    sendToExtension({ command: 'revertSession', sessionId, targetState });
-  }, [sessionId, filesAffected.length]);
+    sendToExtension({ command: 'revertSession', sessionId, targetState: pendingTargetState });
+    setPendingTargetState(null);
+  }, [pendingTargetState, sessionId]);
+
+  const handleCancelRevert = useCallback(() => {
+    setShowConfirmModal(false);
+    setPendingTargetState(null);
+  }, []);
 
   const dismissResult = useCallback(() => {
     setRevertResult(null);
@@ -290,6 +298,16 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
             </div>
           </section>
         </div>
+
+        <ConfirmationModal
+          isOpen={showConfirmModal}
+          title="Confirm Revert"
+          message="This will restore files to their pre-patch state. This action cannot be undone. Continue?"
+          confirmLabel="Restore"
+          cancelLabel="Cancel"
+          onConfirm={handleConfirmRevert}
+          onCancel={handleCancelRevert}
+        />
       </div>
     );
   } catch (err) {

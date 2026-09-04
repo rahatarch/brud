@@ -18,6 +18,10 @@ export interface OperationResult {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
+  from?: string;
+  to?: string;
+  directoryPath?: string;
+  files?: string[];
 }
 
 export type SnapshotType = 'pre' | 'post';

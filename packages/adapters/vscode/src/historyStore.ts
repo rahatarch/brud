@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult } from '@brud/core';
 import { revertSession } from '@brud/core';
 import type { FileSystem } from '@brud/core';
+import { getWorkspaceFolders } from './workspace';
 
 export class WorkspaceHistoryStore implements HistoryStore {
   private brudDirEnsured = false;
@@ -261,6 +262,6 @@ export class WorkspaceHistoryStore implements HistoryStore {
       };
     }
 
-    return revertSession(entry, targetState, this.fileSystem);
+    return revertSession(entry, targetState, this.fileSystem, getWorkspaceFolders());
   }
 }
