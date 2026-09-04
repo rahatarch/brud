@@ -4,5 +4,7 @@ export * from './parser';
 export * from './engine';
 export * from './file-operations';
 export * from './utils/workspacePath';
+export * from './utils/pathResolver';
 export * from './prompt-library';
 export * from './structure-extractor';
+export * from './history';

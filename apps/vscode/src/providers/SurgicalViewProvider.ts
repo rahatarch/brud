@@ -3,12 +3,12 @@ import * as fs from 'fs';
 import { parseOperations } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
-import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -637,13 +637,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
-    if (result.success && result.errors.length === 0) {
+    if (result.success) {
       const msg: ExtensionMessage = { command: 'success', message: result.message };
       this._view?.webview.postMessage(msg);
-    } else if (result.success && result.errors.length > 0) {
-      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
-      this._view?.webview.postMessage(msg);
-      this._outputChannel.show(true);
     } else {
       const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
       this._view?.webview.postMessage(msg);
@@ -670,35 +666,45 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       this._outputChannel.appendLine('DEBUG: Before executeFileOperations for extract_structure');
       const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
-      if (result.success) {
-        let parsedStructures: any[];
-        try {
-          parsedStructures = JSON.parse(result.message);
-        } catch {
-          parsedStructures = [];
-        }
-        const structureResults: StructureResult[] = parsedStructures.map((item: any) => ({
-          json: item.json,
-          directoryPath: item.directoryPath,
-          depth: item.depth,
-          fileCount: item.fileCount,
-          directoryCount: item.directoryCount,
-        }));
-        const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
-        const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
-        this._view?.webview.postMessage(successMsg);
-        this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
-        this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
-      } else {
+      if (!result.success) {
         this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
         this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
         this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
         this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
         this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
         this._outputChannel.show(true);
-const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
+        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
         this._view?.webview.postMessage(errMsg);
+        return;
       }
+
+      if (result.errors.length > 0) {
+        this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
+        const errMsg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
+        this._view?.webview.postMessage(errMsg);
+        return;
+      }
+
+      let structureResults: StructureResult[] = [];
+      try {
+        const parsed = JSON.parse(result.message);
+        const parsedArray = Array.isArray(parsed) ? parsed : [parsed];
+        structureResults = parsedArray.map((item: any) => ({
+          json: item.json,
+          directoryPath: item.directoryPath,
+          depth: item.depth,
+          fileCount: item.fileCount,
+          directoryCount: item.directoryCount,
+        }));
+      } catch (e) {
+        this._outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
+        return;
+      }
+      const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
+      this._view?.webview.postMessage(successMsg);
+      this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+      this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
       return;
     }
 
@@ -732,7 +738,9 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
       return;
     }
 
-    const result = await executeOperationsFromVSCode(operations);
+    const folders = getWorkspaceFolders();
+    const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
+    const result = await executeOperationsFromVSCode(operations, historyStore, text);
     const report = this._generateReport(operations, result);
 
     this._outputChannel.appendLine(result.message);
@@ -740,7 +748,7 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
-    if (result.success && result.errors.length === 0) {
+    if (result.success) {
       const msg: ExtensionMessage = { command: 'success', message: report };
       this._view?.webview.postMessage(msg);
     } else {
@@ -771,96 +779,64 @@ const errMsg: ExtensionMessage = { command: 'error', message: result.message + (
     }
 
     const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
-    if (result.success) {
-      let parsedStructures: any[];
-      try {
-        parsedStructures = JSON.parse(result.message);
-      } catch {
-        parsedStructures = [];
-      }
-      const structureResults: StructureResult[] = parsedStructures.map((item: any) => ({
-        json: item.json,
-        directoryPath: item.directoryPath,
-        depth: item.depth,
-        fileCount: item.fileCount,
-        directoryCount: item.directoryCount,
-      }));
-      const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
-      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
-      this._view?.webview.postMessage(successMsg);
-      this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
-      this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
-    } else {
+    if (!result.success) {
       this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
       this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
       this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
       this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
       this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
       this._outputChannel.show(true);
-      const errMsg: ExtensionMessage = { command: 'error', message: result.message };
+      const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
       this._view?.webview.postMessage(errMsg);
+      return;
     }
+
+    if (result.errors.length > 0) {
+      this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
+      const errMsg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
+      this._view?.webview.postMessage(errMsg);
+      return;
+    }
+
+    let structureResults: StructureResult[] = [];
+    try {
+      const parsed = JSON.parse(result.message);
+      const parsedArray = Array.isArray(parsed) ? parsed : [parsed];
+      structureResults = parsedArray.map((item: any) => ({
+        json: item.json,
+        directoryPath: item.directoryPath,
+        depth: item.depth,
+        fileCount: item.fileCount,
+        directoryCount: item.directoryCount,
+      }));
+    } catch (e) {
+      this._outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
+      return;
+    }
+    const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+    const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
+    this._view?.webview.postMessage(successMsg);
+    this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+    this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
   }
 
   private _generateReport(
     operations: FileOperation[],
-    result: { success: boolean; message: string; errors: string[] }
+    result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] }
   ): string {
     const lines: string[] = [];
 
-    for (const op of operations) {
-      switch (op.kind) {
-        case 'search_replace':
-          lines.push(`Patched ${op.path} by replacing the specified content.`);
-          break;
-        case 'create_file':
-          lines.push(`Created ${op.path}.`);
-          break;
-        case 'delete_file':
-          lines.push(`Deleted ${op.path}.`);
-          break;
-        case 'rename_file':
-          lines.push(`Renamed ${op.from} to ${op.to}.`);
-          break;
-        case 'move_file':
-          lines.push(`Moved ${op.from} to ${op.to}.`);
-          break;
-        case 'copy_file':
-          lines.push(`Copied ${op.from} to ${op.to}.`);
-          break;
-        case 'append_file':
-          lines.push(`Appended content to ${op.path}.`);
-          break;
-        case 'create_directory':
-          lines.push(`Created directory ${op.directoryPath} with ${op.files.length} empty files.`);
-          break;
-        case 'delete_directory':
-          lines.push(`Deleted directory ${op.directoryPath} and all its contents.`);
-          break;
-        case 'move_directory':
-          lines.push(`Moved directory ${op.from} to ${op.to}.`);
-          break;
-        case 'extract_structure':
-          lines.push(`Extracted directory structure of ${op.directoryPath} at depth ${op.depth}.`);
-          break;
-        case 'codebase_metadata':
-          lines.push(`Analyzed codebase metadata: [root] contains [totalFiles] files in [totalFolders] folders. Most dense folder: [mostDenseFolder] with [mostDenseCount] files.`);
-          break;
-      }
+    for (const opResult of result.operationResults) {
+      lines.push(opResult.message);
     }
 
-    let prefix: string;
-    if (result.success && result.errors.length === 0) {
-      prefix = 'All operations completed successfully.';
-    } else if (result.success) {
-      prefix = 'Some operations completed with errors.';
-    } else {
-      prefix = 'All operations failed.';
-    }
+    const report = [result.message, ...lines].join('\n');
 
-    const report = [prefix, ...lines].join('\n');
+    const failedCount = result.operationResults
+      ? result.operationResults.filter(r => r.status === 'failed').length
+      : 0;
 
-    if (result.errors.length > 0) {
+    if (failedCount > 0) {
       return report + '\n\nErrors:\n' + result.errors.map(e => `- ${e}`).join('\n');
     }
 

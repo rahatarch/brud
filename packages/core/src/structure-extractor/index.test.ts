@@ -1,80 +1,44 @@
-import { describe, it, before } from 'node:test';
+import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
-import { FileSystem } from '../types/filesystem';
-import { extractDirectoryStructure } from './index';
+import * as fs from 'fs/promises';
+import * as pathModule from 'path';
+import { NodeFileSystem } from '../testing/nodeFileSystem.js';
+import { extractDirectoryStructure } from './index.js';
 
-type DirEntry = { name: string; isDirectory: boolean };
-
-class MockFileSystem implements FileSystem {
-  private dirs: Map<string, DirEntry[]> = new Map();
-
-  addDirectory(path: string, entries: DirEntry[]) {
-    this.dirs.set(path, entries);
-  }
-
-  async readFile(_path: string): Promise<string> { throw new Error('Not implemented'); }
-  async writeFile(_path: string, _content: string): Promise<void> { throw new Error('Not implemented'); }
-  async deleteFile(_path: string): Promise<void> { throw new Error('Not implemented'); }
-  async renameFile(_from: string, _to: string): Promise<void> { throw new Error('Not implemented'); }
-  async copyFile(_from: string, _to: string): Promise<void> { throw new Error('Not implemented'); }
-  async exists(_path: string): Promise<boolean> { throw new Error('Not implemented'); }
-  async createDirectory(_path: string): Promise<void> { throw new Error('Not implemented'); }
-  async deleteDirectoryRecursive(_path: string): Promise<void> { throw new Error('Not implemented'); }
-  async moveDirectory(_from: string, _to: string): Promise<void> { throw new Error('Not implemented'); }
-  async listDirectory(_path: string): Promise<string[]> { throw new Error('Not implemented'); }
-
-  async listDirectoryContents(path: string): Promise<{ name: string; isDirectory: boolean }[]> {
-    const entries = this.dirs.get(path);
-    if (!entries) {
-      throw new Error(`Directory not found: ${path}`);
-    }
-    return entries;
-  }
-}
-
-function buildMockTree(): MockFileSystem {
-  const fs = new MockFileSystem();
-  fs.addDirectory('src', [
-    { name: 'components', isDirectory: true },
-    { name: 'utils', isDirectory: true },
-    { name: 'index.ts', isDirectory: false },
-    { name: 'node_modules', isDirectory: true },
-    { name: '.hidden', isDirectory: true },
-  ]);
-  fs.addDirectory('src/components', [
-    { name: 'Button.tsx', isDirectory: false },
-    { name: 'Input.tsx', isDirectory: false },
-    { name: 'forms', isDirectory: true },
-  ]);
-  fs.addDirectory('src/components/forms', [
-    { name: 'LoginForm.tsx', isDirectory: false },
-  ]);
-  fs.addDirectory('src/utils', [
-    { name: 'helper.ts', isDirectory: false },
-    { name: 'constants.ts', isDirectory: false },
-  ]);
-  fs.addDirectory('src/node_modules', [
-    { name: 'package1', isDirectory: true },
-  ]);
-  fs.addDirectory('src/node_modules/package1', []);
-  fs.addDirectory('src/.hidden', [
-    { name: 'secret.ts', isDirectory: false },
-  ]);
-  return fs;
+async function createTestStructure(baseDir: string, nodeFs: NodeFileSystem): Promise<void> {
+  await nodeFs.createDirectory(pathModule.join(baseDir, 'src', 'components', 'forms'));
+  await nodeFs.createDirectory(pathModule.join(baseDir, 'src', 'utils'));
+  await nodeFs.createDirectory(pathModule.join(baseDir, 'src', 'node_modules', 'package1'));
+  await nodeFs.createDirectory(pathModule.join(baseDir, 'src', '.hidden'));
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'index.ts'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'components', 'Button.tsx'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'components', 'Input.tsx'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'components', 'forms', 'LoginForm.tsx'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'utils', 'helper.ts'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'utils', 'constants.ts'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', '.hidden', 'secret.ts'), '');
 }
 
 describe('extractDirectoryStructure', () => {
-  let mockFs: MockFileSystem;
+  let tempDir: string;
+  let nodeFs: NodeFileSystem;
 
-  before(() => {
-    mockFs = buildMockTree();
+  before(async () => {
+    tempDir = await fs.mkdtemp('/tmp/brud-structure-test-');
+    nodeFs = new NodeFileSystem();
+    await createTestStructure(tempDir, nodeFs);
+  });
+
+  after(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
   });
 
   it('Test 1: Depth 0 (unlimited) - returns all directories and files excluding node_modules and .hidden', async () => {
-    const result = await extractDirectoryStructure(mockFs, 'src', 0);
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
     const parsed = JSON.parse(result);
-    assert.ok(parsed.src);
-    const children = parsed.src;
+    const srcKey = pathModule.basename(pathModule.join(tempDir, 'src'));
+    assert.ok(parsed[srcKey]);
+    const children = parsed[srcKey];
     const childNames = children.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
     assert.ok(childNames.includes('components'));
     assert.ok(childNames.includes('utils'));
@@ -94,9 +58,10 @@ describe('extractDirectoryStructure', () => {
   });
 
   it('Test 2: Depth 1 - only immediate children of src/ returned, subdirectories at boundary skipped', async () => {
-    const result = await extractDirectoryStructure(mockFs, 'src', 1);
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 1);
     const parsed = JSON.parse(result);
-    const children = parsed.src;
+    const srcKey = pathModule.basename(pathModule.join(tempDir, 'src'));
+    const children = parsed[srcKey];
     const childNames = children.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
     assert.ok(childNames.includes('components'));
     assert.ok(childNames.includes('utils'));
@@ -111,9 +76,10 @@ describe('extractDirectoryStructure', () => {
   });
 
   it('Test 3: Depth 2 - components expanded to show forms/, but forms/ NOT expanded', async () => {
-    const result = await extractDirectoryStructure(mockFs, 'src', 2);
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 2);
     const parsed = JSON.parse(result);
-    const children = parsed.src;
+    const srcKey = pathModule.basename(pathModule.join(tempDir, 'src'));
+    const children = parsed[srcKey];
     const componentsObj = children.find((c: any) => typeof c === 'object' && c.components);
     assert.ok(componentsObj);
     const compChildren = componentsObj.components;
@@ -126,13 +92,13 @@ describe('extractDirectoryStructure', () => {
   });
 
   it('Test 4: Hidden and build directories excluded - node_modules and .hidden do not appear', async () => {
-    const result = await extractDirectoryStructure(mockFs, 'src', 0);
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
     assert.ok(!result.includes('node_modules'));
     assert.ok(!result.includes('.hidden'));
   });
 
   it('Test 5: Output is valid JSON', async () => {
-    const result = await extractDirectoryStructure(mockFs, 'src', 0);
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
     assert.doesNotThrow(() => JSON.parse(result));
   });
 });

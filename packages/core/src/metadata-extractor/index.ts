@@ -1,3 +1,4 @@
+import path from 'path';
 import { FileSystem } from '../types/filesystem';
 
 const IGNORED_DIRECTORIES = new Set([
@@ -35,7 +36,7 @@ export async function extractCodebaseMetadata(
 
       if (entry.isDirectory) {
         totalFolders++;
-        await traverse(`${dirPath}/${entry.name}`);
+        await traverse(path.join(dirPath, entry.name));
       } else {
         totalFiles++;
         directFileCount++;
@@ -50,11 +51,11 @@ export async function extractCodebaseMetadata(
 
   await traverse(rootPath);
 
-  const root = rootPath.split('/').filter(Boolean).pop() || rootPath;
-  const rootDir = rootPath.endsWith('/') ? rootPath : rootPath + '/';
-  const relativeDenseFolder = mostDenseFolder.startsWith(rootDir)
-    ? mostDenseFolder.slice(rootDir.length)
-    : mostDenseFolder;
+  const root = path.basename(rootPath) || rootPath;
+  const relativeDenseFolder = (() => {
+    const rel = path.relative(rootPath, mostDenseFolder);
+    return rel.startsWith('..') ? mostDenseFolder : rel;
+  })();
 
   return {
     root,

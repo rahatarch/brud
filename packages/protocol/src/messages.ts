@@ -11,7 +11,17 @@ export type WebviewCommand =
   | 'updatePreviewHeader'
   | 'openMainWindow'
   | 'extractStructure'
-  | 'ready';
+  | 'ready'
+  | 'getHistory'
+  | 'getRevertHistory'
+  | 'revertSession'
+  | 'revertOperations'
+  | 'deleteSingleSession'
+  | 'wipeHistory'
+  | 'softDeleteSession'
+  | 'restoreSession'
+  | 'getTrashedSessions'
+  | 'permanentDelete';
 
 export type ExtensionCommand =
   | 'success'
@@ -20,11 +30,24 @@ export type ExtensionCommand =
   | 'showPreviewNavigation'
   | 'hidePreviewNavigation'
   | 'structureResult'
-  | 'codebaseMetadataResult';
+  | 'codebaseMetadataResult'
+  | 'historyResult'
+  | 'revertResult'
+  | 'revertOperationsResult'
+  | 'revertHistoryResult'
+  | 'sessionDeleted'
+  | 'historyWiped'
+  | 'trashedSessionsResult'
+  | 'sessionRestored';
 
 export interface WebviewMessage {
   command: WebviewCommand;
   text?: string;
+  sessionId?: string;
+  targetState?: 'pre' | 'post';
+  operationIds?: string[];
+  triggeredBy?: 'user' | 'system';
+  permanentDelete?: boolean;
 }
 
 export interface ExtensionMessage {
@@ -36,6 +59,40 @@ export interface ExtensionMessage {
   structure?: StructureResult;
   structures?: StructureResult[];
   codebaseMetadata?: CodebaseMetadataResult;
+  history?: HistorySessionResult[];
+  revertResult?: RevertSessionResult;
+  revertOperationsResult?: RevertSessionResult;
+  revertHistory?: RevertHistoryData[];
+  deletedCount?: number;
+  trashedSessions?: HistorySessionResult[];
+}
+
+export interface HistorySessionResult {
+  sessionId: string;
+  timestamp: string;
+  originalPrompt: string;
+  status: 'success' | 'failure';
+  operationCount: number;
+  operationTypes: string[];
+  operations: OperationResult[];
+  filesAffected: string[];
+  metadataUsed: Record<string, any>;
+  terminalCommands: string[];
+  revertCommands: string[];
+  isDeleted?: boolean;
+  deletedAt?: string;
+  expiresAt?: string;
+  deletedBy?: 'user' | 'system';
+  deleteReason?: 'manual_delete' | 'manual_wipe' | 'retention_cleanup';
+  renewedAt?: string;
+  softDeleteHistory?: SoftDeleteEventResult[];
+}
+
+export interface SoftDeleteEventResult {
+  action: 'soft_delete' | 'restore';
+  at: string;
+  by: 'user' | 'system';
+  reason?: 'manual_delete' | 'manual_wipe' | 'retention_cleanup';
 }
 
 export interface PreviewHeaderData {
@@ -44,10 +101,20 @@ export interface PreviewHeaderData {
   totalFiles: number;
 }
 
+export interface OperationResult {
+  operationId: string;
+  operationIndex: number;
+  kind: string;
+  status: 'success' | 'aborted' | 'failed';
+  message: string;
+  path: string;
+}
+
 export interface ExecutionResult {
   success: boolean;
   message: string;
   errors: string[];
+  operationResults: OperationResult[];
 }
 
 export interface StructureResult {
@@ -64,4 +131,19 @@ export interface CodebaseMetadataResult {
   totalFolders: number;
   mostDenseFolder: string;
   mostDenseCount: number;
+}
+
+export interface RevertSessionResult {
+  success: boolean;
+  message: string;
+  errors: string[];
+}
+
+export interface RevertHistoryData {
+  revertId: string;
+  timestamp: string;
+  targetState: 'pre' | 'post';
+  revertedOperationIds: string[];
+  status: 'success' | 'failed';
+  errorMessage?: string;
 }
