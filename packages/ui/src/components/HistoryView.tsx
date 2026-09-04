@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle } from 'lucide-react';
-import type { HistorySessionResult, RevertSessionResult } from '@brud/protocol';
+import type { HistorySessionResult, RevertSessionResult, RevertHistoryData } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
 import WipeConfirmationModal from './WipeConfirmationModal';
@@ -85,7 +85,7 @@ function formatKind(kind: string): string {
   return kind.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function DetailView({ session, onBack }: { session: HistorySessionResult; onBack: () => void }) {
+function DetailView({ session, onBack, onViewRevertHistory }: { session: HistorySessionResult; onBack: () => void; onViewRevertHistory: () => void }) {
   const sessionId = session.sessionId || 'Unknown Session';
   const timestamp = session.timestamp;
   const status = session.status || 'unknown';
@@ -101,13 +101,26 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
   const [revertDismissed, setRevertDismissed] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingTargetState, setPendingTargetState] = useState<'pre' | 'post' | null>(null);
+  const [revertHistory, setRevertHistory] = useState<RevertHistoryData[] | null>(null);
+  const [revertHistoryLoading, setRevertHistoryLoading] = useState(false);
 
   useEffect(() => {
+    setRevertHistory(null);
+    setRevertHistoryLoading(true);
+    sendToExtension({ command: 'getRevertHistory', sessionId });
+
     const unsubscribe = onExtensionMessage((message) => {
+      if (message.command === 'revertHistoryResult' && message.revertHistory) {
+        setRevertHistory(message.revertHistory);
+        setRevertHistoryLoading(false);
+      }
       if (message.command === 'revertResult' && message.revertResult) {
         setRevertResult(message.revertResult);
         setRevertLoading(null);
         if (message.revertResult.success) {
+          setRevertHistory(null);
+          setRevertHistoryLoading(true);
+          sendToExtension({ command: 'getRevertHistory', sessionId });
           setTimeout(() => {
             onBack();
           }, 2000);
@@ -115,7 +128,7 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
       }
     });
     return unsubscribe;
-  }, [onBack]);
+  }, [sessionId, onBack]);
 
   const handleRevert = useCallback((targetState: 'pre' | 'post') => {
     setPendingTargetState(targetState);
@@ -197,6 +210,13 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
             ) : (
               'Restore Post-Patch State'
             )}
+          </button>
+          <button
+            onClick={onViewRevertHistory}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
+          >
+            <History size={16} />
+            View Revert History ({revertHistory ? revertHistory.length : 0})
           </button>
         </div>
 
@@ -333,12 +353,118 @@ function DetailView({ session, onBack }: { session: HistorySessionResult; onBack
   }
 }
 
+function RevertHistoryPage({
+  session,
+  revertHistory,
+  revertHistoryLoading,
+  onBack,
+}: {
+  session: HistorySessionResult;
+  revertHistory: RevertHistoryData[] | null;
+  revertHistoryLoading: boolean;
+  onBack: () => void;
+}) {
+  const REVERTS_PER_PAGE = 10;
+  const [currentPage, setCurrentPage] = useState(1);
+  const totalPages = Math.ceil((revertHistory?.length || 0) / REVERTS_PER_PAGE);
+  const startIndex = (currentPage - 1) * REVERTS_PER_PAGE;
+  const endIndex = startIndex + REVERTS_PER_PAGE;
+  const visibleReverts = (revertHistory || []).slice(startIndex, endIndex);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [session.sessionId]);
+
+  return (
+    <div className="flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 text-sm text-text-secondary hover:text-text mb-6 transition-colors cursor-pointer"
+      >
+        <ArrowLeft size={16} />
+        Back to Session Detail
+      </button>
+
+      <h2 className="text-xl font-semibold text-text font-mono mb-1">{session.sessionId}</h2>
+      <p className="text-sm text-text-secondary mb-6">Revert History</p>
+
+      {revertHistoryLoading ? (
+        <div className="flex items-center gap-2 text-sm text-text-secondary">
+          <Loader2 size={14} className="animate-spin" />
+          Loading revert history...
+        </div>
+      ) : visibleReverts.length > 0 ? (
+        <>
+          <div className="flex flex-col gap-2 mb-6">
+            {visibleReverts.map((revert) => (
+              <div
+                key={revert.revertId}
+                className="flex items-start gap-3 p-3 rounded-lg border border-border bg-surface"
+              >
+                <div className="shrink-0 mt-0.5">
+                  {revert.status === 'success' ? (
+                    <CheckCircle size={18} className="text-green-500" />
+                  ) : (
+                    <XCircle size={18} className="text-red-500" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="text-sm font-medium text-text">
+                      {revert.targetState === 'pre' ? 'Pre-Patch' : 'Post-Patch'}
+                    </span>
+                    <span className="text-xs text-text-secondary">
+                      {formatFullDateTime(revert.timestamp)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-text-secondary">
+                    {revert.filesRestored.length} file{revert.filesRestored.length !== 1 ? 's' : ''} restored
+                  </p>
+                  {revert.errorMessage && (
+                    <p className="text-xs text-red-500 mt-0.5">{revert.errorMessage}</p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-text-secondary">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <p className="text-sm text-text-secondary">No reverts recorded for this session.</p>
+      )}
+    </div>
+  );
+}
+
 function HistoryView() {
   const [sessions, setSessions] = useState<HistorySessionResult[]>([]);
   const [selectedSession, setSelectedSession] = useState<HistorySessionResult | null>(null);
+  const [viewState, setViewState] = useState<'list' | 'detail' | 'reverts'>('list');
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showWipeModal, setShowWipeModal] = useState(false);
+  const [revertHistory, setRevertHistory] = useState<RevertHistoryData[] | null>(null);
+  const [revertHistoryLoading, setRevertHistoryLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -361,20 +487,54 @@ function HistoryView() {
         setLoading(false);
         setShowWipeModal(false);
       }
+      if (message.command === 'revertHistoryResult' && message.revertHistory) {
+        setRevertHistory(message.revertHistory);
+        setRevertHistoryLoading(false);
+      }
     });
 
     return unsubscribe;
   }, [refreshKey]);
 
-  const handleBack = useCallback(() => {
+  const handleBackToDetail = useCallback(() => {
+    setViewState('detail');
+  }, []);
+
+  const handleBackToList = useCallback(() => {
     setSelectedSession(null);
+    setViewState('list');
     setRefreshKey(k => k + 1);
+  }, []);
+
+  const handleViewRevertHistory = useCallback(() => {
+    setRevertHistoryLoading(true);
+    setRevertHistory(null);
+    if (selectedSession) {
+      sendToExtension({ command: 'getRevertHistory', sessionId: selectedSession.sessionId });
+    }
+    setViewState('reverts');
+  }, [selectedSession]);
+
+  const handleSelectSession = useCallback((session: HistorySessionResult) => {
+    setSelectedSession(session);
+    setViewState('detail');
   }, []);
 
   const grouped = groupByDate(sessions);
 
-  if (selectedSession) {
-    return <DetailView session={selectedSession} onBack={handleBack} />;
+  if (viewState === 'reverts' && selectedSession) {
+    return (
+      <RevertHistoryPage
+        session={selectedSession}
+        revertHistory={revertHistory}
+        revertHistoryLoading={revertHistoryLoading}
+        onBack={handleBackToDetail}
+      />
+    );
+  }
+
+  if (viewState === 'detail' && selectedSession) {
+    return <DetailView session={selectedSession} onBack={handleBackToList} onViewRevertHistory={handleViewRevertHistory} />;
   }
 
   if (loading) {
@@ -431,7 +591,7 @@ function HistoryView() {
                 return (
                   <button
                     key={sid}
-                    onClick={() => setSelectedSession(session)}
+                    onClick={() => handleSelectSession(session)}
                     className="flex items-start gap-3 p-4 rounded-lg border border-border bg-surface hover:bg-surface-2 hover:border-border-subtle text-left cursor-pointer transition-colors"
                   >
                     <div className="mt-0.5 shrink-0">

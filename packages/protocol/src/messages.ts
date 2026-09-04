@@ -13,6 +13,7 @@ export type WebviewCommand =
   | 'extractStructure'
   | 'ready'
   | 'getHistory'
+  | 'getRevertHistory'
   | 'revertSession'
   | 'wipeHistory';
 
@@ -26,6 +27,7 @@ export type ExtensionCommand =
   | 'codebaseMetadataResult'
   | 'historyResult'
   | 'revertResult'
+  | 'revertHistoryResult'
   | 'historyWiped';
 
 export interface WebviewMessage {
@@ -46,6 +48,7 @@ export interface ExtensionMessage {
   codebaseMetadata?: CodebaseMetadataResult;
   history?: HistorySessionResult[];
   revertResult?: RevertSessionResult;
+  revertHistory?: RevertHistoryData[];
   deletedCount?: number;
 }
 
@@ -104,4 +107,13 @@ export interface RevertSessionResult {
   success: boolean;
   message: string;
   errors: string[];
+}
+
+export interface RevertHistoryData {
+  revertId: string;
+  timestamp: string;
+  targetState: 'pre' | 'post';
+  filesRestored: string[];
+  status: 'success' | 'failed';
+  errorMessage?: string;
 }

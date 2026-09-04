@@ -1,4 +1,4 @@
-import type { HistoryEntry, HistorySession } from './types.js';
+import type { HistoryEntry, HistorySession, RevertHistoryEntry, RevertHistory } from './types.js';
 
 export interface HistoryStore {
   saveSession(entry: HistoryEntry): Promise<void>;
@@ -9,4 +9,6 @@ export interface HistoryStore {
   getRecentSessions(limit: number): Promise<HistorySession[]>;
   cleanupOldSessions(retentionMonths: number): Promise<number>;
   wipeAllHistory(): Promise<number>;
+  saveRevertHistory(sessionId: string, entry: RevertHistoryEntry): Promise<void>;
+  getRevertHistory(sessionId: string): Promise<RevertHistory>;
 }

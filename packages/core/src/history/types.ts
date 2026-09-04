@@ -39,3 +39,17 @@ export interface HistoryEntry {
   preSnapshot: SnapshotData;
   postSnapshot: SnapshotData;
 }
+
+export interface RevertHistoryEntry {
+  revertId: string;
+  timestamp: string;
+  targetState: 'pre' | 'post';
+  filesRestored: string[];
+  status: 'success' | 'failed';
+  errorMessage?: string;
+}
+
+export interface RevertHistory {
+  sessionId: string;
+  reverts: RevertHistoryEntry[];
+}

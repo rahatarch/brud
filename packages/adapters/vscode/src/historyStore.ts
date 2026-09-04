@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult } from '@brud/core';
+import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory } from '@brud/core';
 import { revertSession } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 import { getWorkspaceFolders } from './workspace';
@@ -41,6 +41,10 @@ export class WorkspaceHistoryStore implements HistoryStore {
 
   private postFile(sessionId: string): string {
     return path.join(this.sessionDir(sessionId), 'post.json');
+  }
+
+  private revertsFile(sessionId: string): string {
+    return path.join(this.sessionDir(sessionId), 'reverts.json');
   }
 
   private mapToObject(map: Map<string, string>): Record<string, string> {
@@ -319,9 +323,62 @@ export class WorkspaceHistoryStore implements HistoryStore {
         success: false,
         message: `Session ${sessionId} not found`,
         errors: [`Session ${sessionId} does not exist in history`],
+        filesRestored: [],
       };
     }
 
-    return revertSession(entry, targetState, this.fileSystem, getWorkspaceFolders());
+    const result = await revertSession(
+      entry,
+      targetState,
+      this.fileSystem,
+      getWorkspaceFolders(),
+      (revertEntry) => {
+        this.saveRevertHistory(sessionId, revertEntry).catch(() => {});
+      },
+    );
+
+    return result;
+  }
+
+  async saveRevertHistory(sessionId: string, entry: RevertHistoryEntry): Promise<void> {
+    const revertsPath = this.revertsFile(sessionId);
+    let reverts: RevertHistoryEntry[] = [];
+
+    if (await this.fileSystem.exists(revertsPath)) {
+      const raw = await this.fileSystem.readFile(revertsPath);
+      try {
+        const existing = JSON.parse(raw);
+        if (Array.isArray(existing)) {
+          reverts = existing;
+        }
+      } catch {
+        // If file is corrupt, start fresh
+      }
+    }
+
+    reverts.push(entry);
+    await this.fileSystem.writeFile(revertsPath, JSON.stringify(reverts, null, 2));
+  }
+
+  async getRevertHistory(sessionId: string): Promise<RevertHistory> {
+    const revertsPath = this.revertsFile(sessionId);
+    let reverts: RevertHistoryEntry[] = [];
+
+    if (await this.fileSystem.exists(revertsPath)) {
+      const raw = await this.fileSystem.readFile(revertsPath);
+      try {
+        const existing = JSON.parse(raw);
+        if (Array.isArray(existing)) {
+          reverts = existing;
+        }
+      } catch {
+        // If file is corrupt, return empty history
+      }
+    }
+
+    return {
+      sessionId,
+      reverts,
+    };
   }
 }

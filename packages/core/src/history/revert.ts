@@ -1,6 +1,6 @@
 import { applyPatch, parsePatch } from 'diff';
 import * as path from 'path';
-import type { HistoryEntry, OperationResult } from './types.js';
+import type { HistoryEntry, OperationResult, RevertHistoryEntry } from './types.js';
 import type { FileSystem } from '../types/filesystem.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
 
@@ -8,6 +8,7 @@ export interface RevertResult {
   success: boolean;
   message: string;
   errors: string[];
+  filesRestored: string[];
 }
 
 function applyDiff(content: string, diff: string): string | false {
@@ -62,8 +63,10 @@ export async function revertSession(
   targetState: 'pre' | 'post',
   fs: FileSystem,
   workspaceFolders: string[],
+  onRevertComplete?: (revertEntry: RevertHistoryEntry) => void,
 ): Promise<RevertResult> {
   const errors: string[] = [];
+  const filesRestored: string[] = [];
   const { session, preSnapshot, postSnapshot } = entry;
   const preFiles = preSnapshot.files;
   const postFiles = postSnapshot.files;
@@ -81,6 +84,7 @@ export async function revertSession(
             break;
           }
           await revertFileContent(result.resolvedPath, targetState, preFiles, postFiles, fs, errors);
+          filesRestored.push(result.resolvedPath);
           break;
         }
 
@@ -94,6 +98,7 @@ export async function revertSession(
           if (targetState === 'pre') {
             if (await fs.exists(resolvedPath)) {
               await fs.deleteFile(resolvedPath);
+              filesRestored.push(resolvedPath);
             }
           } else {
             const postDiff = postFiles.get(resolvedPath);
@@ -109,6 +114,7 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
               }
               await fs.writeFile(resolvedPath, reconstructed);
+              filesRestored.push(resolvedPath);
             }
           }
           break;
@@ -129,10 +135,12 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
               }
               await fs.writeFile(resolvedPath, preContent);
+              filesRestored.push(resolvedPath);
             }
           } else {
             if (await fs.exists(resolvedPath)) {
               await fs.deleteFile(resolvedPath);
+              filesRestored.push(resolvedPath);
             }
           }
           break;
@@ -149,10 +157,12 @@ export async function revertSession(
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
+                filesRestored.push(fromResult.resolvedPath);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
                 await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
+                filesRestored.push(toResult.resolvedPath);
               }
             }
           }
@@ -174,6 +184,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
+                filesRestored.push(fromResult.resolvedPath);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -182,6 +193,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.renameFile(fromResult.resolvedPath, toResult.resolvedPath);
+                filesRestored.push(toResult.resolvedPath);
               }
             }
           }
@@ -199,6 +211,7 @@ export async function revertSession(
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.deleteFile(toResult.resolvedPath);
+                filesRestored.push(toResult.resolvedPath);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -208,6 +221,7 @@ export async function revertSession(
                 }
                 const content = await fs.readFile(fromResult.resolvedPath);
                 await fs.writeFile(toResult.resolvedPath, content);
+                filesRestored.push(toResult.resolvedPath);
               }
             }
           }
@@ -228,6 +242,7 @@ export async function revertSession(
           if (targetState === 'pre') {
             if (await fs.exists(resolvedDirPath)) {
               await fs.deleteDirectoryRecursive(resolvedDirPath);
+              filesRestored.push(resolvedDirPath);
             }
           } else {
             await fs.createDirectory(resolvedDirPath);
@@ -237,6 +252,7 @@ export async function revertSession(
               const parentDir = path.dirname(filePath);
               await fs.createDirectory(parentDir);
               await fs.writeFile(filePath, '');
+              filesRestored.push(filePath);
             }
           }
           break;
@@ -262,12 +278,14 @@ export async function revertSession(
                 await fs.createDirectory(parentDir);
                 if (content) {
                   await fs.writeFile(filePath, content);
+                  filesRestored.push(filePath);
                 }
               }
             }
           } else {
             if (await fs.exists(resolvedDirPath)) {
               await fs.deleteDirectoryRecursive(resolvedDirPath);
+              filesRestored.push(resolvedDirPath);
             }
           }
           break;
@@ -288,6 +306,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.moveDirectory(toResult.resolvedPath, fromResult.resolvedPath);
+                filesRestored.push(fromResult.resolvedPath);
               }
             } else {
               if (await fs.exists(fromResult.resolvedPath)) {
@@ -296,6 +315,7 @@ export async function revertSession(
                   await fs.createDirectory(parentDir);
                 }
                 await fs.moveDirectory(fromResult.resolvedPath, toResult.resolvedPath);
+                filesRestored.push(toResult.resolvedPath);
               }
             }
           }
@@ -316,17 +336,39 @@ export async function revertSession(
     }
   }
 
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const revertId = `REVERT-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+
+  let result: RevertResult;
   if (errors.length > 0) {
-    return {
+    result = {
       success: false,
       message: `Revert to ${targetState}-patch state completed with ${errors.length} error(s)`,
       errors,
+      filesRestored,
+    };
+  } else {
+    result = {
+      success: true,
+      message: `Successfully reverted to ${targetState}-patch state (${session.operations.length} operations reversed)`,
+      errors: [],
+      filesRestored,
     };
   }
 
-  return {
-    success: true,
-    message: `Successfully reverted to ${targetState}-patch state (${session.operations.length} operations reversed)`,
-    errors: [],
+  const revertEntry: RevertHistoryEntry = {
+    revertId,
+    timestamp: now.toISOString(),
+    targetState,
+    filesRestored,
+    status: result.success ? 'success' : 'failed',
+    errorMessage: result.success ? undefined : errors.join('; '),
   };
+
+  if (onRevertComplete) {
+    onRevertComplete(revertEntry);
+  }
+
+  return result;
 }

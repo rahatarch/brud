@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { WebviewMessage, ExtensionMessage, HistorySessionResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData } from '@brud/protocol';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
@@ -51,6 +51,9 @@ export class BrudMainWindowManager {
         case 'getHistory':
           await this._handleGetHistory();
           break;
+        case 'getRevertHistory':
+          await this._handleGetRevertHistory(data.sessionId);
+          break;
         case 'revertSession':
           await this._handleRevertSession(data.sessionId, data.targetState);
           break;
@@ -83,6 +86,25 @@ export class BrudMainWindowManager {
     }));
 
     this._panel?.webview.postMessage({ command: 'historyResult', history } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetRevertHistory(sessionId?: string): Promise<void> {
+    if (!this._historyStore || !sessionId) {
+      this._panel?.webview.postMessage({ command: 'revertHistoryResult', revertHistory: [] } satisfies ExtensionMessage);
+      return;
+    }
+
+    const result = await this._historyStore.getRevertHistory(sessionId);
+    const revertHistory: RevertHistoryData[] = result.reverts.map(r => ({
+      revertId: r.revertId,
+      timestamp: r.timestamp,
+      targetState: r.targetState,
+      filesRestored: r.filesRestored,
+      status: r.status,
+      errorMessage: r.errorMessage,
+    }));
+
+    this._panel?.webview.postMessage({ command: 'revertHistoryResult', revertHistory } satisfies ExtensionMessage);
   }
 
   private async _handleRevertSession(sessionId?: string, targetState?: 'pre' | 'post'): Promise<void> {
