@@ -44,6 +44,7 @@ export interface FileOperationResult {
   message: string;
   errors: string[];
   operationResults: OperationResult[];
+  sessionId?: string;
 }
 
 
@@ -55,9 +56,10 @@ export async function executeFileOperations(
   historyStore?: HistoryStore,
   originalPrompt?: string,
   terminalExecutor?: TerminalExecutor,
+  sessionIdOverride?: string,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
-    return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'], operationResults: [] };
+    return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'], operationResults: [], sessionId: undefined };
   }
 
   const errors: string[] = [];
@@ -69,6 +71,7 @@ export async function executeFileOperations(
   let preSnapshot: SnapshotData | undefined;
   const preResolvedMultiFiles: Map<number, string[]> = new Map();
   const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
+  let existingSessionData: { filesAffected: string[]; preSnapshot: SnapshotData; postSnapshot: SnapshotData; operationResults: OperationResult[] } | undefined;
 
   if (historyStore) {
     for (let i = 0; i < operations.length; i++) {
@@ -130,9 +133,31 @@ export async function executeFileOperations(
     }
 
     const now = new Date();
-    const existingSessions = await historyStore.getAllSessions();
-    const seq = getNextSequenceNumber(existingSessions);
-    sessionId = generateSessionId(now, seq);
+    if (sessionIdOverride) {
+      sessionId = sessionIdOverride;
+    } else {
+      const existingSessions = await historyStore.getAllSessions();
+      const seq = getNextSequenceNumber(existingSessions);
+      sessionId = generateSessionId(now, seq);
+    }
+
+    if (sessionIdOverride && historyStore) {
+      const existingEntry = await historyStore.getSession(sessionIdOverride);
+      if (existingEntry) {
+        existingSessionData = {
+          filesAffected: existingEntry.session.filesAffected,
+          preSnapshot: existingEntry.preSnapshot,
+          postSnapshot: existingEntry.postSnapshot,
+          operationResults: existingEntry.session.operations,
+        };
+        for (const f of existingSessionData.filesAffected) {
+          if (!filesAffected.includes(f)) {
+            filesAffected.push(f);
+          }
+        }
+      }
+    }
+
     preSnapshot = await createSnapshot(sessionId, 'pre', fs, filesAffected);
   }
 
@@ -1263,7 +1288,7 @@ operationResults.push({
     }
   }
 
-  let result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] };
+  let result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[]; sessionId?: string };
 
   if (extractionResults.length > 0) {
     const allSucceeded = extractionResults.length === operations.filter(o => o.kind === 'extract_structure').length;
@@ -1319,7 +1344,28 @@ operationResults.push({
   }
 
   if (historyStore && sessionId && preSnapshot) {
+    if (existingSessionData) {
+      for (const [filePath, content] of existingSessionData.preSnapshot.files) {
+        if (!preSnapshot.files.has(filePath)) {
+          preSnapshot.files.set(filePath, content);
+        }
+      }
+    }
+
     const postSnapshot = await createSnapshot(sessionId, 'post', fs, filesAffected, preSnapshot);
+
+    if (existingSessionData) {
+      for (const [filePath, diff] of existingSessionData.postSnapshot.files) {
+        if (!postSnapshot.files.has(filePath)) {
+          postSnapshot.files.set(filePath, diff);
+        }
+      }
+    }
+
+    const mergedOperationResults = existingSessionData
+      ? [...existingSessionData.operationResults, ...operationResults]
+      : operationResults;
+
     await recordAndSaveSession(
       operations,
       { success: result.success, message: result.message, errors: result.errors },
@@ -1328,10 +1374,10 @@ operationResults.push({
       preSnapshot,
       postSnapshot,
       historyStore,
-      operationResults,
+      mergedOperationResults,
       sessionId,
     );
   }
 
-  return result;
+  return { ...result, sessionId };
 }

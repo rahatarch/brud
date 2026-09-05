@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Send, PlusCircle, ExternalLink, Copy, Check } from 'lucide-react';
+import { Send, PlusCircle, ExternalLink, Copy, Check, Eye } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
 import ReadResultsPanel from './components/ReadResultsPanel';
+import DiffPreviewPanel from './components/DiffPreviewPanel';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
 function App() {
@@ -24,6 +25,10 @@ function App() {
     return <ReadResultsPanel />;
   }
 
+  if (viewMode === 'diff-preview') {
+    return <DiffPreviewPanel />;
+  }
+
   const [inputText, setInputText] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
@@ -40,6 +45,11 @@ function App() {
     sendPrompt(inputText);
     sendToExtension({ command: 'applyPatch', text: inputText });
     setInputText('');
+  };
+
+  const handlePreview = () => {
+    if (!inputText.trim()) return;
+    sendToExtension({ command: 'previewPatch', text: inputText });
   };
 
   useEffect(() => {
@@ -168,22 +178,30 @@ function App() {
             Create New Brud Code Session
           </button>
         ) : (
-          <div className="relative">
-            <div className="w-full min-h-[100px] overflow-y-auto">
-              <textarea
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Paste your Brud Prompt here..."
-                className="w-full min-h-[100px] rounded-md bg-surface-2 border border-border p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none focus:border-primary text-sm"
-              />
+          <div className="bg-surface-2 border border-border rounded-md">
+            <textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Paste your Brud Prompt here..."
+              className="w-full min-h-[100px] rounded-t-md bg-surface-2 p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none text-sm"
+            />
+            <div className="flex items-center justify-end gap-1 px-2 py-1.5 bg-surface-2 rounded-b-md">
+              <button
+                onClick={handlePreview}
+                className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text hover:brightness-125 cursor-pointer rounded transition-all"
+                title="Preview Diff"
+              >
+                <Eye size={16} />
+              </button>
+              <button
+                onClick={handleSend}
+                className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text hover:brightness-125 cursor-pointer rounded transition-all"
+                title="Execute"
+              >
+                <Send size={16} />
+              </button>
             </div>
-            <button
-              onClick={handleSend}
-              className="absolute bottom-4 right-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white w-9 h-9 rounded-md flex items-center justify-center cursor-pointer"
-            >
-              <Send size={16} />
-            </button>
           </div>
         )}
       </div>

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations } from '@brud/core';
 
 export class BrudMainWindowManager {
@@ -78,6 +78,9 @@ export class BrudMainWindowManager {
           break;
         case 'wipeHistory':
           await this._handleWipeHistory();
+          break;
+        case 'getSessionSnapshots':
+          await this._handleGetSessionSnapshots(data.sessionId);
           break;
       }
     });
@@ -230,6 +233,38 @@ export class BrudMainWindowManager {
 
     const deletedCount = await this._historyStore.wipeAllHistory();
     this._panel?.webview.postMessage({ command: 'historyWiped', deletedCount, history: [] } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetSessionSnapshots(sessionId?: string): Promise<void> {
+    if (!this._historyStore || !sessionId) {
+      this._panel?.webview.postMessage({ command: 'sessionSnapshotsResult', snapshotData: null } satisfies ExtensionMessage);
+      return;
+    }
+
+    const entry = await this._historyStore.getSession(sessionId);
+    if (!entry) {
+      this._panel?.webview.postMessage({ command: 'sessionSnapshotsResult', snapshotData: null } satisfies ExtensionMessage);
+      return;
+    }
+
+    const preSnapshot: SnapshotDataResult = {
+      sessionId: entry.preSnapshot.sessionId,
+      snapshotType: 'pre',
+      files: Object.fromEntries(entry.preSnapshot.files),
+      diffFromPrevious: entry.preSnapshot.diffFromPrevious,
+    };
+
+    const postSnapshot: SnapshotDataResult = {
+      sessionId: entry.postSnapshot.sessionId,
+      snapshotType: 'post',
+      files: Object.fromEntries(entry.postSnapshot.files),
+      diffFromPrevious: entry.postSnapshot.diffFromPrevious,
+    };
+
+    this._panel?.webview.postMessage({
+      command: 'sessionSnapshotsResult',
+      snapshotData: { pre: preSnapshot, post: postSnapshot },
+    } satisfies ExtensionMessage);
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

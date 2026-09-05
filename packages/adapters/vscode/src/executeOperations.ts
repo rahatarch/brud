@@ -8,7 +8,8 @@ export async function executeOperationsFromVSCode(
   operations: FileOperation[],
   historyStore?: HistoryStore,
   originalPrompt?: string,
-): Promise<{ success: boolean; message: string; errors: string[]; operationResults: OperationResult[] }> {
+  sessionIdOverride?: string,
+): Promise<{ success: boolean; message: string; errors: string[]; operationResults: OperationResult[]; sessionId?: string }> {
   const fs = new VSCodeFileSystem();
   const workspaceFolders = getWorkspaceFolders();
   
@@ -21,5 +22,5 @@ export async function executeOperationsFromVSCode(
     };
   }
   
-  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand });
+  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand }, sessionIdOverride);
 }

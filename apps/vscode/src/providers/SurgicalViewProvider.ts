@@ -5,10 +5,12 @@ import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
 import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
+import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData } from '@brud/protocol';
+import { createTwoFilesPatch } from 'diff';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData, DiffPreviewData, DiffFileEntry } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -36,6 +38,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _mainWindowProvider: any;
   private _structurePanelManager: any;
   private _readPanelManager: any;
+  private _diffPreviewPanelManager: BrudDiffPreviewPanelManager;
+  private _originalPrompt: string = '';
+  private _diffPreviewSessionId: string | undefined = undefined;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -44,10 +49,15 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     mainWindowProvider?: any,
     structurePanelManager?: any,
     readPanelManager?: any,
+    diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
     this._readPanelManager = readPanelManager;
+    this._diffPreviewPanelManager = diffPreviewPanelManager || new BrudDiffPreviewPanelManager(_extensionUri);
+    this._diffPreviewPanelManager.setMessageHandler((msg) => {
+      this._handleDiffPreviewPanelMessage(msg);
+    });
   }
 
   private _groupOperationsByFile(operations: FileOperation[]): Map<string, FileOperation[]> {
@@ -435,6 +445,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         case 'executeAllFiles':
           await this._handleExecuteAllFiles();
           break;
+        case 'rejectPreview':
+          await this._handleRejectPreview();
+          break;
         case 'extractStructure':
           await this._handleExtractStructure(data.text ?? '');
           break;
@@ -446,6 +459,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handlePreviewPatch(text: string) {
+    this._originalPrompt = text;
     let operations;
     try {
       operations = parseOperations(text);
@@ -463,7 +477,92 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    await this._showPreviewForFile(this._fileList[0]);
+    const diffFiles: DiffFileEntry[] = [];
+
+    for (const filePath of this._fileList) {
+      const result = validateWorkspacePath(filePath, getWorkspaceFolders());
+      const fileOps = this._operationsByFile.get(filePath) || [];
+      const searchReplaceOps = fileOps.filter(op => op.kind === 'search_replace');
+      const createFileOps = fileOps.filter(op => op.kind === 'create_file');
+      const appendFileOps = fileOps.filter(op => op.kind === 'append_file');
+
+      let originalContent = '';
+      let modifiedContent = '';
+
+      if (result.valid) {
+        try {
+          const document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
+          const docLines: string[] = [];
+          for (let i = 0; i < document.lineCount; i++) {
+            docLines.push(document.lineAt(i).text);
+          }
+          originalContent = docLines.join('\n');
+        } catch {
+          originalContent = '';
+        }
+      }
+
+      if (createFileOps.length > 0) {
+        modifiedContent = createFileOps[0].content;
+      } else if (appendFileOps.length > 0) {
+        modifiedContent = originalContent;
+        for (const op of appendFileOps) {
+          if (op.position === 'end') {
+            modifiedContent += op.content;
+          } else {
+            modifiedContent = op.content + modifiedContent;
+          }
+        }
+      } else if (searchReplaceOps.length > 0) {
+        const blocks: PatchBlock[] = searchReplaceOps.map(op => ({
+          index: op.index,
+          search: op.search,
+          searchMeat: op.search.replace(/\s+/g, ''),
+          replace: op.replace,
+        }));
+
+        const docLines = originalContent.split('\n');
+        const matches = findMatches(docLines, blocks, (msg, block) => {
+          this._outputChannel.appendLine(`WARNING: ${msg}`);
+          if (block) {
+            this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
+          }
+        });
+
+        if (matches) {
+          modifiedContent = reconstructContent(docLines, matches);
+        } else {
+          modifiedContent = originalContent;
+        }
+      } else {
+        modifiedContent = originalContent;
+      }
+
+      const fileExtension = filePath.split('.').pop() || '';
+      const languageMap: Record<string, string> = {
+        ts: 'typescript', tsx: 'typescriptreact', js: 'javascript',
+        jsx: 'javascriptreact', json: 'json', css: 'css', html: 'html',
+        md: 'markdown', py: 'python', rs: 'rust', go: 'go', java: 'java',
+        cpp: 'cpp', c: 'c', h: 'c', hpp: 'cpp', yaml: 'yaml', yml: 'yaml',
+        xml: 'xml', sh: 'shellscript', bash: 'shellscript', sql: 'sql',
+        vue: 'vue', svelte: 'svelte', scss: 'scss', less: 'less',
+      };
+
+      diffFiles.push({
+        filePath,
+        originalContent,
+        modifiedContent,
+        languageId: languageMap[fileExtension] || 'plaintext',
+      });
+    }
+
+    const diffPreviewData: DiffPreviewData = {
+      files: diffFiles,
+      currentIndex: 0,
+    };
+
+    this._diffPreviewPanelManager.openDiffPreview(diffPreviewData);
+
     const showMsg: ExtensionMessage = { command: 'showPreviewNavigation' };
     this._view?.webview.postMessage(showMsg);
   }
@@ -615,7 +714,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
     const filePath = this._fileList[this._currentFileIndex];
     const operations = this._operationsByFile.get(filePath) || [];
-    const result = await executeFileOperations(operations, new VSCodeFileSystem(), getWorkspaceFolders());
+    const folders = getWorkspaceFolders();
+    const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
+    const result = await executeOperationsFromVSCode(operations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
@@ -623,7 +724,16 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     if (result.success) {
-      this._removeFileFromPreview(filePath);
+      if (result.sessionId) {
+        this._diffPreviewSessionId = result.sessionId;
+      }
+
+      this._diffPreviewPanelManager.postMessage({
+        command: 'filePatched',
+        fileIndex: this._currentFileIndex,
+      });
+
+      await this._closePreviewTabs();
     }
   }
 
@@ -637,7 +747,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       allOperations.push(...ops);
     }
 
-    const result = await executeFileOperations(allOperations, new VSCodeFileSystem(), getWorkspaceFolders());
+    const folders = getWorkspaceFolders();
+    const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
+    const result = await executeOperationsFromVSCode(allOperations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
@@ -645,14 +757,57 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     if (result.success) {
-      for (const filePath of this._fileList) {
-        await this._closePreviewTabs();
+      if (result.sessionId) {
+        this._diffPreviewSessionId = result.sessionId;
       }
+
+      this._diffPreviewPanelManager.postMessage({
+        command: 'executeSuccess',
+        message: `Successfully applied ${this._fileList.length} patches`,
+      });
+      await this._closePreviewTabs();
       this._fileList = [];
       this._operationsByFile.clear();
       this._currentFileIndex = 0;
+      this._diffPreviewSessionId = undefined;
       const hideMsg: ExtensionMessage = { command: 'hidePreviewNavigation' };
       this._view?.webview.postMessage(hideMsg);
+    }
+  }
+
+  private async _handleRejectPreview() {
+    this._diffPreviewPanelManager.closePanel();
+    this._fileList = [];
+    this._operationsByFile.clear();
+    this._currentFileIndex = 0;
+    this._diffPreviewSessionId = undefined;
+    const hideMsg: ExtensionMessage = { command: 'hidePreviewNavigation' };
+    this._view?.webview.postMessage(hideMsg);
+  }
+
+  private async _handleDiffPreviewPanelMessage(message: any) {
+    switch (message.command) {
+      case 'executeCurrentFile':
+        await this._handleExecuteCurrentFile();
+        break;
+      case 'executeAllFiles':
+        await this._handleExecuteAllFiles();
+        break;
+      case 'rejectPreview':
+        await this._handleRejectPreview();
+        break;
+      case 'doneDiffPreview':
+        await this._handleRejectPreview();
+        break;
+      case 'closeDiffPreview':
+        this._diffPreviewPanelManager.closePanel();
+        break;
+      case 'previewPrevFile':
+        await this._handlePreviewPrevFile();
+        break;
+      case 'previewNextFile':
+        await this._handlePreviewNextFile();
+        break;
     }
   }
 

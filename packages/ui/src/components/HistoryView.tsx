@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare, X } from 'lucide-react';
-import type { HistorySessionResult, RevertSessionResult, RevertHistoryData } from '@brud/protocol';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare, X, Download } from 'lucide-react';
+import type { HistorySessionResult, RevertSessionResult, RevertHistoryData, SessionSnapshotsResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
 import WipeConfirmationModal from './WipeConfirmationModal';
@@ -109,6 +109,9 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
   const [pendingIndividualTarget, setPendingIndividualTarget] = useState<'pre' | 'post' | null>(null);
   const [individualRevertResult, setIndividualRevertResult] = useState<RevertSessionResult | null>(null);
   const [individualRevertLoading, setIndividualRevertLoading] = useState(false);
+  const [exportCopied, setExportCopied] = useState(false);
+  const [snapshotData, setSnapshotData] = useState<SessionSnapshotsResult | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
 
   const toggleOperation = useCallback((operationId: string) => {
     setSelectedOperationIds(prev => {
@@ -159,6 +162,20 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
     });
     return unsubscribe;
   }, [sessionId, onBack]);
+
+  useEffect(() => {
+    setSnapshotData(null);
+    setSnapshotLoading(true);
+    sendToExtension({ command: 'getSessionSnapshots', sessionId });
+
+    const unsubscribe = onExtensionMessage((message) => {
+      if (message.command === 'sessionSnapshotsResult') {
+        setSnapshotData(message.snapshotData);
+        setSnapshotLoading(false);
+      }
+    });
+    return unsubscribe;
+  }, [sessionId]);
 
   const handleRevert = useCallback((targetState: 'pre' | 'post') => {
     setPendingTargetState(targetState);
@@ -212,6 +229,54 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
   const dismissIndividualResult = useCallback(() => {
     setIndividualRevertResult(null);
   }, []);
+
+  const handleExportJSON = useCallback(() => {
+    const preSnapshot = snapshotData?.pre;
+    const postSnapshot = snapshotData?.post;
+
+    const exportData = {
+      session: {
+        sessionId: session.sessionId,
+        timestamp: session.timestamp,
+        status: session.status,
+        operationCount: session.operationCount,
+        operationTypes: session.operationTypes,
+        terminalCommands: session.terminalCommands,
+        revertCommands: session.revertCommands,
+        isDeleted: session.isDeleted,
+        deletedAt: session.deletedAt,
+        expiresAt: session.expiresAt,
+        deletedBy: session.deletedBy,
+        deleteReason: session.deleteReason,
+        renewedAt: session.renewedAt,
+      },
+      originalPrompt: session.originalPrompt,
+      operations: session.operations,
+      filesAffected: session.filesAffected,
+      metadata: session.metadataUsed,
+      snapshots: {
+        pre: preSnapshot ? {
+          sessionId: preSnapshot.sessionId,
+          snapshotType: preSnapshot.snapshotType,
+          files: preSnapshot.files,
+          diffFromPrevious: preSnapshot.diffFromPrevious,
+        } : null,
+        post: postSnapshot ? {
+          sessionId: postSnapshot.sessionId,
+          snapshotType: postSnapshot.snapshotType,
+          files: postSnapshot.files,
+          diffFromPrevious: postSnapshot.diffFromPrevious,
+        } : null,
+      },
+      revertHistory: revertHistory || [],
+      softDeleteHistory: session.softDeleteHistory || [],
+    };
+
+    navigator.clipboard.writeText(JSON.stringify(exportData, null, 2)).then(() => {
+      setExportCopied(true);
+      setTimeout(() => setExportCopied(false), 2000);
+    });
+  }, [session, snapshotData, revertHistory]);
 
   try {
     return (
@@ -275,6 +340,14 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
           >
             <History size={16} />
             View Revert History ({revertHistory ? revertHistory.length : 0})
+          </button>
+          <button
+            onClick={handleExportJSON}
+            disabled={snapshotLoading}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border bg-surface text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer disabled:opacity-50"
+          >
+            <Download size={16} />
+            {exportCopied ? 'Copied!' : 'Export to JSON'}
           </button>
         </div>
 
