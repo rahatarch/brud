@@ -5,6 +5,7 @@ import { BrudMainWindowManager } from './providers/MainWindowProvider';
 import { BrudStructurePanelManager } from './providers/StructurePanelProvider';
 import { BrudReadPanelManager } from './providers/ReadPanelProvider';
 import { BrudDiffPreviewPanelManager } from './providers/DiffPreviewPanelProvider';
+import { BrudUnifiedResultsPanelManager } from './providers/UnifiedResultsPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
@@ -33,6 +34,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.extensionUri,
   );
 
+  const unifiedResultsPanelManager = new BrudUnifiedResultsPanelManager(
+    context.extensionUri,
+  );
+
   const provider = new BrudSRViewProvider(
     context.extensionUri,
     logger.channel,
@@ -41,6 +46,7 @@ export function activate(context: vscode.ExtensionContext) {
     structurePanelManager,
     readPanelManager,
     diffPreviewPanelManager,
+    unifiedResultsPanelManager,
   );
 
   // Register the Virtual Document Provider for surgical diff previews

@@ -38,6 +38,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _mainWindowProvider: any;
   private _structurePanelManager: any;
   private _readPanelManager: any;
+  private _unifiedResultsPanelManager: any;
   private _diffPreviewPanelManager: BrudDiffPreviewPanelManager;
   private _originalPrompt: string = '';
   private _diffPreviewSessionId: string | undefined = undefined;
@@ -50,10 +51,12 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     structurePanelManager?: any,
     readPanelManager?: any,
     diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
+    unifiedResultsPanelManager?: any,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
     this._readPanelManager = readPanelManager;
+    this._unifiedResultsPanelManager = unifiedResultsPanelManager;
     this._diffPreviewPanelManager = diffPreviewPanelManager || new BrudDiffPreviewPanelManager(_extensionUri);
     this._diffPreviewPanelManager.setMessageHandler((msg) => {
       this._handleDiffPreviewPanelMessage(msg);
@@ -726,7 +729,7 @@ fileIndex: this._currentFileIndex,
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
-      this._readPanelManager?.openReadPanel(readData);
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ readResults: readData });
     }
 
     if (result.success) {
@@ -759,7 +762,7 @@ fileIndex: this._currentFileIndex,
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
-      this._readPanelManager?.openReadPanel(readData);
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ readResults: readData });
     }
 
     if (result.success) {
@@ -897,43 +900,40 @@ fileIndex: this._currentFileIndex,
         parsedMessage = null;
       }
 
-      const panelsOpened: string[] = [];
+      const unifiedResults: Record<string, any> = {};
 
       if (parsedMessage && parsedMessage.extractionResults) {
-        const structureResults: StructureResult[] = parsedMessage.extractionResults.map((item: any) => ({
+        unifiedResults.extractionResults = parsedMessage.extractionResults.map((item: any) => ({
           json: item.json,
           directoryPath: item.directoryPath,
           depth: item.depth,
           fileCount: item.fileCount,
           directoryCount: item.directoryCount,
         }));
-        this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
-        panelsOpened.push('Structure');
       }
 
       if (parsedMessage && parsedMessage.readResults) {
-        const readResultData: ReadResultData = parsedMessage.readResults.reduce(
-          (merged: ReadResultData, d: any) => ({
+        unifiedResults.readResults = parsedMessage.readResults.reduce(
+          (merged: any, d: any) => ({
             files: [...(merged.files || []), ...(d.files || [])],
             totalFiles: merged.totalFiles + (d.totalFiles || 0),
             totalSize: merged.totalSize + (d.totalSize || 0),
           }),
           { files: [], totalFiles: 0, totalSize: 0 }
         );
-        this._readPanelManager?.openReadPanel(readResultData);
-        panelsOpened.push('Read');
       }
 
       const searchOpResults = result.operationResults.filter(r => r.kind === 'search_files' && r.status === 'success');
       if (searchOpResults.length > 0) {
-        const searchData = parsedMessage && parsedMessage.totalMatches !== undefined ? parsedMessage : searchOpResults;
-        this._structurePanelManager?.openSearchResultsPanel(searchData);
-        panelsOpened.push('Search Results');
+        unifiedResults.search_files = parsedMessage && parsedMessage.totalMatches !== undefined ? parsedMessage : searchOpResults;
       }
 
       if (parsedMessage && parsedMessage.root !== undefined && parsedMessage.totalFiles !== undefined) {
-        this._structurePanelManager?.openStructurePanel(parsedMessage);
-        panelsOpened.push('Codebase Metadata');
+        unifiedResults.codebase_metadata = parsedMessage;
+      }
+
+      if (Object.keys(unifiedResults).length > 0) {
+        this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
       }
 
       if (!result.success) {
@@ -941,9 +941,7 @@ fileIndex: this._currentFileIndex,
         this._view?.webview.postMessage(errMsg);
         this._outputChannel.show(true);
       } else {
-        const report = panelsOpened.length > 0
-          ? `Operations completed. Results available in the following panels: ${panelsOpened.join(', ')}.`
-          : result.message;
+        const report = result.message;
         const successMsg: ExtensionMessage = { command: 'success', message: report };
         this._view?.webview.postMessage(successMsg);
       }
@@ -1051,7 +1049,7 @@ fileIndex: this._currentFileIndex,
     const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
     const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
     this._view?.webview.postMessage(successMsg);
-    this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+    this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ extractionResults: structureResults });
     this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
   }
 

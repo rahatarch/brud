@@ -6,7 +6,11 @@ import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
 import ReadResultsPanel from './components/ReadResultsPanel';
 import DiffPreviewPanel from './components/DiffPreviewPanel';
+import UnifiedResultsPanel from './components/UnifiedResultsPanel';
+import { initResultRegistry } from './result-registry/init';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
+
+initResultRegistry();
 
 function App() {
   const root = document.getElementById('root');
@@ -27,6 +31,10 @@ function App() {
 
   if (viewMode === 'diff-preview') {
     return <DiffPreviewPanel />;
+  }
+
+  if (viewMode === 'unified-results') {
+    return <UnifiedResultsPanel />;
   }
 
   const [inputText, setInputText] = useState('');
