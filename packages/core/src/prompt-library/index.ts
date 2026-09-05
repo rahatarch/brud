@@ -16,6 +16,9 @@ import {
   extractStructurePrompt,
   searchFilesPrompt,
   codebaseMetadataPrompt,
+  readFilePrompt,
+  readFilesPrompt,
+  readDirectoryPrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -117,6 +120,24 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Codebase Metadata',
       description: 'Get a quick summary of codebase scale and density',
       content: codebaseMetadataPrompt,
+    },
+    {
+      id: 'read-file',
+      title: 'Read File',
+      description: 'Read a file with optional import following',
+      content: readFilePrompt,
+    },
+    {
+      id: 'read-files',
+      title: 'Read Multiple Files',
+      description: 'Read files matching a pattern',
+      content: readFilesPrompt,
+    },
+    {
+      id: 'read-directory',
+      title: 'Read Directory',
+      description: 'Read all files in a directory',
+      content: readDirectoryPrompt,
     },
   ],
 };

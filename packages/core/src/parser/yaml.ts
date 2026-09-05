@@ -295,6 +295,74 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'read_file': {
+        const path = parsed.path as string | undefined;
+        if (!path) {
+          throw new Error('Missing path field in read_file operation');
+        }
+        const isImportRead = parsed.isImportRead as boolean | undefined;
+        const maxDepth = parsed.maxDepth as number | undefined;
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
+        operations.push({
+          kind: 'read_file',
+          path,
+          isImportRead: isImportRead ?? false,
+          maxDepth: maxDepth ?? 5,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          index: String(index),
+        });
+        break;
+      }
+      case 'read_files': {
+        const patterns = parsed.patterns as string[] | undefined;
+        if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
+          throw new Error('Missing or empty patterns field in read_files operation');
+        }
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const directory = parsed.directory as string | undefined;
+        const recursive = parsed.recursive as boolean | undefined;
+        const maxResults = parsed.maxResults as number | undefined;
+        const isImportRead = parsed.isImportRead as boolean | undefined;
+        const maxDepth = parsed.maxDepth as number | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
+        operations.push({
+          kind: 'read_files',
+          patterns,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          directory: directory || undefined,
+          recursive: recursive ?? true,
+          maxResults: maxResults ?? 500,
+          isImportRead: isImportRead ?? false,
+          maxDepth: maxDepth ?? 5,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          index: String(index),
+        });
+        break;
+      }
+      case 'read_directory': {
+        const directoryPath = parsed.directoryPath as string | undefined;
+        if (!directoryPath) {
+          throw new Error('Missing directoryPath field in read_directory operation');
+        }
+        const recursive = parsed.recursive as boolean | undefined;
+        const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const isImportRead = parsed.isImportRead as boolean | undefined;
+        const maxDepth = parsed.maxDepth as number | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
+        operations.push({
+          kind: 'read_directory',
+          directoryPath,
+          recursive: recursive ?? true,
+          excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          isImportRead: isImportRead ?? false,
+          maxDepth: maxDepth ?? 5,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

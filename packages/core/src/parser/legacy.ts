@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -26,6 +26,10 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let currentMultiSearch = '';
   let currentMultiReplace = '';
   let multiBuffer: string[] = [];
+  let currentReadIsImportRead = false;
+  let currentReadMaxDepth = 5;
+  let currentReadExclude: string[] = [];
+  let currentReadImportSyntax: string[] = [];
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -215,6 +219,69 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentMultiReplace = '';
   }
 
+  function flushReadFile() {
+    if (currentIndex && currentFilePath) {
+      operations.push({
+        kind: 'read_file',
+        path: currentFilePath,
+        isImportRead: currentReadIsImportRead,
+        maxDepth: currentReadMaxDepth,
+        excludePatterns: currentReadExclude.length > 0 ? [...currentReadExclude] : undefined,
+        importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        index: currentIndex,
+      });
+    }
+    currentFilePath = '';
+    currentReadIsImportRead = false;
+    currentReadMaxDepth = 5;
+    currentReadExclude = [];
+    currentReadImportSyntax = [];
+  }
+
+  function flushReadFiles() {
+    if (currentIndex && currentSearchPatterns.length > 0) {
+      operations.push({
+        kind: 'read_files',
+        patterns: [...currentSearchPatterns],
+        excludePatterns: currentReadExclude.length > 0 ? [...currentReadExclude] : undefined,
+        directory: currentSearchScope || undefined,
+        recursive: true,
+        maxResults: currentSearchMaxResults,
+        isImportRead: currentReadIsImportRead,
+        maxDepth: currentReadMaxDepth,
+        importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        index: currentIndex,
+      });
+    }
+    currentSearchPatterns = [];
+    currentReadExclude = [];
+    currentSearchScope = '';
+    currentSearchMaxResults = 500;
+    currentReadIsImportRead = false;
+    currentReadMaxDepth = 5;
+    currentReadImportSyntax = [];
+  }
+
+  function flushReadDirectory() {
+    if (currentIndex && currentDirectoryPath) {
+      operations.push({
+        kind: 'read_directory',
+        directoryPath: currentDirectoryPath,
+        recursive: currentReadMaxDepth > 1,
+        excludePatterns: currentReadExclude.length > 0 ? [...currentReadExclude] : undefined,
+        isImportRead: currentReadIsImportRead,
+        maxDepth: currentReadMaxDepth,
+        importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        index: currentIndex,
+      });
+    }
+    currentDirectoryPath = '';
+    currentReadIsImportRead = false;
+    currentReadMaxDepth = 5;
+    currentReadExclude = [];
+    currentReadImportSyntax = [];
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -232,6 +299,10 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentSearchExclude = [];
     currentSearchScope = '';
     currentSearchMaxResults = 500;
+    currentReadIsImportRead = false;
+    currentReadMaxDepth = 5;
+    currentReadExclude = [];
+    currentReadImportSyntax = [];
   }
 
   for (const line of lines) {
@@ -278,6 +349,15 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const maxResultsMatch = line.match(/^MaxResults:\s*(.+)/);
     const searchFieldMatch = line.match(/^Search:\s*(.+)/);
     const replaceFieldMatch = line.match(/^Replace:\s*(.+)/);
+    const isImportReadMatch = line.match(/^isImportRead:\s*(true|false)/i);
+    const maxDepthFieldMatch = line.match(/^MaxDepth:\s*(\d+)/);
+    const readExcludeMatch = line.match(/^Exclude:\s*(.+)/);
+    const readPatternMatch = line.match(/^Pattern:\s*(.+)/);
+    const readScopeMatch = line.match(/^Scope:\s*(.+)/);
+    const readMaxResultsMatch = line.match(/^MaxResults:\s*(\d+)/);
+    const readDirectoryPathMatch = line.match(/^Directory Path:\s*(.+)/);
+    const readRecursiveMatch = line.match(/^Recursive:\s*(true|false)/i);
+    const importSyntaxMatch = line.match(/^importSyntax:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -389,6 +469,35 @@ if (searchFilesMatch) {
         currentSearchMaxResults = 500;
         currentMultiSearch = '';
         currentMultiReplace = '';
+        continue;
+      }
+      if (line.match(/^<<<<<<< READ_FILE \[([\w\d.-]+)\]/)) {
+        currentState = 'READ_FILE';
+        currentIndex = line.match(/^<<<<<<< READ_FILE \[([\w\d.-]+)\]/)![1];
+        currentFilePath = '';
+        currentReadIsImportRead = false;
+        currentReadMaxDepth = 5;
+        currentReadExclude = [];
+        continue;
+      }
+      if (line.match(/^<<<<<<< READ_FILES \[([\w\d.-]+)\]/)) {
+        currentState = 'READ_FILES';
+        currentIndex = line.match(/^<<<<<<< READ_FILES \[([\w\d.-]+)\]/)![1];
+        currentSearchPatterns = [];
+        currentReadExclude = [];
+        currentSearchScope = '';
+        currentSearchMaxResults = 500;
+        currentReadIsImportRead = false;
+        currentReadMaxDepth = 5;
+        continue;
+      }
+      if (line.match(/^<<<<<<< READ_DIRECTORY \[([\w\d.-]+)\]/)) {
+        currentState = 'READ_DIRECTORY';
+        currentIndex = line.match(/^<<<<<<< READ_DIRECTORY \[([\w\d.-]+)\]/)![1];
+        currentDirectoryPath = '';
+        currentReadIsImportRead = false;
+        currentReadMaxDepth = 5;
+        currentReadExclude = [];
         continue;
       }
       if (filePathMatch) {
@@ -784,6 +893,113 @@ if (searchFilesMatch) {
       }
       if (maxResultsMatch) {
         currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'READ_FILE') {
+      if (line.match(/^>>>>>>> END READ_FILE \[([\w\d.-]+)\]/)) {
+        if (RegExp.$1 === currentIndex) {
+          flushReadFile();
+        }
+        reset();
+        continue;
+      }
+      if (filePathMatch) {
+        currentFilePath = filePathMatch[1].trim();
+        continue;
+      }
+      if (isImportReadMatch) {
+        currentReadIsImportRead = isImportReadMatch[1].toLowerCase() === 'true';
+        continue;
+      }
+      if (maxDepthFieldMatch) {
+        currentReadMaxDepth = parseInt(maxDepthFieldMatch[1], 10);
+        continue;
+      }
+      if (readExcludeMatch) {
+        currentReadExclude = readExcludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (importSyntaxMatch) {
+        currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'READ_FILES') {
+      if (line.match(/^>>>>>>> END READ_FILES \[([\w\d.-]+)\]/)) {
+        if (RegExp.$1 === currentIndex) {
+          flushReadFiles();
+        }
+        reset();
+        continue;
+      }
+      if (readPatternMatch) {
+        currentSearchPatterns = readPatternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (readExcludeMatch) {
+        currentReadExclude = readExcludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (readScopeMatch) {
+        currentSearchScope = readScopeMatch[1].trim();
+        continue;
+      }
+      if (readMaxResultsMatch) {
+        currentSearchMaxResults = parseInt(readMaxResultsMatch[1], 10) || 500;
+        continue;
+      }
+      if (isImportReadMatch) {
+        currentReadIsImportRead = isImportReadMatch[1].toLowerCase() === 'true';
+        continue;
+      }
+      if (maxDepthFieldMatch) {
+        currentReadMaxDepth = parseInt(maxDepthFieldMatch[1], 10);
+        continue;
+      }
+      if (importSyntaxMatch) {
+        currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'READ_DIRECTORY') {
+      if (line.match(/^>>>>>>> END READ_DIRECTORY \[([\w\d.-]+)\]/)) {
+        if (RegExp.$1 === currentIndex) {
+          flushReadDirectory();
+        }
+        reset();
+        continue;
+      }
+      if (readDirectoryPathMatch) {
+        currentDirectoryPath = readDirectoryPathMatch[1].trim();
+        continue;
+      }
+      if (readRecursiveMatch) {
+        if (readRecursiveMatch[1].toLowerCase() === 'true') {
+          currentReadMaxDepth = Math.max(currentReadMaxDepth, 1);
+        }
+        continue;
+      }
+      if (readExcludeMatch) {
+        currentReadExclude = readExcludeMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      if (isImportReadMatch) {
+        currentReadIsImportRead = isImportReadMatch[1].toLowerCase() === 'true';
+        continue;
+      }
+      if (maxDepthFieldMatch) {
+        currentReadMaxDepth = parseInt(maxDepthFieldMatch[1], 10);
+        continue;
+      }
+      if (importSyntaxMatch) {
+        currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
         continue;
       }
       continue;
