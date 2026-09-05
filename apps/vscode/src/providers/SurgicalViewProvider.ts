@@ -874,150 +874,80 @@ fileIndex: this._currentFileIndex,
       return;
     }
 
-    const extractOps = operations.filter(op => op.kind === 'extract_structure');
-    if (extractOps.length > 0) {
-      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for extract_structure');
-      const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
+    const queryOps = operations.filter(op =>
+      op.kind === 'extract_structure' ||
+      op.kind === 'read_file' || op.kind === 'read_files' || op.kind === 'read_directory' ||
+      op.kind === 'search_files' ||
+      op.kind === 'codebase_metadata'
+    );
+
+    if (queryOps.length > 0) {
+      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for query operations');
+      const result = await executeFileOperations(queryOps, new VSCodeFileSystem(), getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
-      if (!result.success) {
-        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
-        this._outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
-        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
-        this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
-        this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
-        this._outputChannel.show(true);
-        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
-        this._view?.webview.postMessage(errMsg);
-        return;
+
+      for (const err of result.errors) {
+        this._outputChannel.appendLine(`  ERROR: ${err}`);
       }
 
-      if (result.errors.length > 0) {
-        this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
-        const errMsg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
-        this._view?.webview.postMessage(errMsg);
-        return;
-      }
-
-      let structureResults: StructureResult[] = [];
+      let parsedMessage: any;
       try {
-        const parsed = JSON.parse(result.message);
-        const parsedArray = Array.isArray(parsed) ? parsed : [parsed];
-        structureResults = parsedArray.map((item: any) => ({
+        parsedMessage = JSON.parse(result.message);
+      } catch {
+        parsedMessage = null;
+      }
+
+      const panelsOpened: string[] = [];
+
+      if (parsedMessage && parsedMessage.extractionResults) {
+        const structureResults: StructureResult[] = parsedMessage.extractionResults.map((item: any) => ({
           json: item.json,
           directoryPath: item.directoryPath,
           depth: item.depth,
           fileCount: item.fileCount,
           directoryCount: item.directoryCount,
         }));
-      } catch (e) {
-        this._outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
-        return;
+        this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
+        panelsOpened.push('Structure');
       }
-      const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
-      const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
-      this._view?.webview.postMessage(successMsg);
-      this._structurePanelManager?.openStructurePanel(structureResults.length === 1 ? structureResults[0] : structureResults);
-      this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
-      return;
-    }
 
-    const metadataOps = operations.filter(op => op.kind === 'codebase_metadata');
-    if (metadataOps.length > 0) {
-      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for codebase_metadata');
-      const result = await executeFileOperations(metadataOps, new VSCodeFileSystem(), getWorkspaceFolders());
-      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
-      if (result.success) {
-        let metadata: CodebaseMetadataResult;
-        try {
-          metadata = JSON.parse(result.message);
-        } catch {
-          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse codebase metadata result.' };
-          this._view?.webview.postMessage(errMsg);
-          return;
-        }
-        const report = `Analyzed codebase metadata: ${metadata.root} contains ${metadata.totalFiles} files in ${metadata.totalFolders} folders. Most dense folder: ${metadata.mostDenseFolder} with ${metadata.mostDenseCount} files.`;
-        const successMsg: ExtensionMessage = { command: 'success', message: report };
-        this._view?.webview.postMessage(successMsg);
-        this._structurePanelManager?.openStructurePanel(metadata);
-        this._outputChannel.appendLine(`Codebase metadata: ${JSON.stringify(metadata)}`);
-      } else {
-        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
-        this._outputChannel.appendLine('Operations: ' + JSON.stringify(metadataOps));
-        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
-        this._outputChannel.show(true);
-        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
-        this._view?.webview.postMessage(errMsg);
-      }
-      return;
-    }
-
-    const searchOps = operations.filter(op => op.kind === 'search_files');
-    if (searchOps.length > 0) {
-      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for search_files');
-      const result = await executeFileOperations(searchOps, new VSCodeFileSystem(), getWorkspaceFolders());
-      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
-      if (result.success) {
-        let searchData: any;
-        try {
-          searchData = JSON.parse(result.message);
-        } catch {
-          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse search results.' };
-          this._view?.webview.postMessage(errMsg);
-          return;
-        }
-        const report = `Found ${searchData.totalMatches} files matching pattern.`;
-        const successMsg: ExtensionMessage = { command: 'success', message: report };
-        this._view?.webview.postMessage(successMsg);
-        this._structurePanelManager?.openSearchResultsPanel(searchData);
-        this._outputChannel.appendLine(`Search results: ${JSON.stringify(searchData)}`);
-      } else {
-        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
-        this._outputChannel.appendLine('Operations: ' + JSON.stringify(searchOps));
-        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
-        this._outputChannel.show(true);
-        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
-        this._view?.webview.postMessage(errMsg);
-      }
-      return;
-    }
-
-    const readOps = operations.filter(op => op.kind === 'read_file' || op.kind === 'read_files' || op.kind === 'read_directory');
-    if (readOps.length > 0) {
-      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for read operations');
-      const result = await executeFileOperations(readOps, new VSCodeFileSystem(), getWorkspaceFolders());
-      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
-      if (result.success) {
-        let readData: any;
-        try {
-          readData = JSON.parse(result.message);
-        } catch {
-          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse read results.' };
-          this._view?.webview.postMessage(errMsg);
-          return;
-        }
-        const fileCount = Array.isArray(readData) ? readData.reduce((sum: number, d: any) => sum + d.totalFiles, 0) : readData.totalFiles;
-        const report = `Read ${fileCount} file(s). Results available in the Read panel.`;
-        const successMsg: ExtensionMessage = { command: 'success', message: report };
-        this._view?.webview.postMessage(successMsg);
-
-        // Merge per-operation results into a single ReadResultData
-        const readResultData: ReadResultData = Array.isArray(readData)
-          ? readData.reduce((merged: ReadResultData, d: any) => ({
-              files: [...(merged.files || []), ...(d.files || [])],
-              totalFiles: merged.totalFiles + (d.totalFiles || 0),
-              totalSize: merged.totalSize + (d.totalSize || 0),
-            }), { files: [], totalFiles: 0, totalSize: 0 })
-          : readData;
+      if (parsedMessage && parsedMessage.readResults) {
+        const readResultData: ReadResultData = parsedMessage.readResults.reduce(
+          (merged: ReadResultData, d: any) => ({
+            files: [...(merged.files || []), ...(d.files || [])],
+            totalFiles: merged.totalFiles + (d.totalFiles || 0),
+            totalSize: merged.totalSize + (d.totalSize || 0),
+          }),
+          { files: [], totalFiles: 0, totalSize: 0 }
+        );
         this._readPanelManager?.openReadPanel(readResultData);
-        this._outputChannel.appendLine(`Read results: ${result.message}`);
-      } else {
-        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
-        this._outputChannel.appendLine('Operations: ' + JSON.stringify(readOps));
-        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
-        this._outputChannel.show(true);
+        panelsOpened.push('Read');
+      }
+
+      const searchOpResults = result.operationResults.filter(r => r.kind === 'search_files' && r.status === 'success');
+      if (searchOpResults.length > 0) {
+        const searchData = parsedMessage && parsedMessage.totalMatches !== undefined ? parsedMessage : searchOpResults;
+        this._structurePanelManager?.openSearchResultsPanel(searchData);
+        panelsOpened.push('Search Results');
+      }
+
+      if (parsedMessage && parsedMessage.root !== undefined && parsedMessage.totalFiles !== undefined) {
+        this._structurePanelManager?.openStructurePanel(parsedMessage);
+        panelsOpened.push('Codebase Metadata');
+      }
+
+      if (!result.success) {
         const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
         this._view?.webview.postMessage(errMsg);
+        this._outputChannel.show(true);
+      } else {
+        const report = panelsOpened.length > 0
+          ? `Operations completed. Results available in the following panels: ${panelsOpened.join(', ')}.`
+          : result.message;
+        const successMsg: ExtensionMessage = { command: 'success', message: report };
+        this._view?.webview.postMessage(successMsg);
       }
+
       return;
     }
 
@@ -1027,21 +957,17 @@ fileIndex: this._currentFileIndex,
       const results: string[] = [];
       for (const op of terminalOps) {
         const termOp = op as any;
-        const result = await executeTerminalCommand(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
-        if (result.success) {
-          results.push(`Command "${termOp.command}" executed successfully.\n${result.output}`);
+        const termResult = await executeTerminalCommand(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
+        if (termResult.success) {
+          results.push(`Command "${termOp.command}" executed successfully.\n${termResult.output}`);
         } else {
-          results.push(`Command "${termOp.command}" failed (exit code: ${result.exitCode})\n${result.output}`);
+          results.push(`Command "${termOp.command}" failed (exit code: ${termResult.exitCode})\n${termResult.output}`);
           this._outputChannel.appendLine(`Terminal command failed: ${termOp.command}`);
-          this._outputChannel.appendLine(`Exit code: ${result.exitCode}`);
-          this._outputChannel.appendLine(`Output: ${result.output}`);
+          this._outputChannel.appendLine(`Exit code: ${termResult.exitCode}`);
+          this._outputChannel.appendLine(`Output: ${termResult.output}`);
         }
       }
       const report = results.join('\n\n');
-      const allSucceeded = terminalOps.every((_, i) => {
-        const op = operations.filter(o => o.kind === 'terminal_interactive')[i];
-        return true;
-      });
       const msg: ExtensionMessage = { command: 'success', message: report };
       this._view?.webview.postMessage(msg);
       return;

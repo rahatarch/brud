@@ -1290,24 +1290,35 @@ operationResults.push({
 
   let result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[]; sessionId?: string };
 
+  const combined: any = {};
+
   if (extractionResults.length > 0) {
-    const allSucceeded = extractionResults.length === operations.filter(o => o.kind === 'extract_structure').length;
-    const message = JSON.stringify(extractionResults.map(r => ({
+    combined.extractionResults = extractionResults.map(r => ({
       directoryPath: r.directoryPath,
       depth: r.depth,
       fileCount: r.fileCount,
       directoryCount: r.directoryCount,
       json: r.json,
-    })));
-    result = { success: allSucceeded, message, errors, operationResults };
-  } else if (readResults.size > 0) {
-    const readData = Array.from(readResults.entries()).map(([idx, data]) => ({
-      operationIndex: idx,
+    }));
+  }
+
+  if (readResults.size > 0) {
+    combined.readResults = Array.from(readResults.entries()).map(([opIndex, data]) => ({
+      operationIndex: opIndex,
+      files: data.files,
       totalFiles: data.totalFiles,
       totalSize: data.totalSize,
-      files: data.files,
     }));
-    result = { success: true, message: JSON.stringify(readData), errors, operationResults };
+  }
+
+  if (Object.keys(combined).length > 0) {
+    result = {
+      success: true,
+      message: JSON.stringify(combined),
+      operationResults,
+      errors: [],
+      sessionId,
+    };
   } else {
     const hasExtractOps = operations.some(o => o.kind === 'extract_structure');
     if (hasExtractOps) {
