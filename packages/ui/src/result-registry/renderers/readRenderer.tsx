@@ -74,7 +74,7 @@ function ReadFileList({ data }: { data: ReadResultData }) {
           </div>
           {expandedFiles.has(file.path) && (
             <div className="px-6 pb-3">
-              <pre className="text-xs text-text-secondary font-mono whitespace-pre leading-relaxed bg-surface-2 border border-border rounded p-4 overflow-x-auto max-h-[600px] overflow-y-auto">
+              <pre className="text-xs text-text-secondary font-mono whitespace-pre leading-relaxed bg-surface-2 border border-border rounded p-4 overflow-x-auto max-h-150 overflow-y-auto">
                 {file.content}
               </pre>
             </div>

@@ -729,7 +729,7 @@ fileIndex: this._currentFileIndex,
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ readResults: readData });
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
     }
 
     if (result.success) {
@@ -762,7 +762,7 @@ fileIndex: this._currentFileIndex,
     const readData = this._reportExecutionResult(result);
 
     if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ readResults: readData });
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
     }
 
     if (result.success) {
@@ -893,7 +893,7 @@ fileIndex: this._currentFileIndex,
 
     let queryResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
     let fileResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
-    const unifiedResults: Record<string, any> = {};
+    const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
 
     if (queryOps.length > 0) {
       this._outputChannel.appendLine('DEBUG: Before executeFileOperations for query operations');
@@ -912,38 +912,52 @@ fileIndex: this._currentFileIndex,
       }
 
       if (parsedMessage && parsedMessage.extractionResults) {
-        unifiedResults.extractionResults = parsedMessage.extractionResults.map((item: any) => ({
-          json: item.json,
-          directoryPath: item.directoryPath,
-          depth: item.depth,
-          fileCount: item.fileCount,
-          directoryCount: item.directoryCount,
-        }));
+        for (const item of parsedMessage.extractionResults) {
+          unifiedResults.operations.push({
+            toolKind: 'extractionResults',
+            data: {
+              json: item.json,
+              directoryPath: item.directoryPath,
+              depth: item.depth,
+              fileCount: item.fileCount,
+              directoryCount: item.directoryCount,
+            },
+          });
+        }
       }
 
       if (parsedMessage && parsedMessage.readResults) {
-        unifiedResults.readResults = parsedMessage.readResults.reduce(
-          (merged: any, d: any) => ({
-            files: [...(merged.files || []), ...(d.files || [])],
-            totalFiles: merged.totalFiles + (d.totalFiles || 0),
-            totalSize: merged.totalSize + (d.totalSize || 0),
-          }),
-          { files: [], totalFiles: 0, totalSize: 0 }
-        );
+        for (const d of parsedMessage.readResults) {
+          unifiedResults.operations.push({
+            toolKind: 'readResults',
+            data: {
+              files: d.files || [],
+              totalFiles: d.totalFiles || 0,
+              totalSize: d.totalSize || 0,
+            },
+          });
+        }
       }
 
       if (parsedMessage && parsedMessage.search_results) {
-        const allResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
-        const merged = allResults.reduce((acc, entry) => ({
-          results: [...(acc.results || []), ...(entry.results.results || [])],
-          totalMatches: (acc.totalMatches || 0) + (entry.results.totalMatches || 0),
-          truncated: acc.truncated || entry.results.truncated || false,
-        }), { results: [] as any[], totalMatches: 0, truncated: false });
-        unifiedResults.search_files = merged;
+        const searchResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
+        for (const entry of searchResults) {
+          unifiedResults.operations.push({
+            toolKind: 'search_files',
+            data: {
+              results: entry.results.results || [],
+              totalMatches: entry.results.totalMatches || 0,
+              truncated: entry.results.truncated || false,
+            },
+          });
+        }
       }
 
       if (parsedMessage && parsedMessage.codebase_metadata) {
-        unifiedResults.codebase_metadata = parsedMessage.codebase_metadata;
+        unifiedResults.operations.push({
+          toolKind: 'codebase_metadata',
+          data: parsedMessage.codebase_metadata,
+        });
       }
     }
 
@@ -953,7 +967,7 @@ fileIndex: this._currentFileIndex,
       fileResult = await executeOperationsFromVSCode(fileOps, historyStore, text);
     }
 
-    if (Object.keys(unifiedResults).length > 0) {
+    if (unifiedResults.operations.length > 0) {
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
     }
 
@@ -1043,7 +1057,12 @@ fileIndex: this._currentFileIndex,
     const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
     const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
     this._view?.webview.postMessage(successMsg);
-    this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ extractionResults: structureResults });
+    this._unifiedResultsPanelManager?.openUnifiedResultsPanel({
+      operations: structureResults.map(s => ({
+        toolKind: 'extractionResults',
+        data: s,
+      })),
+    });
     this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
   }
 

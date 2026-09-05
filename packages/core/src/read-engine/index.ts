@@ -68,7 +68,7 @@ export async function readDirectoryFiles(
   maxResults?: number,
 ): Promise<string[]> {
   const query: FileSearchQuery = {
-    patterns: ['*'],
+    patterns: ['**'],
     excludePatterns,
     directory: directoryPath,
     recursive,

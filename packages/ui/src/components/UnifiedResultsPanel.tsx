@@ -3,8 +3,13 @@ import { Copy, Check } from 'lucide-react';
 import { sendToExtension } from '../bridge/vscodeBridge';
 import { globalRegistry } from '../result-registry/registry';
 
+export interface UnifiedOperationResult {
+  toolKind: string;
+  data: any;
+}
+
 export interface UnifiedSessionResults {
-  [toolKind: string]: any;
+  operations: UnifiedOperationResult[];
 }
 
 function UnifiedResultsPanel() {
@@ -30,11 +35,10 @@ function UnifiedResultsPanel() {
   const handleCopyAll = useCallback(() => {
     if (!results) return;
     const parts: string[] = [];
-    const renderers = globalRegistry.getAllRenderers();
-    for (const renderer of renderers) {
-      const data = results[renderer.toolKind];
-      if (data) {
-        const formatted = renderer.copyFormatter(data);
+    for (const op of results.operations) {
+      const renderer = globalRegistry.getRenderer(op.toolKind);
+      if (renderer) {
+        const formatted = renderer.copyFormatter(op.data);
         if (formatted) {
           parts.push(`=== ${renderer.title} ===\n${formatted}`);
         }
@@ -47,7 +51,7 @@ function UnifiedResultsPanel() {
     }
   }, [results]);
 
-  if (!results || Object.keys(results).length === 0) {
+  if (!results || results.operations.length === 0) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
         <h1 className="text-2xl font-semibold text-text mb-3">Brud Session Results</h1>
@@ -59,14 +63,10 @@ function UnifiedResultsPanel() {
   }
 
   const renderers = globalRegistry.getAllRenderers();
-  const sections: { renderer: typeof renderers[0]; data: any }[] = [];
-
-  for (const renderer of renderers) {
-    const data = results[renderer.toolKind];
-    if (data) {
-      sections.push({ renderer, data });
-    }
-  }
+  const sections = results.operations.map(op => ({
+    renderer: globalRegistry.getRenderer(op.toolKind),
+    data: op.data
+  })).filter(s => s.renderer);
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
@@ -82,8 +82,8 @@ function UnifiedResultsPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {sections.map(({ renderer, data }) => (
-          <div key={renderer.toolKind}>
+        {sections.map(({ renderer, data }, index) => (
+          <div key={index}>
             <div className="sticky top-0 z-10 bg-surface-3 border-b border-border px-6 py-2">
               <h2 className="text-sm font-semibold text-text">{renderer.title}</h2>
             </div>

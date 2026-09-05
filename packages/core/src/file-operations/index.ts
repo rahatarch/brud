@@ -5,6 +5,7 @@ import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
+import { isGlobPattern } from '../search/globMatcher.js';
 import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
@@ -1175,8 +1176,12 @@ operationResults.push({
             continue;
           }
 
+          const patterns = operation.recursive
+            ? operation.patterns.map(p => isGlobPattern(p) && !p.includes('**') ? `**/${p}` : p)
+            : operation.patterns;
+
           const fileQuery: FileSearchQuery = {
-            patterns: operation.patterns,
+            patterns,
             excludePatterns: operation.excludePatterns,
             directory: searchDirectory,
             recursive: operation.recursive,
