@@ -71,6 +71,8 @@ export async function executeFileOperations(
   let preSnapshot: SnapshotData | undefined;
   const preResolvedMultiFiles: Map<number, string[]> = new Map();
   const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
+  let metadataResult: string | undefined;
+  const searchResults: Map<number, string> = new Map();
   let existingSessionData: { filesAffected: string[]; preSnapshot: SnapshotData; postSnapshot: SnapshotData; operationResults: OperationResult[] } | undefined;
 
   if (historyStore) {
@@ -862,7 +864,8 @@ operationResults.push({
             message: `Analyzed codebase metadata for ${workspaceRoot}.`,
             path: workspaceRoot,
           });
-          return { success: true, message, errors, operationResults };
+          metadataResult = message;
+          break;
         }
 
         case 'search_files': {
@@ -916,7 +919,8 @@ operationResults.push({
             message: `Found ${response.totalMatches} files matching pattern.`,
             path: operation.directory || '',
           });
-          return { success: true, message: resultJson, errors, operationResults };
+          searchResults.set(i, resultJson);
+          break;
         }
 
         case 'append_file_multi': {
@@ -1309,6 +1313,18 @@ operationResults.push({
       totalFiles: data.totalFiles,
       totalSize: data.totalSize,
     }));
+  }
+
+  if (metadataResult) {
+    combined.codebase_metadata = JSON.parse(metadataResult);
+  }
+
+  if (searchResults.size > 0) {
+    const searchArray = Array.from(searchResults.entries()).map(([opIndex, json]) => ({
+      operationIndex: opIndex,
+      results: JSON.parse(json)
+    }));
+    combined.search_results = searchArray;
   }
 
   if (Object.keys(combined).length > 0) {

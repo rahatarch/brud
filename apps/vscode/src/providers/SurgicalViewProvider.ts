@@ -884,23 +884,32 @@ fileIndex: this._currentFileIndex,
       op.kind === 'codebase_metadata'
     );
 
+    const fileOps = operations.filter(op =>
+      op.kind !== 'extract_structure' &&
+      op.kind !== 'read_file' && op.kind !== 'read_files' && op.kind !== 'read_directory' &&
+      op.kind !== 'search_files' &&
+      op.kind !== 'codebase_metadata'
+    );
+
+    let queryResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
+    let fileResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
+    const unifiedResults: Record<string, any> = {};
+
     if (queryOps.length > 0) {
       this._outputChannel.appendLine('DEBUG: Before executeFileOperations for query operations');
-      const result = await executeFileOperations(queryOps, new VSCodeFileSystem(), getWorkspaceFolders());
-      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
+      queryResult = await executeFileOperations(queryOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + queryResult.success + ' - errors: ' + queryResult.errors.length);
 
-      for (const err of result.errors) {
+      for (const err of queryResult.errors) {
         this._outputChannel.appendLine(`  ERROR: ${err}`);
       }
 
       let parsedMessage: any;
       try {
-        parsedMessage = JSON.parse(result.message);
+        parsedMessage = JSON.parse(queryResult.message);
       } catch {
         parsedMessage = null;
       }
-
-      const unifiedResults: Record<string, any> = {};
 
       if (parsedMessage && parsedMessage.extractionResults) {
         unifiedResults.extractionResults = parsedMessage.extractionResults.map((item: any) => ({
@@ -923,73 +932,58 @@ fileIndex: this._currentFileIndex,
         );
       }
 
-      const searchOpResults = result.operationResults.filter(r => r.kind === 'search_files' && r.status === 'success');
-      if (searchOpResults.length > 0) {
-        unifiedResults.search_files = parsedMessage && parsedMessage.totalMatches !== undefined ? parsedMessage : searchOpResults;
+      if (parsedMessage && parsedMessage.search_results) {
+        const allResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
+        const merged = allResults.reduce((acc, entry) => ({
+          results: [...(acc.results || []), ...(entry.results.results || [])],
+          totalMatches: (acc.totalMatches || 0) + (entry.results.totalMatches || 0),
+          truncated: acc.truncated || entry.results.truncated || false,
+        }), { results: [] as any[], totalMatches: 0, truncated: false });
+        unifiedResults.search_files = merged;
       }
 
-      if (parsedMessage && parsedMessage.root !== undefined && parsedMessage.totalFiles !== undefined) {
-        unifiedResults.codebase_metadata = parsedMessage;
+      if (parsedMessage && parsedMessage.codebase_metadata) {
+        unifiedResults.codebase_metadata = parsedMessage.codebase_metadata;
       }
-
-      if (Object.keys(unifiedResults).length > 0) {
-        this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
-      }
-
-      if (!result.success) {
-        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
-        this._view?.webview.postMessage(errMsg);
-        this._outputChannel.show(true);
-      } else {
-        const report = result.message;
-        const successMsg: ExtensionMessage = { command: 'success', message: report };
-        this._view?.webview.postMessage(successMsg);
-      }
-
-      return;
     }
 
-    const terminalOps = operations.filter(op => op.kind === 'terminal_interactive');
-    if (terminalOps.length > 0) {
-      const { executeTerminalCommand } = await import('@brud/core');
-      const results: string[] = [];
-      for (const op of terminalOps) {
-        const termOp = op as any;
-        const termResult = await executeTerminalCommand(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
-        if (termResult.success) {
-          results.push(`Command "${termOp.command}" executed successfully.\n${termResult.output}`);
-        } else {
-          results.push(`Command "${termOp.command}" failed (exit code: ${termResult.exitCode})\n${termResult.output}`);
-          this._outputChannel.appendLine(`Terminal command failed: ${termOp.command}`);
-          this._outputChannel.appendLine(`Exit code: ${termResult.exitCode}`);
-          this._outputChannel.appendLine(`Output: ${termResult.output}`);
-        }
-      }
-      const report = results.join('\n\n');
-      const msg: ExtensionMessage = { command: 'success', message: report };
-      this._view?.webview.postMessage(msg);
-      return;
+    if (fileOps.length > 0) {
+      const folders = getWorkspaceFolders();
+      const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
+      fileResult = await executeOperationsFromVSCode(fileOps, historyStore, text);
     }
 
-    const folders = getWorkspaceFolders();
-    const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
-    const result = await executeOperationsFromVSCode(operations, historyStore, text);
-    const report = this._generateReport(operations, result);
-
-    this._outputChannel.appendLine(result.message);
-    for (const err of result.errors) {
-      this._outputChannel.appendLine(`  ERROR: ${err}`);
+    if (Object.keys(unifiedResults).length > 0) {
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
     }
 
-    if (result.success) {
+    const combinedMessages: string[] = [];
+    let combinedSuccess = true;
+    const combinedErrors: string[] = [];
+
+    if (queryResult) {
+      combinedMessages.push(queryResult.message);
+      combinedSuccess = combinedSuccess && queryResult.success;
+      combinedErrors.push(...queryResult.errors);
+    }
+
+    if (fileResult) {
+      combinedMessages.push(fileResult.message);
+      combinedSuccess = combinedSuccess && fileResult.success;
+      combinedErrors.push(...fileResult.errors);
+    }
+
+    const report = combinedMessages.join('\n');
+
+    if (combinedSuccess) {
       const msg: ExtensionMessage = { command: 'success', message: report };
       this._view?.webview.postMessage(msg);
     } else {
-      this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
-      this._outputChannel.appendLine('Operations: ' + JSON.stringify(operations));
-      this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+      this._outputChannel.appendLine('=== EXECUTION SUMMARY ===');
+      this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
+      this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const msg: ExtensionMessage = { command: 'error', message: report };
+      const msg: ExtensionMessage = { command: 'error', message: report + (combinedErrors.length > 0 ? '\n\nErrors:\n' + combinedErrors.map(e => `- ${e}`).join('\n') : '') };
       this._view?.webview.postMessage(msg);
     }
   }
