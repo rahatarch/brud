@@ -57,6 +57,7 @@ export interface WebviewMessage {
   operationIds?: string[];
   triggeredBy?: 'user' | 'system';
   permanentDelete?: boolean;
+  fileIndex?: number;
 }
 
 export interface ExtensionMessage {

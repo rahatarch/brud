@@ -138,8 +138,8 @@ function DiffPreviewPanel() {
   }, [diffData, currentFileIndex]);
 
   const handleExecuteCurrent = useCallback(() => {
-    sendToExtension({ command: 'executeCurrentFile' });
-  }, []);
+    sendToExtension({ command: 'executeCurrentFile', fileIndex: currentFileIndex });
+  }, [currentFileIndex]);
 
   const handleExecuteAll = useCallback(() => {
     sendToExtension({ command: 'executeAllFiles' });

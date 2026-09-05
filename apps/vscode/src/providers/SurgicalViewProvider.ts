@@ -318,7 +318,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
           const headerMsg: ExtensionMessage = {
             command: 'updatePreviewHeader',
             fileName: filePath,
-            fileIndex: this._currentFileIndex,
+fileIndex: this._currentFileIndex,
             totalFiles: this._fileList.length,
           };
           this._view?.webview.postMessage(headerMsg);
@@ -440,7 +440,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
           await this._handlePreviewAllFiles();
           break;
         case 'executeCurrentFile':
-          await this._handleExecuteCurrentFile();
+          await this._handleExecuteCurrentFile(data.fileIndex);
           break;
         case 'executeAllFiles':
           await this._handleExecuteAllFiles();
@@ -707,12 +707,18 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private async _handleExecuteCurrentFile() {
-    if (this._fileList.length === 0 || this._currentFileIndex < 0 || this._currentFileIndex >= this._fileList.length) {
+  private async _handleExecuteCurrentFile(fileIndex?: number) {
+    const idx = fileIndex !== undefined ? fileIndex : this._currentFileIndex;
+    this._outputChannel.appendLine(`[DEBUG] _handleExecuteCurrentFile called. fileIndex param=${fileIndex}, this._currentFileIndex=${this._currentFileIndex}, resolved idx=${idx}`);
+    this._outputChannel.appendLine(`[DEBUG] _fileList contents: ${JSON.stringify(this._fileList)}`);
+    
+    if (this._fileList.length === 0 || idx < 0 || idx >= this._fileList.length) {
+      this._outputChannel.appendLine(`[DEBUG] _handleExecuteCurrentFile: returning early - invalid idx=${idx}, _fileList.length=${this._fileList.length}`);
       return;
     }
 
-    const filePath = this._fileList[this._currentFileIndex];
+    const filePath = this._fileList[idx];
+    this._outputChannel.appendLine(`[DEBUG] _handleExecuteCurrentFile: selected filePath="${filePath}" at idx=${idx}`);
     const operations = this._operationsByFile.get(filePath) || [];
     const folders = getWorkspaceFolders();
     const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
@@ -730,7 +736,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
 
       this._diffPreviewPanelManager.postMessage({
         command: 'filePatched',
-        fileIndex: this._currentFileIndex,
+        fileIndex: idx,
       });
 
       await this._closePreviewTabs();
@@ -786,9 +792,10 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async _handleDiffPreviewPanelMessage(message: any) {
+    this._outputChannel.appendLine(`[DEBUG] _handleDiffPreviewPanelMessage received: ${JSON.stringify(message)}`);
     switch (message.command) {
       case 'executeCurrentFile':
-        await this._handleExecuteCurrentFile();
+        await this._handleExecuteCurrentFile(message.fileIndex);
         break;
       case 'executeAllFiles':
         await this._handleExecuteAllFiles();
