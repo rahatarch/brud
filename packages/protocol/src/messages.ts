@@ -39,7 +39,8 @@ export type ExtensionCommand =
   | 'historyWiped'
   | 'trashedSessionsResult'
   | 'sessionRestored'
-  | 'searchFilesResult';
+  | 'searchFilesResult'
+  | 'readResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -67,6 +68,7 @@ export interface ExtensionMessage {
   deletedCount?: number;
   trashedSessions?: HistorySessionResult[];
   searchResults?: SearchFilesResult;
+  readResult?: ReadResultData;
 }
 
 export interface HistorySessionResult {
@@ -139,6 +141,20 @@ export interface SearchFilesResult {
   results: Array<{ path: string; name: string; extension: string; directory: string; size: number }>;
   totalMatches: number;
   truncated: boolean;
+}
+
+export interface ReadFileEntry {
+  path: string;
+  content: string;
+  size: number;
+  isImported?: boolean;
+  importedFrom?: string;
+}
+
+export interface ReadResultData {
+  files: ReadFileEntry[];
+  totalFiles: number;
+  totalSize: number;
 }
 
 export interface RevertSessionResult {

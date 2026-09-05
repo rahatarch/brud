@@ -5,6 +5,7 @@ import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
+import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
@@ -63,6 +64,7 @@ export async function executeFileOperations(
   let sessionId: string | undefined;
   let preSnapshot: SnapshotData | undefined;
   const preResolvedMultiFiles: Map<number, string[]> = new Map();
+  const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
 
   if (historyStore) {
     for (let i = 0; i < operations.length; i++) {
@@ -1072,6 +1074,143 @@ operationResults.push({
           });
           break;
         }
+
+        case 'read_file': {
+          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          if (!result.valid) {
+            errors.push(result.error);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'read_file',
+              status: 'failed',
+              message: result.error,
+              path: operation.path,
+            });
+            continue;
+          }
+
+          const resultData = await readFiles(
+            fs,
+            [result.resolvedPath],
+            operation.isImportRead,
+            operation.maxDepth,
+            operation.excludePatterns,
+          );
+          readResults.set(i, resultData);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'read_file',
+            status: 'success',
+            message: JSON.stringify(resultData),
+            path: operation.path,
+          });
+          break;
+        }
+
+        case 'read_files': {
+          if (workspaceFolders.length === 0) {
+            errors.push('No workspace root available for file read.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'read_files',
+              status: 'aborted',
+              message: 'No workspace root available for file read.',
+              path: '',
+            });
+            continue;
+          }
+
+          const workspaceRoot = workspaceFolders[0];
+          const searchDirectory = operation.directory
+            ? path.resolve(workspaceRoot, operation.directory)
+            : path.resolve(workspaceRoot);
+
+          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'read_files',
+              status: 'failed',
+              message: `Search directory is outside workspace root: ${operation.directory}.`,
+              path: operation.directory || '',
+            });
+            continue;
+          }
+
+          const fileQuery: FileSearchQuery = {
+            patterns: operation.patterns,
+            excludePatterns: operation.excludePatterns,
+            directory: searchDirectory,
+            recursive: operation.recursive,
+            maxResults: operation.maxResults,
+          };
+
+          const searchResponse = await searchFiles(fs, fileQuery);
+          const filePaths = searchResponse.results.map(r => path.resolve(searchDirectory, r.path));
+
+          const resultData = await readFiles(
+            fs,
+            filePaths,
+            operation.isImportRead,
+            operation.maxDepth,
+            operation.excludePatterns,
+          );
+          readResults.set(i, resultData);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'read_files',
+            status: 'success',
+            message: JSON.stringify(resultData),
+            path: operation.directory || '',
+          });
+          break;
+        }
+
+        case 'read_directory': {
+          const dirResult = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          if (!dirResult.valid) {
+            errors.push(dirResult.error);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'read_directory',
+              status: 'failed',
+              message: dirResult.error,
+              path: operation.directoryPath,
+            });
+            continue;
+          }
+
+          const dirFilePaths = await readDirectoryFiles(
+            fs,
+            dirResult.resolvedPath,
+            operation.recursive,
+            operation.excludePatterns,
+          );
+
+          const resultData = await readFiles(
+            fs,
+            dirFilePaths,
+            operation.isImportRead,
+            operation.maxDepth,
+            operation.excludePatterns,
+          );
+          readResults.set(i, resultData);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'read_directory',
+            status: 'success',
+            message: JSON.stringify(resultData),
+            path: operation.directoryPath,
+          });
+          break;
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -1100,6 +1239,14 @@ operationResults.push({
       json: r.json,
     })));
     result = { success: allSucceeded, message, errors, operationResults };
+  } else if (readResults.size > 0) {
+    const readData = Array.from(readResults.entries()).map(([idx, data]) => ({
+      operationIndex: idx,
+      totalFiles: data.totalFiles,
+      totalSize: data.totalSize,
+      files: data.files,
+    }));
+    result = { success: true, message: JSON.stringify(readData), errors, operationResults };
   } else {
     const hasExtractOps = operations.some(o => o.kind === 'extract_structure');
     if (hasExtractOps) {

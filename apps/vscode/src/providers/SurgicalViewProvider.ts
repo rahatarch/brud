@@ -8,7 +8,7 @@ import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -35,6 +35,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _currentFileIndex: number = 0;
   private _mainWindowProvider: any;
   private _structurePanelManager: any;
+  private _readPanelManager: any;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -42,9 +43,11 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     private readonly _previewProvider: BrudCodePreviewProvider,
     mainWindowProvider?: any,
     structurePanelManager?: any,
+    readPanelManager?: any,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
+    this._readPanelManager = readPanelManager;
   }
 
   private _groupOperationsByFile(operations: FileOperation[]): Map<string, FileOperation[]> {
@@ -68,7 +71,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? '__append_file_multi__'
         : op.kind === 'search_replace_multi'
         ? '__search_replace_multi__'
-        : op.path;
+        : op.kind === 'read_file'
+        ? op.path
+        : op.kind === 'read_files'
+        ? '__read_files__'
+        : op.kind === 'read_directory'
+        ? op.directoryPath
+        : (op as any).path;
       const existing = grouped.get(key) || [];
       existing.push(op);
       grouped.set(key, existing);
@@ -605,7 +614,11 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     const filePath = this._fileList[this._currentFileIndex];
     const operations = this._operationsByFile.get(filePath) || [];
     const result = await executeFileOperations(operations, new VSCodeFileSystem(), getWorkspaceFolders());
-    this._reportExecutionResult(result);
+    const readData = this._reportExecutionResult(result);
+
+    if (readData) {
+      this._readPanelManager?.openReadPanel(readData);
+    }
 
     if (result.success) {
       this._removeFileFromPreview(filePath);
@@ -623,7 +636,11 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
 
     const result = await executeFileOperations(allOperations, new VSCodeFileSystem(), getWorkspaceFolders());
-    this._reportExecutionResult(result);
+    const readData = this._reportExecutionResult(result);
+
+    if (readData) {
+      this._readPanelManager?.openReadPanel(readData);
+    }
 
     if (result.success) {
       for (const filePath of this._fileList) {
@@ -637,20 +654,46 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private _reportExecutionResult(result: ExecutionResult) {
+  private _reportExecutionResult(result: ExecutionResult): ReadResultData | null {
     this._outputChannel.appendLine(result.message);
     for (const err of result.errors) {
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
     if (result.success) {
-      const msg: ExtensionMessage = { command: 'success', message: result.message };
-      this._view?.webview.postMessage(msg);
+      let readData: any;
+      try {
+        readData = JSON.parse(result.message);
+      } catch {
+        readData = null;
+      }
+
+      const isReadResult = readData && (readData.totalFiles !== undefined || (Array.isArray(readData) && readData.some((d: any) => d.totalFiles !== undefined)));
+
+      if (isReadResult) {
+        const fileCount = Array.isArray(readData) ? readData.reduce((sum: number, d: any) => sum + d.totalFiles, 0) : readData.totalFiles;
+        const report = `Read ${fileCount} file(s). Results available in the Read panel.`;
+        const msg: ExtensionMessage = { command: 'success', message: report };
+        this._view?.webview.postMessage(msg);
+
+        const readResultData: ReadResultData = Array.isArray(readData)
+          ? readData.reduce((merged: ReadResultData, d: any) => ({
+              files: [...(merged.files || []), ...(d.files || [])],
+              totalFiles: merged.totalFiles + (d.totalFiles || 0),
+              totalSize: merged.totalSize + (d.totalSize || 0),
+            }), { files: [], totalFiles: 0, totalSize: 0 })
+          : readData;
+        return readResultData;
+      } else {
+        const msg: ExtensionMessage = { command: 'success', message: result.message };
+        this._view?.webview.postMessage(msg);
+      }
     } else {
       const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
       this._view?.webview.postMessage(msg);
       this._outputChannel.show(true);
     }
+    return null;
   }
 
   private async _handleApplyPatch(text: string) {
@@ -766,6 +809,46 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       } else {
         this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
         this._outputChannel.appendLine('Operations: ' + JSON.stringify(searchOps));
+        this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
+        this._outputChannel.show(true);
+        const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
+        this._view?.webview.postMessage(errMsg);
+      }
+      return;
+    }
+
+    const readOps = operations.filter(op => op.kind === 'read_file' || op.kind === 'read_files' || op.kind === 'read_directory');
+    if (readOps.length > 0) {
+      this._outputChannel.appendLine('DEBUG: Before executeFileOperations for read operations');
+      const result = await executeFileOperations(readOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      this._outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + result.success + ' - errors: ' + result.errors.length);
+      if (result.success) {
+        let readData: any;
+        try {
+          readData = JSON.parse(result.message);
+        } catch {
+          const errMsg: ExtensionMessage = { command: 'error', message: 'Failed to parse read results.' };
+          this._view?.webview.postMessage(errMsg);
+          return;
+        }
+        const fileCount = Array.isArray(readData) ? readData.reduce((sum: number, d: any) => sum + d.totalFiles, 0) : readData.totalFiles;
+        const report = `Read ${fileCount} file(s). Results available in the Read panel.`;
+        const successMsg: ExtensionMessage = { command: 'success', message: report };
+        this._view?.webview.postMessage(successMsg);
+
+        // Merge per-operation results into a single ReadResultData
+        const readResultData: ReadResultData = Array.isArray(readData)
+          ? readData.reduce((merged: ReadResultData, d: any) => ({
+              files: [...(merged.files || []), ...(d.files || [])],
+              totalFiles: merged.totalFiles + (d.totalFiles || 0),
+              totalSize: merged.totalSize + (d.totalSize || 0),
+            }), { files: [], totalFiles: 0, totalSize: 0 })
+          : readData;
+        this._readPanelManager?.openReadPanel(readResultData);
+        this._outputChannel.appendLine(`Read results: ${result.message}`);
+      } else {
+        this._outputChannel.appendLine('=== EXECUTION FAILURE ===');
+        this._outputChannel.appendLine('Operations: ' + JSON.stringify(readOps));
         this._outputChannel.appendLine('Result: ' + JSON.stringify(result));
         this._outputChannel.show(true);
         const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };

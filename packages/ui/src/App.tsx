@@ -4,6 +4,7 @@ import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
+import ReadResultsPanel from './components/ReadResultsPanel';
 import CustomScrollbar from './components/CustomScrollbar';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
@@ -18,6 +19,10 @@ function App() {
 
   if (viewMode === 'structure-panel') {
     return <StructurePanel />;
+  }
+
+  if (viewMode === 'read-panel') {
+    return <ReadResultsPanel />;
   }
 
   const [inputText, setInputText] = useState('');

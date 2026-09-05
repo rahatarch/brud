@@ -12,7 +12,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -131,4 +131,35 @@ export interface SearchReplaceMultiOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation;
+export interface ReadFileOperation {
+  kind: 'read_file';
+  path: string;
+  isImportRead: boolean;
+  maxDepth: number;
+  excludePatterns?: string[];
+  index: string;
+}
+
+export interface ReadFilesOperation {
+  kind: 'read_files';
+  patterns: string[];
+  excludePatterns?: string[];
+  directory?: string;
+  recursive: boolean;
+  maxResults: number;
+  isImportRead: boolean;
+  maxDepth: number;
+  index: string;
+}
+
+export interface ReadDirectoryOperation {
+  kind: 'read_directory';
+  directoryPath: string;
+  recursive: boolean;
+  excludePatterns?: string[];
+  isImportRead: boolean;
+  maxDepth: number;
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation;
