@@ -303,12 +303,14 @@ export function parseYamlFormat(input: string): FileOperation[] {
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
         operations.push({
           kind: 'read_file',
           path,
           isImportRead: isImportRead ?? false,
           maxDepth: maxDepth ?? 5,
           excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
           index: String(index),
         });
         break;
@@ -324,6 +326,7 @@ export function parseYamlFormat(input: string): FileOperation[] {
         const maxResults = parsed.maxResults as number | undefined;
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
         operations.push({
           kind: 'read_files',
           patterns,
@@ -333,6 +336,7 @@ export function parseYamlFormat(input: string): FileOperation[] {
           maxResults: maxResults ?? 500,
           isImportRead: isImportRead ?? false,
           maxDepth: maxDepth ?? 5,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
           index: String(index),
         });
         break;
@@ -346,6 +350,7 @@ export function parseYamlFormat(input: string): FileOperation[] {
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
+        const importSyntax = parsed.importSyntax as string[] | undefined;
         operations.push({
           kind: 'read_directory',
           directoryPath,
@@ -353,6 +358,7 @@ export function parseYamlFormat(input: string): FileOperation[] {
           excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
           isImportRead: isImportRead ?? false,
           maxDepth: maxDepth ?? 5,
+          importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
           index: String(index),
         });
         break;

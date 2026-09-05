@@ -151,6 +151,81 @@ describe('resolveImports', () => {
   });
 });
 
+describe('resolveImports with custom patterns', () => {
+  let tempDir: string;
+
+  before(async () => {
+    tempDir = await fs.mkdtemp('/tmp/brud-custom-import-');
+  });
+
+  after(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('uses custom regex pattern instead of built-in patterns', async () => {
+    const depFile = pathModule.join(tempDir, 'helper.custom');
+    await fs.writeFile(depFile, 'export const helper = true;');
+
+    const content = `import './helper.custom';\n`;
+    const customPattern = "import\\s+['\"]([^'\"]+)['\"]";
+    const result = await resolveImports(content, pathModule.join(tempDir, 'index.ts'), fileExists, [customPattern]);
+    assert.ok(result.includes(depFile), `Expected ${depFile} in resolved imports: ${result}`);
+  });
+
+  it('uses multiple custom patterns', async () => {
+    const depFile1 = pathModule.join(tempDir, 'lib1.custom');
+    const depFile2 = pathModule.join(tempDir, 'lib2.custom');
+    await fs.writeFile(depFile1, 'content1');
+    await fs.writeFile(depFile2, 'content2');
+
+    const content = `import './lib1.custom';\ninclude './lib2.custom';\n`;
+    const patterns = [
+      "import\\s+['\"]([^'\"]+)['\"]",
+      "include\\s+['\"]([^'\"]+)['\"]",
+    ];
+    const result = await resolveImports(content, pathModule.join(tempDir, 'index.ts'), fileExists, patterns);
+    assert.ok(result.includes(depFile1), `Expected ${depFile1} in resolved imports: ${result}`);
+    assert.ok(result.includes(depFile2), `Expected ${depFile2} in resolved imports: ${result}`);
+  });
+
+  it('throws clear error for invalid regex pattern', async () => {
+    const content = `import 'test';\n`;
+    const invalidPattern = "[invalid";
+    await assert.rejects(
+      () => resolveImports(content, pathModule.join(tempDir, 'index.ts'), fileExists, [invalidPattern]),
+      { message: /Invalid importSyntax pattern/ },
+    );
+  });
+
+  it('falls back to built-in patterns when no custom patterns provided', async () => {
+    const depFile = pathModule.join(tempDir, 'fallback-test.ts');
+    await fs.writeFile(depFile, 'export const fallback = true;');
+
+    const content = `import { fallback } from './fallback-test';\n`;
+    const result = await resolveImports(content, pathModule.join(tempDir, 'index.ts'), fileExists);
+    assert.ok(result.includes(depFile), `Expected ${depFile} in resolved imports: ${result}`);
+  });
+
+  it('uses custom patterns with readFileWithImports', async () => {
+    const depFile = pathModule.join(tempDir, 'custom-imported.custom');
+    const nodeFs = new NodeFileSystem();
+    await nodeFs.writeFile(depFile, 'custom content');
+
+    const mainFile = pathModule.join(tempDir, 'main.custom');
+    await nodeFs.writeFile(mainFile, `import './custom-imported.custom';\n`);
+
+    const result = await readFileWithImports(
+      nodeFs,
+      mainFile,
+      1,
+      undefined,
+      ["import\\s+['\"]([^'\"]+)['\"]"],
+    );
+    assert.ok(result.files.has(depFile), `Expected ${depFile} in result files: ${[...result.files.keys()]}`);
+    assert.ok(result.files.has(mainFile));
+  });
+});
+
 describe('readFileWithImports', () => {
   let tempDir: string;
   let nodeFs: NodeFileSystem;

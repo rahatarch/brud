@@ -130,6 +130,48 @@ Returns a summary of the codebase scale (total files, folders, most dense folder
 <<<<<<< CODEBASE_METADATA [1]
 >>>>>>> END CODEBASE_METADATA [1]
 
+### 16. READ_FILE
+Reads a file with optional import following.
+<<<<<<< READ_FILE [1]
+File Path: [path]
+isImportRead: [true or false]
+MaxDepth: [number, default 5]
+importSyntax: [optional custom regex]
+Exclude: [patterns to skip, optional]
+>>>>>>> END READ_FILE [1]
+
+- File Path: the file to read
+- isImportRead: true to also read imported files recursively
+- MaxDepth: how deep to follow imports (default 5, 0 for unlimited)
+- importSyntax: custom import pattern regex for non-standard languages (optional)
+- Exclude: glob patterns to skip when following imports (optional)
+
+### 17. READ_FILES
+Reads multiple files matching a pattern.
+<<<<<<< READ_FILES [1]
+Pattern: **/*.ts
+Scope: src
+MaxResults: 10
+isImportRead: false
+>>>>>>> END READ_FILES [1]
+
+- Pattern: glob pattern to match files
+- Scope: directory to search (optional, default workspace root)
+- MaxResults: maximum files to return (optional, default 10)
+- isImportRead: true to also read imported files (optional, default false)
+
+### 18. READ_DIRECTORY
+Reads all files in a directory.
+<<<<<<< READ_DIRECTORY [1]
+Directory Path: src/utils
+Recursive: true
+Exclude: *.test.ts
+>>>>>>> END READ_DIRECTORY [1]
+
+- Directory Path: the directory to read
+- Recursive: true to read files in subdirectories (optional, default false)
+- Exclude: glob patterns to skip (optional)
+
 ## Output Rules
 
 1. Output ALL Brud blocks inside a single markdown code block using triple backticks

@@ -1096,6 +1096,7 @@ operationResults.push({
             operation.isImportRead,
             operation.maxDepth,
             operation.excludePatterns,
+            operation.importSyntax,
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1158,6 +1159,7 @@ operationResults.push({
             operation.isImportRead,
             operation.maxDepth,
             operation.excludePatterns,
+            operation.importSyntax,
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1199,6 +1201,7 @@ operationResults.push({
             operation.isImportRead,
             operation.maxDepth,
             operation.excludePatterns,
+            operation.importSyntax,
           );
           readResults.set(i, resultData);
           operationResults.push({

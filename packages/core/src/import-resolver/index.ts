@@ -1,6 +1,6 @@
 import path from 'path';
 import { FileSystem } from '../types/filesystem.js';
-import { getPatternsForFile } from './languagePatterns.js';
+import { getPatternsForFile, ImportPattern } from './languagePatterns.js';
 
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'];
 const INDEX_FILES = ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'index.mjs', 'index.cjs', 'index.mts', 'index.cts'];
@@ -21,6 +21,11 @@ async function resolveModulePath(
     return (await fileExists(resolved)) ? resolved : null;
   }
 
+  const resolvedExt = path.extname(resolved);
+  if (resolvedExt && await fileExists(resolved)) {
+    return resolved;
+  }
+
   for (const ext of EXTENSIONS) {
     const withExt = resolved + ext;
     if (await fileExists(withExt)) return withExt;
@@ -34,12 +39,33 @@ async function resolveModulePath(
   return null;
 }
 
-export async function resolveImports(content: string, filePath: string, fileExists: (path: string) => Promise<boolean>): Promise<string[]> {
+export async function resolveImports(
+  content: string,
+  filePath: string,
+  fileExists: (path: string) => Promise<boolean>,
+  customPatterns?: string[],
+): Promise<string[]> {
   const imports: string[] = [];
   const matches = new Set<string>();
-  const patterns = getPatternsForFile(filePath);
 
-  for (const pattern of patterns.patterns) {
+  let patterns: ImportPattern[];
+
+  if (customPatterns && customPatterns.length > 0) {
+    patterns = [];
+    for (const patternStr of customPatterns) {
+      try {
+        const regex = new RegExp(patternStr, 'g');
+        patterns.push({ regex, type: 'import' });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        throw new Error(`Invalid importSyntax pattern "${patternStr}": ${message}`);
+      }
+    }
+  } else {
+    patterns = getPatternsForFile(filePath).patterns;
+  }
+
+  for (const pattern of patterns) {
     pattern.regex.lastIndex = 0;
     let match: RegExpExecArray | null;
     while ((match = pattern.regex.exec(content)) !== null) {
@@ -70,6 +96,7 @@ export async function readFileWithImports(
   filePath: string,
   maxDepth: number,
   excludePatterns?: string[],
+  importSyntax?: string[],
 ): Promise<{ files: Map<string, string>; errors: ReadError[] }> {
   const result = new Map<string, string>();
   const visited = new Set<string>();
@@ -90,7 +117,7 @@ export async function readFileWithImports(
       result.set(currentPath, content);
 
       if (depth > 0) {
-        const imports = await resolveImports(content, currentPath, (p) => fs.exists(p));
+        const imports = await resolveImports(content, currentPath, (p) => fs.exists(p), importSyntax);
         for (const importPath of imports) {
           await readRecursive(importPath, depth - 1);
         }

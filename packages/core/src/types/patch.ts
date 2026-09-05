@@ -137,6 +137,7 @@ export interface ReadFileOperation {
   isImportRead: boolean;
   maxDepth: number;
   excludePatterns?: string[];
+  importSyntax?: string[];
   index: string;
 }
 
@@ -149,6 +150,7 @@ export interface ReadFilesOperation {
   maxResults: number;
   isImportRead: boolean;
   maxDepth: number;
+  importSyntax?: string[];
   index: string;
 }
 
@@ -159,6 +161,7 @@ export interface ReadDirectoryOperation {
   excludePatterns?: string[];
   isImportRead: boolean;
   maxDepth: number;
+  importSyntax?: string[];
   index: string;
 }
 

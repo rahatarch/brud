@@ -195,3 +195,57 @@ Replace: new text
 >>>>>>> END SEARCH_REPLACE_MULTI [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const readFilePrompt = `Use READ_FILE to read a file with optional import following.
+
+Describe the file to read below:
+
+<<<<<<< READ_FILE [1]
+File Path: [path]
+isImportRead: [true or false]
+MaxDepth: [number, default 5]
+importSyntax: [optional custom regex]
+Exclude: [patterns to skip, optional]
+>>>>>>> END READ_FILE [1]
+
+- File Path: the file to read
+- isImportRead: true to also read imported files recursively
+- MaxDepth: how deep to follow imports (default 5, 0 for unlimited)
+- importSyntax: custom import pattern regex for non-standard languages (optional)
+- Exclude: glob patterns to skip when following imports (optional)
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const readFilesPrompt = `Use READ_FILES to read multiple files matching a pattern.
+
+Describe the files to read below:
+
+<<<<<<< READ_FILES [1]
+Pattern: **/*.ts
+Scope: src
+MaxResults: 10
+isImportRead: false
+>>>>>>> END READ_FILES [1]
+
+- Pattern: glob pattern to match files
+- Scope: directory to search (optional, default workspace root)
+- MaxResults: maximum files to return (optional, default 10)
+- isImportRead: true to also read imported files (optional, default false)
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const readDirectoryPrompt = `Use READ_DIRECTORY to read all files in a directory.
+
+Describe the directory to read below:
+
+<<<<<<< READ_DIRECTORY [1]
+Directory Path: src/utils
+Recursive: true
+Exclude: *.test.ts
+>>>>>>> END READ_DIRECTORY [1]
+
+- Directory Path: the directory to read
+- Recursive: true to read files in subdirectories (optional, default false)
+- Exclude: glob patterns to skip (optional)
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

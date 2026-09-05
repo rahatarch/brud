@@ -24,6 +24,7 @@ export async function readFiles(
   isImportRead: boolean,
   maxDepth: number,
   excludePatterns?: string[],
+  importSyntax?: string[],
 ): Promise<ReadResult> {
   const entries: ReadFileEntry[] = [];
   let totalSize = 0;
@@ -31,7 +32,7 @@ export async function readFiles(
   for (const filePath of filePaths) {
     try {
       if (isImportRead && maxDepth > 0) {
-        const { files: fileMap } = await readFileWithImports(fs, filePath, maxDepth, excludePatterns);
+        const { files: fileMap } = await readFileWithImports(fs, filePath, maxDepth, excludePatterns, importSyntax);
         let isFirst = true;
         for (const [p, content] of fileMap) {
           const size = Buffer.byteLength(content, 'utf8');
