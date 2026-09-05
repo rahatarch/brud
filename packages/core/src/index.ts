@@ -11,3 +11,4 @@ export * from './history';
 export * from './search';
 export * from './import-resolver';
 export * from './read-engine';
+export * from './terminal';

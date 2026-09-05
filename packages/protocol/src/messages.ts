@@ -6,6 +6,9 @@ export type WebviewCommand =
   | 'previewAllFiles'
   | 'executeCurrentFile'
   | 'executeAllFiles'
+  | 'rejectPreview'
+  | 'doneDiffPreview'
+  | 'closeDiffPreview'
   | 'hidePreviewNavigation'
   | 'showPreviewNavigation'
   | 'updatePreviewHeader'
@@ -21,7 +24,8 @@ export type WebviewCommand =
   | 'softDeleteSession'
   | 'restoreSession'
   | 'getTrashedSessions'
-  | 'permanentDelete';
+  | 'permanentDelete'
+  | 'getSessionSnapshots';
 
 export type ExtensionCommand =
   | 'success'
@@ -40,7 +44,10 @@ export type ExtensionCommand =
   | 'trashedSessionsResult'
   | 'sessionRestored'
   | 'searchFilesResult'
-  | 'readResult';
+  | 'readResult'
+  | 'diffPreviewResult'
+  | 'filePatched'
+  | 'sessionSnapshotsResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -69,6 +76,8 @@ export interface ExtensionMessage {
   trashedSessions?: HistorySessionResult[];
   searchResults?: SearchFilesResult;
   readResult?: ReadResultData;
+  diffPreviewData?: DiffPreviewData;
+  snapshotData?: SessionSnapshotsResult | null;
 }
 
 export interface HistorySessionResult {
@@ -143,6 +152,18 @@ export interface SearchFilesResult {
   truncated: boolean;
 }
 
+export interface DiffFileEntry {
+  filePath: string;
+  originalContent: string;
+  modifiedContent: string;
+  languageId?: string;
+}
+
+export interface DiffPreviewData {
+  files: DiffFileEntry[];
+  currentIndex: number;
+}
+
 export interface ReadFileEntry {
   path: string;
   content: string;
@@ -170,4 +191,16 @@ export interface RevertHistoryData {
   revertedOperationIds: string[];
   status: 'success' | 'failed';
   errorMessage?: string;
+}
+
+export interface SnapshotDataResult {
+  sessionId: string;
+  snapshotType: 'pre' | 'post';
+  files: Record<string, string>;
+  diffFromPrevious: string;
+}
+
+export interface SessionSnapshotsResult {
+  pre: SnapshotDataResult;
+  post: SnapshotDataResult;
 }

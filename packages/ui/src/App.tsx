@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Send, PlusCircle, ExternalLink, Copy, Check } from 'lucide-react';
+import { Send, PlusCircle, ExternalLink, Copy, Check, Eye } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
 import ReadResultsPanel from './components/ReadResultsPanel';
-import CustomScrollbar from './components/CustomScrollbar';
+import DiffPreviewPanel from './components/DiffPreviewPanel';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
 function App() {
@@ -25,6 +25,10 @@ function App() {
     return <ReadResultsPanel />;
   }
 
+  if (viewMode === 'diff-preview') {
+    return <DiffPreviewPanel />;
+  }
+
   const [inputText, setInputText] = useState('');
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
@@ -41,6 +45,11 @@ function App() {
     sendPrompt(inputText);
     sendToExtension({ command: 'applyPatch', text: inputText });
     setInputText('');
+  };
+
+  const handlePreview = () => {
+    if (!inputText.trim()) return;
+    sendToExtension({ command: 'previewPatch', text: inputText });
   };
 
   useEffect(() => {
@@ -97,7 +106,7 @@ function App() {
           Management
         </button>
       </div>
-      <CustomScrollbar ref={chatAreaRef} className="flex-1 px-4 py-4">
+      <div ref={chatAreaRef} className="flex-1 overflow-y-auto px-4 py-4">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
             <img src={imageUri} alt="Brud Code Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
@@ -157,7 +166,7 @@ function App() {
             )}
           </div>
         ) : null}
-      </CustomScrollbar>
+      </div>
 
       <div className="pt-4 px-4 pb-2">
         {sessionState === 'complete' ? (
@@ -169,22 +178,30 @@ function App() {
             Create New Brud Code Session
           </button>
         ) : (
-          <div className="relative">
-            <CustomScrollbar className="w-full min-h-[100px]">
-              <textarea
-                value={inputText}
-                onChange={e => setInputText(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Paste your Brud Prompt here..."
-                className="w-full min-h-[100px] rounded-md bg-surface-2 border border-border p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none focus:border-primary text-sm"
-              />
-            </CustomScrollbar>
-            <button
-              onClick={handleSend}
-              className="absolute bottom-4 right-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white w-9 h-9 rounded-md flex items-center justify-center cursor-pointer"
-            >
-              <Send size={16} />
-            </button>
+          <div className="bg-surface-2 border border-border rounded-md">
+            <textarea
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Paste your Brud Prompt here..."
+              className="w-full min-h-[100px] rounded-t-md bg-surface-2 p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none text-sm"
+            />
+            <div className="flex items-center justify-end gap-1 px-2 py-1.5 bg-surface-2 rounded-b-md">
+              <button
+                onClick={handlePreview}
+                className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text hover:brightness-125 cursor-pointer rounded transition-all"
+                title="Preview Diff"
+              >
+                <Eye size={16} />
+              </button>
+              <button
+                onClick={handleSend}
+                className="flex items-center justify-center w-8 h-8 text-text-muted hover:text-text hover:brightness-125 cursor-pointer rounded transition-all"
+                title="Execute"
+              >
+                <Send size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>

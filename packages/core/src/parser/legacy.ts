@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -30,6 +30,10 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let currentReadMaxDepth = 5;
   let currentReadExclude: string[] = [];
   let currentReadImportSyntax: string[] = [];
+  let currentTerminalCommand = '';
+  let currentTerminalAnswers: string[] = [];
+  let currentTerminalTimeout = 120;
+  let currentTerminalCwd = '';
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -282,6 +286,23 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentReadImportSyntax = [];
   }
 
+  function flushTerminalInteractive() {
+    if (currentIndex && currentTerminalCommand) {
+      operations.push({
+        kind: 'terminal_interactive',
+        command: currentTerminalCommand,
+        answers: currentTerminalAnswers,
+        timeout: currentTerminalTimeout,
+        cwd: currentTerminalCwd || undefined,
+        index: currentIndex,
+      });
+    }
+    currentTerminalCommand = '';
+    currentTerminalAnswers = [];
+    currentTerminalTimeout = 120;
+    currentTerminalCwd = '';
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -358,6 +379,13 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const readDirectoryPathMatch = line.match(/^Directory Path:\s*(.+)/);
     const readRecursiveMatch = line.match(/^Recursive:\s*(true|false)/i);
     const importSyntaxMatch = line.match(/^importSyntax:\s*(.+)/);
+    const terminalInteractiveMatch = line.match(/^<<<<<<< TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
+    const endTerminalInteractiveMatch = line.match(/^>>>>>>> END TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
+    const commandMatch = line.match(/^Command:\s*(.+)/);
+    const answersHeaderMatch = line.match(/^Answers:/);
+    const answerListItemMatch = line.match(/^\s*-\s*(.+)/);
+    const timeoutFieldMatch = line.match(/^Timeout:\s*(\d+)/);
+    const workingDirectoryMatch = line.match(/^Working Directory:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -498,6 +526,15 @@ if (searchFilesMatch) {
         currentReadIsImportRead = false;
         currentReadMaxDepth = 5;
         currentReadExclude = [];
+        continue;
+      }
+      if (terminalInteractiveMatch) {
+        currentState = 'TERMINAL_INTERACTIVE';
+        currentIndex = terminalInteractiveMatch[1];
+        currentTerminalCommand = '';
+        currentTerminalAnswers = [];
+        currentTerminalTimeout = 120;
+        currentTerminalCwd = '';
         continue;
       }
       if (filePathMatch) {
@@ -1000,6 +1037,36 @@ if (searchFilesMatch) {
       }
       if (importSyntaxMatch) {
         currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'TERMINAL_INTERACTIVE') {
+      if (endTerminalInteractiveMatch) {
+        if (endTerminalInteractiveMatch[1] === currentIndex) {
+          flushTerminalInteractive();
+        }
+        reset();
+        continue;
+      }
+      if (commandMatch) {
+        currentTerminalCommand = commandMatch[1].trim();
+        continue;
+      }
+      if (answersHeaderMatch) {
+        continue;
+      }
+      if (answerListItemMatch) {
+        currentTerminalAnswers.push(answerListItemMatch[1].trim());
+        continue;
+      }
+      if (timeoutFieldMatch) {
+        currentTerminalTimeout = parseInt(timeoutFieldMatch[1], 10);
+        continue;
+      }
+      if (workingDirectoryMatch) {
+        currentTerminalCwd = workingDirectoryMatch[1].trim();
         continue;
       }
       continue;

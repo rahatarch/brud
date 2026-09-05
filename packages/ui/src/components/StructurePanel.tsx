@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Copy, Check, FileText } from 'lucide-react';
-import CustomScrollbar from './CustomScrollbar';
 import { sendToExtension } from '../bridge/vscodeBridge';
 
 interface StructureData {
@@ -122,7 +121,7 @@ function StructurePanel() {
         </button>
       </div>
 
-      <CustomScrollbar className="flex-1">
+      <div className="flex-1 overflow-y-auto">
         {searchResults ? (
           <div>
             <div className="px-6 py-3 border-b border-border bg-surface-2 text-sm text-text-secondary">
@@ -197,7 +196,7 @@ function StructurePanel() {
             </div>
           ))
         )}
-      </CustomScrollbar>
+      </div>
     </div>
   );
 }
