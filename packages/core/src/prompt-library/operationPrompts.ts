@@ -249,3 +249,33 @@ Exclude: *.test.ts
 - Exclude: glob patterns to skip (optional)
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const terminalInteractivePrompt = `Use TERMINAL_INTERACTIVE to run terminal commands that require interactive prompt responses.
+
+Describe the command and the answers to feed to its interactive prompts below:
+
+<<<<<<< TERMINAL_INTERACTIVE [1]
+Command: npm init
+Answers:
+  - brud-app
+  - 1.0.0
+  - My App
+  - index.js
+  - node index.js
+  - 
+  - 
+  - Your Name
+  - MIT
+  - yes
+Timeout: 120
+>>>>>>> END TERMINAL_INTERACTIVE [1]
+
+- Command: the terminal command to run
+- Answers: responses fed to interactive prompts IN ORDER
+- Empty answer (just -) means accept default (sends Enter)
+- Timeout: maximum seconds to wait (default 120)
+- The answers are sent sequentially with small delays
+- User must know their tool's question order
+- Works with any interactive CLI (npm init, scaffolding tools, wizards)
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

@@ -1,4 +1,4 @@
-import { executeFileOperations, FileOperation, validateWorkspacePath } from '@brud/core';
+import { executeFileOperations, FileOperation, validateWorkspacePath, executeTerminalCommand } from '@brud/core';
 import type { HistoryStore } from '@brud/core';
 import type { OperationResult } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
@@ -21,5 +21,5 @@ export async function executeOperationsFromVSCode(
     };
   }
   
-  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt);
+  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand });
 }

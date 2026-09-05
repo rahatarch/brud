@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { getAllPrompts, getPromptById } from '@brud/core';
 import { Copy, Check, ArrowLeft, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
-import CustomScrollbar from './CustomScrollbar';
 
 function PromptLibrary() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const detailViewRef = useRef<HTMLDivElement>(null);
 
   const PROMPTS_PER_PAGE = 10;
   const prompts = getAllPrompts();
@@ -47,7 +47,7 @@ function PromptLibrary() {
     }
 
     return (
-      <div className="flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
+      <div ref={detailViewRef} className="min-h-0 flex-1 flex flex-col px-6 py-6 max-w-4xl mx-auto w-full">
         <button
           onClick={handleBack}
           className="flex items-center gap-2 text-sm text-text-secondary hover:text-text mb-4 cursor-pointer self-start"
@@ -78,11 +78,11 @@ function PromptLibrary() {
 
         <p className="text-sm text-text-secondary mb-4">{prompt.description}</p>
 
-        <CustomScrollbar className="flex-1 bg-surface-2 border border-border rounded-lg p-4 max-h-[60vh]">
-          <pre className="text-sm text-text-secondary font-mono whitespace-pre-wrap wrap-break-words">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-surface-2 border border-border rounded-lg p-4 max-h-[60vh]">
+          <pre className="text-sm text-text-secondary font-mono whitespace-pre-wrap break-all">
             {prompt.content}
           </pre>
-        </CustomScrollbar>
+        </div>
       </div>
     );
   }

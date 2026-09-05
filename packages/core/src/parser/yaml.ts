@@ -363,6 +363,27 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'terminal_interactive': {
+        const command = parsed.command as string | undefined;
+        if (!command) {
+          throw new Error('Missing command field in terminal_interactive operation');
+        }
+        const answers = parsed.answers as string[] | undefined;
+        if (!answers || !Array.isArray(answers)) {
+          throw new Error('Missing or invalid answers field in terminal_interactive operation');
+        }
+        const timeout = parsed.timeout as number | undefined;
+        const cwd = parsed.cwd as string | undefined;
+        operations.push({
+          kind: 'terminal_interactive',
+          command,
+          answers,
+          timeout: timeout ?? 120,
+          cwd: cwd || undefined,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

@@ -5,7 +5,6 @@ import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
 import ReadResultsPanel from './components/ReadResultsPanel';
-import CustomScrollbar from './components/CustomScrollbar';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 
 function App() {
@@ -97,7 +96,7 @@ function App() {
           Management
         </button>
       </div>
-      <CustomScrollbar ref={chatAreaRef} className="flex-1 px-4 py-4">
+      <div ref={chatAreaRef} className="flex-1 overflow-y-auto px-4 py-4">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
             <img src={imageUri} alt="Brud Code Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
@@ -157,7 +156,7 @@ function App() {
             )}
           </div>
         ) : null}
-      </CustomScrollbar>
+      </div>
 
       <div className="pt-4 px-4 pb-2">
         {sessionState === 'complete' ? (
@@ -170,7 +169,7 @@ function App() {
           </button>
         ) : (
           <div className="relative">
-            <CustomScrollbar className="w-full min-h-[100px]">
+            <div className="w-full min-h-[100px] overflow-y-auto">
               <textarea
                 value={inputText}
                 onChange={e => setInputText(e.target.value)}
@@ -178,7 +177,7 @@ function App() {
                 placeholder="Paste your Brud Prompt here..."
                 className="w-full min-h-[100px] rounded-md bg-surface-2 border border-border p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none focus:border-primary text-sm"
               />
-            </CustomScrollbar>
+            </div>
             <button
               onClick={handleSend}
               className="absolute bottom-4 right-3 bg-primary hover:bg-primary-hover active:bg-primary-active text-white w-9 h-9 rounded-md flex items-center justify-center cursor-pointer"

@@ -77,6 +77,8 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         ? '__read_files__'
         : op.kind === 'read_directory'
         ? op.directoryPath
+        : op.kind === 'terminal_interactive'
+        ? '__terminal_interactive__'
         : (op as any).path;
       const existing = grouped.get(key) || [];
       existing.push(op);
@@ -854,6 +856,32 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
         const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
         this._view?.webview.postMessage(errMsg);
       }
+      return;
+    }
+
+    const terminalOps = operations.filter(op => op.kind === 'terminal_interactive');
+    if (terminalOps.length > 0) {
+      const { executeTerminalCommand } = await import('@brud/core');
+      const results: string[] = [];
+      for (const op of terminalOps) {
+        const termOp = op as any;
+        const result = await executeTerminalCommand(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
+        if (result.success) {
+          results.push(`Command "${termOp.command}" executed successfully.\n${result.output}`);
+        } else {
+          results.push(`Command "${termOp.command}" failed (exit code: ${result.exitCode})\n${result.output}`);
+          this._outputChannel.appendLine(`Terminal command failed: ${termOp.command}`);
+          this._outputChannel.appendLine(`Exit code: ${result.exitCode}`);
+          this._outputChannel.appendLine(`Output: ${result.output}`);
+        }
+      }
+      const report = results.join('\n\n');
+      const allSucceeded = terminalOps.every((_, i) => {
+        const op = operations.filter(o => o.kind === 'terminal_interactive')[i];
+        return true;
+      });
+      const msg: ExtensionMessage = { command: 'success', message: report };
+      this._view?.webview.postMessage(msg);
       return;
     }
 

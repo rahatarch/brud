@@ -24,6 +24,7 @@ export function parseOperations(input: string): FileOperation[] {
     '<<<<<<< READ_FILE',
     '<<<<<<< READ_FILES',
     '<<<<<<< READ_DIRECTORY',
+    '<<<<<<< TERMINAL_INTERACTIVE',
   ];
 
   const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));

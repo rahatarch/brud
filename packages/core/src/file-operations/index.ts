@@ -1,5 +1,5 @@
 import path from 'path';
-import { FileOperation } from '../types/patch';
+import { FileOperation, TerminalInteractiveOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
@@ -9,6 +9,7 @@ import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
+import type { TerminalExecutor } from '../terminal/types';
 
 let operationIdCounter = 0;
 
@@ -45,12 +46,15 @@ export interface FileOperationResult {
   operationResults: OperationResult[];
 }
 
+
+
 export async function executeFileOperations(
   operations: FileOperation[],
   fs: FileSystem,
   workspaceFolders: string[],
   historyStore?: HistoryStore,
   originalPrompt?: string,
+  terminalExecutor?: TerminalExecutor,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'], operationResults: [] };
@@ -1211,6 +1215,35 @@ operationResults.push({
             status: 'success',
             message: JSON.stringify(resultData),
             path: operation.directoryPath,
+          });
+          break;
+        }
+
+        case 'terminal_interactive': {
+          if (!terminalExecutor) {
+            errors.push('Terminal executor not available. This operation requires a VS Code environment.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_interactive',
+              status: 'failed',
+              message: 'Terminal executor not available.',
+              path: '',
+            });
+            continue;
+          }
+
+          const termOp = operation as TerminalInteractiveOperation;
+          const termResult = await terminalExecutor.execute(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'terminal_interactive',
+            status: termResult.success ? 'success' : 'failed',
+            message: termResult.success
+              ? `Terminal command executed successfully.\nOutput:\n${termResult.output}`
+              : `Terminal command failed (exit code: ${termResult.exitCode})\nOutput:\n${termResult.output}`,
+            path: '',
           });
           break;
         }

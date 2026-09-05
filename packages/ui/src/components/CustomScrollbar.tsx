@@ -8,6 +8,7 @@ interface CustomScrollbarProps {
 const CustomScrollbar = forwardRef<HTMLDivElement, CustomScrollbarProps>(
   function CustomScrollbar({ children, className = '' }, ref) {
     const contentRef = useRef<HTMLDivElement>(null);
+    const wrapperRef = useRef<HTMLDivElement>(null);
     const [scrollTop, setScrollTop] = useState(0);
     const [scrollHeight, setScrollHeight] = useState(0);
     const [clientHeight, setClientHeight] = useState(0);
@@ -21,26 +22,21 @@ const CustomScrollbar = forwardRef<HTMLDivElement, CustomScrollbarProps>(
         setScrollTop(el.scrollTop);
         setScrollHeight(el.scrollHeight);
         setClientHeight(el.clientHeight);
-        const showThumb = el.scrollHeight > el.clientHeight;
-        console.log('updateScrollInfo called', { scrollHeight: el.scrollHeight, clientHeight: el.clientHeight, showThumb });
       }
     }, []);
 
     useEffect(() => {
-      console.log('CustomScrollbar mounted');
       const el = contentRef.current;
+      const wrapper = wrapperRef.current;
       if (!el) return;
       updateScrollInfo();
       const observer = new ResizeObserver(updateScrollInfo);
       observer.observe(el);
+      if (wrapper) observer.observe(wrapper);
       return () => observer.disconnect();
     }, [updateScrollInfo]);
 
     const handleScroll = useCallback(() => {
-      const el = contentRef.current;
-      if (el) {
-        console.log('Scroll event fired', { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight });
-      }
       updateScrollInfo();
     }, [updateScrollInfo]);
 
@@ -88,13 +84,12 @@ const CustomScrollbar = forwardRef<HTMLDivElement, CustomScrollbarProps>(
       document.addEventListener('mouseup', handleMouseUp);
     }, [clientHeight, scrollHeight]);
 
-    console.log('Rendering CustomScrollbar', { showThumb, thumbHeight, thumbTop });
-
     return (
-      <div className={`relative overflow-hidden ${className}`}>
+      <div ref={wrapperRef} data-custom-scrollbar className={`relative overflow-hidden ${className}`}>
         <div
           ref={contentRef}
-          className="h-full overflow-y-scroll brud-hide-native-scrollbar"
+          data-scroll-inner
+          className="h-full overflow-y-scroll"
           onScroll={handleScroll}
         >
           {children}
