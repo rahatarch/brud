@@ -11,7 +11,7 @@ import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
-import type { TerminalExecutor } from '../terminal/types';
+import type { TerminalExecutor, GroupResult } from '../terminal/types';
 
 let operationIdCounter = 0;
 
@@ -1359,13 +1359,12 @@ operationResults.push({
               continue;
             }
             const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
-            const groupResult = await terminalExecutor.executeSequential(
-              termCmdOp.commands,
-              cwdValidation.resolvedCwd,
-              termCmdTimeout,
-              termCmdOp.env,
-              termCmdOp.stopOnFailure,
-            );
+            let groupResult: GroupResult;
+            if (termCmdOp.mode === 'parallel') {
+              groupResult = await terminalExecutor.executeParallel(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
+            } else {
+              groupResult = await terminalExecutor.executeSequential(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, termCmdOp.stopOnFailure);
+            }
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
             operationResults.push({

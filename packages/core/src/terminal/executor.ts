@@ -180,3 +180,28 @@ export const executeSequential: TerminalExecutor['executeSequential'] = async (
 
   return { success, results, totalDuration };
 };
+
+export const executeParallel: TerminalExecutor['executeParallel'] = async (
+  commands: string[],
+  cwd?: string,
+  timeout: number = 120000,
+  env?: Record<string, string>,
+): Promise<GroupResult> => {
+  const results = await Promise.all(
+    commands.map(async (command) => {
+      const result = await executeCommand(command, cwd, timeout, env);
+      return {
+        command,
+        success: result.success,
+        output: result.output,
+        exitCode: result.exitCode,
+        duration: result.duration,
+      };
+    }),
+  );
+
+  const totalDuration = Math.max(...results.map(r => r.duration));
+  const success = results.every(r => r.success);
+
+  return { success, results, totalDuration };
+};
