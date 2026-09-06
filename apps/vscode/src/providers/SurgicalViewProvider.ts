@@ -1022,6 +1022,12 @@ fileIndex: this._currentFileIndex,
     const items = this._toTerminalOperationData([opResult], fileOps);
     unifiedResults.operations.push(...items);
   }
+  if (opResult.kind === 'get_tool_info') {
+    unifiedResults.operations.push({
+      toolKind: 'tool_info',
+      data: { message: opResult.message, status: opResult.status },
+    });
+  }
 }
     }
 

@@ -280,6 +280,24 @@ Timeout: 120
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
 
+export const getToolInfoPrompt = `Use GET_TOOL_INFO to discover available tools and their documentation.
+
+Without Tool field: returns list of all available tools with names and descriptions.
+With Tool field: returns full documentation for that specific tool.
+
+Use this to discover what Brud Code can do before requesting operations. Tool IDs use snake_case (e.g., create_file, search_replace).
+
+List all tools:
+<<<<<<< GET_TOOL_INFO [1]
+>>>>>>> END GET_TOOL_INFO [1]
+
+Get specific tool documentation:
+<<<<<<< GET_TOOL_INFO [1]
+Tool: create_file
+>>>>>>> END GET_TOOL_INFO [1]
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
 export const terminalCommandPrompt = `Use TERMINAL_COMMAND to run terminal commands — single, sequential, parallel, or conditional.
 
 Describe the command(s) to run below:

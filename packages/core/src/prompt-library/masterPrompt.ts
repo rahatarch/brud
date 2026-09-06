@@ -35,7 +35,11 @@ The Correct Flow:
 
 ## Available Operations
 
-Use GET_TOOL_INFO to discover available tools. Call without arguments to list all tools, or with Tool: <kind> for specific documentation.
+Use GET_TOOL_INFO to discover available tools and their documentation.
+
+- Call without the Tool field to list all tools with names and descriptions
+- Call with Tool: <tool_id> (snake_case) for specific tool documentation
+- This is how you discover what Brud Code can do — use this before requesting any operation you're unsure about
 
 <<<<<<< GET_TOOL_INFO [1]
 >>>>>>> END GET_TOOL_INFO [1]

@@ -21,6 +21,7 @@ import {
   readDirectoryPrompt,
   terminalInteractivePrompt,
   terminalCommandPrompt,
+  getToolInfoPrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -152,6 +153,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Terminal Command',
       description: 'Run terminal commands — single, sequential, parallel, or conditional',
       content: terminalCommandPrompt,
+    },
+    {
+      id: 'get-tool-info',
+      title: 'Get Tool Info',
+      description: 'Discover available tools and their documentation',
+      content: getToolInfoPrompt,
     },
   ],
 };

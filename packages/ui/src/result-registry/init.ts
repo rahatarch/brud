@@ -4,6 +4,7 @@ import { readRenderer } from './renderers/readRenderer';
 import { searchRenderer } from './renderers/searchRenderer';
 import { metadataRenderer } from './renderers/metadataRenderer';
 import { terminalRenderer } from './renderers/terminalRenderer';
+import { toolInfoRenderer } from './renderers/toolInfoRenderer';
 
 export function initResultRegistry(): void {
   globalRegistry.registerRenderer(structureRenderer);
@@ -11,4 +12,5 @@ export function initResultRegistry(): void {
   globalRegistry.registerRenderer(searchRenderer);
   globalRegistry.registerRenderer(metadataRenderer);
   globalRegistry.registerRenderer(terminalRenderer);
+  globalRegistry.registerRenderer(toolInfoRenderer);
 }
