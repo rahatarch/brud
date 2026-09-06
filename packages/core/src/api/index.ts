@@ -15,6 +15,8 @@ import {
   multipleMatchesError,
 } from './errors';
 
+export type { BrudError, ValidationResult } from './types';
+
 const DANGEROUS_PATTERNS: RegExp[] = [
   /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
   /\brm\s+-(?:rf|fr)\s+\*\s*$/,
