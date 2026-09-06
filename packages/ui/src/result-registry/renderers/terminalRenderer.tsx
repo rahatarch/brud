@@ -9,9 +9,9 @@ interface TerminalResultData {
   success: boolean;
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 1) return `${(seconds * 1000).toFixed(0)}ms`;
-  return `${seconds.toFixed(1)}s`;
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms.toFixed(0)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
 }
 
 export const terminalRenderer: ToolResultRenderer = {
