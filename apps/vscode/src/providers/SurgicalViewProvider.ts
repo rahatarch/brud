@@ -466,6 +466,9 @@ fileIndex: this._currentFileIndex,
             this._unifiedResultsPanelManager?.openUnifiedResultsPanel(this._lastExecutionResult);
           }
           break;
+        case 'previewNoChanges':
+          this._diffPreviewPanelManager.openNoPreviewPanel('No changes found. The search text was not found in any of the files.');
+          break;
       }
     });
   }
@@ -526,12 +529,19 @@ fileIndex: this._currentFileIndex,
         modifiedContent = createFileOps[0].content;
       } else if (appendFileOps.length > 0) {
         modifiedContent = originalContent;
+        let hasContentChange = false;
         for (const op of appendFileOps) {
-          if (op.position === 'end') {
-            modifiedContent += op.content;
-          } else {
-            modifiedContent = op.content + modifiedContent;
+          if (op.content && op.content.length > 0) {
+            hasContentChange = true;
+            if (op.position === 'end') {
+              modifiedContent += op.content;
+            } else {
+              modifiedContent = op.content + modifiedContent;
+            }
           }
+        }
+        if (!hasContentChange) {
+          continue;
         }
       } else if (searchReplaceOps.length > 0) {
         const blocks: PatchBlock[] = searchReplaceOps.map(op => ({
@@ -552,10 +562,10 @@ fileIndex: this._currentFileIndex,
         if (matches) {
           modifiedContent = reconstructContent(docLines, matches);
         } else {
-          modifiedContent = originalContent;
+          continue;
         }
       } else {
-        modifiedContent = originalContent;
+        continue;
       }
 
       const fileExtension = filePath.split('.').pop() || '';
@@ -574,6 +584,37 @@ fileIndex: this._currentFileIndex,
         modifiedContent,
         languageId: languageMap[fileExtension] || 'plaintext',
       });
+    }
+
+    if (diffFiles.length === 0) {
+      const searchBlocks = operations
+        .filter(op => op.kind === 'search_replace')
+        .map(op => (op as any).search)
+        .filter(Boolean);
+      const searchText = searchBlocks.length > 0
+        ? searchBlocks.slice(0, 3).join('\n\n---\n\n')
+        : 'N/A';
+      const copyMessage = "The search text was not found in the file. Please check the content and provide the correct search block.";
+      const structured: ReportSection[] = [
+        {
+          type: 'text',
+          content: "I couldn't find the search text in your files. This usually means the content has changed since you got the block from your AI, or there's a formatting mismatch.",
+        },
+        {
+          type: 'details',
+          title: 'Search Text',
+          content: searchText,
+        },
+        {
+          type: 'button',
+          buttonText: 'See Details',
+          buttonAction: 'previewNoChanges',
+        },
+      ];
+      const msg: ExtensionMessage = { command: 'previewNoChanges', message: 'No changes found.', structured };
+      this._view?.webview.postMessage(msg);
+      this._diffPreviewPanelManager.openNoPreviewPanel('No changes found. The search text was not found in any of the files.');
+      return;
     }
 
     const diffPreviewData: DiffPreviewData = {
@@ -935,6 +976,7 @@ fileIndex: this._currentFileIndex,
 
   private async _handleApplyPatch(text: string) {
     await this._closePreviewTabs();
+    this._diffPreviewPanelManager.closePanel();
     this._outputChannel.appendLine('DEBUG: Before parseOperations');
 
     let operations;

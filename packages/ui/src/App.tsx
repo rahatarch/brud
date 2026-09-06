@@ -32,6 +32,14 @@ function StatusBadge({ status }: { status: 'success' | 'failed' | 'aborted' }) {
 }
 
 function StructuredReport({ sections }: { sections: ReportSection[] }) {
+  const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
+
+  const handleCopyText = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedIndex(key);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
   return (
     <div className="flex flex-col gap-3 mt-2 overflow-x-hidden break-words">
       {sections.map((section, i) => {
@@ -82,6 +90,21 @@ function StructuredReport({ sections }: { sections: ReportSection[] }) {
             return (
               <div key={i} className="text-sm text-text leading-relaxed">
                 {section.content}
+              </div>
+            );
+          case 'copyButton':
+            return (
+              <div key={i}>
+                <button
+                  onClick={() => handleCopyText(section.copyText || '', `copy-${i}`)}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-hover cursor-pointer bg-surface-2 border border-border-subtle rounded px-3 py-2 transition-colors w-full text-left break-words"
+                >
+                  {copiedIndex === `copy-${i}` ? (
+                    <><Check size={12} /> Copied!</>
+                  ) : (
+                    <><Copy size={12} /> {section.buttonText || 'Copy'}</>
+                  )}
+                </button>
               </div>
             );
           case 'button':
@@ -173,6 +196,8 @@ function App() {
         addReport(message.message || '', message.structured);
       } else if (message.command === 'error') {
         addReport('[Error] ' + (message.message || 'An error occurred.'), message.structured);
+      } else if (message.command === 'previewNoChanges') {
+        addReport('[Error] ' + (message.message || 'No changes found.'), message.structured);
       }
     });
   }, [addReport]);
@@ -288,7 +313,24 @@ function App() {
                 </div>
                 {msg.type === 'brud' && (
                   <button
-                    onClick={() => handleCopyMessage(msg.id, msg.content)}
+                    onClick={() => {
+                      const textToCopy = msg.structured && msg.structured.length > 0
+                        ? msg.structured
+                            .map(section => {
+                              const parts: string[] = [];
+                              if (section.title) parts.push(section.title);
+                              if (section.content) parts.push(section.content);
+                              if (section.items) {
+                                parts.push(section.items.map(item => `${item.label}: ${item.value}`).join('\n'));
+                              }
+                              if (section.copyText) parts.push(section.copyText);
+                              return parts.filter(Boolean).join('\n');
+                            })
+                            .filter(text => text.length > 0)
+                            .join('\n\n')
+                        : msg.content;
+                      handleCopyMessage(msg.id, textToCopy);
+                    }}
                     className="ml-1 mt-1 text-text-muted hover:text-text transition-colors cursor-pointer"
                     title="Copy message"
                   >

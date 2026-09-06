@@ -22,12 +22,14 @@ export class BrudDiffPreviewPanelManager {
     }
   }
 
-  public openNoPreviewPanel() {
-    const message = { command: 'noPreviewableOps' };
+  public openNoPreviewPanel(detail?: string) {
+    const msg = detail
+      ? { command: 'noPreviewableOps', detail }
+      : { command: 'noPreviewableOps' };
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
-      this._panel.webview.postMessage(message);
+      this._panel.webview.postMessage(msg);
       return;
     }
 
@@ -46,7 +48,7 @@ export class BrudDiffPreviewPanelManager {
 
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
-    this._pendingMessage = message;
+    this._pendingMessage = msg;
 
     this._panel.onDidDispose(() => {
       this._panel = undefined;

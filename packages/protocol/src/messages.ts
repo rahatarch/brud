@@ -28,7 +28,8 @@ export type WebviewCommand =
   | 'permanentDelete'
   | 'getSessionSnapshots'
   | 'openUnifiedResults'
-  | 'openPromptLibrary';
+  | 'openPromptLibrary'
+  | 'previewNoChanges';
 
 export type ExtensionCommand =
   | 'success'
@@ -51,7 +52,8 @@ export type ExtensionCommand =
   | 'readResult'
   | 'diffPreviewResult'
   | 'filePatched'
-  | 'sessionSnapshotsResult';
+  | 'sessionSnapshotsResult'
+  | 'previewNoChanges';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -65,12 +67,13 @@ export interface WebviewMessage {
 }
 
 export interface ReportSection {
-  type: 'summary' | 'table' | 'details' | 'button' | 'text';
+  type: 'summary' | 'table' | 'details' | 'button' | 'copyButton' | 'text';
   title?: string;
   content?: string;
   items?: Array<{ label: string; value: string; status?: 'success' | 'failed' | 'aborted' }>;
   buttonText?: string;
   buttonAction?: string;
+  copyText?: string;
 }
 
 export interface ExtensionMessage {

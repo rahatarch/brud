@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Play, X, FileText, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Play, X, FileText, Check, AlertTriangle } from 'lucide-react';
 import { sendToExtension } from '../bridge/vscodeBridge';
 
 interface DiffFileEntry {
@@ -77,6 +77,7 @@ function DiffPreviewPanel() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [patchedFileIndices, setPatchedFileIndices] = useState<Set<number>>(new Set());
   const [noPreview, setNoPreview] = useState(false);
+  const [noPreviewDetail, setNoPreviewDetail] = useState<string | undefined>(undefined);
   const [countdown, setCountdown] = useState(5);
   const diffContentRef = useRef<HTMLDivElement>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,6 +101,7 @@ function DiffPreviewPanel() {
       if (message.command === 'noPreviewableOps') {
         setDiffData(null);
         setNoPreview(true);
+        setNoPreviewDetail(message.detail);
         setCountdown(5);
         setSuccessMessage(null);
         setPatchedFileIndices(new Set());
@@ -166,6 +168,8 @@ function DiffPreviewPanel() {
   }, [noPreview]);
 
   const currentFile = diffData?.files[currentFileIndex];
+  const isCurrentFileIdentical = currentFile ? currentFile.originalContent === currentFile.modifiedContent : false;
+  const allFilesIdentical = diffData ? diffData.files.every(f => f.originalContent === f.modifiedContent) : false;
 
   const handlePrevFile = useCallback(() => {
     if (!diffData) return;
@@ -202,6 +206,8 @@ function DiffPreviewPanel() {
   const allPatched = diffData ? patchedFileIndices.size === diffData.files.length : false;
 
   if (noPreview) {
+    const heading = noPreviewDetail ? "No Changes Found" : "Preview Not Available";
+    const description = noPreviewDetail ?? "This tool doesn't support Preview. Use Execute directly.";
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
         <div className="flex items-center gap-3 mb-4">
@@ -211,9 +217,9 @@ function DiffPreviewPanel() {
             </svg>
           </div>
         </div>
-        <h2 className="text-xl font-semibold text-text mb-2">Preview Not Available</h2>
+        <h2 className="text-xl font-semibold text-text mb-2">{heading}</h2>
         <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed mb-4">
-          This tool doesn't support Preview. Use Execute directly.
+          {description}
         </p>
         <p className="text-xs text-text-tertiary">Closing automatically in {countdown}s...</p>
       </div>
@@ -249,6 +255,29 @@ function DiffPreviewPanel() {
     );
   }
 
+  if (allFilesIdentical) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-yellow-400" />
+          </div>
+        </div>
+        <h2 className="text-xl font-semibold text-text mb-2">No changes found</h2>
+        <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed mb-6">
+          The search text was not found in any of the files. No changes can be applied.
+        </p>
+        <button
+          onClick={handleDone}
+          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer"
+        >
+          <X size={14} />
+          Go Back
+        </button>
+      </div>
+    );
+  }
+
   if (successMessage) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
@@ -279,9 +308,9 @@ function DiffPreviewPanel() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExecuteAll}
-            disabled={allPatched}
+            disabled={allPatched || allFilesIdentical}
             className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
-              allPatched
+              allPatched || allFilesIdentical
                 ? 'bg-surface-1 text-text-tertiary cursor-not-allowed'
                 : 'bg-primary hover:bg-primary-hover text-white'
             }`}
@@ -326,6 +355,11 @@ function DiffPreviewPanel() {
                   <Check size={10} />
                 </span>
               )}
+              {!isPatched && diffData.files[index].originalContent === diffData.files[index].modifiedContent && (
+                <span className="ml-1 text-yellow-400">
+                  <AlertTriangle size={10} />
+                </span>
+              )}
             </button>
           );
         })}
@@ -355,10 +389,16 @@ function DiffPreviewPanel() {
           <span className="text-xs text-text-secondary font-mono truncate">
             {currentFile?.filePath || ''}
           </span>
-          <span className={`text-xs font-medium shrink-0 ${patchedFileIndices.has(currentFileIndex) ? 'text-green-400' : 'text-yellow-400'}`}>
-            {patchedFileIndices.has(currentFileIndex) ? 'Patched' : 'Pending'}
+          <span className={`text-xs font-medium shrink-0 ${patchedFileIndices.has(currentFileIndex) ? 'text-green-400' : isCurrentFileIdentical ? 'text-yellow-400' : 'text-yellow-400'}`}>
+            {patchedFileIndices.has(currentFileIndex) ? 'Patched' : isCurrentFileIdentical ? 'No changes' : 'Pending'}
           </span>
-          {!patchedFileIndices.has(currentFileIndex) && (
+          {isCurrentFileIdentical && (
+            <span className="text-xs text-yellow-400 font-medium shrink-0 flex items-center gap-1">
+              <AlertTriangle size={10} />
+              Search text not found
+            </span>
+          )}
+          {!patchedFileIndices.has(currentFileIndex) && !isCurrentFileIdentical && (
             <button
               onClick={handleExecuteCurrent}
               className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer shrink-0"
