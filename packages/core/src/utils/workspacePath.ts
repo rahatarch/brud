@@ -12,11 +12,17 @@ function isWithinWorkspaceFolder(inputPath: string, workspaceFolder: string): bo
 }
 
 export function getWorkspaceRootForPath(targetPath: string, workspaceFolders: string[]): string | null {
-  const normalized = path.resolve(targetPath);
   for (const root of workspaceFolders) {
     const resolvedRoot = path.resolve(root);
-    if (isWithinWorkspaceFolder(normalized, resolvedRoot)) {
-      return resolvedRoot;
+    if (path.isAbsolute(targetPath)) {
+      if (isWithinWorkspaceFolder(path.resolve(targetPath), resolvedRoot)) {
+        return resolvedRoot;
+      }
+    } else {
+      const candidate = path.resolve(resolvedRoot, targetPath);
+      if (isWithinWorkspaceFolder(candidate, resolvedRoot)) {
+        return resolvedRoot;
+      }
     }
   }
   return null;
