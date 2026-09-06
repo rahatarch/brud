@@ -23,6 +23,7 @@ export type WebviewCommand =
   | 'wipeHistory'
   | 'softDeleteSession'
   | 'restoreSession'
+  | 'restoreAllSessions'
   | 'getTrashedSessions'
   | 'permanentDelete'
   | 'getSessionSnapshots';
@@ -43,6 +44,7 @@ export type ExtensionCommand =
   | 'historyWiped'
   | 'trashedSessionsResult'
   | 'sessionRestored'
+  | 'allSessionsRestored'
   | 'searchFilesResult'
   | 'readResult'
   | 'diffPreviewResult'
@@ -74,6 +76,7 @@ export interface ExtensionMessage {
   revertOperationsResult?: RevertSessionResult;
   revertHistory?: RevertHistoryData[];
   deletedCount?: number;
+  restoredCount?: number;
   trashedSessions?: HistorySessionResult[];
   searchResults?: SearchFilesResult;
   readResult?: ReadResultData;

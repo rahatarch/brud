@@ -73,6 +73,9 @@ export class BrudMainWindowManager {
         case 'restoreSession':
           await this._handleRestoreSession(data.sessionId);
           break;
+        case 'restoreAllSessions':
+          await this._handleRestoreAllSessions();
+          break;
         case 'permanentDelete':
           await this._handlePermanentDelete(data.sessionId);
           break;
@@ -213,6 +216,25 @@ export class BrudMainWindowManager {
 
     await this._historyStore.restoreSession(sessionId);
     this._panel?.webview.postMessage({ command: 'sessionRestored' } satisfies ExtensionMessage);
+  }
+
+  private async _handleRestoreAllSessions(): Promise<void> {
+    if (!this._historyStore) {
+      this._panel?.webview.postMessage({ command: 'allSessionsRestored', restoredCount: 0 } satisfies ExtensionMessage);
+      return;
+    }
+
+    const trashedSessions = await this._historyStore.getTrashedSessions();
+    let restoredCount = 0;
+    for (const session of trashedSessions) {
+      try {
+        await this._historyStore.restoreSession(session.sessionId);
+        restoredCount++;
+      } catch {
+        continue;
+      }
+    }
+    this._panel?.webview.postMessage({ command: 'allSessionsRestored', restoredCount } satisfies ExtensionMessage);
   }
 
   private async _handlePermanentDelete(sessionId?: string): Promise<void> {

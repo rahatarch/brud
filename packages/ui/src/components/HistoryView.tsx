@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare, X, Download } from 'lucide-react';
+import { History, CheckCircle, XCircle, AlertCircle, Clock, FileText, ArrowLeft, Loader2, AlertTriangle, Trash2, Square, CheckSquare, X, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { HistorySessionResult, RevertSessionResult, RevertHistoryData, SessionSnapshotsResult } from '@brud/protocol';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import ConfirmationModal from './ConfirmationModal';
@@ -756,6 +756,7 @@ function ScheduledDeletesModal({
   isOpen,
   trashedSessions,
   onRestore,
+  onRestoreAll,
   onPermanentDelete,
   onClose,
   onRefresh,
@@ -763,11 +764,13 @@ function ScheduledDeletesModal({
   isOpen: boolean;
   trashedSessions: HistorySessionResult[];
   onRestore: (sessionId: string) => void;
+  onRestoreAll: () => void;
   onPermanentDelete: (sessionId: string) => void;
   onClose: () => void;
   onRefresh: () => void;
 }) {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [restoreAllLoading, setRestoreAllLoading] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -785,9 +788,25 @@ function ScheduledDeletesModal({
     }
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    const unsubscribe = onExtensionMessage((message) => {
+      if (message.command === 'allSessionsRestored') {
+        setRestoreAllLoading(false);
+        setActionLoading(null);
+        onRefresh();
+      }
+    });
+    return unsubscribe;
+  }, [onRefresh]);
+
   const handleRestore = async (sessionId: string) => {
     setActionLoading(sessionId);
     onRestore(sessionId);
+  };
+
+  const handleRestoreAll = async () => {
+    setRestoreAllLoading(true);
+    onRestoreAll();
   };
 
   const handlePermanentDelete = async (sessionId: string) => {
@@ -808,12 +827,25 @@ function ScheduledDeletesModal({
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h2 className="text-lg font-semibold text-text">Scheduled Deletes</h2>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md text-text-secondary hover:text-text hover:bg-surface-2 transition-colors cursor-pointer"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleRestoreAll}
+              disabled={trashedSessions.length === 0 || restoreAllLoading}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {restoreAllLoading ? (
+                <><Loader2 size={14} className="animate-spin" />Restoring All...</>
+              ) : (
+                <>Restore All ({trashedSessions.length})</>
+              )}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded-md text-text-secondary hover:text-text hover:bg-surface-2 transition-colors cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto p-6">
           {trashedSessions.length === 0 ? (
@@ -889,6 +921,8 @@ function HistoryView() {
   const [sessionToDelete, setSessionToDelete] = useState<HistorySessionResult | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [protectionEnabled, setProtectionEnabled] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const SESSIONS_PER_PAGE = 10;
 
   useEffect(() => {
     setLoading(true);
@@ -905,6 +939,7 @@ function HistoryView() {
           }
         );
         setSessions(sorted);
+        setCurrentPage(1);
         setLoading(false);
       }
       if (message.command === 'trashedSessionsResult' && message.trashedSessions) {
@@ -921,6 +956,9 @@ function HistoryView() {
         setDeleteLoading(false);
       }
       if (message.command === 'sessionRestored') {
+        setRefreshKey(k => k + 1);
+      }
+      if (message.command === 'allSessionsRestored') {
         setRefreshKey(k => k + 1);
       }
       if (message.command === 'revertHistoryResult' && message.revertHistory) {
@@ -1002,6 +1040,10 @@ function HistoryView() {
     sendToExtension({ command: 'restoreSession', sessionId });
   }, []);
 
+  const handleRestoreAllSessions = useCallback(() => {
+    sendToExtension({ command: 'restoreAllSessions' });
+  }, []);
+
   const handlePermanentDeleteSession = useCallback((sessionId: string) => {
     sendToExtension({ command: 'permanentDelete', sessionId });
   }, []);
@@ -1010,7 +1052,12 @@ function HistoryView() {
     sendToExtension({ command: 'getTrashedSessions' });
   }, []);
 
-  const grouped = groupByDate(sessions);
+  const totalPages = Math.ceil(sessions.length / SESSIONS_PER_PAGE);
+  const startIndex = (currentPage - 1) * SESSIONS_PER_PAGE;
+  const endIndex = startIndex + SESSIONS_PER_PAGE;
+  const visibleSessions = sessions.slice(startIndex, endIndex);
+
+  const grouped = groupByDate(visibleSessions);
 
   if (viewState === 'revertDetail' && selectedSession && selectedRevert) {
     return (
@@ -1068,6 +1115,7 @@ function HistoryView() {
           isOpen={showScheduledDeletes}
           trashedSessions={trashedSessions}
           onRestore={handleRestoreSession}
+          onRestoreAll={handleRestoreAllSessions}
           onPermanentDelete={handlePermanentDeleteSession}
           onClose={() => setShowScheduledDeletes(false)}
           onRefresh={handleRefreshTrash}
@@ -1166,10 +1214,35 @@ function HistoryView() {
         ))}
       </div>
 
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4 mt-6">
+          <button
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage === 1}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-border bg-surface hover:bg-surface-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <ChevronLeft size={16} />
+            Previous
+          </button>
+          <span className="text-sm text-text-secondary">
+            Page {currentPage} of {totalPages}
+          </span>
+          <button
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage === totalPages}
+            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded-md border border-border bg-surface hover:bg-surface-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Next
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
+
       <ScheduledDeletesModal
         isOpen={showScheduledDeletes}
         trashedSessions={trashedSessions}
         onRestore={handleRestoreSession}
+        onRestoreAll={handleRestoreAllSessions}
         onPermanentDelete={handlePermanentDeleteSession}
         onClose={() => setShowScheduledDeletes(false)}
         onRefresh={handleRefreshTrash}
