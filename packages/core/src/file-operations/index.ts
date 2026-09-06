@@ -39,7 +39,7 @@ export interface OperationResult {
   to?: string;
   directoryPath?: string;
   files?: string[];
-  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean };
+  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
 
 export interface FileOperationResult {
@@ -1324,6 +1324,68 @@ operationResults.push({
           }
 
           const termCmdOp = operation as TerminalCommandOperation;
+
+          if (termCmdOp.commands && termCmdOp.commands.length > 0) {
+            let hasDangerous = false;
+            for (const cmd of termCmdOp.commands) {
+              if (isDangerousCommand(cmd)) {
+                errors.push(`Dangerous terminal command blocked: ${cmd}`);
+                operationResults.push({
+                  operationIndex: i,
+                  operationId: generateOperationId(),
+                  kind: 'terminal_command',
+                  status: 'failed',
+                  message: `Dangerous terminal command blocked: ${cmd}`,
+                  path: '',
+                });
+                hasDangerous = true;
+                break;
+              }
+            }
+            if (hasDangerous) {
+              continue;
+            }
+            const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
+            if (!cwdValidation.valid) {
+              errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'terminal_command',
+                status: 'failed',
+                message: cwdValidation.error || 'Invalid working directory for terminal command',
+                path: '',
+              });
+              continue;
+            }
+            const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
+            const groupResult = await terminalExecutor.executeSequential(
+              termCmdOp.commands,
+              cwdValidation.resolvedCwd,
+              termCmdTimeout,
+              termCmdOp.env,
+              termCmdOp.stopOnFailure,
+            );
+            const succeeded = groupResult.results.filter(r => r.success).length;
+            const failed = groupResult.results.filter(r => !r.success).length;
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_command',
+              status: groupResult.success ? 'success' : 'failed',
+              message: `Executed ${groupResult.results.length} commands. ${succeeded} succeeded, ${failed} failed.`,
+              path: '',
+              data: groupResult.results.map(r => ({
+                command: r.command,
+                output: r.output,
+                exitCode: r.exitCode,
+                duration: r.duration,
+                success: r.success,
+              })),
+            });
+            break;
+          }
+
           if (isDangerousCommand(termCmdOp.command)) {
             errors.push(`Dangerous terminal command blocked: ${termCmdOp.command}`);
             operationResults.push({

@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import type { TerminalExecutor, TerminalResult } from './types';
+import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand } from './types';
 
 function stripAnsiCodes(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
@@ -147,4 +147,36 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
   }
 
   return processDone;
+};
+
+export const executeSequential: TerminalExecutor['executeSequential'] = async (
+  commands: string[],
+  cwd?: string,
+  timeout: number = 120000,
+  env?: Record<string, string>,
+  stopOnFailure?: boolean,
+): Promise<GroupResult> => {
+  const results: ExecutedCommand[] = [];
+  let overallSuccess = true;
+
+  for (const command of commands) {
+    const result = await executeCommand(command, cwd, timeout, env);
+    results.push({
+      command,
+      success: result.success,
+      output: result.output,
+      exitCode: result.exitCode,
+      duration: result.duration,
+    });
+
+    if (!result.success && stopOnFailure) {
+      overallSuccess = false;
+      break;
+    }
+  }
+
+  const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+  const success = results.every(r => r.success) && overallSuccess;
+
+  return { success, results, totalDuration };
 };

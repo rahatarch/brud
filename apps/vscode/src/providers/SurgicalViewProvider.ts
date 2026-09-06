@@ -730,7 +730,9 @@ fileIndex: this._currentFileIndex,
 
     const terminalOps = result.operationResults
       .filter(op => op.kind === 'terminal_command' && op.data)
-      .map(op => ({ toolKind: 'terminal_command' as const, data: op.data! }));
+      .flatMap(op => Array.isArray(op.data)
+        ? op.data.map(d => ({ toolKind: 'terminal_command' as const, data: d }))
+        : [{ toolKind: 'terminal_command' as const, data: op.data! }]);
 
     const unifiedOps: { toolKind: string; data: any }[] = [];
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
@@ -771,7 +773,9 @@ fileIndex: this._currentFileIndex,
 
     const terminalOps = result.operationResults
       .filter(op => op.kind === 'terminal_command' && op.data)
-      .map(op => ({ toolKind: 'terminal_command' as const, data: op.data! }));
+      .flatMap(op => Array.isArray(op.data)
+        ? op.data.map(d => ({ toolKind: 'terminal_command' as const, data: d }))
+        : [{ toolKind: 'terminal_command' as const, data: op.data! }]);
 
     const unifiedOps: { toolKind: string; data: any }[] = [];
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
@@ -983,13 +987,13 @@ fileIndex: this._currentFileIndex,
       fileResult = await executeOperationsFromVSCode(fileOps, historyStore, text);
 
       for (const opResult of fileResult.operationResults) {
-        if (opResult.kind === 'terminal_command' && opResult.data) {
-          unifiedResults.operations.push({
-            toolKind: 'terminal_command',
-            data: opResult.data,
-          });
-        }
-      }
+  if (opResult.kind === 'terminal_command' && opResult.data) {
+    const items = Array.isArray(opResult.data)
+      ? opResult.data.map(d => ({ toolKind: 'terminal_command' as const, data: d }))
+      : [{ toolKind: 'terminal_command' as const, data: opResult.data }];
+    unifiedResults.operations.push(...items);
+  }
+}
     }
 
     if (unifiedResults.operations.length > 0) {

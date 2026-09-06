@@ -37,6 +37,9 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentTerminalCwd = '';
   let currentTerminalEnv: Record<string, string> = {};
   let currentTerminalEnvLines: string[] = [];
+  let currentTerminalCommands: string[] = [];
+  let currentTerminalMode: 'sequential' | 'parallel' | undefined = undefined;
+  let currentTerminalStopOnFailure: boolean | undefined = undefined;
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -314,28 +317,53 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   }
 
   function flushTerminalCommand() {
-    if (currentIndex && currentTerminalCommand) {
-      if (isDangerousCommand(currentTerminalCommand)) {
+    if (currentIndex && (currentTerminalCommand || currentTerminalCommands.length > 0)) {
+      if (currentTerminalCommand && isDangerousCommand(currentTerminalCommand)) {
         throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      }
+      if (currentTerminalCommands.length > 0) {
+        for (const cmd of currentTerminalCommands) {
+          if (isDangerousCommand(cmd)) {
+            throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+          }
+        }
       }
       const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
       if (!cwdValidation.valid) {
         throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
       }
-      operations.push({
+      const op: any = {
         kind: 'terminal_command',
-        command: currentTerminalCommand,
-        timeout: currentTerminalTimeout !== 120 ? currentTerminalTimeout : undefined,
-        cwd: cwdValidation.resolvedCwd,
-        env: Object.keys(currentTerminalEnv).length > 0 ? currentTerminalEnv : undefined,
         index: currentIndex,
-      });
+      };
+      if (currentTerminalCommands.length > 0) {
+        op.commands = currentTerminalCommands;
+        if (currentTerminalMode) {
+          op.mode = currentTerminalMode;
+        }
+        if (currentTerminalStopOnFailure !== undefined) {
+          op.stopOnFailure = currentTerminalStopOnFailure;
+        }
+      } else {
+        op.command = currentTerminalCommand;
+      }
+      if (currentTerminalTimeout !== 120) {
+        op.timeout = currentTerminalTimeout;
+      }
+      op.cwd = cwdValidation.resolvedCwd;
+      if (Object.keys(currentTerminalEnv).length > 0) {
+        op.env = currentTerminalEnv;
+      }
+      operations.push(op as FileOperation);
     }
     currentTerminalCommand = '';
     currentTerminalTimeout = 120;
     currentTerminalCwd = '';
     currentTerminalEnv = {};
     currentTerminalEnvLines = [];
+    currentTerminalCommands = [];
+    currentTerminalMode = undefined;
+    currentTerminalStopOnFailure = undefined;
   }
 
   function reset() {
@@ -425,6 +453,9 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     const timeoutFieldMatch = line.match(/^Timeout:\s*(\d+)/);
     const workingDirectoryMatch = line.match(/^Working Directory:\s*(.+)/);
     const envMatch = line.match(/^Env:\s*(.+)/);
+    const commandsHeaderMatch = line.match(/^Commands:/);
+    const modeFieldMatch = line.match(/^Mode:\s*(sequential|parallel)/);
+    const stopOnFailureMatch = line.match(/^StopOnFailure:\s*(true|false)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -583,7 +614,10 @@ if (searchFilesMatch) {
         currentTerminalTimeout = 120;
         currentTerminalCwd = '';
         currentTerminalEnv = {};
-        currentTerminalEnvLines = [];
+currentTerminalEnvLines = [];
+    currentTerminalCommands = [];
+    currentTerminalMode = undefined;
+    currentTerminalStopOnFailure = undefined;
         continue;
       }
       if (filePathMatch) {
@@ -1131,6 +1165,21 @@ if (searchFilesMatch) {
       }
       if (commandMatch) {
         currentTerminalCommand = commandMatch[1].trim();
+        continue;
+      }
+      if (commandsHeaderMatch) {
+        continue;
+      }
+      if (filesListMatch) {
+        currentTerminalCommands.push(filesListMatch[1].trim());
+        continue;
+      }
+      if (modeFieldMatch) {
+        currentTerminalMode = modeFieldMatch[1] as 'sequential' | 'parallel';
+        continue;
+      }
+      if (stopOnFailureMatch) {
+        currentTerminalStopOnFailure = stopOnFailureMatch[1] === 'true';
         continue;
       }
       if (timeoutFieldMatch) {

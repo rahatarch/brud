@@ -394,27 +394,51 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       }
       case 'terminal_command': {
         const command = parsed.command as string | undefined;
-        if (!command) {
-          throw new Error('Missing command field in terminal_command operation');
+        const commands = parsed.commands as string[] | undefined;
+        if (!command && (!commands || !Array.isArray(commands) || commands.length === 0)) {
+          throw new Error('Missing command or commands field in terminal_command operation');
         }
-        if (isDangerousCommand(command)) {
+        if (command && isDangerousCommand(command)) {
           throw new Error(`Dangerous terminal command blocked: ${command}`);
+        }
+        if (commands && Array.isArray(commands)) {
+          for (const cmd of commands) {
+            if (isDangerousCommand(cmd)) {
+              throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+            }
+          }
         }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
         const env = parsed.env as Record<string, string> | undefined;
+        const mode = parsed.mode as string | undefined;
+        const stopOnFailure = parsed.stop_on_failure as boolean | undefined;
+        if (mode !== undefined && mode !== 'sequential' && mode !== 'parallel') {
+          throw new Error('Mode field must be "sequential" or "parallel" in terminal_command operation');
+        }
         const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
         if (!cwdValidation.valid) {
           throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
         }
-        operations.push({
+        const op: any = {
           kind: 'terminal_command',
-          command,
-          timeout: timeout ?? undefined,
-          cwd: cwdValidation.resolvedCwd,
-          env: env && typeof env === 'object' ? env : undefined,
           index: String(index),
-        });
+        };
+        if (commands && Array.isArray(commands)) {
+          op.commands = commands;
+          if (mode) {
+            op.mode = mode;
+          }
+          if (stopOnFailure !== undefined) {
+            op.stopOnFailure = stopOnFailure;
+          }
+        } else {
+          op.command = command;
+        }
+        op.timeout = timeout ?? undefined;
+        op.cwd = cwdValidation.resolvedCwd;
+        op.env = env && typeof env === 'object' ? env : undefined;
+        operations.push(op as FileOperation);
         break;
       }
       default:

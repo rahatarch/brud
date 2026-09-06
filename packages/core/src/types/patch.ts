@@ -177,6 +177,9 @@ export interface TerminalInteractiveOperation {
 export interface TerminalCommandOperation {
   kind: 'terminal_command';
   command: string;
+  commands?: string[];
+  mode?: 'sequential' | 'parallel';
+  stopOnFailure?: boolean;
   cwd?: string;
   timeout?: number;
   env?: Record<string, string>;

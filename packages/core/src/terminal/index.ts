@@ -1,2 +1,2 @@
 export * from './types';
-export { executeTerminalCommand, executeCommand } from './executor';
+export { executeTerminalCommand, executeCommand, executeSequential } from './executor';
