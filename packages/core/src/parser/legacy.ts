@@ -1,8 +1,9 @@
 import { FileOperation } from '../types/patch';
+import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND';
 
-export function parseLegacyFormat(input: string): FileOperation[] {
+export function parseLegacyFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
   const lines = input.split(/\r?\n/);
 
@@ -290,12 +291,19 @@ export function parseLegacyFormat(input: string): FileOperation[] {
 
   function flushTerminalInteractive() {
     if (currentIndex && currentTerminalCommand) {
+      if (isDangerousCommand(currentTerminalCommand)) {
+        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      }
+      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdValidation.valid) {
+        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      }
       operations.push({
         kind: 'terminal_interactive',
         command: currentTerminalCommand,
         answers: currentTerminalAnswers,
         timeout: currentTerminalTimeout,
-        cwd: currentTerminalCwd || undefined,
+        cwd: cwdValidation.resolvedCwd,
         index: currentIndex,
       });
     }
@@ -307,11 +315,18 @@ export function parseLegacyFormat(input: string): FileOperation[] {
 
   function flushTerminalCommand() {
     if (currentIndex && currentTerminalCommand) {
+      if (isDangerousCommand(currentTerminalCommand)) {
+        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      }
+      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdValidation.valid) {
+        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      }
       operations.push({
         kind: 'terminal_command',
         command: currentTerminalCommand,
         timeout: currentTerminalTimeout !== 120 ? currentTerminalTimeout : undefined,
-        cwd: currentTerminalCwd || undefined,
+        cwd: cwdValidation.resolvedCwd,
         env: Object.keys(currentTerminalEnv).length > 0 ? currentTerminalEnv : undefined,
         index: currentIndex,
       });

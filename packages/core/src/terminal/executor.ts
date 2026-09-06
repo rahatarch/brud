@@ -24,7 +24,7 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   const startTime = Date.now();
   const child = spawn(command, [], {
     shell: true,
-    cwd: cwd || process.cwd(),
+    cwd: cwd || (() => { console.warn('Warning: cwd not resolved for executeCommand, falling back to process.cwd()'); return process.cwd(); })(),
     stdio: ['pipe', 'pipe', 'pipe'],
     env: env ? { ...process.env, ...env } : undefined,
   });
@@ -83,7 +83,7 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
   const startTime = Date.now();
   const child = spawn(command, [], {
     shell: true,
-    cwd: cwd || process.cwd(),
+    cwd: cwd || (() => { console.warn('Warning: cwd not resolved for execute, falling back to process.cwd()'); return process.cwd(); })(),
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 

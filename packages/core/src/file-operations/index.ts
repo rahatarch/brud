@@ -2,6 +2,7 @@ import path from 'path';
 import { FileOperation, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
+import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
@@ -1269,7 +1270,32 @@ operationResults.push({
           }
 
           const termOp = operation as TerminalInteractiveOperation;
-          const termResult = await terminalExecutor.execute(termOp.command, termOp.answers, termOp.cwd, (termOp.timeout ?? 120) * 1000);
+          if (isDangerousCommand(termOp.command)) {
+            errors.push(`Dangerous terminal command blocked: ${termOp.command}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_interactive',
+              status: 'failed',
+              message: `Dangerous terminal command blocked: ${termOp.command}`,
+              path: '',
+            });
+            continue;
+          }
+          const cwdValidation = validateTerminalCwd(termOp.cwd, workspaceFolders);
+          if (!cwdValidation.valid) {
+            errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_interactive',
+              status: 'failed',
+              message: cwdValidation.error || 'Invalid working directory for terminal command',
+              path: '',
+            });
+            continue;
+          }
+          const termResult = await terminalExecutor.execute(termOp.command, termOp.answers, cwdValidation.resolvedCwd, (termOp.timeout ?? 120) * 1000);
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
@@ -1298,8 +1324,33 @@ operationResults.push({
           }
 
           const termCmdOp = operation as TerminalCommandOperation;
+          if (isDangerousCommand(termCmdOp.command)) {
+            errors.push(`Dangerous terminal command blocked: ${termCmdOp.command}`);
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_command',
+              status: 'failed',
+              message: `Dangerous terminal command blocked: ${termCmdOp.command}`,
+              path: '',
+            });
+            continue;
+          }
+          const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
+          if (!cwdValidation.valid) {
+            errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_command',
+              status: 'failed',
+              message: cwdValidation.error || 'Invalid working directory for terminal command',
+              path: '',
+            });
+            continue;
+          }
           const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
-          const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, termCmdOp.cwd, termCmdTimeout, termCmdOp.env);
+          const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),

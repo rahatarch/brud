@@ -1,7 +1,8 @@
 import * as yaml from 'js-yaml';
 import { FileOperation } from '../types/patch';
+import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 
-export function parseYamlFormat(input: string): FileOperation[] {
+export function parseYamlFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
   const docs = input.split(/(?:^|\n)---\s*\n/);
 
@@ -368,18 +369,25 @@ export function parseYamlFormat(input: string): FileOperation[] {
         if (!command) {
           throw new Error('Missing command field in terminal_interactive operation');
         }
+        if (isDangerousCommand(command)) {
+          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        }
         const answers = parsed.answers as string[] | undefined;
         if (!answers || !Array.isArray(answers)) {
           throw new Error('Missing or invalid answers field in terminal_interactive operation');
         }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
+        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
+        if (!cwdValidation.valid) {
+          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        }
         operations.push({
           kind: 'terminal_interactive',
           command,
           answers,
           timeout: timeout ?? 120,
-          cwd: cwd || undefined,
+          cwd: cwdValidation.resolvedCwd,
           index: String(index),
         });
         break;
@@ -389,14 +397,21 @@ export function parseYamlFormat(input: string): FileOperation[] {
         if (!command) {
           throw new Error('Missing command field in terminal_command operation');
         }
+        if (isDangerousCommand(command)) {
+          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
         const env = parsed.env as Record<string, string> | undefined;
+        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
+        if (!cwdValidation.valid) {
+          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        }
         operations.push({
           kind: 'terminal_command',
           command,
           timeout: timeout ?? undefined,
-          cwd: cwd || undefined,
+          cwd: cwdValidation.resolvedCwd,
           env: env && typeof env === 'object' ? env : undefined,
           index: String(index),
         });

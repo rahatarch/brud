@@ -465,7 +465,7 @@ fileIndex: this._currentFileIndex,
     this._originalPrompt = text;
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
       this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
@@ -885,7 +885,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
@@ -1032,7 +1032,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
       this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
