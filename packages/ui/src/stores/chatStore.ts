@@ -8,7 +8,7 @@ export interface ChatMessage {
   structured?: ReportSection[];
 }
 
-export type SessionState = 'idle' | 'working' | 'complete';
+export type SessionState = 'idle' | 'working';
 
 export interface ChatStore {
   messages: ChatMessage[];
@@ -35,7 +35,7 @@ export const useChatStore = create<ChatStore>((set) => {
     addReport: (content, structured) =>
       set((state) => ({
         messages: [...state.messages, { id: generateId(), type: 'brud', content, structured }],
-        sessionState: 'complete',
+        sessionState: 'idle',
       })),
 
     resetSession: () =>

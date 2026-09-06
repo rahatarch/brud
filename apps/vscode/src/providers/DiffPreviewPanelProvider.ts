@@ -22,6 +22,52 @@ export class BrudDiffPreviewPanelManager {
     }
   }
 
+  public openNoPreviewPanel() {
+    const message = { command: 'noPreviewableOps' };
+
+    if (this._panel) {
+      this._panel.reveal(vscode.ViewColumn.One);
+      this._panel.webview.postMessage(message);
+      return;
+    }
+
+    this._panel = vscode.window.createWebviewPanel(
+      'brud-diff-preview',
+      'Brud Diff Preview',
+      vscode.ViewColumn.One,
+      {
+        enableScripts: true,
+        retainContextWhenHidden: true,
+        localResourceRoots: [
+          vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview'),
+        ],
+      },
+    );
+
+    this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
+
+    this._pendingMessage = message;
+
+    this._panel.onDidDispose(() => {
+      this._panel = undefined;
+      for (const d of this._disposables) {
+        d.dispose();
+      }
+      this._disposables = [];
+    });
+
+    this._panel.webview.onDidReceiveMessage((message) => {
+      if (message.command === 'ready') {
+        if (this._pendingMessage) {
+          this._panel?.webview.postMessage(this._pendingMessage);
+          this._pendingMessage = null;
+        }
+        return;
+      }
+      this._messageHandler?.(message);
+    });
+  }
+
   public openDiffPreview(data: DiffPreviewData) {
     const message = { command: 'diffPreviewResult', diffPreviewData: data };
 

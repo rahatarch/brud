@@ -1139,7 +1139,7 @@ function HistoryView() {
           </button>
           <button
             onClick={() => setShowWipeModal(true)}
-            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium border border-red-500/60 text-red-600 bg-red-500/10 hover:bg-red-500/20 transition-colors cursor-pointer"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-500 transition-all cursor-pointer"
           >
             <AlertTriangle size={16} />
             Wipe Out History

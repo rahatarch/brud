@@ -51,7 +51,7 @@ export default function WipeConfirmationModal({
       onClick={onCancel}
     >
       <div
-        className="bg-surface border border-red-500/30 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
+        className="bg-surface rounded-lg p-6 max-w-md w-full mx-4 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-3 mb-4">
@@ -74,7 +74,7 @@ export default function WipeConfirmationModal({
             type="checkbox"
             checked={protectionEnabled}
             onChange={(e) => setProtectionEnabled(e.target.checked)}
-            className="rounded border-border bg-surface-2 text-primary focus:ring-primary/30"
+            className="rounded border-2 border-red-600/20 bg-surface-2 text-primary focus:ring-primary/30"
           />
           <span className="text-sm text-text-secondary">7-day protection (recoverable)</span>
         </label>
@@ -87,14 +87,14 @@ export default function WipeConfirmationModal({
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
           placeholder={REQUIRED_PHRASE}
-          className="w-full px-3 py-2 rounded-lg border border-border bg-surface-2 text-text placeholder-text-secondary/50 focus:outline-none focus:border-red-500/50 text-sm font-mono"
+          className="w-full px-3 py-2 rounded-lg border-2 border-red-600/20 bg-surface-2 text-text placeholder-text-secondary/50 focus:outline-none focus:border-red-500 text-sm font-mono"
           autoFocus
         />
 
         <div className="flex gap-3 justify-end mt-6">
           <button
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-surface border border-border text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
+            className="px-4 py-2 rounded-lg text-sm font-medium bg-surface border-2 border-red-600/20 text-text-secondary hover:bg-surface-2 hover:text-text transition-colors cursor-pointer"
           >
             Cancel
           </button>

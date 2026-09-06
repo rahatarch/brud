@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Star } from 'lucide-react';
 import PromptLibrary from './PromptLibrary';
 import HistoryView from './HistoryView';
 
@@ -42,9 +43,21 @@ function MainWindowShell() {
         return (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
             <h2 className="text-2xl font-semibold text-text mb-3">{current.title}</h2>
-            <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed">
+            <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed mb-6">
               {current.description}
             </p>
+            <span className="inline-block bg-primary/20 text-primary rounded-full px-3 py-1 text-xs font-medium mb-6">
+              Coming Soon
+            </span>
+            <a
+              href="https://github.com/rahatarch/brud"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-md bg-primary/20 px-4 py-2 text-sm font-medium text-primary hover:brightness-110 transition-all"
+            >
+              <Star className="w-4 h-4" />
+              Star The Repo
+            </a>
           </div>
         );
     }
@@ -69,6 +82,31 @@ function MainWindowShell() {
       </div>
 
       {renderTabContent()}
+
+      <footer className="shrink-0 px-4 py-3 bg-surface-2 flex items-center justify-center gap-4 text-xs text-text-secondary">
+        <span>
+          Built by{' '}
+          <a
+            href="https://github.com/rahatarch"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:text-text transition-colors"
+          >
+            Rahat Hasan
+          </a>
+        </span>
+        <span className="text-border">|</span>
+        <a
+          href="https://github.com/rahatarch/brud"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:text-text transition-colors"
+        >
+          Star Brud Code
+        </a>
+        <span className="text-border">|</span>
+        <span>© 2026 Akkhar-Labs</span>
+      </footer>
     </div>
   );
 }

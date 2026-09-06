@@ -489,6 +489,14 @@ fileIndex: this._currentFileIndex,
       return;
     }
 
+    const previewableKinds = new Set(['search_replace', 'create_file', 'append_file']);
+    const hasPreviewableOps = operations.some(op => previewableKinds.has(op.kind));
+
+    if (!hasPreviewableOps) {
+      this._diffPreviewPanelManager.openNoPreviewPanel();
+      return;
+    }
+
     const diffFiles: DiffFileEntry[] = [];
 
     for (const filePath of this._fileList) {

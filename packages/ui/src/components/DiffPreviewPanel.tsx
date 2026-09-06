@@ -76,8 +76,11 @@ function DiffPreviewPanel() {
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [patchedFileIndices, setPatchedFileIndices] = useState<Set<number>>(new Set());
+  const [noPreview, setNoPreview] = useState(false);
+  const [countdown, setCountdown] = useState(5);
   const diffContentRef = useRef<HTMLDivElement>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noPreviewTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     sendToExtension({ command: 'ready' });
@@ -89,6 +92,15 @@ function DiffPreviewPanel() {
       if (message.command === 'diffPreviewResult' && message.diffPreviewData) {
         setDiffData(message.diffPreviewData);
         setCurrentFileIndex(message.diffPreviewData.currentIndex || 0);
+        setSuccessMessage(null);
+        setPatchedFileIndices(new Set());
+        setNoPreview(false);
+        setCountdown(5);
+      }
+      if (message.command === 'noPreviewableOps') {
+        setDiffData(null);
+        setNoPreview(true);
+        setCountdown(5);
         setSuccessMessage(null);
         setPatchedFileIndices(new Set());
       }
@@ -120,8 +132,38 @@ function DiffPreviewPanel() {
       if (successTimerRef.current) {
         clearTimeout(successTimerRef.current);
       }
+      if (noPreviewTimerRef.current) {
+        clearInterval(noPreviewTimerRef.current);
+      }
     };
   }, [diffData]);
+
+  useEffect(() => {
+    if (!noPreview) return;
+
+    if (noPreviewTimerRef.current) {
+      clearInterval(noPreviewTimerRef.current);
+    }
+
+    noPreviewTimerRef.current = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          if (noPreviewTimerRef.current) {
+            clearInterval(noPreviewTimerRef.current);
+          }
+          sendToExtension({ command: 'closeDiffPreview' });
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (noPreviewTimerRef.current) {
+        clearInterval(noPreviewTimerRef.current);
+      }
+    };
+  }, [noPreview]);
 
   const currentFile = diffData?.files[currentFileIndex];
 
@@ -158,6 +200,25 @@ function DiffPreviewPanel() {
   }, []);
 
   const allPatched = diffData ? patchedFileIndices.size === diffData.files.length : false;
+
+  if (noPreview) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-surface px-6 py-12">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-10 h-10 rounded-full bg-yellow-500/20 flex items-center justify-center">
+            <svg className="w-5 h-5 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+          </div>
+        </div>
+        <h2 className="text-xl font-semibold text-text mb-2">Preview Not Available</h2>
+        <p className="text-sm text-text-secondary text-center max-w-md leading-relaxed mb-4">
+          This tool doesn't support Preview. Use Execute directly.
+        </p>
+        <p className="text-xs text-text-tertiary">Closing automatically in {countdown}s...</p>
+      </div>
+    );
+  }
 
   if (!diffData || diffData.files.length === 0) {
     if (successMessage) {

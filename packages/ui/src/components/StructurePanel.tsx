@@ -197,6 +197,12 @@ function StructurePanel() {
           ))
         )}
       </div>
+
+      <footer className="shrink-0 px-6 py-2 border-t border-border bg-surface-2 flex items-center justify-center gap-1 text-[11px] text-text-muted">
+        <span>Brud Code</span>
+        <span className="text-border">|</span>
+        <span>© 2026 Akkhar-Labs</span>
+      </footer>
     </div>
   );
 }
