@@ -1,5 +1,5 @@
 import path from 'path';
-import { FileOperation, TerminalInteractiveOperation } from '../types/patch';
+import { FileOperation, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { extractDirectoryStructure } from '../structure-extractor';
@@ -1277,6 +1277,36 @@ operationResults.push({
             message: termResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termResult.output}`
               : `Terminal command failed (exit code: ${termResult.exitCode})\nOutput:\n${termResult.output}`,
+            path: '',
+          });
+          break;
+        }
+
+        case 'terminal_command': {
+          if (!terminalExecutor) {
+            errors.push('Terminal executor not available. This operation requires a VS Code environment.');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_command',
+              status: 'failed',
+              message: 'Terminal executor not available.',
+              path: '',
+            });
+            continue;
+          }
+
+          const termCmdOp = operation as TerminalCommandOperation;
+          const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
+          const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, termCmdOp.cwd, termCmdTimeout, termCmdOp.env);
+          operationResults.push({
+            operationIndex: i,
+            operationId: generateOperationId(),
+            kind: 'terminal_command',
+            status: termCmdResult.success ? 'success' : 'failed',
+            message: termCmdResult.success
+              ? `Terminal command executed successfully.\nOutput:\n${termCmdResult.output}`
+              : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
             path: '',
           });
           break;

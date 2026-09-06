@@ -384,6 +384,24 @@ export function parseYamlFormat(input: string): FileOperation[] {
         });
         break;
       }
+      case 'terminal_command': {
+        const command = parsed.command as string | undefined;
+        if (!command) {
+          throw new Error('Missing command field in terminal_command operation');
+        }
+        const timeout = parsed.timeout as number | undefined;
+        const cwd = parsed.cwd as string | undefined;
+        const env = parsed.env as Record<string, string> | undefined;
+        operations.push({
+          kind: 'terminal_command',
+          command,
+          timeout: timeout ?? undefined,
+          cwd: cwd || undefined,
+          env: env && typeof env === 'object' ? env : undefined,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

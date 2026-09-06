@@ -1,6 +1,6 @@
 import { FileOperation } from '../types/patch';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND';
 
 export function parseLegacyFormat(input: string): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -34,6 +34,8 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let currentTerminalAnswers: string[] = [];
   let currentTerminalTimeout = 120;
   let currentTerminalCwd = '';
+  let currentTerminalEnv: Record<string, string> = {};
+  let currentTerminalEnvLines: string[] = [];
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -303,6 +305,24 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentTerminalCwd = '';
   }
 
+  function flushTerminalCommand() {
+    if (currentIndex && currentTerminalCommand) {
+      operations.push({
+        kind: 'terminal_command',
+        command: currentTerminalCommand,
+        timeout: currentTerminalTimeout !== 120 ? currentTerminalTimeout : undefined,
+        cwd: currentTerminalCwd || undefined,
+        env: Object.keys(currentTerminalEnv).length > 0 ? currentTerminalEnv : undefined,
+        index: currentIndex,
+      });
+    }
+    currentTerminalCommand = '';
+    currentTerminalTimeout = 120;
+    currentTerminalCwd = '';
+    currentTerminalEnv = {};
+    currentTerminalEnvLines = [];
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -324,6 +344,7 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentReadMaxDepth = 5;
     currentReadExclude = [];
     currentReadImportSyntax = [];
+    currentTerminalEnvLines = [];
   }
 
   for (const line of lines) {
@@ -381,11 +402,14 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const importSyntaxMatch = line.match(/^importSyntax:\s*(.+)/);
     const terminalInteractiveMatch = line.match(/^<<<<<<< TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
     const endTerminalInteractiveMatch = line.match(/^>>>>>>> END TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
+    const terminalCommandMatch = line.match(/^<<<<<<< TERMINAL_COMMAND \[([\w\d.-]+)\]/);
+    const endTerminalCommandMatch = line.match(/^>>>>>>> END TERMINAL_COMMAND \[([\w\d.-]+)\]/);
     const commandMatch = line.match(/^Command:\s*(.+)/);
     const answersHeaderMatch = line.match(/^Answers:/);
     const answerListItemMatch = line.match(/^\s*-\s*(.+)/);
     const timeoutFieldMatch = line.match(/^Timeout:\s*(\d+)/);
     const workingDirectoryMatch = line.match(/^Working Directory:\s*(.+)/);
+    const envMatch = line.match(/^Env:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -535,6 +559,16 @@ if (searchFilesMatch) {
         currentTerminalAnswers = [];
         currentTerminalTimeout = 120;
         currentTerminalCwd = '';
+        continue;
+      }
+      if (terminalCommandMatch) {
+        currentState = 'TERMINAL_COMMAND';
+        currentIndex = terminalCommandMatch[1];
+        currentTerminalCommand = '';
+        currentTerminalTimeout = 120;
+        currentTerminalCwd = '';
+        currentTerminalEnv = {};
+        currentTerminalEnvLines = [];
         continue;
       }
       if (filePathMatch) {
@@ -1067,6 +1101,38 @@ if (searchFilesMatch) {
       }
       if (workingDirectoryMatch) {
         currentTerminalCwd = workingDirectoryMatch[1].trim();
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'TERMINAL_COMMAND') {
+      if (endTerminalCommandMatch) {
+        if (endTerminalCommandMatch[1] === currentIndex) {
+          flushTerminalCommand();
+        }
+        reset();
+        continue;
+      }
+      if (commandMatch) {
+        currentTerminalCommand = commandMatch[1].trim();
+        continue;
+      }
+      if (timeoutFieldMatch) {
+        currentTerminalTimeout = parseInt(timeoutFieldMatch[1], 10);
+        continue;
+      }
+      if (workingDirectoryMatch) {
+        currentTerminalCwd = workingDirectoryMatch[1].trim();
+        continue;
+      }
+      if (envMatch) {
+        const eqIndex = envMatch[1].indexOf('=');
+        if (eqIndex !== -1) {
+          const key = envMatch[1].substring(0, eqIndex).trim();
+          const val = envMatch[1].substring(eqIndex + 1).trim();
+          currentTerminalEnv[key] = val;
+        }
         continue;
       }
       continue;
