@@ -12,6 +12,8 @@ import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
 import type { TerminalExecutor, GroupResult, ConditionalCommand } from '../terminal/types';
+import { globalToolRegistry } from '../tool-registry/registry.js';
+import { initializeToolRegistry } from '../tool-registry/init.js';
 
 let operationIdCounter = 0;
 
@@ -1306,6 +1308,50 @@ operationResults.push({
               : `Terminal command failed (exit code: ${termResult.exitCode})\nOutput:\n${termResult.output}`,
             path: '',
           });
+          break;
+        }
+
+        case 'get_tool_info': {
+          initializeToolRegistry();
+          const toolOp = operation as import('../types/patch.js').GetToolInfoOperation;
+          if (!toolOp.toolKind) {
+            const allTools = globalToolRegistry.getAllTools();
+            const toolList = allTools.map(t => `${t.kind} - ${t.name}: ${t.description}`).join('\n');
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'get_tool_info',
+              status: 'success',
+              message: `Available tools:\n${toolList}`,
+              path: '',
+            });
+          } else {
+            const doc = globalToolRegistry.getTool(toolOp.toolKind);
+            if (!doc) {
+              errors.push(`Tool not found: ${toolOp.toolKind}`);
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'get_tool_info',
+                status: 'failed',
+                message: `Tool not found: ${toolOp.toolKind}`,
+                path: '',
+              });
+            } else {
+              const params = doc.parameters.map(p =>
+                `  - ${p.name} (${p.type})${p.required ? ' [required]' : ''}: ${p.description}${p.default ? ` (default: ${p.default})` : ''}`
+              ).join('\n');
+              const rules = doc.rules.map(r => `  - ${r}`).join('\n');
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'get_tool_info',
+                status: 'success',
+                message: `Tool: ${doc.name}\nMarker: ${doc.marker}\nDescription: ${doc.description}\n\nParameters:\n${params}\n\nRules:\n${rules}\n\nExample:\n${doc.example}`,
+                path: '',
+              });
+            }
+          }
           break;
         }
 

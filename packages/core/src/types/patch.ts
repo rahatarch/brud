@@ -14,7 +14,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory' | 'terminal_interactive' | 'terminal_command';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory' | 'terminal_interactive' | 'terminal_command' | 'get_tool_info';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -190,4 +190,10 @@ export interface TerminalCommandOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation | TerminalCommandOperation;
+export interface GetToolInfoOperation {
+  kind: 'get_tool_info';
+  toolKind?: string;
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation | TerminalCommandOperation | GetToolInfoOperation;

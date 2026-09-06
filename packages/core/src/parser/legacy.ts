@@ -1,7 +1,7 @@
 import { FileOperation } from '../types/patch';
 import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'GET_TOOL_INFO';
 
 export function parseLegacyFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -42,6 +42,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentTerminalStopOnFailure: boolean | undefined = undefined;
   let currentTerminalOnSuccess: string | undefined = undefined;
   let currentTerminalOnFailure: string | undefined = undefined;
+  let currentToolKind: string | undefined = undefined;
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -376,6 +377,17 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentTerminalOnFailure = undefined;
   }
 
+  function flushGetToolInfo() {
+    if (currentIndex) {
+      operations.push({
+        kind: 'get_tool_info',
+        toolKind: currentToolKind || undefined,
+        index: currentIndex,
+      });
+    }
+    currentToolKind = undefined;
+  }
+
   function reset() {
     currentState = 'IDLE';
     currentIndex = '';
@@ -468,6 +480,9 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     const stopOnFailureMatch = line.match(/^StopOnFailure:\s*(true|false)/);
     const onSuccessMatch = line.match(/^OnSuccess:\s*(.+)/);
     const onFailureMatch = line.match(/^OnFailure:\s*(.+)/);
+    const getToolInfoMatch = line.match(/^<<<<<<< GET_TOOL_INFO \[([\w\d.-]+)\]/);
+    const endGetToolInfoMatch = line.match(/^>>>>>>> END GET_TOOL_INFO \[([\w\d.-]+)\]/);
+    const toolKindFieldMatch = line.match(/^Tool:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -632,6 +647,12 @@ currentTerminalEnvLines = [];
     currentTerminalStopOnFailure = undefined;
     currentTerminalOnSuccess = undefined;
     currentTerminalOnFailure = undefined;
+        continue;
+      }
+      if (getToolInfoMatch) {
+        currentState = 'GET_TOOL_INFO';
+        currentIndex = getToolInfoMatch[1];
+        currentToolKind = undefined;
         continue;
       }
       if (filePathMatch) {
@@ -1219,6 +1240,21 @@ currentTerminalEnvLines = [];
           const val = envMatch[1].substring(eqIndex + 1).trim();
           currentTerminalEnv[key] = val;
         }
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'GET_TOOL_INFO') {
+      if (endGetToolInfoMatch) {
+        if (endGetToolInfoMatch[1] === currentIndex) {
+          flushGetToolInfo();
+        }
+        reset();
+        continue;
+      }
+      if (toolKindFieldMatch) {
+        currentToolKind = toolKindFieldMatch[1].trim();
         continue;
       }
       continue;

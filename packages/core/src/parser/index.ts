@@ -26,6 +26,7 @@ export function parseOperations(input: string, workspaceFolders: string[] = []):
     '<<<<<<< READ_DIRECTORY',
     '<<<<<<< TERMINAL_INTERACTIVE',
     '<<<<<<< TERMINAL_COMMAND',
+    '<<<<<<< GET_TOOL_INFO',
   ];
 
   const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));

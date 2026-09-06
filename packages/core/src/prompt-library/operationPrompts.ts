@@ -279,3 +279,46 @@ Timeout: 120
 - Works with any interactive CLI (npm init, scaffolding tools, wizards)
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+
+export const terminalCommandPrompt = `Use TERMINAL_COMMAND to run terminal commands — single, sequential, parallel, or conditional.
+
+Describe the command(s) to run below:
+
+Single command:
+<<<<<<< TERMINAL_COMMAND [1]
+Command: npm install
+Timeout: 120
+>>>>>>> END TERMINAL_COMMAND [1]
+
+Sequential:
+<<<<<<< TERMINAL_COMMAND [1]
+Commands:
+  - npm install
+  - npm run build
+Mode: sequential
+StopOnFailure: true
+>>>>>>> END TERMINAL_COMMAND [1]
+
+Parallel:
+<<<<<<< TERMINAL_COMMAND [1]
+Commands:
+  - npm run lint
+  - npm run type-check
+Mode: parallel
+>>>>>>> END TERMINAL_COMMAND [1]
+
+Conditional:
+<<<<<<< TERMINAL_COMMAND [1]
+Command: npm run build
+OnSuccess: npm test
+OnFailure: npm run build:fix
+>>>>>>> END TERMINAL_COMMAND [1]
+
+- Single: one command with optional timeout
+- Sequential: multiple commands run one after another; StopOnFailure controls whether to stop on error (default true)
+- Parallel: multiple commands run simultaneously
+- Conditional: run a command; run OnSuccess if it succeeds, or OnFailure if it fails
+
+Revert commands are NOT currently available. The Brud Code team has deliberately chosen not to implement them because running a saved revert command months later can be dangerous — the command might not work, might corrupt data, or might have unintended consequences. Brud Code does not know what a revert command actually does and cannot guarantee it will safely undo changes.
+
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

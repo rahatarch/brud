@@ -468,6 +468,15 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         operations.push(op as FileOperation);
         break;
       }
+      case 'get_tool_info': {
+        const toolKind = parsed.tool as string | undefined;
+        operations.push({
+          kind: 'get_tool_info',
+          toolKind: toolKind || undefined,
+          index: String(index),
+        });
+        break;
+      }
       default:
         throw new Error(`Unrecognized operation type: ${operation}`);
     }

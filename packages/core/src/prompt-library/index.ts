@@ -20,6 +20,7 @@ import {
   readFilesPrompt,
   readDirectoryPrompt,
   terminalInteractivePrompt,
+  terminalCommandPrompt,
 } from './operationPrompts';
 
 export const brudPromptLibrary: PromptLibrary = {
@@ -145,6 +146,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Terminal Interactive',
       description: 'Run terminal commands with interactive prompt support',
       content: terminalInteractivePrompt,
+    },
+    {
+      id: 'terminal-command',
+      title: 'Terminal Command',
+      description: 'Run terminal commands — single, sequential, parallel, or conditional',
+      content: terminalCommandPrompt,
     },
   ],
 };
