@@ -206,7 +206,7 @@ export const executeParallel: TerminalExecutor['executeParallel'] = async (
   return { success, results, totalDuration };
 };
 
-async function executeCommandGroup(
+export async function executeCommandGroup(
   group: CommandGroup,
   cwd?: string,
   timeout?: number,

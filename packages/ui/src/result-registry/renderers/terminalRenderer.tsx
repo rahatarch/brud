@@ -9,6 +9,14 @@ interface TerminalResultData {
   success: boolean;
 }
 
+interface GroupResultData {
+  mode: 'single' | 'sequential' | 'parallel' | 'conditional';
+  results: TerminalResultData[];
+  totalDuration: number;
+  succeeded: number;
+  failed: number;
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms.toFixed(0)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
@@ -56,14 +64,41 @@ function formatSingleCopy(termData: TerminalResultData): string {
   ].join('\n');
 }
 
+function isGroupResultData(data: any): data is GroupResultData {
+  return data && typeof data === 'object' && 'mode' in data && 'results' in data;
+}
+
+function renderGroupCommand(groupData: GroupResultData) {
+  const modeLabel = groupData.mode.charAt(0).toUpperCase() + groupData.mode.slice(1);
+  return (
+    <div>
+      <div className="px-6 py-3 border-b border-border bg-surface-1">
+        <div className="flex items-center gap-3">
+          <Terminal size={14} className="text-text-tertiary" />
+          <span className="text-sm font-medium text-text">{modeLabel} Group</span>
+          <span className="text-xs text-text-secondary">{groupData.results.length} command{groupData.results.length !== 1 ? 's' : ''}</span>
+          <span className="text-xs text-green-500 ml-auto">{groupData.succeeded} succeeded</span>
+          {groupData.failed > 0 && <span className="text-xs text-red-500">{groupData.failed} failed</span>}
+          <span className="text-xs text-text-secondary">Total: {formatDuration(groupData.totalDuration)}</span>
+        </div>
+      </div>
+      {groupData.results.map((item, index) => (
+        <div key={index}>
+          {index > 0 && <hr className="my-2 border-border" />}
+          {renderSingleCommand(item)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export const terminalRenderer: ToolResultRenderer = {
   toolKind: 'terminal_command',
   title: 'Terminal Command',
   renderSection: (data: any) => {
-    // DUAL SAFETY NET: The provider should always unwrap sequential command arrays
-    // into individual operations before sending to the Unified Panel. This array
-    // handling remains as a defensive fallback in case any future code path sends
-    // an array directly. It prevents crashes and ensures graceful rendering.
+    if (isGroupResultData(data)) {
+      return renderGroupCommand(data);
+    }
     if (Array.isArray(data)) {
       return (
         <div>
@@ -79,6 +114,21 @@ export const terminalRenderer: ToolResultRenderer = {
     return renderSingleCommand(data);
   },
   copyFormatter: (data: any) => {
+    if (isGroupResultData(data)) {
+      const lines: string[] = [
+        `Group Mode: ${data.mode}`,
+        `Commands: ${data.results.length}`,
+        `Succeeded: ${data.succeeded}`,
+        `Failed: ${data.failed}`,
+        `Total Duration: ${formatDuration(data.totalDuration)}`,
+        '',
+      ];
+      for (const item of data.results) {
+        lines.push(formatSingleCopy(item));
+        lines.push('---');
+      }
+      return lines.join('\n');
+    }
     if (Array.isArray(data)) {
       return data.map(formatSingleCopy).join('\n\n---\n\n');
     }
