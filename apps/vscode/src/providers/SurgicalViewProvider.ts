@@ -6,7 +6,8 @@ import { executeFileOperations } from '@brud/core';
 import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
-import { validateWorkspacePath } from '@brud/core';
+import { BrudAPI } from '@brud/core';
+import type { ValidationResult } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
 import { createTwoFilesPatch } from 'diff';
@@ -102,9 +103,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   }
 
   private async _showPreviewForFile(filePath: string) {
-    const result = validateWorkspacePath(filePath, getWorkspaceFolders());
-    if (!result.valid) {
-      this._sendErrorToWebview(result.error);
+    const result = BrudAPI.validate.path(filePath, getWorkspaceFolders());
+    if (!result.success) {
+      this._sendErrorToWebview(result);
       return;
     }
 
@@ -176,9 +177,9 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length === 0 && createFileOps.length === 0 && appendFileOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
       } catch {
-        this._sendErrorToWebview(`Could not open file: ${filePath}`);
+        this._sendErrorToWebview({ code: 'FILE_OPEN_ERROR', friendly: 'Could not open file.', details: `Could not open file: ${filePath}`, path: filePath });
         const headerMsg: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -266,7 +267,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
       } catch (e) {
         if (createFileOps.length > 0) {
           const fileExtension = filePath.split('.').pop() || '';
@@ -327,7 +328,7 @@ fileIndex: this._currentFileIndex,
           this._view?.webview.postMessage(headerMsg);
           return;
         }
-        this._sendErrorToWebview(`Could not open file: ${filePath}`);
+        this._sendErrorToWebview({ code: 'FILE_OPEN_ERROR', friendly: 'Could not open file.', details: `Could not open file: ${filePath}`, path: filePath });
         const headerMsg2: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -396,7 +397,7 @@ fileIndex: this._currentFileIndex,
       return;
     }
 
-    this._sendErrorToWebview('Preview not available for this operation type.');
+    this._sendErrorToWebview({ code: 'PREVIEW_NOT_AVAILABLE', friendly: 'Preview not available for this operation type.', details: 'Preview not available for this operation type.' });
     const headerMsg2: ExtensionMessage = {
       command: 'updatePreviewHeader',
       fileName: filePath,
@@ -484,7 +485,7 @@ fileIndex: this._currentFileIndex,
     this._currentFileIndex = 0;
 
     if (this._fileList.length === 0) {
-      this._sendErrorToWebview('No valid operations found.');
+      this._sendErrorToWebview({ code: 'NO_VALID_OPERATIONS', friendly: 'No valid operations found.', details: 'No valid operations found.' });
       return;
     }
 
@@ -499,7 +500,7 @@ fileIndex: this._currentFileIndex,
     const diffFiles: DiffFileEntry[] = [];
 
     for (const filePath of this._fileList) {
-      const result = validateWorkspacePath(filePath, getWorkspaceFolders());
+      const result = BrudAPI.validate.path(filePath, getWorkspaceFolders());
       const fileOps = this._operationsByFile.get(filePath) || [];
       const searchReplaceOps = fileOps.filter(op => op.kind === 'search_replace');
       const createFileOps = fileOps.filter(op => op.kind === 'create_file');
@@ -508,9 +509,9 @@ fileIndex: this._currentFileIndex,
       let originalContent = '';
       let modifiedContent = '';
 
-      if (result.valid) {
+      if (result.success) {
         try {
-          const document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
+          const document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
           const docLines: string[] = [];
           for (let i = 0; i < document.lineCount; i++) {
             docLines.push(document.lineAt(i).text);
@@ -654,14 +655,14 @@ fileIndex: this._currentFileIndex,
     const combinedParts: string[] = [];
 
     for (const filePath of this._fileList) {
-      const result = validateWorkspacePath(filePath, getWorkspaceFolders());
-      if (!result.valid) {
+      const result = BrudAPI.validate.path(filePath, getWorkspaceFolders());
+      if (!result.success) {
         continue;
       }
 
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
       } catch {
         continue;
       }
@@ -700,19 +701,19 @@ fileIndex: this._currentFileIndex,
     }
 
     if (combinedParts.length === 0) {
-      this._sendErrorToWebview('No preview could be generated for any file.');
+      this._sendErrorToWebview({ code: 'NO_PREVIEW', friendly: 'No preview could be generated for any file.', details: 'No preview could be generated for any file.' });
       return;
     }
 
     const combinedContent = combinedParts.join('\n\n');
-    const firstFileResult = validateWorkspacePath(this._fileList[0], getWorkspaceFolders());
-    if (!firstFileResult.valid) {
+    const firstFileResult = BrudAPI.validate.path(this._fileList[0], getWorkspaceFolders());
+    if (!firstFileResult.success) {
       return;
     }
 
     let firstDocument: vscode.TextDocument;
     try {
-      firstDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(firstFileResult.resolvedPath));
+      firstDocument = await vscode.workspace.openTextDocument(vscode.Uri.file((firstFileResult.data as any).resolvedPath));
     } catch {
       return;
     }
@@ -1127,7 +1128,8 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
       this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const structuredSections = this._generateErrorReport(report);
+      const executionError = { code: 'EXECUTION_FAILED', friendly: 'Something went wrong. Here are the details:', details: report };
+      const structuredSections = this._generateErrorReport(executionError);
       const friendlyText = structuredSections[0].content;
       const msg: ExtensionMessage = { command: 'error', message: friendlyText, structured: structuredSections };
       this._view?.webview.postMessage(msg);
@@ -1147,7 +1149,7 @@ fileIndex: this._currentFileIndex,
 
     const extractOps = operations.filter(op => op.kind === 'extract_structure');
     if (extractOps.length === 0) {
-      this._sendErrorToWebview('No extract_structure operations found.');
+      this._sendErrorToWebview({ code: 'NO_EXTRACT_OPERATIONS', friendly: 'No extract_structure operations found.', details: 'No extract_structure operations found.' });
       return;
     }
 
@@ -1159,13 +1161,13 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
       this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
       this._outputChannel.show(true);
-      this._sendErrorToWebview(result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : ''));
+      this._sendErrorToWebview({ code: 'EXECUTION_FAILED', friendly: result.message, details: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') });
       return;
     }
 
     if (result.errors.length > 0) {
       this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
-      this._sendErrorToWebview(result.message + ' Errors: ' + result.errors.join('; '));
+      this._sendErrorToWebview({ code: 'EXECUTION_FAILED', friendly: result.message, details: result.message + ' Errors: ' + result.errors.join('; ') });
       return;
     }
 
@@ -1281,38 +1283,39 @@ fileIndex: this._currentFileIndex,
     return report;
   }
 
-  private _generateErrorReport(errorMessage: string): ReportSection[] {
+  private _generateErrorReport(error: string | { code: string; friendly: string; details: string; path?: string; command?: string } | ValidationResult): ReportSection[] {
     const sections: ReportSection[] = [];
 
     let friendlyMessage: string;
-    if (errorMessage.includes('No workspace')) {
-      friendlyMessage = "I need a workspace to work with. Open a folder in VS Code first, then I can help you.";
-    } else if (errorMessage.includes('outside the workspace')) {
-      friendlyMessage = "This path is outside your workspace. I can only work with files inside the folder you opened.";
-    } else if (errorMessage.includes('Could not open file')) {
-      friendlyMessage = "I couldn't find that file. It may have been moved or deleted.";
-    } else if (errorMessage.includes('No valid operations')) {
-      friendlyMessage = "I couldn't understand the format. Check the Prompt Library for examples.";
-    } else if (errorMessage.includes('No preview')) {
-      friendlyMessage = "I couldn't generate a preview for these changes.";
+    let detailMessage: string;
+    if (typeof error === 'string') {
+      friendlyMessage = error;
+      detailMessage = error;
     } else {
-      friendlyMessage = "Something went wrong. Here are the details:";
+      friendlyMessage = error.friendly || 'Something went wrong. Here are the details:';
+      detailMessage = error.details || friendlyMessage;
     }
 
     sections.push({ type: 'text', content: friendlyMessage });
-    sections.push({ type: 'details', title: 'Error Details', content: errorMessage });
+    sections.push({ type: 'details', title: 'Error Details', content: detailMessage });
     sections.push({ type: 'button', buttonText: 'See Details', buttonAction: 'openUnifiedResults' });
 
     return sections;
   }
 
-  private _sendErrorToWebview(errorMessage: string): void {
-    const structured = this._generateErrorReport(errorMessage);
+  private _sendErrorToWebview(error: string | { code: string; friendly: string; details: string; path?: string; command?: string } | ValidationResult): void {
+    const structured = this._generateErrorReport(error);
+    let friendlyMessage: string;
+    if (typeof error === 'string') {
+      friendlyMessage = error;
+    } else {
+      friendlyMessage = error.friendly || 'Something went wrong.';
+    }
     if (this._view) {
-      const msg: ExtensionMessage = { command: 'error', message: errorMessage, structured };
+      const msg: ExtensionMessage = { command: 'error', message: friendlyMessage, structured };
       this._view.webview.postMessage(msg);
     }
-    this._outputChannel.appendLine('ERROR: ' + errorMessage);
+    this._outputChannel.appendLine('ERROR: ' + friendlyMessage);
   }
 
   private _sendParseErrorToWebview(): void {

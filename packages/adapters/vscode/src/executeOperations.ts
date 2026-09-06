@@ -1,4 +1,4 @@
-import { executeFileOperations, FileOperation, validateWorkspacePath, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
+import { executeFileOperations, FileOperation, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
 import type { HistoryStore } from '@brud/core';
 import type { OperationResult } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';

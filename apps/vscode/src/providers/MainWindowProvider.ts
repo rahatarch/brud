@@ -133,10 +133,11 @@ export class BrudMainWindowManager {
   }
 
   private async _handleRevertSession(sessionId?: string, targetState?: 'pre' | 'post'): Promise<void> {
+    const revertError = { code: 'INVALID_REVERT_REQUEST', friendly: 'Missing sessionId or targetState', details: 'Cannot revert session without both sessionId and targetState.' };
     if (!this._historyStore || !sessionId || !targetState) {
       this._panel?.webview.postMessage({
         command: 'revertResult',
-        revertResult: { success: false, message: 'Missing sessionId or targetState', errors: ['Invalid revert request'] },
+        revertResult: { success: false, message: revertError.friendly, errors: [revertError.details] },
       } satisfies ExtensionMessage);
       return;
     }
@@ -146,10 +147,11 @@ export class BrudMainWindowManager {
   }
 
   private async _handleRevertOperations(sessionId?: string, operationIds?: string[], targetState?: 'pre' | 'post'): Promise<void> {
+    const revertOpError = { code: 'INVALID_REVERT_REQUEST', friendly: 'Missing sessionId, operationIds, or targetState', details: 'Cannot revert operations without sessionId, operationIds, and targetState.' };
     if (!this._historyStore || !sessionId || !operationIds || !targetState) {
       this._panel?.webview.postMessage({
         command: 'revertOperationsResult',
-        revertOperationsResult: { success: false, message: 'Missing sessionId, operationIds, or targetState', errors: ['Invalid revert request'] },
+        revertOperationsResult: { success: false, message: revertOpError.friendly, errors: [revertOpError.details] },
       } satisfies ExtensionMessage);
       return;
     }
