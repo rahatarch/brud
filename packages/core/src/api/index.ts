@@ -1,7 +1,7 @@
 import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
 import { getWorkspaceRootForPath } from '../utils/workspacePath';
-import type { ValidationResult } from './types';
+import type { BrudError as BrudErrorType, ValidationResult } from './types';
 import {
   noWorkspaceError,
   pathOutsideWorkspaceError,
@@ -15,7 +15,25 @@ import {
   multipleMatchesError,
 } from './errors';
 
-export type { BrudError, ValidationResult } from './types';
+export type { ValidationResult } from './types';
+
+export class BrudError extends Error {
+  code: string;
+  friendly: string;
+  details: string;
+  path?: string;
+  command?: string;
+
+  constructor(opts: BrudErrorType) {
+    super(opts.details);
+    this.name = 'BrudError';
+    this.code = opts.code;
+    this.friendly = opts.friendly;
+    this.details = opts.details;
+    this.path = opts.path;
+    this.command = opts.command;
+  }
+}
 
 const DANGEROUS_PATTERNS: RegExp[] = [
   /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,

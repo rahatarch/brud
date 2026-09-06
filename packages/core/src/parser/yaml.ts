@@ -1,7 +1,7 @@
 import * as yaml from 'js-yaml';
 import { FileOperation } from '../types/patch';
 import { CommandGroup } from '../terminal/types';
-import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+import { BrudAPI, BrudError } from '../api/index';
 
 function parseCommandGroup(value: unknown): CommandGroup | undefined {
   if (typeof value === 'string') {
@@ -388,8 +388,9 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (!command) {
           throw new Error('Missing command field in terminal_interactive operation');
         }
-        if (isDangerousCommand(command)) {
-          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        const cmdResult = BrudAPI.validate.command(command);
+        if (!cmdResult.success) {
+          throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${command}` });
         }
         const answers = parsed.answers as string[] | undefined;
         if (!answers || !Array.isArray(answers)) {
@@ -397,16 +398,17 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
-        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
-        if (!cwdValidation.valid) {
-          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        const cwdResult = BrudAPI.validate.cwd(cwd, workspaceFolders);
+        if (!cwdResult.success) {
+          throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
         }
+        const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
         operations.push({
           kind: 'terminal_interactive',
           command,
           answers,
           timeout: timeout ?? 120,
-          cwd: cwdValidation.resolvedCwd,
+          cwd: cwdData?.resolvedCwd,
           index: String(index),
         });
         break;
@@ -417,13 +419,17 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (!command && (!commands || !Array.isArray(commands) || commands.length === 0)) {
           throw new Error('Missing command or commands field in terminal_command operation');
         }
-        if (command && isDangerousCommand(command)) {
-          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        if (command) {
+          const cmdResult = BrudAPI.validate.command(command);
+          if (!cmdResult.success) {
+            throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${command}` });
+          }
         }
         if (commands && Array.isArray(commands)) {
           for (const cmd of commands) {
-            if (isDangerousCommand(cmd)) {
-              throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+            const cmdResult = BrudAPI.validate.command(cmd);
+            if (!cmdResult.success) {
+              throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${cmd}` });
             }
           }
         }
@@ -437,10 +443,11 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (mode !== undefined && mode !== 'sequential' && mode !== 'parallel') {
           throw new Error('Mode field must be "sequential" or "parallel" in terminal_command operation');
         }
-        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
-        if (!cwdValidation.valid) {
-          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        const cwdResult = BrudAPI.validate.cwd(cwd, workspaceFolders);
+        if (!cwdResult.success) {
+          throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
         }
+        const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
         const op: any = {
           kind: 'terminal_command',
           index: String(index),
@@ -457,7 +464,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           op.command = command;
         }
         op.timeout = timeout ?? undefined;
-        op.cwd = cwdValidation.resolvedCwd;
+        op.cwd = cwdData?.resolvedCwd;
         op.env = env && typeof env === 'object' ? env : undefined;
         if (onSuccess) {
           op.onSuccess = onSuccess;

@@ -1,5 +1,5 @@
 import { FileOperation } from '../types/patch';
-import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+import { BrudAPI, BrudError } from '../api/index';
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'GET_TOOL_INFO';
 
@@ -297,19 +297,21 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
 
   function flushTerminalInteractive() {
     if (currentIndex && currentTerminalCommand) {
-      if (isDangerousCommand(currentTerminalCommand)) {
-        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
+      if (!cmdResult.success) {
+        throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${currentTerminalCommand}` });
       }
-      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
-      if (!cwdValidation.valid) {
-        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdResult.success) {
+        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
       }
+      const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
       operations.push({
         kind: 'terminal_interactive',
         command: currentTerminalCommand,
         answers: currentTerminalAnswers,
         timeout: currentTerminalTimeout,
-        cwd: cwdValidation.resolvedCwd,
+        cwd: cwdData?.resolvedCwd,
         index: currentIndex,
       });
     }
@@ -321,20 +323,25 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
 
   function flushTerminalCommand() {
     if (currentIndex && (currentTerminalCommand || currentTerminalCommands.length > 0)) {
-      if (currentTerminalCommand && isDangerousCommand(currentTerminalCommand)) {
-        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      if (currentTerminalCommand) {
+        const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
+        if (!cmdResult.success) {
+          throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${currentTerminalCommand}` });
+        }
       }
       if (currentTerminalCommands.length > 0) {
         for (const cmd of currentTerminalCommands) {
-          if (isDangerousCommand(cmd)) {
-            throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+          const cmdResult = BrudAPI.validate.command(cmd);
+          if (!cmdResult.success) {
+            throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${cmd}` });
           }
         }
       }
-      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
-      if (!cwdValidation.valid) {
-        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdResult.success) {
+        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
       }
+      const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
       const op: any = {
         kind: 'terminal_command',
         index: currentIndex,
@@ -353,7 +360,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (currentTerminalTimeout !== 120) {
         op.timeout = currentTerminalTimeout;
       }
-      op.cwd = cwdValidation.resolvedCwd;
+      op.cwd = cwdData?.resolvedCwd;
       if (Object.keys(currentTerminalEnv).length > 0) {
         op.env = currentTerminalEnv;
       }

@@ -7,7 +7,7 @@ import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, Wor
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { BrudAPI } from '@brud/core';
-import type { BrudError, ValidationResult } from '@brud/core';
+import type { ValidationResult } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
 import { createTwoFilesPatch } from 'diff';
@@ -1128,7 +1128,7 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
       this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const executionError: BrudError = { code: 'EXECUTION_FAILED', friendly: 'Something went wrong. Here are the details:', details: report };
+      const executionError = { code: 'EXECUTION_FAILED', friendly: 'Something went wrong. Here are the details:', details: report };
       const structuredSections = this._generateErrorReport(executionError);
       const friendlyText = structuredSections[0].content;
       const msg: ExtensionMessage = { command: 'error', message: friendlyText, structured: structuredSections };
@@ -1283,7 +1283,7 @@ fileIndex: this._currentFileIndex,
     return report;
   }
 
-  private _generateErrorReport(error: string | BrudError | ValidationResult): ReportSection[] {
+  private _generateErrorReport(error: string | { code: string; friendly: string; details: string; path?: string; command?: string } | ValidationResult): ReportSection[] {
     const sections: ReportSection[] = [];
 
     let friendlyMessage: string;
@@ -1303,7 +1303,7 @@ fileIndex: this._currentFileIndex,
     return sections;
   }
 
-  private _sendErrorToWebview(error: string | BrudError | ValidationResult): void {
+  private _sendErrorToWebview(error: string | { code: string; friendly: string; details: string; path?: string; command?: string } | ValidationResult): void {
     const structured = this._generateErrorReport(error);
     let friendlyMessage: string;
     if (typeof error === 'string') {
