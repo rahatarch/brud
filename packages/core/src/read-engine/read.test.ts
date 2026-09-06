@@ -177,12 +177,13 @@ MaxDepth: 0
     const result = await executeFileOperations(ops, nodeFs, [tempDir]);
     assert.strictEqual(result.success, true);
     const parsed = JSON.parse(result.message);
-    assert.ok(Array.isArray(parsed));
-    assert.strictEqual(parsed.length, 1);
-    assert.strictEqual(parsed[0].totalFiles, 1);
-    assert.strictEqual(parsed[0].files.length, 1);
-    assert.strictEqual(parsed[0].files[0].path, fileA);
-    assert.strictEqual(parsed[0].files[0].content, 'const x = 42;\n');
+    assert.ok(parsed.readResults, 'expected readResults in message');
+    assert.ok(Array.isArray(parsed.readResults));
+    assert.strictEqual(parsed.readResults.length, 1);
+    assert.strictEqual(parsed.readResults[0].totalFiles, 1);
+    assert.strictEqual(parsed.readResults[0].files.length, 1);
+    assert.strictEqual(parsed.readResults[0].files[0].path, fileA);
+    assert.strictEqual(parsed.readResults[0].files[0].content, 'const x = 42;\n');
   });
 
   it('TEST 11: full READ_FILE flow with isImportRead=true resolves imports', async () => {
@@ -207,10 +208,11 @@ MaxDepth: 3
     const result = await executeFileOperations(ops, nodeFs, [tempDir]);
     assert.strictEqual(result.success, true);
     const parsed = JSON.parse(result.message);
-    assert.ok(Array.isArray(parsed));
-    assert.strictEqual(parsed.length, 1);
-    assert.strictEqual(parsed[0].totalFiles, 2);
-    const paths = parsed[0].files.map((f: { path: string }) => f.path);
+    assert.ok(parsed.readResults, 'expected readResults in message');
+    assert.ok(Array.isArray(parsed.readResults));
+    assert.strictEqual(parsed.readResults.length, 1);
+    assert.strictEqual(parsed.readResults[0].totalFiles, 2);
+    const paths = parsed.readResults[0].files.map((f: { path: string }) => f.path);
     assert.ok(paths.includes(fileA));
     assert.ok(paths.includes(fileB));
   });
