@@ -38,7 +38,7 @@ export function parseOperations(input: string, workspaceFolders: string[] = []):
     return parseYamlFormat(trimmed, workspaceFolders);
   }
 
-  throw new Error('Unrecognized patch format. Please use either the legacy Brud format or YAML format.');
+  throw new Error("I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML. Don't worry — you can browse ready-made prompts in the Prompt Library to see the correct format for each tool.");
 }
 
 export function parseBlocks(input: string): PatchBlock[] {

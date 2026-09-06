@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, useLayoutEffect } from 'react';
-import { Send, PlusCircle, ExternalLink, Copy, Check, Eye } from 'lucide-react';
+import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
+import { Send, PlusCircle, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
@@ -9,8 +9,100 @@ import DiffPreviewPanel from './components/DiffPreviewPanel';
 import UnifiedResultsPanel from './components/UnifiedResultsPanel';
 import { initResultRegistry } from './result-registry/init';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
+import type { ReportSection } from '@brud/protocol';
 
 initResultRegistry();
+
+function StatusBadge({ status }: { status: 'success' | 'failed' | 'aborted' }) {
+  const colors: Record<string, string> = {
+    success: 'bg-green-500/10 text-green-400 border-green-500/30',
+    failed: 'bg-red-500/10 text-red-400 border-red-500/30',
+    aborted: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
+  };
+  const icons: Record<string, any> = {
+    success: <CheckCircle size={12} />,
+    failed: <XCircle size={12} />,
+    aborted: <AlertCircle size={12} />,
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border break-words ${colors[status]}`}>
+      {icons[status]} {status}
+    </span>
+  );
+}
+
+function StructuredReport({ sections }: { sections: ReportSection[] }) {
+  return (
+    <div className="flex flex-col gap-3 mt-2 overflow-x-hidden break-words">
+      {sections.map((section, i) => {
+        switch (section.type) {
+          case 'summary':
+            return (
+              <div key={i}>
+                {section.title && <div className="text-xs font-semibold text-text mb-2 uppercase tracking-wider">{section.title}</div>}
+                <div className="flex flex-wrap gap-2">
+                  {section.items?.map((item, j) => (
+                    <div key={j} className="flex items-center gap-1.5 bg-surface-2 border border-border-subtle rounded px-2.5 py-1.5 text-xs max-w-full break-words">
+                      {item.status ? <StatusBadge status={item.status} /> : null}
+                      <span className="text-text-secondary shrink-0">{item.label}:</span>
+                      <span className="text-text font-medium break-words">{item.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          case 'table':
+            return (
+              <div key={i}>
+                {section.title && <div className="text-xs font-semibold text-text mb-2 uppercase tracking-wider">{section.title}</div>}
+                <div className="flex flex-col gap-1">
+                  {section.items?.map((item, j) => (
+                    <div key={j} className="flex items-start gap-2 bg-surface-2 border border-border-subtle rounded px-2.5 py-1.5 text-xs overflow-hidden">
+                      <ChevronRight size={12} className="text-text-secondary shrink-0 mt-0.5" />
+                      <span className="text-text-secondary shrink-0 min-w-[80px] break-words">{item.label}</span>
+                      <span className="text-text flex-1 break-words min-w-0">{item.value}</span>
+                      {item.status && <StatusBadge status={item.status} />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          case 'details':
+            return (
+              <div key={i}>
+                {section.title && <div className="text-xs font-semibold text-text mb-2 uppercase tracking-wider">{section.title}</div>}
+                {section.content && (
+                  <pre className="text-xs text-red-400 bg-surface-2 border border-border-subtle rounded p-2 whitespace-pre-wrap overflow-x-auto max-h-[200px] overflow-y-auto break-words">
+                    {section.content}
+                  </pre>
+                )}
+              </div>
+            );
+          case 'text':
+            return (
+              <div key={i} className="text-sm text-text leading-relaxed">
+                {section.content}
+              </div>
+            );
+          case 'button':
+            return (
+              <div key={i}>
+                <button
+                  onClick={() => sendToExtension({ command: section.buttonAction || 'openUnifiedResults' })}
+                  className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-hover cursor-pointer bg-surface-2 border border-border-subtle rounded px-3 py-2 transition-colors w-full text-left break-words"
+                >
+                  {section.buttonText || 'See Details'}
+                  <ChevronRight size={12} />
+                </button>
+              </div>
+            );
+          default:
+            return null;
+        }
+      })}
+    </div>
+  );
+}
 
 function App() {
   const root = document.getElementById('root');
@@ -41,6 +133,21 @@ function App() {
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
   const chatAreaRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
+
+  const handleScroll = useCallback(() => {
+    const el = chatAreaRef.current;
+    if (!el) return;
+    const threshold = 80;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    isNearBottomRef.current = distanceFromBottom < threshold;
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    const el = chatAreaRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, []);
 
   const handleCopyMessage = (messageId: string, content: string) => {
     navigator.clipboard.writeText(content);
@@ -63,21 +170,25 @@ function App() {
   useEffect(() => {
     return onExtensionMessage((message) => {
       if (message.command === 'success') {
-        addReport(message.message || '');
+        addReport(message.message || '', message.structured);
       } else if (message.command === 'error') {
-        addReport('[Error] ' + (message.message || 'An error occurred.'));
+        addReport('[Error] ' + (message.message || 'An error occurred.'), message.structured);
       }
     });
   }, [addReport]);
 
   useLayoutEffect(() => {
-    if (chatAreaRef.current) {
-      chatAreaRef.current.scrollTo({
-        top: chatAreaRef.current.scrollHeight,
-        behavior: 'smooth'
+    if (!isNearBottomRef.current) return;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        scrollToBottom('auto');
       });
-    }
-  }, [messages, sessionState]);
+    });
+  }, [messages, sessionState, scrollToBottom]);
+
+  useLayoutEffect(() => {
+    scrollToBottom('auto');
+  }, [scrollToBottom]);
 
   const handleReset = () => {
     resetSession();
@@ -103,8 +214,8 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <div className="flex items-center justify-end px-4 py-2 border-b border-border bg-surface-2">
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="shrink-0 flex items-center justify-end px-4 py-2 border-b border-border bg-surface-2">
         <button
           onClick={handleOpenMainWindow}
           className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text cursor-pointer bg-surface-3 hover:bg-surface-3 border border-border-subtle rounded px-2.5 py-1.5 transition-colors"
@@ -114,7 +225,7 @@ function App() {
           Management
         </button>
       </div>
-      <div ref={chatAreaRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={chatAreaRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
         {sessionState === 'idle' && messages.length === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-6">
             <img src={imageUri} alt="Brud Code Logo" className="w-[100px] h-[100px] mb-6 object-contain" />
@@ -148,13 +259,17 @@ function App() {
                 className={`flex flex-col ${msg.type === 'user' ? 'items-end' : 'items-start'}`}
               >
                 <div
-                  className={`max-w-[90%] rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${
+                  className={`rounded-lg px-4 py-2.5 text-sm whitespace-pre-wrap break-words ${
                     msg.type === 'user'
-                      ? 'bg-surface-2 border border-border text-text'
-                      : 'bg-surface-3 border border-border-subtle text-text'
+                      ? 'max-w-[90%] bg-surface-2 border border-border text-text'
+                      : 'text-text max-w-full'
                   }`}
                 >
-                  {msg.content}
+                  {msg.structured && msg.structured.length > 0 ? (
+                    <StructuredReport sections={msg.structured} />
+                  ) : (
+                    <p>{msg.content}</p>
+                  )}
                 </div>
                 {msg.type === 'brud' && (
                   <button
@@ -176,7 +291,7 @@ function App() {
         ) : null}
       </div>
 
-      <div className="pt-4 px-4 pb-2">
+      <div className="shrink-0 pt-4 px-4 pb-2">
         {sessionState === 'complete' ? (
           <button
             onClick={handleReset}

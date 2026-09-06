@@ -1,9 +1,11 @@
 import { create } from 'zustand';
+import type { ReportSection } from '@brud/protocol';
 
 export interface ChatMessage {
   id: string;
   type: 'user' | 'brud';
   content: string;
+  structured?: ReportSection[];
 }
 
 export type SessionState = 'idle' | 'working' | 'complete';
@@ -12,7 +14,7 @@ export interface ChatStore {
   messages: ChatMessage[];
   sessionState: SessionState;
   sendPrompt: (text: string) => void;
-  addReport: (content: string) => void;
+  addReport: (content: string, structured?: ReportSection[]) => void;
   resetSession: () => void;
 }
 
@@ -30,9 +32,9 @@ export const useChatStore = create<ChatStore>((set) => {
         sessionState: 'working',
       })),
 
-    addReport: (content) =>
+    addReport: (content, structured) =>
       set((state) => ({
-        messages: [...state.messages, { id: generateId(), type: 'brud', content }],
+        messages: [...state.messages, { id: generateId(), type: 'brud', content, structured }],
         sessionState: 'complete',
       })),
 

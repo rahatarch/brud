@@ -26,7 +26,9 @@ export type WebviewCommand =
   | 'restoreAllSessions'
   | 'getTrashedSessions'
   | 'permanentDelete'
-  | 'getSessionSnapshots';
+  | 'getSessionSnapshots'
+  | 'openUnifiedResults'
+  | 'openPromptLibrary';
 
 export type ExtensionCommand =
   | 'success'
@@ -62,6 +64,15 @@ export interface WebviewMessage {
   fileIndex?: number;
 }
 
+export interface ReportSection {
+  type: 'summary' | 'table' | 'details' | 'button' | 'text';
+  title?: string;
+  content?: string;
+  items?: Array<{ label: string; value: string; status?: 'success' | 'failed' | 'aborted' }>;
+  buttonText?: string;
+  buttonAction?: string;
+}
+
 export interface ExtensionMessage {
   command: ExtensionCommand;
   message?: string;
@@ -82,6 +93,7 @@ export interface ExtensionMessage {
   readResult?: ReadResultData;
   diffPreviewData?: DiffPreviewData;
   snapshotData?: SessionSnapshotsResult | null;
+  structured?: ReportSection[];
 }
 
 export interface HistorySessionResult {

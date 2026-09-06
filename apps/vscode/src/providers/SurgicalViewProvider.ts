@@ -10,7 +10,7 @@ import { validateWorkspacePath } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
 import { createTwoFilesPatch } from 'diff';
-import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData, DiffPreviewData, DiffFileEntry } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData, DiffPreviewData, DiffFileEntry, ReportSection } from '@brud/protocol';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -42,6 +42,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _diffPreviewPanelManager: BrudDiffPreviewPanelManager;
   private _originalPrompt: string = '';
   private _diffPreviewSessionId: string | undefined = undefined;
+  private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
 
   constructor(
     private readonly _extensionUri: vscode.Uri,
@@ -457,6 +458,14 @@ fileIndex: this._currentFileIndex,
         case 'openMainWindow':
           vscode.commands.executeCommand('brud.openManagement');
           break;
+        case 'openPromptLibrary':
+          vscode.commands.executeCommand('brud.openManagement');
+          break;
+        case 'openUnifiedResults':
+          if (this._lastExecutionResult) {
+            this._unifiedResultsPanelManager?.openUnifiedResultsPanel(this._lastExecutionResult);
+          }
+          break;
       }
     });
   }
@@ -467,7 +476,7 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
-      this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
+      this._sendParseErrorToWebview();
       return;
     }
 
@@ -878,6 +887,8 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
 
+    const structured = this._generateStructuredReport(result);
+
     if (result.success) {
       let readData: any;
       try {
@@ -891,7 +902,7 @@ fileIndex: this._currentFileIndex,
       if (isReadResult) {
         const fileCount = Array.isArray(readData) ? readData.reduce((sum: number, d: any) => sum + d.totalFiles, 0) : readData.totalFiles;
         const report = `Read ${fileCount} file(s). Results available in the Read panel.`;
-        const msg: ExtensionMessage = { command: 'success', message: report };
+        const msg: ExtensionMessage = { command: 'success', message: report, structured };
         this._view?.webview.postMessage(msg);
 
         const readResultData: ReadResultData = Array.isArray(readData)
@@ -903,11 +914,11 @@ fileIndex: this._currentFileIndex,
           : readData;
         return readResultData;
       } else {
-        const msg: ExtensionMessage = { command: 'success', message: result.message };
+        const msg: ExtensionMessage = { command: 'success', message: structured ? 'Session completed. See details below.' : result.message, structured };
         this._view?.webview.postMessage(msg);
       }
     } else {
-      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
+      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; '), structured };
       this._view?.webview.postMessage(msg);
       this._outputChannel.show(true);
     }
@@ -924,7 +935,7 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
-      this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
+      this._sendParseErrorToWebview();
       return;
     }
 
@@ -1032,6 +1043,7 @@ fileIndex: this._currentFileIndex,
     }
 
     if (unifiedResults.operations.length > 0) {
+      this._lastExecutionResult = unifiedResults;
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
     }
 
@@ -1053,15 +1065,24 @@ fileIndex: this._currentFileIndex,
 
     const report = combinedMessages.join('\n');
 
+    let combinedOpResults: OperationResult[] = [];
+    if (queryResult) combinedOpResults.push(...queryResult.operationResults);
+    if (fileResult) combinedOpResults.push(...fileResult.operationResults);
+
+    const structured = combinedOpResults.length > 0
+      ? this._generateStructuredReport({ success: combinedSuccess, message: report, errors: combinedErrors, operationResults: combinedOpResults })
+      : undefined;
+
     if (combinedSuccess) {
-      const msg: ExtensionMessage = { command: 'success', message: report };
+      const msg: ExtensionMessage = { command: 'success', message: structured ? 'Session completed. See details below.' : report, structured };
       this._view?.webview.postMessage(msg);
     } else {
       this._outputChannel.appendLine('=== EXECUTION SUMMARY ===');
       this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
       this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const msg: ExtensionMessage = { command: 'error', message: report + (combinedErrors.length > 0 ? '\n\nErrors:\n' + combinedErrors.map(e => `- ${e}`).join('\n') : '') };
+      const fallback = report + (combinedErrors.length > 0 ? '\n\nErrors:\n' + combinedErrors.map(e => `- ${e}`).join('\n') : '');
+      const msg: ExtensionMessage = { command: 'error', message: structured ? 'Session completed with errors. See details below.' : fallback, structured };
       this._view?.webview.postMessage(msg);
     }
   }
@@ -1073,7 +1094,7 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
-      this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
+      this._sendParseErrorToWebview();
       return;
     }
 
@@ -1130,6 +1151,68 @@ fileIndex: this._currentFileIndex,
     this._outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
   }
 
+  private _generateStructuredReport(result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] }): ReportSection[] {
+    const sections: ReportSection[] = [];
+    const totalOps = result.operationResults.length;
+    const successCount = result.operationResults.filter(r => r.status === 'success').length;
+    const failedCount = result.operationResults.filter(r => r.status === 'failed').length;
+    const abortedCount = result.operationResults.filter(r => r.status === 'aborted').length;
+    const totalDuration = result.operationResults.reduce((sum, r) => {
+      if (r.data) {
+        const data = Array.isArray(r.data) ? r.data : [r.data];
+        return sum + data.reduce((s, d) => s + (d.duration || 0), 0);
+      }
+      return sum;
+    }, 0);
+
+    sections.push({
+      type: 'summary',
+      title: 'Execution Summary',
+      items: [
+        { label: 'Total Operations', value: String(totalOps) },
+        { label: 'Success', value: String(successCount), status: 'success' },
+        { label: 'Failed', value: String(failedCount), status: 'failed' },
+        { label: 'Aborted', value: String(abortedCount), status: 'aborted' },
+        { label: 'Total Duration', value: `${totalDuration}ms` },
+      ],
+    });
+
+    const tableItems = result.operationResults.map(r => {
+      let duration = 0;
+      if (r.data) {
+        const data = Array.isArray(r.data) ? r.data : [r.data];
+        duration = data.reduce((s, d) => s + (d.duration || 0), 0);
+      }
+      return {
+        label: r.kind,
+        value: `${r.path} — ${duration}ms`,
+        status: r.status as 'success' | 'failed' | 'aborted',
+      };
+    });
+
+    sections.push({
+      type: 'table',
+      title: 'Operation Breakdown',
+      items: tableItems,
+    });
+
+    if (!result.success && result.errors.length > 0) {
+      sections.push({
+        type: 'details',
+        title: 'Errors',
+        content: result.errors.map(e => `- ${e}`).join('\n'),
+      });
+    }
+
+    sections.push({
+      type: 'button',
+      buttonText: 'See Details',
+      buttonAction: 'openUnifiedResults',
+    });
+
+    return sections;
+  }
+
   private _generateReport(
     operations: FileOperation[],
     result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] }
@@ -1159,6 +1242,19 @@ fileIndex: this._currentFileIndex,
       this._view.webview.postMessage(msg);
     }
     this._outputChannel.appendLine('ERROR: ' + errorMessage);
+  }
+
+  private _sendParseErrorToWebview(): void {
+    const friendlyMessage = "I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML. Don't worry — you can browse ready-made prompts in the Prompt Library to see the correct format for each tool.";
+    const structured: ReportSection[] = [
+      { type: 'text', content: friendlyMessage },
+      { type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' },
+    ];
+    if (this._view) {
+      const msg: ExtensionMessage = { command: 'error', message: friendlyMessage, structured };
+      this._view.webview.postMessage(msg);
+    }
+    this._outputChannel.appendLine('ERROR: Parse error - unrecognized patch format');
   }
 
   private async _closePreviewTabs() {
