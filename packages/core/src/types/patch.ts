@@ -1,3 +1,5 @@
+import type { CommandGroup } from '../terminal/types';
+
 export interface PatchBlock {
   index: string;
   search: string;
@@ -180,6 +182,8 @@ export interface TerminalCommandOperation {
   commands?: string[];
   mode?: 'sequential' | 'parallel';
   stopOnFailure?: boolean;
+  onSuccess?: CommandGroup;
+  onFailure?: CommandGroup;
   cwd?: string;
   timeout?: number;
   env?: Record<string, string>;

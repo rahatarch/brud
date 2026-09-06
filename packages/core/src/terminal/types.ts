@@ -18,6 +18,12 @@ export interface CommandGroup {
   stopOnFailure?: boolean;
 }
 
+export interface ConditionalCommand {
+  command: string;
+  onSuccess?: CommandGroup;
+  onFailure?: CommandGroup;
+}
+
 export interface ExecutedCommand {
   command: string;
   success: boolean;
@@ -37,4 +43,5 @@ export interface TerminalExecutor {
   executeCommand(command: string, cwd?: string, timeout?: number, env?: Record<string, string>): Promise<TerminalResult>;
   executeSequential(commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, stopOnFailure?: boolean): Promise<GroupResult>;
   executeParallel(commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>): Promise<GroupResult>;
+  executeConditional(conditional: ConditionalCommand, cwd?: string, timeout?: number, env?: Record<string, string>): Promise<GroupResult>;
 }

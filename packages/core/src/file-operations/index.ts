@@ -11,7 +11,7 @@ import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
-import type { TerminalExecutor, GroupResult } from '../terminal/types';
+import type { TerminalExecutor, GroupResult, ConditionalCommand } from '../terminal/types';
 
 let operationIdCounter = 0;
 
@@ -1411,6 +1411,32 @@ operationResults.push({
             continue;
           }
           const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
+          if (termCmdOp.onSuccess || termCmdOp.onFailure) {
+            const conditional: ConditionalCommand = {
+              command: termCmdOp.command,
+              onSuccess: termCmdOp.onSuccess,
+              onFailure: termCmdOp.onFailure,
+            };
+            const groupResult = await terminalExecutor.executeConditional(conditional, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
+            const succeeded = groupResult.results.filter(r => r.success).length;
+            const failed = groupResult.results.filter(r => !r.success).length;
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'terminal_command',
+              status: groupResult.success ? 'success' : 'failed',
+              message: `Executed conditional command. ${succeeded} succeeded, ${failed} failed.`,
+              path: '',
+              data: groupResult.results.map(r => ({
+                command: r.command,
+                output: r.output,
+                exitCode: r.exitCode,
+                duration: r.duration,
+                success: r.success,
+              })),
+            });
+            break;
+          }
           const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
           operationResults.push({
             operationIndex: i,

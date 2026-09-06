@@ -1,6 +1,25 @@
 import * as yaml from 'js-yaml';
 import { FileOperation } from '../types/patch';
+import { CommandGroup } from '../terminal/types';
 import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+
+function parseCommandGroup(value: unknown): CommandGroup | undefined {
+  if (typeof value === 'string') {
+    return { type: 'sequential', commands: [value] };
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const commands = obj.commands as (string | CommandGroup)[] | undefined;
+    if (commands && Array.isArray(commands) && commands.length > 0) {
+      return {
+        type: (obj.type as 'sequential' | 'parallel') || 'sequential',
+        commands,
+        stopOnFailure: obj.stopOnFailure as boolean | undefined,
+      };
+    }
+  }
+  return undefined;
+}
 
 export function parseYamlFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -413,6 +432,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const env = parsed.env as Record<string, string> | undefined;
         const mode = parsed.mode as string | undefined;
         const stopOnFailure = parsed.stop_on_failure as boolean | undefined;
+        const onSuccess = parseCommandGroup(parsed.on_success);
+        const onFailure = parseCommandGroup(parsed.on_failure);
         if (mode !== undefined && mode !== 'sequential' && mode !== 'parallel') {
           throw new Error('Mode field must be "sequential" or "parallel" in terminal_command operation');
         }
@@ -438,6 +459,12 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         op.timeout = timeout ?? undefined;
         op.cwd = cwdValidation.resolvedCwd;
         op.env = env && typeof env === 'object' ? env : undefined;
+        if (onSuccess) {
+          op.onSuccess = onSuccess;
+        }
+        if (onFailure) {
+          op.onFailure = onFailure;
+        }
         operations.push(op as FileOperation);
         break;
       }

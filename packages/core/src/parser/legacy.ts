@@ -40,6 +40,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentTerminalCommands: string[] = [];
   let currentTerminalMode: 'sequential' | 'parallel' | undefined = undefined;
   let currentTerminalStopOnFailure: boolean | undefined = undefined;
+  let currentTerminalOnSuccess: string | undefined = undefined;
+  let currentTerminalOnFailure: string | undefined = undefined;
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -354,6 +356,12 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (Object.keys(currentTerminalEnv).length > 0) {
         op.env = currentTerminalEnv;
       }
+      if (currentTerminalOnSuccess) {
+        op.onSuccess = { type: 'sequential', commands: [currentTerminalOnSuccess] };
+      }
+      if (currentTerminalOnFailure) {
+        op.onFailure = { type: 'sequential', commands: [currentTerminalOnFailure] };
+      }
       operations.push(op as FileOperation);
     }
     currentTerminalCommand = '';
@@ -364,6 +372,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentTerminalCommands = [];
     currentTerminalMode = undefined;
     currentTerminalStopOnFailure = undefined;
+    currentTerminalOnSuccess = undefined;
+    currentTerminalOnFailure = undefined;
   }
 
   function reset() {
@@ -456,6 +466,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     const commandsHeaderMatch = line.match(/^Commands:/);
     const modeFieldMatch = line.match(/^Mode:\s*(sequential|parallel)/);
     const stopOnFailureMatch = line.match(/^StopOnFailure:\s*(true|false)/);
+    const onSuccessMatch = line.match(/^OnSuccess:\s*(.+)/);
+    const onFailureMatch = line.match(/^OnFailure:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -618,6 +630,8 @@ currentTerminalEnvLines = [];
     currentTerminalCommands = [];
     currentTerminalMode = undefined;
     currentTerminalStopOnFailure = undefined;
+    currentTerminalOnSuccess = undefined;
+    currentTerminalOnFailure = undefined;
         continue;
       }
       if (filePathMatch) {
@@ -1180,6 +1194,14 @@ currentTerminalEnvLines = [];
       }
       if (stopOnFailureMatch) {
         currentTerminalStopOnFailure = stopOnFailureMatch[1] === 'true';
+        continue;
+      }
+      if (onSuccessMatch) {
+        currentTerminalOnSuccess = onSuccessMatch[1].trim();
+        continue;
+      }
+      if (onFailureMatch) {
+        currentTerminalOnFailure = onFailureMatch[1].trim();
         continue;
       }
       if (timeoutFieldMatch) {

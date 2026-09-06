@@ -1,5 +1,5 @@
 import { spawn } from 'child_process';
-import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand } from './types';
+import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup } from './types';
 
 function stripAnsiCodes(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
@@ -204,4 +204,92 @@ export const executeParallel: TerminalExecutor['executeParallel'] = async (
   const success = results.every(r => r.success);
 
   return { success, results, totalDuration };
+};
+
+async function executeCommandGroup(
+  group: CommandGroup,
+  cwd?: string,
+  timeout?: number,
+  env?: Record<string, string>,
+): Promise<GroupResult> {
+  const stringCommands: string[] = [];
+  const subGroups: { group: CommandGroup; index: number }[] = [];
+
+  for (let i = 0; i < group.commands.length; i++) {
+    const cmd = group.commands[i];
+    if (typeof cmd === 'string') {
+      stringCommands.push(cmd);
+    } else {
+      subGroups.push({ group: cmd, index: i });
+    }
+  }
+
+  const allResults: { index: number; result: ExecutedCommand }[] = [];
+  let overallSuccess = true;
+
+  if (stringCommands.length > 0) {
+    let groupResult: GroupResult;
+    if (group.type === 'parallel') {
+      groupResult = await executeParallel(stringCommands, cwd, timeout, env);
+    } else {
+      groupResult = await executeSequential(stringCommands, cwd, timeout, env, group.stopOnFailure);
+    }
+    groupResult.results.forEach((r, idx) => {
+      allResults.push({ index: idx, result: r });
+    });
+    if (!groupResult.success) {
+      overallSuccess = false;
+    }
+  }
+
+  for (const sg of subGroups) {
+    const subResult = await executeCommandGroup(sg.group, cwd, timeout, env);
+    subResult.results.forEach((r) => {
+      allResults.push({ index: sg.index, result: r });
+    });
+    if (!subResult.success) {
+      overallSuccess = false;
+    }
+  }
+
+  allResults.sort((a, b) => a.index - b.index);
+  const results = allResults.map(r => r.result);
+  const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
+  const success = results.every(r => r.success) && overallSuccess;
+
+  return { success, results, totalDuration };
+}
+
+export const executeConditional: TerminalExecutor['executeConditional'] = async (
+  conditional: ConditionalCommand,
+  cwd?: string,
+  timeout: number = 120000,
+  env?: Record<string, string>,
+): Promise<GroupResult> => {
+  const primaryResult = await executeCommand(conditional.command, cwd, timeout, env);
+  const allResults: ExecutedCommand[] = [
+    {
+      command: conditional.command,
+      success: primaryResult.success,
+      output: primaryResult.output,
+      exitCode: primaryResult.exitCode,
+      duration: primaryResult.duration,
+    },
+  ];
+
+  let conditionalResults: ExecutedCommand[] = [];
+
+  if (primaryResult.success && conditional.onSuccess) {
+    const gr = await executeCommandGroup(conditional.onSuccess, cwd, timeout, env);
+    conditionalResults = gr.results;
+  } else if (!primaryResult.success && conditional.onFailure) {
+    const gr = await executeCommandGroup(conditional.onFailure, cwd, timeout, env);
+    conditionalResults = gr.results;
+  }
+
+  allResults.push(...conditionalResults);
+  const totalDuration = allResults.reduce((sum, r) => sum + r.duration, 0);
+  const success = allResults.every(r => r.success);
+
+  return { success, results: allResults, totalDuration };
 };
