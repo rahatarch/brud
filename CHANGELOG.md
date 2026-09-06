@@ -1,48 +1,41 @@
 # Changelog
 
-All notable changes to **Brud** will be documented in this file. This project adheres to
+All notable changes to **Brud Code** are documented in this file. This project adheres to
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-## [0.1.0] - 2026-09-01
+## [Unreleased]
 
-### First Release Under the Brud Name
+### Added
+- Create, delete, rename, move, copy, and append files and directories
+- Apply bulk changes to thousands of files with a single block
+- Search files by name, glob pattern, or file extension
+- Extract project structure as token-efficient JSON for AI tools
+- Get codebase metadata including file count, folder count, and density
+- Read files with automatic import following
+- Run terminal commands with single, sequential, parallel, or conditional execution
+- Interactive terminal support for CLI wizards and prompts
+- Complete session history with recording and snapshots
+- Revert individual operations or roll back entire sessions
+- 7-day trash protection with full restore capability
+- Audit log for all deletion operations
+- Unified Results Panel showing all operation results
+- Diff Preview with per-file execution control
+- Prompt Library with ready-made prompts for AI chatbots
+- GET_TOOL_INFO for AI tool discovery
+- Workspace security with dangerous command blocking
+- Friendly chat interface with structured reports
+- Fuzzy matching for finding files and content
+- AI mistake auto-fix to correct AI-generated code errors
+- AI output cleaner to remove extraneous AI formatting
+- Confidence indicators showing match accuracy
+- Support for multiple output formats
+- Apply changes to all occurrences of a pattern
+- Git integration for version control workflows
+- Syntax validation to catch errors before applying
+- Template library with reusable code templates
 
-This release marks the first official release under the Brud name. Brud is a fork of the original
-[Brud](https://github.com/akkhar-labs/brud) repository, which is no
-longer maintained. This fork is the official continuation of the project under a new identity.
-
-- Rebranded from the original project to Brud.
-- Expanded feature set including file operations, prompt helper, fuzzy matching, AI mistake auto-fix,
-  multi-file patch support, patch history, AI output cleaner, confidence indicators, multiple format
-  support, multi-occurrence apply, git integration, syntax validation, and template library.
-- All existing functionality from the original project is preserved and enhanced.
-
-## [0.0.1] - 2026-05-23
-
-### Initial Public Release (as the original project)
-
-- **Brud Orchestration Protocol V4 Engine**: Implemented a professional-grade
-  structural matching algorithm that ignores indentation mismatches, ensuring
-  100% reliability against AI-generated spacing hallucinations.
-- **Intelligent Re-indentation**: Automatic detection and application of
-  document-level indentation to all replacement blocks.
-- **Bulk Preview Diff**: Seamless integration with the native VS Code
-  side-by-side diff engine to review multi-block surgical patches before they
-  touch the disk.
-- **Decoupled Architecture**: Service-oriented codebase structure following Meta
-  and Microsoft open-source standards for high maintainability and testability.
-- **Atomic Transactions**: Integration with `vscode.workspace.applyEdit` to
-  ensure all patches in a stream are committed as a single, undo-able event.
-- **Reverse-Topological Execution**: Patches are applied from the bottom of the
-  file to the top to maintain line-number integrity and prevent offset drift.
-- **UI Persistence**: Implementation of `retainContextWhenHidden` to ensure the
-  sidebar input buffer remains persistent across tab switches.
-- **Language-Aware Highlighting**: Dynamic URI scheme injection to trigger
-  native syntax coloring for any supported language within the diff preview.
-- **Surgical Diagnostics**: Centralized logging via a dedicated "Brud Debug"
-  Output Channel for real-time validation feedback.
-
----
-
-_(c) 2026 Akkhar-Labs. Architected by rahathasan._
+### Changed
+- Rebranded from Akkhar Code Patcher to Brud Code
+- Improved user interface with professional design
+- Native scrolling and cleaner layout

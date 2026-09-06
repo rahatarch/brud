@@ -364,15 +364,16 @@ The Terminal module integrates with:
 
 ## Implementation Phases
 
-- Phase 1: Core TerminalCommand types and executor — PENDING
-- Phase 2: Single command execution — PENDING
-- Phase 3: Sequential command support — PENDING
-- Phase 4: Parallel command support — PENDING
-- Phase 5: Conditional execution — PENDING
-- Phase 6: Mixed groups — PENDING
+- Phase 1: Core TerminalCommand types and executor — COMPLETED
+- Phase 2: Single command execution — COMPLETED
+- Phase 3: Sequential command support — COMPLETED
+- Phase 4: Parallel command support — COMPLETED
+- Phase 5: Conditional execution — COMPLETED
+- Phase 6: Mixed groups — COMPLETED
 - Phase 7: Interactive terminal — COMPLETED
-- Phase 8: Unified Results integration — PENDING
-- Phase 9: Tests — PENDING
+- Phase 8: Unified Results integration — COMPLETED
+- Phase 9: Tests — COMPLETED
+- Phase 10: Revert commands — FLAGGED/DEFERRED (see prompt-library/operationPrompts.ts for rationale)
 
 ## Success Criteria
 

@@ -5,7 +5,7 @@
   "description": "Brud Code: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
   "publisher": "Akkhar-Labs",
   "author": "Akkhar-Labs",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/rahatarch/brud.git"
@@ -16,7 +16,7 @@
     "apps/*"
   ],
   "engines": {
-    "vscode": "^1.120.0"
+    "vscode": "^1.136.0"
   },
   "categories": [
     "Other",

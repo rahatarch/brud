@@ -2,185 +2,139 @@
   <img src="assets/images/brud_super_high.png" width="200" alt="Brud Code Logo" />
 </p>
 
-<h1 align="center">Brud Code</h1>
-
 <h3 align="center">AI-Assisted Coding Platform — Manual Paste, Surgical Apply, Full Control</h3>
 
 <p align="center">
   <img src="https://img.shields.io/github/actions/workflow/status/rahatarch/brud/ci.yml?style=for-the-badge&logo=github&logoColor=white" alt="CI" />
-  <img src="https://img.shields.io/badge/VS%20Code-1.80%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.80+" />
-  <img src="https://img.shields.io/badge/Price-Free-00C853?style=for-the-badge" alt="Free Forever" />
-  <img src="https://img.shields.io/badge/No%20API%20Keys-Required-FF6F00?style=for-the-badge" alt="No API Keys Required" />
+  <img src="https://img.shields.io/badge/VS%20Code-1.136%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.136+" />
   <img src="https://img.shields.io/badge/License-MIT-4CAF50?style=for-the-badge" alt="License MIT" />
+  <img src="https://img.shields.io/github/stars/rahatarch/brud?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Stars" />
 </p>
 
 <p align="center">
-  <strong>This project is a fork of the original <a href="https://github.com/akkhar-labs/akkhar-code-patcher">Akkhar Code Patcher</a> repository.</strong>
-  The original repository is no longer maintained. This fork is the official continuation of the project under a new identity.
+  <strong>Fork of <a href="https://github.com/akkhar-labs/akkhar-code-patcher">Akkhar Code Patcher</a></strong> — the original repository is no longer maintained. This is the official continuation under a new identity.
 </p>
 
-<br />
+<p align="center">
+  <img src="assets/images/brud_editor_view.png" alt="Brud Code Editor View" width="100%" />
+</p>
 
-# Brud Code
+## About
 
-## What Brud Code Does
+Brud Code is a **free, AI-assisted coding platform** that works with any AI chatbot — ChatGPT, Claude, Gemini, or others. You paste AI-generated code changes into the Brud Code sidebar, preview the diff, and execute with surgical precision. No API keys, no subscriptions, just copy, paste, and apply.
 
-Brud is a manual paste-and-apply AI coding platform. You paste AI-generated code changes into Brud, and it executes them surgically on your codebase — with precision, safety, and full control.
+Built as a fork of Akkhar Code Patcher, Brud Code gives you full control over every AI-driven change. Unlike copilot-style tools that modify files invisibly, Brud Code keeps you in the driver's seat: review every edit before it touches your project, revert anytime, and audit your full history. It's the safety-first approach to AI-assisted development.
 
-- **Paste AI output, Brud executes it.** No copy-paste-drift, no missed lines, no manual editing.
-- **Works with any free AI chatbot.** ChatGPT, Claude, Gemini, DeepSeek — whatever you already use.
-- **Zero API keys.** No OpenAI keys, no Anthropic keys, no third-party tokens.
-- **No subscriptions for full functionality.** Everything is free, forever.
+## Installation
 
----
+Download the [latest VSIX](https://github.com/rahatarch/brud/releases) and install manually:
+
+```bash
+# Install from VSIX
+code --install-extension brud-code-*.vsix
+
+# Or install via CLI from the marketplace (once published)
+code --install-extension rahatarch.brud-code
+```
+
+You can also install from the VS Code Extensions view: press `Ctrl+Shift+X`, search "Brud Code", and click Install. Or use the `...` menu → **Install from VSIX** and select the downloaded file. Reload VS Code when prompted.
 
 ## Features
 
 ### File Operations
-- Create files and directories
-- Delete files and directories
-- Rename, move, and copy files
-- Append content to files
-- Search and replace code with precision
-- All operations are workspace-safe — nothing touches files outside your project
+Create, delete, rename, move, copy, and append files and directories — all through AI-generated Brud blocks. Every operation is previewed, logged, and reversible.
 
-### Codebase Discovery
-- Extract directory structure as token-efficient JSON — perfect for sending to AI
-- Get codebase metadata (total files, total folders, most dense folder)
-- Extract multiple directories in a single prompt
-- Share your project structure with AI without wasting tokens on file contents
+### Bulk Operations
+Process thousands of files in a single block. Apply the same transformation across an entire directory tree with one atomic operation. Brud handles the orchestration so your AI doesn't need to iterate file by file.
 
-### History and Revert
-- Every session is automatically recorded with full detail
-- Revert entire sessions or individual operations
-- 7-day trash protection for deleted sessions
-- Restore deleted sessions anytime within the grace period
-- Complete audit trail — know exactly what changed and when
+### Code Discovery
+Extract your project structure as a token-efficient JSON tree, query codebase metadata, search files by name or content pattern, and read files with import-chain following. Give your AI full context without bloating the prompt.
 
-### Prompt Library
-- Ready-made prompts for free AI chatbots (ChatGPT, Claude, Gemini, etc.)
-- Master system prompt that teaches AI how to output Brud-compatible blocks
-- Operation-specific prompts for create, delete, rename, search-and-replace, and more
-- One-click copy — paste directly into your AI chat
+### Terminal
+Run single commands, sequential chains, parallel groups, or conditional pipelines — all driven by AI-generated blocks. Interactive CLI programs work too: Brud feeds answers back to the AI for dynamic workflows.
 
----
+### History
+Every operation is snapshotted. Revert individual edits or entire sessions. A 7-day trash bin protects against accidental loss. Full audit trail so you always know what changed and when.
 
-## Why Brud Code
+### AI Integration
+Works with **any** AI chatbot — free or paid, API or web UI. Use `GET_TOOL_INFO` to let the AI discover every available tool dynamically. The built-in Prompt Library provides ready-made prompts for common workflows.
 
-- **Zero API keys required.** No signups, no billing, no rate limits.
-- **Works with free AI chatbots.** Use whatever AI you already have open.
-- **Token-efficient.** AI only outputs the Brud instruction block, not the entire file — saves tokens and works with smaller context windows.
-- **Surgical precision.** Brud only changes what you specify. No hallucinations, no drift, no surprise edits.
-- **Full history with revert.** Accidentally broke something? Revert instantly. Never lose work again.
-- **Professional UI.** Built for developers who want control, not black-box automation.
+## How It Works
 
----
+```text
+1. Install Brud Code → 2. Open Prompt Library → 3. Copy Master Prompt
+      ↓                                                          
+4. Paste into ChatGPT, Claude, or Gemini
+      ↓
+5. Tell AI: "Add a discount parameter to calculateTotal"
+      ↓
+6. AI outputs a Brud block:
+```
 
-## Who Is Brud Code For
+```txt
+File Path: src/utils.js
+<<<<<<< SEARCH [1]
+function calculateTotal(price, tax) {
+  return price + tax;
+}
+=======
+function calculateTotal(price, tax, discount = 0) {
+  return price + tax - discount;
+}
+>>>>>>> REPLACE [1]
+```
 
-### For Students
-Brud Code is free. No subscriptions, no API keys, no credit card required. If you are learning to code and using free AI chatbots like ChatGPT or Claude, Brud Code lets you apply AI-generated code changes safely without breaking your project. You do not need a paid AI coding tool to ship real projects.
+```text
+7. Paste block into Brud Code sidebar → Preview → Execute → Done
+```
 
-### For Indie Hackers
-You are building products solo, often with limited budget. Brud Code gives you the power of AI-assisted development using the free AI tools you already have. You can scaffold features, refactor code, and manage large codebases without paying for Cursor or Copilot. Every session is recorded, every change is revertable, and your work is protected.
+## Agents & Prompt Library
 
-### For Freelancers
-You work on multiple client projects with tight deadlines. Brud Code helps you understand unfamiliar codebases quickly with structure extraction, make surgical changes with confidence, and keep an audit trail of everything you did. The history and revert system means you never lose work or break a client's codebase.
+The **Prompt Library** ships with ready-made prompts for every Brud tool: file operations, search, terminal commands, and more. Copy the **Master System Prompt** into any chatbot to teach it the Brud block format. Use `GET_TOOL_INFO` mid-conversation to let the AI discover new tools on the fly.
 
-### For Developers Who Cannot Afford Premium Tools
-Most AI coding assistants cost 20 dollars per month or more. If that is too expensive for you, Brud Code is built specifically for you. You can use any free AI chatbot, copy the Brud block, paste it into Brud Code, and apply changes with surgical precision. Full features, no paywall.
+## Documentation
 
-### For Developers in Emerging Economies
-Software subscriptions priced in US dollars are often unaffordable in many countries. Brud Code is free forever, works offline with your chosen AI tool, and does not require any API keys. It is built by someone who understands what it means to build without budget.
-
-### For Teams That Need Audit Trails
-Brud Code records every session, every operation, every revert, and every deletion with timestamps and actor information. If you need to know what changed, when it changed, and who changed it, Brud Code gives you that transparency.
-
-### For Anyone Building Serious Projects
-Brud Code is not a toy. It has a real history system, real revert capabilities, real snapshot management, and a real audit trail. If you are building something that matters, Brud Code helps you move fast without breaking things.
-
----
-
-## Quick Start
-
-1. **Install** the Brud Code VSIX from the [Releases page](https://github.com/rahatarch/brud/releases) or search "Brud Code" in VS Code Extensions.
-2. **Open** the Brud Code sidebar (click the Brud icon in the activity bar).
-3. **Copy a Brud Prompt** from the Prompt Library or ask your AI to output one.
-4. **Paste** the prompt into the Brud Code input panel.
-5. **Click Execute** to apply the changes.
-6. **Review** the results in the diff view and history panel.
-
----
-
-## Installation
-
-1. Open VS Code.
-2. Go to Extensions (Ctrl+Shift+X).
-3. Search "Brud Code".
-4. Click Install.
-5. Look for the Brud Code icon in your sidebar.
-
----
-
-## Usage
-
-Brud Code works with **any AI assistant** — ChatGPT, Claude, Gemini, or any free web AI. You don't need API keys or paid subscriptions.
-
-### Recommended: Start with the Prompt Library
-
-The Prompt Library is the fastest way to get started:
-
-1. **Install Brud Code** from the VS Code marketplace.
-2. **Open the Prompt Library** from the welcome screen or the Management window.
-3. **Browse ready-made prompts** for different operations (create, search/replace, append, delete, etc.).
-4. **Copy the Master System Prompt** and share it with your AI assistant — this teaches the AI how to output Brud-compatible blocks.
-
-### Workflow
-
-1. **Give the Master System Prompt** to your AI assistant once. It tells the AI how to format code changes.
-2. **Tell the AI what you want to change** in your codebase (e.g., "Add a discount parameter to the calculateTotal function").
-3. **The AI outputs a Brud block** inside a code fence. Example:
-
-   ```brud
-   File Path: src/utils.js
-   <<<<<<< SEARCH [0]
-   function calculateTotal(price, tax) {
-     return price + tax;
-   }
-   =======
-   function calculateTotal(price, tax, discount = 0) {
-     return price + tax - discount;
-   }
-   >>>>>>> REPLACE [0]
-   ```
-
-4. **Copy the Brud block** from the AI response.
-5. **Paste it into the Brud Code sidebar** in VS Code.
-6. **Preview and Execute** — review the diff, then apply the change.
-7. **Review the report** — Brud shows you exactly what changed and lets you revert if needed.
-
-> The Prompt Library contains operation-specific prompts for CREATE_FILE, SEARCH/REPLACE, APPEND_FILE, DELETE_FILE, directory operations, and structure extraction. Use these prompts to get exactly the output you need from your AI.
-
----
+- [ARCHITECTURE.md](ARCHITECTURE.md) — deep dive into the codebase
+- [Prompt Library](https://github.com/rahatarch/brud) — built into the extension
 
 ## Contributing
 
-Contributions are welcome. Please read CONTRIBUTING.md for guidelines on the development workflow, coding standards, and pull request process.
-
----
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-Brud Code is licensed under the MIT License. See the LICENSE file for details.
+Licensed under the [MIT License](LICENSE).
 
----
+## FAQ
+
+<details>
+<summary><strong>Where did Brud Code come from?</strong></summary>
+
+Brud Code is a fork of <a href="https://github.com/akkhar-labs/akkhar-code-patcher">Akkhar Code Patcher</a>. The original project is no longer maintained, and this fork is the official continuation under a new identity.
+</details>
+
+<details>
+<summary><strong>Does Brud Code need API keys?</strong></summary>
+
+No. Brud Code works with any AI chatbot — including free web versions. You paste the AI output; no API keys, tokens, or subscriptions required.
+</details>
+
+<details>
+<summary><strong>Is Brud Code free?</strong></summary>
+
+Yes. Brud Code is completely free and open source under the MIT license.
+</details>
+
+<details>
+<summary><strong>What AI chatbots work with Brud Code?</strong></summary>
+
+All of them. ChatGPT, Claude, Gemini, DeepSeek, Grok, Llama — any chatbot that can output text. The Master System Prompt teaches any AI the Brud block format.
+</details>
+
+## Community
 
 <p align="center">
-  <a href="https://github.com/rahatarch/brud">Star this repository</a> |
-  <a href="https://github.com/rahatarch/brud/issues">Report a bug</a> |
-  <a href="https://github.com/rahatarch">Follow the builder</a>
-</p>
-
-<p align="center">
-  <sub>(c) 2026 Akkhar-Labs. Principal Architect: Rahat Hasan.</sub>
+  <a href="https://github.com/rahatarch/brud">Star on GitHub</a> ·
+  <a href="https://github.com/rahatarch/brud/issues">Report a Bug</a> ·
+  <a href="https://github.com/rahatarch">Follow @rahatarch</a>
 </p>
