@@ -38,6 +38,7 @@ export interface OperationResult {
   to?: string;
   directoryPath?: string;
   files?: string[];
+  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean };
 }
 
 export interface FileOperationResult {
@@ -1308,6 +1309,13 @@ operationResults.push({
               ? `Terminal command executed successfully.\nOutput:\n${termCmdResult.output}`
               : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
             path: '',
+            data: {
+              command: termCmdOp.command,
+              output: termCmdResult.output,
+              exitCode: termCmdResult.exitCode,
+              duration: termCmdResult.duration,
+              success: termCmdResult.success,
+            },
           });
           break;
         }

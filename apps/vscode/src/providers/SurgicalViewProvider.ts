@@ -728,8 +728,16 @@ fileIndex: this._currentFileIndex,
     const result = await executeOperationsFromVSCode(operations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
-    if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
+    const terminalOps = result.operationResults
+      .filter(op => op.kind === 'terminal_command' && op.data)
+      .map(op => ({ toolKind: 'terminal_command' as const, data: op.data! }));
+
+    const unifiedOps: { toolKind: string; data: any }[] = [];
+    if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
+    unifiedOps.push(...terminalOps);
+
+    if (unifiedOps.length > 0) {
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
 
     if (result.success) {
@@ -761,8 +769,16 @@ fileIndex: this._currentFileIndex,
     const result = await executeOperationsFromVSCode(allOperations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
-    if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
+    const terminalOps = result.operationResults
+      .filter(op => op.kind === 'terminal_command' && op.data)
+      .map(op => ({ toolKind: 'terminal_command' as const, data: op.data! }));
+
+    const unifiedOps: { toolKind: string; data: any }[] = [];
+    if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
+    unifiedOps.push(...terminalOps);
+
+    if (unifiedOps.length > 0) {
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
 
     if (result.success) {
@@ -965,6 +981,15 @@ fileIndex: this._currentFileIndex,
       const folders = getWorkspaceFolders();
       const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
       fileResult = await executeOperationsFromVSCode(fileOps, historyStore, text);
+
+      for (const opResult of fileResult.operationResults) {
+        if (opResult.kind === 'terminal_command' && opResult.data) {
+          unifiedResults.operations.push({
+            toolKind: 'terminal_command',
+            data: opResult.data,
+          });
+        }
+      }
     }
 
     if (unifiedResults.operations.length > 0) {
