@@ -1,3 +1,4 @@
+import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
 import { getWorkspaceRootForPath, validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
@@ -49,7 +50,11 @@ export const BrudAPI = {
         return fail(pathOutsideWorkspaceError(path));
       }
 
-      return success({ path, root, operationKind: options?.operationKind });
+      const resolvedPath = pathModule.isAbsolute(path)
+        ? pathModule.resolve(path)
+        : pathModule.resolve(root, path);
+
+      return success({ resolvedPath, path, root, operationKind: options?.operationKind });
     },
 
     command(command: string): ValidationResult {
