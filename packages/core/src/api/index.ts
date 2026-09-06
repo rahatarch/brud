@@ -1,7 +1,6 @@
 import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
-import { getWorkspaceRootForPath, validateWorkspacePath } from '../utils/workspacePath';
-import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+import { getWorkspaceRootForPath } from '../utils/workspacePath';
 import type { ValidationResult } from './types';
 import {
   noWorkspaceError,
@@ -15,6 +14,26 @@ import {
   searchNotFoundError,
   multipleMatchesError,
 } from './errors';
+
+const DANGEROUS_PATTERNS: RegExp[] = [
+  /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
+  /\brm\s+-(?:rf|fr)\s+\*\s*$/,
+  /\bsudo\b/,
+  /\bsu\b/,
+  /\bpkexec\b/,
+  /\bmkfs\b/,
+  /\bfdisk\b/,
+  /\bdd\s+if=/,
+  /curl\s+.*\|\s*(bash|sh)\b/,
+  /wget\s+.*\|\s*(bash|sh)\b/,
+  /\bchmod\s+-R\s+777\b/,
+  /\bchown\s+-R\b/,
+  />\s+\/dev\/sd/,
+  />\s+\/dev\/nvme/,
+  /:\s*\(\)\s*\{[^}]*:\s*:\s*\(\)\s*\|/,
+  /\bapt-get\s+--force-yes\b/,
+  /\bnpm\s+--unsafe-perm\b/,
+];
 
 function success(data?: unknown): ValidationResult {
   return { success: true, data };
@@ -58,18 +77,26 @@ export const BrudAPI = {
     },
 
     command(command: string): ValidationResult {
-      if (isDangerousCommand(command)) {
+      if (DANGEROUS_PATTERNS.some((pattern) => pattern.test(command))) {
         return fail(dangerousCommandError(command));
       }
       return success({ command });
     },
 
     cwd(cwd: string | undefined, workspaceFolders: string[]): ValidationResult {
-      const result = validateTerminalCwd(cwd, workspaceFolders);
-      if (!result.valid) {
-        return fail(invalidCwdError(cwd ?? ''));
+      if (!cwd || cwd.trim() === '') {
+        const wsResult = this.workspace(workspaceFolders);
+        if (!wsResult.success) {
+          return wsResult;
+        }
+        return success({ resolvedCwd: workspaceFolders[0] });
       }
-      return success({ resolvedCwd: result.resolvedCwd });
+      const pathResult = this.path(cwd, workspaceFolders);
+      if (!pathResult.success) {
+        return fail(invalidCwdError(cwd));
+      }
+      const data = pathResult.data as { resolvedPath?: string } | undefined;
+      return success({ resolvedCwd: data?.resolvedPath });
     },
 
     async fileExists(fs: FileSystem, path: string): Promise<ValidationResult> {

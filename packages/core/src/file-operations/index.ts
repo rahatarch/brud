@@ -3,6 +3,7 @@ import { FileOperation, TerminalInteractiveOperation, TerminalCommandOperation }
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+import { BrudAPI } from '../api/index';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
@@ -109,7 +110,8 @@ export async function executeFileOperations(
         }
         case 'append_file_multi':
         case 'search_replace_multi': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             break;
           }
           const workspaceRoot = workspaceFolders[0];
@@ -188,40 +190,34 @@ export async function executeFileOperations(
           }
 
           const filePath = result.resolvedPath;
+
+          const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, operation.search);
+          if (!matchResult.success) {
+            if (matchResult.code === 'SEARCH_NOT_FOUND') {
+              errors.push(`Search text not found in file: ${operation.path}`);
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'search_replace',
+                status: 'aborted',
+                message: `Search text not found in ${operation.path}. No changes made.`,
+                path: operation.path,
+              });
+            } else {
+              errors.push(`Multiple matches found for search text in file: ${operation.path}. Please provide more context to make the search unique.`);
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'search_replace',
+                status: 'aborted',
+                message: `Multiple matches found in ${operation.path}. Patch aborted to avoid ambiguity.`,
+                path: operation.path,
+              });
+            }
+            continue;
+          }
+
           const content = await fs.readFile(filePath);
-
-          let count = 0;
-          let searchIndex = content.indexOf(operation.search);
-          while (searchIndex !== -1) {
-            count++;
-            searchIndex = content.indexOf(operation.search, searchIndex + 1);
-          }
-
-          if (count === 0) {
-            errors.push(`Search text not found in file: ${operation.path}`);
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_replace',
-              status: 'aborted',
-              message: `Search text not found in ${operation.path}. No changes made.`,
-              path: operation.path,
-            });
-            continue;
-          }
-
-          if (count > 1) {
-            errors.push(`Multiple matches found for search text in file: ${operation.path}. Please provide more context to make the search unique.`);
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_replace',
-              status: 'aborted',
-              message: `Multiple matches found in ${operation.path}. Patch aborted to avoid ambiguity.`,
-              path: operation.path,
-            });
-            continue;
-          }
 
           const matchIndex = content.indexOf(operation.search);
           const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
@@ -254,7 +250,8 @@ export async function executeFileOperations(
 
           const filePath = result.resolvedPath;
 
-          if (await fs.exists(filePath)) {
+          const fileNotExistsResult = await BrudAPI.validate.fileNotExists(fs, filePath);
+          if (!fileNotExistsResult.success) {
             errors.push(`File already exists: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
@@ -298,7 +295,8 @@ export async function executeFileOperations(
 
           const filePath = result.resolvedPath;
 
-          if (!(await fs.exists(filePath))) {
+          const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
+          if (!fileExistsResult.success) {
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -367,7 +365,8 @@ export async function executeFileOperations(
           const sourcePath = fromResult.resolvedPath;
           const targetPath = toResult.resolvedPath;
 
-          if (!(await fs.exists(sourcePath))) {
+          const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
+          if (!sourceExistsResult.success) {
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
@@ -380,7 +379,8 @@ export async function executeFileOperations(
             continue;
           }
 
-          if (await fs.exists(targetPath)) {
+          const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
+          if (!targetNotExistsResult.success) {
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
@@ -439,7 +439,8 @@ export async function executeFileOperations(
           const sourcePath = fromResult.resolvedPath;
           const targetPath = toResult.resolvedPath;
 
-          if (!(await fs.exists(sourcePath))) {
+          const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
+          if (!sourceExistsResult.success) {
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
@@ -452,7 +453,8 @@ export async function executeFileOperations(
             continue;
           }
 
-          if (await fs.exists(targetPath)) {
+          const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
+          if (!targetNotExistsResult.success) {
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
@@ -513,7 +515,8 @@ export async function executeFileOperations(
           const sourcePath = fromResult.resolvedPath;
           const targetPath = toResult.resolvedPath;
 
-          if (!(await fs.exists(sourcePath))) {
+          const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
+          if (!sourceExistsResult.success) {
             errors.push(`Source file not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
@@ -526,7 +529,8 @@ export async function executeFileOperations(
             continue;
           }
 
-          if (await fs.exists(targetPath)) {
+          const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
+          if (!targetNotExistsResult.success) {
             errors.push(`Destination file already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
@@ -573,7 +577,8 @@ export async function executeFileOperations(
           const filePath = result.resolvedPath;
 
           let existingContent = '';
-          if (!(await fs.exists(filePath))) {
+          const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
+          if (!fileExistsResult.success) {
             errors.push(`File not found: ${operation.path}`);
             operationResults.push({
               operationIndex: i,
@@ -662,7 +667,8 @@ export async function executeFileOperations(
 
           const directoryPath = result.resolvedPath;
 
-          if (!(await fs.exists(directoryPath))) {
+          const dirExistsResult = await BrudAPI.validate.directoryExists(fs, directoryPath);
+          if (!dirExistsResult.success) {
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -732,7 +738,8 @@ operationResults.push({
           const sourcePath = fromResult.resolvedPath;
           const targetPath = toResult.resolvedPath;
 
-          if (!(await fs.exists(sourcePath))) {
+          const sourceExistsResult = await BrudAPI.validate.directoryExists(fs, sourcePath);
+          if (!sourceExistsResult.success) {
             errors.push(`Source directory not found: ${operation.from}`);
             operationResults.push({
               operationIndex: i,
@@ -745,7 +752,8 @@ operationResults.push({
             continue;
           }
 
-          if (await fs.exists(targetPath)) {
+          const targetNotExistsResult = await BrudAPI.validate.directoryNotExists(fs, targetPath);
+          if (!targetNotExistsResult.success) {
             errors.push(`Destination directory already exists: ${operation.to}`);
             operationResults.push({
               operationIndex: i,
@@ -793,7 +801,8 @@ operationResults.push({
           const directoryPath = result.resolvedPath;
           const exists = await fs.exists(directoryPath);
           console.error('DEBUG extract_structure: fs.exists result=' + exists);
-          if (!exists) {
+          const dirExistsResult = await BrudAPI.validate.directoryExists(fs, directoryPath);
+          if (!dirExistsResult.success) {
             errors.push(`Directory not found: ${operation.directoryPath}`);
             operationResults.push({
               operationIndex: i,
@@ -845,7 +854,8 @@ operationResults.push({
         }
 
         case 'codebase_metadata': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             errors.push('No workspace root available for codebase metadata.');
             operationResults.push({
               operationIndex: i,
@@ -874,7 +884,8 @@ operationResults.push({
         }
 
         case 'search_files': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             errors.push('No workspace root available for file search.');
             operationResults.push({
               operationIndex: i,
@@ -929,7 +940,8 @@ operationResults.push({
         }
 
         case 'append_file_multi': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             errors.push('No workspace root available for file search.');
             operationResults.push({
               operationIndex: i,
@@ -1016,7 +1028,8 @@ operationResults.push({
         }
 
         case 'search_replace_multi': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             errors.push('No workspace root available for file search.');
             operationResults.push({
               operationIndex: i,
@@ -1067,19 +1080,8 @@ operationResults.push({
             try {
               const content = await fs.readFile(filePath);
 
-              let count = 0;
-              let searchIndex = content.indexOf(operation.search);
-              while (searchIndex !== -1) {
-                count++;
-                searchIndex = content.indexOf(operation.search, searchIndex + 1);
-              }
-
-              if (count === 0) {
-                skippedFiles.push(filePath);
-                continue;
-              }
-
-              if (count > 1) {
+              const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, operation.search);
+              if (!matchResult.success) {
                 skippedFiles.push(filePath);
                 continue;
               }
@@ -1149,7 +1151,8 @@ operationResults.push({
         }
 
         case 'read_files': {
-          if (workspaceFolders.length === 0) {
+          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+          if (!wsResult.success) {
             errors.push('No workspace root available for file read.');
             operationResults.push({
               operationIndex: i,
