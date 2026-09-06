@@ -178,8 +178,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       try {
         document = await vscode.workspace.openTextDocument(vscode.Uri.file(result.resolvedPath));
       } catch {
-        const errMsg: ExtensionMessage = { command: 'error', message: `Could not open file: ${filePath}` };
-        this._view?.webview.postMessage(errMsg);
+        this._sendErrorToWebview(`Could not open file: ${filePath}`);
         const headerMsg: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -328,8 +327,7 @@ fileIndex: this._currentFileIndex,
           this._view?.webview.postMessage(headerMsg);
           return;
         }
-        const errMsg: ExtensionMessage = { command: 'error', message: `Could not open file: ${filePath}` };
-        this._view?.webview.postMessage(errMsg);
+        this._sendErrorToWebview(`Could not open file: ${filePath}`);
         const headerMsg2: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -353,8 +351,7 @@ fileIndex: this._currentFileIndex,
       }
 
       const matches = findMatches(docLines, blocks, (msg, block) => {
-        const errMsg: ExtensionMessage = { command: 'error', message: msg };
-        this._view?.webview.postMessage(errMsg);
+        this._sendErrorToWebview(msg);
         if (block) {
           this._outputChannel.appendLine(`--- FAILED BLOCK [${block.index}] ---`);
           this._outputChannel.appendLine(`SEARCH_CONTENT: ${JSON.stringify(block.search)}`);
@@ -399,8 +396,7 @@ fileIndex: this._currentFileIndex,
       return;
     }
 
-    const errMsg: ExtensionMessage = { command: 'error', message: 'Preview not available for this operation type.' };
-    this._view?.webview.postMessage(errMsg);
+    this._sendErrorToWebview('Preview not available for this operation type.');
     const headerMsg2: ExtensionMessage = {
       command: 'updatePreviewHeader',
       fileName: filePath,
@@ -1131,8 +1127,9 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
       this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const fallback = report + (combinedErrors.length > 0 ? '\n\nErrors:\n' + combinedErrors.map(e => `- ${e}`).join('\n') : '');
-      const msg: ExtensionMessage = { command: 'error', message: structured ? 'Session completed with errors. See details below.' : fallback, structured };
+      const structuredSections = this._generateErrorReport(report);
+      const friendlyText = structuredSections[0].content;
+      const msg: ExtensionMessage = { command: 'error', message: friendlyText, structured: structuredSections };
       this._view?.webview.postMessage(msg);
     }
   }
@@ -1162,15 +1159,13 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
       this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
       this._outputChannel.show(true);
-      const errMsg: ExtensionMessage = { command: 'error', message: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') };
-      this._view?.webview.postMessage(errMsg);
+      this._sendErrorToWebview(result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : ''));
       return;
     }
 
     if (result.errors.length > 0) {
       this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
-      const errMsg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; ') };
-      this._view?.webview.postMessage(errMsg);
+      this._sendErrorToWebview(result.message + ' Errors: ' + result.errors.join('; '));
       return;
     }
 
@@ -1286,9 +1281,35 @@ fileIndex: this._currentFileIndex,
     return report;
   }
 
+  private _generateErrorReport(errorMessage: string): ReportSection[] {
+    const sections: ReportSection[] = [];
+
+    let friendlyMessage: string;
+    if (errorMessage.includes('No workspace')) {
+      friendlyMessage = "I need a workspace to work with. Open a folder in VS Code first, then I can help you.";
+    } else if (errorMessage.includes('outside the workspace')) {
+      friendlyMessage = "This path is outside your workspace. I can only work with files inside the folder you opened.";
+    } else if (errorMessage.includes('Could not open file')) {
+      friendlyMessage = "I couldn't find that file. It may have been moved or deleted.";
+    } else if (errorMessage.includes('No valid operations')) {
+      friendlyMessage = "I couldn't understand the format. Check the Prompt Library for examples.";
+    } else if (errorMessage.includes('No preview')) {
+      friendlyMessage = "I couldn't generate a preview for these changes.";
+    } else {
+      friendlyMessage = "Something went wrong. Here are the details:";
+    }
+
+    sections.push({ type: 'text', content: friendlyMessage });
+    sections.push({ type: 'details', title: 'Error Details', content: errorMessage });
+    sections.push({ type: 'button', buttonText: 'See Details', buttonAction: 'openUnifiedResults' });
+
+    return sections;
+  }
+
   private _sendErrorToWebview(errorMessage: string): void {
+    const structured = this._generateErrorReport(errorMessage);
     if (this._view) {
-      const msg: ExtensionMessage = { command: 'error', message: errorMessage };
+      const msg: ExtensionMessage = { command: 'error', message: errorMessage, structured };
       this._view.webview.postMessage(msg);
     }
     this._outputChannel.appendLine('ERROR: ' + errorMessage);

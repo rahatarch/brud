@@ -195,9 +195,9 @@ function App() {
       if (message.command === 'success') {
         addReport(message.message || '', message.structured);
       } else if (message.command === 'error') {
-        addReport('[Error] ' + (message.message || 'An error occurred.'), message.structured);
+        addReport(message.message || 'An error occurred.', message.structured);
       } else if (message.command === 'previewNoChanges') {
-        addReport('[Error] ' + (message.message || 'No changes found.'), message.structured);
+        addReport(message.message || 'No changes found.', message.structured);
       }
     });
   }, [addReport]);
