@@ -122,6 +122,7 @@ export interface OperationResult {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
+  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
 
 export interface ExecutionResult {

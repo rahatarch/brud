@@ -2,7 +2,8 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { executeTerminalCommand } from './executor.js';
+import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, executeCommandGroup } from './executor.js';
+import type { ConditionalCommand, CommandGroup } from './types.js';
 
 describe('Terminal Executor', () => {
   let tempDir: string;
@@ -79,5 +80,95 @@ echo "Answers: $ans1 $ans2 $ans3"
   it('Test 8: Working directory', async () => {
     const result = await executeTerminalCommand('pwd', [], tempDir);
     assert.ok(result.output.includes(tempDir), `expected ${tempDir} in output: ${result.output}`);
+  });
+
+  describe('executeCommand', () => {
+    it('succeeds with echo', async () => {
+      const result = await executeCommand('echo hello world');
+      assert.strictEqual(result.success, true);
+      assert.ok(result.output.includes('hello world'));
+      assert.strictEqual(result.exitCode, 0);
+    });
+
+    it('fails with nonexistent path', async () => {
+      const result = await executeCommand('ls /nonexistent');
+      assert.strictEqual(result.success, false);
+      assert.notStrictEqual(result.exitCode, 0);
+      assert.notStrictEqual(result.exitCode, null);
+    });
+  });
+
+  describe('executeSequential', () => {
+    it('executes 2 commands in order', async () => {
+      const result = await executeSequential(['echo first', 'echo second']);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.results.length, 2);
+      assert.ok(result.results[0].output.includes('first'));
+      assert.ok(result.results[1].output.includes('second'));
+    });
+
+    it('stops on failure with stopOnFailure', async () => {
+      const result = await executeSequential(['ls /nonexistent', 'echo should_not_run'], undefined, 5000, undefined, true);
+      assert.strictEqual(result.success, false);
+      assert.strictEqual(result.results.length, 1);
+    });
+  });
+
+  describe('executeParallel', () => {
+    it('executes 2 commands in parallel', async () => {
+      const result = await executeParallel(['echo parallel_a', 'echo parallel_b']);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.results.length, 2);
+      const outputs = result.results.map(r => r.output);
+      assert.ok(outputs.some(o => o.includes('parallel_a')));
+      assert.ok(outputs.some(o => o.includes('parallel_b')));
+    });
+  });
+
+  describe('executeConditional', () => {
+    it('runs onSuccess when primary command succeeds', async () => {
+      const conditional: ConditionalCommand = {
+        command: 'echo ok',
+        onSuccess: { type: 'sequential', commands: ['echo success_handler'] },
+      };
+      const result = await executeConditional(conditional);
+      assert.strictEqual(result.success, true);
+      assert.strictEqual(result.results.length, 2);
+      assert.ok(result.results[1].output.includes('success_handler'));
+    });
+
+    it('runs onFailure when primary command fails', async () => {
+      const conditional: ConditionalCommand = {
+        command: 'ls /nonexistent',
+        onFailure: { type: 'sequential', commands: ['echo failure_handler'] },
+      };
+      const result = await executeConditional(conditional);
+      assert.strictEqual(result.results[0].success, false);
+      assert.strictEqual(result.results.length, 2);
+      assert.ok(result.results[1].output.includes('failure_handler'));
+    });
+  });
+
+  describe('executeCommandGroup (nested)', () => {
+    it('handles mixed nested groups', async () => {
+      const group: CommandGroup = {
+        type: 'sequential',
+        commands: [
+          'echo outer_first',
+          {
+            type: 'parallel',
+            commands: ['echo inner_parallel_a', 'echo inner_parallel_b'],
+          },
+          'echo outer_last',
+        ],
+      };
+      const result = await executeCommandGroup(group);
+      assert.strictEqual(result.results.length, 4);
+      assert.ok(result.results[0].output.includes('outer_first'));
+      assert.ok(result.results[1].output.includes('outer_last'));
+      const outputs = result.results.map(r => r.output);
+      assert.ok(outputs.some(o => o.includes('inner_parallel_a')));
+      assert.ok(outputs.some(o => o.includes('inner_parallel_b')));
+    });
   });
 });

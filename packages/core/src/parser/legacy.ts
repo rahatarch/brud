@@ -1,8 +1,9 @@
 import { FileOperation } from '../types/patch';
+import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND';
 
-export function parseLegacyFormat(input: string): FileOperation[] {
+export function parseLegacyFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
   const lines = input.split(/\r?\n/);
 
@@ -34,6 +35,13 @@ export function parseLegacyFormat(input: string): FileOperation[] {
   let currentTerminalAnswers: string[] = [];
   let currentTerminalTimeout = 120;
   let currentTerminalCwd = '';
+  let currentTerminalEnv: Record<string, string> = {};
+  let currentTerminalEnvLines: string[] = [];
+  let currentTerminalCommands: string[] = [];
+  let currentTerminalMode: 'sequential' | 'parallel' | undefined = undefined;
+  let currentTerminalStopOnFailure: boolean | undefined = undefined;
+  let currentTerminalOnSuccess: string | undefined = undefined;
+  let currentTerminalOnFailure: string | undefined = undefined;
 
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
@@ -288,12 +296,19 @@ export function parseLegacyFormat(input: string): FileOperation[] {
 
   function flushTerminalInteractive() {
     if (currentIndex && currentTerminalCommand) {
+      if (isDangerousCommand(currentTerminalCommand)) {
+        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      }
+      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdValidation.valid) {
+        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      }
       operations.push({
         kind: 'terminal_interactive',
         command: currentTerminalCommand,
         answers: currentTerminalAnswers,
         timeout: currentTerminalTimeout,
-        cwd: currentTerminalCwd || undefined,
+        cwd: cwdValidation.resolvedCwd,
         index: currentIndex,
       });
     }
@@ -301,6 +316,64 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentTerminalAnswers = [];
     currentTerminalTimeout = 120;
     currentTerminalCwd = '';
+  }
+
+  function flushTerminalCommand() {
+    if (currentIndex && (currentTerminalCommand || currentTerminalCommands.length > 0)) {
+      if (currentTerminalCommand && isDangerousCommand(currentTerminalCommand)) {
+        throw new Error(`Dangerous terminal command blocked: ${currentTerminalCommand}`);
+      }
+      if (currentTerminalCommands.length > 0) {
+        for (const cmd of currentTerminalCommands) {
+          if (isDangerousCommand(cmd)) {
+            throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+          }
+        }
+      }
+      const cwdValidation = validateTerminalCwd(currentTerminalCwd || undefined, workspaceFolders);
+      if (!cwdValidation.valid) {
+        throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+      }
+      const op: any = {
+        kind: 'terminal_command',
+        index: currentIndex,
+      };
+      if (currentTerminalCommands.length > 0) {
+        op.commands = currentTerminalCommands;
+        if (currentTerminalMode) {
+          op.mode = currentTerminalMode;
+        }
+        if (currentTerminalStopOnFailure !== undefined) {
+          op.stopOnFailure = currentTerminalStopOnFailure;
+        }
+      } else {
+        op.command = currentTerminalCommand;
+      }
+      if (currentTerminalTimeout !== 120) {
+        op.timeout = currentTerminalTimeout;
+      }
+      op.cwd = cwdValidation.resolvedCwd;
+      if (Object.keys(currentTerminalEnv).length > 0) {
+        op.env = currentTerminalEnv;
+      }
+      if (currentTerminalOnSuccess) {
+        op.onSuccess = { type: 'sequential', commands: [currentTerminalOnSuccess] };
+      }
+      if (currentTerminalOnFailure) {
+        op.onFailure = { type: 'sequential', commands: [currentTerminalOnFailure] };
+      }
+      operations.push(op as FileOperation);
+    }
+    currentTerminalCommand = '';
+    currentTerminalTimeout = 120;
+    currentTerminalCwd = '';
+    currentTerminalEnv = {};
+    currentTerminalEnvLines = [];
+    currentTerminalCommands = [];
+    currentTerminalMode = undefined;
+    currentTerminalStopOnFailure = undefined;
+    currentTerminalOnSuccess = undefined;
+    currentTerminalOnFailure = undefined;
   }
 
   function reset() {
@@ -324,6 +397,7 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     currentReadMaxDepth = 5;
     currentReadExclude = [];
     currentReadImportSyntax = [];
+    currentTerminalEnvLines = [];
   }
 
   for (const line of lines) {
@@ -381,11 +455,19 @@ export function parseLegacyFormat(input: string): FileOperation[] {
     const importSyntaxMatch = line.match(/^importSyntax:\s*(.+)/);
     const terminalInteractiveMatch = line.match(/^<<<<<<< TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
     const endTerminalInteractiveMatch = line.match(/^>>>>>>> END TERMINAL_INTERACTIVE \[([\w\d.-]+)\]/);
+    const terminalCommandMatch = line.match(/^<<<<<<< TERMINAL_COMMAND \[([\w\d.-]+)\]/);
+    const endTerminalCommandMatch = line.match(/^>>>>>>> END TERMINAL_COMMAND \[([\w\d.-]+)\]/);
     const commandMatch = line.match(/^Command:\s*(.+)/);
     const answersHeaderMatch = line.match(/^Answers:/);
     const answerListItemMatch = line.match(/^\s*-\s*(.+)/);
     const timeoutFieldMatch = line.match(/^Timeout:\s*(\d+)/);
     const workingDirectoryMatch = line.match(/^Working Directory:\s*(.+)/);
+    const envMatch = line.match(/^Env:\s*(.+)/);
+    const commandsHeaderMatch = line.match(/^Commands:/);
+    const modeFieldMatch = line.match(/^Mode:\s*(sequential|parallel)/);
+    const stopOnFailureMatch = line.match(/^StopOnFailure:\s*(true|false)/);
+    const onSuccessMatch = line.match(/^OnSuccess:\s*(.+)/);
+    const onFailureMatch = line.match(/^OnFailure:\s*(.+)/);
 
     if (currentState === 'IDLE') {
       if (searchMatch) {
@@ -535,6 +617,21 @@ if (searchFilesMatch) {
         currentTerminalAnswers = [];
         currentTerminalTimeout = 120;
         currentTerminalCwd = '';
+        continue;
+      }
+      if (terminalCommandMatch) {
+        currentState = 'TERMINAL_COMMAND';
+        currentIndex = terminalCommandMatch[1];
+        currentTerminalCommand = '';
+        currentTerminalTimeout = 120;
+        currentTerminalCwd = '';
+        currentTerminalEnv = {};
+currentTerminalEnvLines = [];
+    currentTerminalCommands = [];
+    currentTerminalMode = undefined;
+    currentTerminalStopOnFailure = undefined;
+    currentTerminalOnSuccess = undefined;
+    currentTerminalOnFailure = undefined;
         continue;
       }
       if (filePathMatch) {
@@ -1067,6 +1164,61 @@ if (searchFilesMatch) {
       }
       if (workingDirectoryMatch) {
         currentTerminalCwd = workingDirectoryMatch[1].trim();
+        continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'TERMINAL_COMMAND') {
+      if (endTerminalCommandMatch) {
+        if (endTerminalCommandMatch[1] === currentIndex) {
+          flushTerminalCommand();
+        }
+        reset();
+        continue;
+      }
+      if (commandMatch) {
+        currentTerminalCommand = commandMatch[1].trim();
+        continue;
+      }
+      if (commandsHeaderMatch) {
+        continue;
+      }
+      if (filesListMatch) {
+        currentTerminalCommands.push(filesListMatch[1].trim());
+        continue;
+      }
+      if (modeFieldMatch) {
+        currentTerminalMode = modeFieldMatch[1] as 'sequential' | 'parallel';
+        continue;
+      }
+      if (stopOnFailureMatch) {
+        currentTerminalStopOnFailure = stopOnFailureMatch[1] === 'true';
+        continue;
+      }
+      if (onSuccessMatch) {
+        currentTerminalOnSuccess = onSuccessMatch[1].trim();
+        continue;
+      }
+      if (onFailureMatch) {
+        currentTerminalOnFailure = onFailureMatch[1].trim();
+        continue;
+      }
+      if (timeoutFieldMatch) {
+        currentTerminalTimeout = parseInt(timeoutFieldMatch[1], 10);
+        continue;
+      }
+      if (workingDirectoryMatch) {
+        currentTerminalCwd = workingDirectoryMatch[1].trim();
+        continue;
+      }
+      if (envMatch) {
+        const eqIndex = envMatch[1].indexOf('=');
+        if (eqIndex !== -1) {
+          const key = envMatch[1].substring(0, eqIndex).trim();
+          const val = envMatch[1].substring(eqIndex + 1).trim();
+          currentTerminalEnv[key] = val;
+        }
         continue;
       }
       continue;

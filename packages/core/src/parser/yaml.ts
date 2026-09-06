@@ -1,7 +1,27 @@
 import * as yaml from 'js-yaml';
 import { FileOperation } from '../types/patch';
+import { CommandGroup } from '../terminal/types';
+import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 
-export function parseYamlFormat(input: string): FileOperation[] {
+function parseCommandGroup(value: unknown): CommandGroup | undefined {
+  if (typeof value === 'string') {
+    return { type: 'sequential', commands: [value] };
+  }
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    const commands = obj.commands as (string | CommandGroup)[] | undefined;
+    if (commands && Array.isArray(commands) && commands.length > 0) {
+      return {
+        type: (obj.type as 'sequential' | 'parallel') || 'sequential',
+        commands,
+        stopOnFailure: obj.stopOnFailure as boolean | undefined,
+      };
+    }
+  }
+  return undefined;
+}
+
+export function parseYamlFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
   const docs = input.split(/(?:^|\n)---\s*\n/);
 
@@ -368,20 +388,84 @@ export function parseYamlFormat(input: string): FileOperation[] {
         if (!command) {
           throw new Error('Missing command field in terminal_interactive operation');
         }
+        if (isDangerousCommand(command)) {
+          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        }
         const answers = parsed.answers as string[] | undefined;
         if (!answers || !Array.isArray(answers)) {
           throw new Error('Missing or invalid answers field in terminal_interactive operation');
         }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
+        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
+        if (!cwdValidation.valid) {
+          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        }
         operations.push({
           kind: 'terminal_interactive',
           command,
           answers,
           timeout: timeout ?? 120,
-          cwd: cwd || undefined,
+          cwd: cwdValidation.resolvedCwd,
           index: String(index),
         });
+        break;
+      }
+      case 'terminal_command': {
+        const command = parsed.command as string | undefined;
+        const commands = parsed.commands as string[] | undefined;
+        if (!command && (!commands || !Array.isArray(commands) || commands.length === 0)) {
+          throw new Error('Missing command or commands field in terminal_command operation');
+        }
+        if (command && isDangerousCommand(command)) {
+          throw new Error(`Dangerous terminal command blocked: ${command}`);
+        }
+        if (commands && Array.isArray(commands)) {
+          for (const cmd of commands) {
+            if (isDangerousCommand(cmd)) {
+              throw new Error(`Dangerous terminal command blocked: ${cmd}`);
+            }
+          }
+        }
+        const timeout = parsed.timeout as number | undefined;
+        const cwd = parsed.cwd as string | undefined;
+        const env = parsed.env as Record<string, string> | undefined;
+        const mode = parsed.mode as string | undefined;
+        const stopOnFailure = parsed.stop_on_failure as boolean | undefined;
+        const onSuccess = parseCommandGroup(parsed.on_success);
+        const onFailure = parseCommandGroup(parsed.on_failure);
+        if (mode !== undefined && mode !== 'sequential' && mode !== 'parallel') {
+          throw new Error('Mode field must be "sequential" or "parallel" in terminal_command operation');
+        }
+        const cwdValidation = validateTerminalCwd(cwd, workspaceFolders);
+        if (!cwdValidation.valid) {
+          throw new Error(cwdValidation.error || 'Invalid working directory for terminal command');
+        }
+        const op: any = {
+          kind: 'terminal_command',
+          index: String(index),
+        };
+        if (commands && Array.isArray(commands)) {
+          op.commands = commands;
+          if (mode) {
+            op.mode = mode;
+          }
+          if (stopOnFailure !== undefined) {
+            op.stopOnFailure = stopOnFailure;
+          }
+        } else {
+          op.command = command;
+        }
+        op.timeout = timeout ?? undefined;
+        op.cwd = cwdValidation.resolvedCwd;
+        op.env = env && typeof env === 'object' ? env : undefined;
+        if (onSuccess) {
+          op.onSuccess = onSuccess;
+        }
+        if (onFailure) {
+          op.onFailure = onFailure;
+        }
+        operations.push(op as FileOperation);
         break;
       }
       default:

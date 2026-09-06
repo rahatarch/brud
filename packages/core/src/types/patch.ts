@@ -1,3 +1,5 @@
+import type { CommandGroup } from '../terminal/types';
+
 export interface PatchBlock {
   index: string;
   search: string;
@@ -12,7 +14,7 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory' | 'terminal_interactive';
+export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory' | 'terminal_interactive' | 'terminal_command';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -174,4 +176,18 @@ export interface TerminalInteractiveOperation {
   index: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation;
+export interface TerminalCommandOperation {
+  kind: 'terminal_command';
+  command: string;
+  commands?: string[];
+  mode?: 'sequential' | 'parallel';
+  stopOnFailure?: boolean;
+  onSuccess?: CommandGroup;
+  onFailure?: CommandGroup;
+  cwd?: string;
+  timeout?: number;
+  env?: Record<string, string>;
+  index: string;
+}
+
+export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation | TerminalCommandOperation;

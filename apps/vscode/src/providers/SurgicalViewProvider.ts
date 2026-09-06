@@ -465,7 +465,7 @@ fileIndex: this._currentFileIndex,
     this._originalPrompt = text;
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
       this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
@@ -728,8 +728,14 @@ fileIndex: this._currentFileIndex,
     const result = await executeOperationsFromVSCode(operations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
-    if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
+    const terminalOps = this._toTerminalOperationData(result.operationResults, operations);
+
+    const unifiedOps: { toolKind: string; data: any }[] = [];
+    if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
+    unifiedOps.push(...terminalOps);
+
+    if (unifiedOps.length > 0) {
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
 
     if (result.success) {
@@ -761,8 +767,14 @@ fileIndex: this._currentFileIndex,
     const result = await executeOperationsFromVSCode(allOperations, historyStore, this._originalPrompt, this._diffPreviewSessionId);
     const readData = this._reportExecutionResult(result);
 
-    if (readData) {
-      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: [{ toolKind: 'readResults', data: readData }] });
+    const terminalOps = this._toTerminalOperationData(result.operationResults, allOperations);
+
+    const unifiedOps: { toolKind: string; data: any }[] = [];
+    if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
+    unifiedOps.push(...terminalOps);
+
+    if (unifiedOps.length > 0) {
+      this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
 
     if (result.success) {
@@ -821,6 +833,45 @@ fileIndex: this._currentFileIndex,
     }
   }
 
+  private _toTerminalOperationData(
+    operationResults: OperationResult[],
+    originalOperations: FileOperation[],
+  ): { toolKind: 'terminal_command'; data: any }[] {
+    const result: { toolKind: 'terminal_command'; data: any }[] = [];
+    for (const op of operationResults) {
+      if (op.kind !== 'terminal_command' || !op.data) continue;
+      if (Array.isArray(op.data)) {
+        const originalOp = originalOperations[op.operationIndex] as any;
+        let mode: 'single' | 'sequential' | 'parallel' | 'conditional' = 'sequential';
+        if (originalOp) {
+          if (originalOp.mode === 'parallel') {
+            mode = 'parallel';
+          } else if (originalOp.onSuccess || originalOp.onFailure) {
+            mode = 'conditional';
+          } else {
+            mode = 'sequential';
+          }
+        }
+        const succeeded = op.data.filter((d: any) => d.success).length;
+        const failed = op.data.filter((d: any) => !d.success).length;
+        const totalDuration = op.data.reduce((sum: number, d: any) => sum + (d.duration || 0), 0);
+        result.push({
+          toolKind: 'terminal_command',
+          data: {
+            mode,
+            results: op.data,
+            totalDuration,
+            succeeded,
+            failed,
+          },
+        });
+      } else {
+        result.push({ toolKind: 'terminal_command', data: op.data });
+      }
+    }
+    return result;
+  }
+
   private _reportExecutionResult(result: ExecutionResult): ReadResultData | null {
     this._outputChannel.appendLine(result.message);
     for (const err of result.errors) {
@@ -869,7 +920,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
@@ -965,6 +1016,13 @@ fileIndex: this._currentFileIndex,
       const folders = getWorkspaceFolders();
       const historyStore = folders.length > 0 ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem()) : undefined;
       fileResult = await executeOperationsFromVSCode(fileOps, historyStore, text);
+
+      for (const opResult of fileResult.operationResults) {
+  if (opResult.kind === 'terminal_command' && opResult.data) {
+    const items = this._toTerminalOperationData([opResult], fileOps);
+    unifiedResults.operations.push(...items);
+  }
+}
     }
 
     if (unifiedResults.operations.length > 0) {
@@ -1007,7 +1065,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text);
+      operations = parseOperations(text, getWorkspaceFolders());
     } catch (e) {
       this._sendErrorToWebview(e instanceof Error ? e.message : String(e));
       return;

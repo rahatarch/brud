@@ -2,7 +2,7 @@ import { PatchBlock, FileOperation } from '../types/patch';
 import { parseLegacyFormat } from './legacy';
 import { parseYamlFormat } from './yaml';
 
-export function parseOperations(input: string): FileOperation[] {
+export function parseOperations(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const trimmed = input.trim();
 
   const legacyPatterns = [
@@ -25,15 +25,16 @@ export function parseOperations(input: string): FileOperation[] {
     '<<<<<<< READ_FILES',
     '<<<<<<< READ_DIRECTORY',
     '<<<<<<< TERMINAL_INTERACTIVE',
+    '<<<<<<< TERMINAL_COMMAND',
   ];
 
   const isLegacy = legacyPatterns.some((p) => trimmed.includes(p));
   if (isLegacy) {
-    return parseLegacyFormat(trimmed);
+    return parseLegacyFormat(trimmed, workspaceFolders);
   }
 
   if (trimmed.includes('operation:') || trimmed.startsWith('---')) {
-    return parseYamlFormat(trimmed);
+    return parseYamlFormat(trimmed, workspaceFolders);
   }
 
   throw new Error('Unrecognized patch format. Please use either the legacy Brud format or YAML format.');

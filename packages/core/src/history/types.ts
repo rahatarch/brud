@@ -37,6 +37,7 @@ export interface OperationResult {
   to?: string;
   directoryPath?: string;
   files?: string[];
+  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
 
 export type SnapshotType = 'pre' | 'post';
