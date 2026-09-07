@@ -1,4 +1,4 @@
-import { spawn } from 'child_process';
+import { spawn, ChildProcess } from 'child_process';
 import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup } from './types';
 
 function stripAnsiCodes(str: string): string {
@@ -15,6 +15,30 @@ function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function forceKillProcess(child: ChildProcess): void {
+  if (typeof process === 'undefined') return;
+  if (child.pid === undefined) {
+    try { child.kill('SIGKILL'); } catch {}
+    return;
+  }
+  if (process.platform === 'win32') {
+    try {
+      const { spawn } = require('child_process');
+      spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+    } catch {
+      try { child.kill(); } catch {}
+    }
+  } else {
+    try {
+      process.kill(-child.pid, 'SIGKILL');
+    } catch {
+      try { child.kill('SIGKILL'); } catch {}
+    }
+  }
+}
+
+const isWindows = typeof process !== 'undefined' && process.platform === 'win32';
+
 export const executeCommand: TerminalExecutor['executeCommand'] = async (
   command: string,
   cwd?: string,
@@ -25,6 +49,7 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   const child = spawn(command, [], {
     shell: true,
     cwd: cwd || (() => { console.warn('Warning: cwd not resolved for executeCommand, falling back to process.cwd()'); return process.cwd(); })(),
+    detached: !isWindows,
     stdio: ['pipe', 'pipe', 'pipe'],
     env: env ? { ...process.env, ...env } : undefined,
   });
@@ -35,7 +60,19 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
 
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
-    child.kill();
+
+    try {
+      if (isWindows) {
+        child.kill();
+      } else {
+        child.kill('SIGTERM');
+      }
+    } catch {}
+
+    setTimeout(() => {
+      forceKillProcess(child);
+    }, 5000).unref();
+
   }, timeout);
 
   child.stdout?.on('data', (data: Buffer) => {
@@ -46,13 +83,15 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
     stderr += data.toString();
   });
 
-  const result = await new Promise<TerminalResult>((resolve) => {
-    let resolved = false;
+  let resolved = false;
+  let safetyTimeout: NodeJS.Timeout | undefined;
 
+  const result = await new Promise<TerminalResult>((resolve) => {
     child.on('close', (exitCode) => {
       if (resolved) return;
       resolved = true;
       clearTimeout(timeoutHandle);
+      clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
       const combinedOutput = stripAnsiCodes(stdout + stderr);
       if (timedOut) {
@@ -66,10 +105,20 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
       if (resolved) return;
       resolved = true;
       clearTimeout(timeoutHandle);
+      clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
       resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration });
     });
   });
+
+  safetyTimeout = setTimeout(() => {
+    if (!resolved) {
+      timedOut = true;
+      forceKillProcess(child);
+    }
+  }, timeout + 10000);
+
+  safetyTimeout.unref();
 
   return result;
 };
@@ -84,6 +133,7 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
   const child = spawn(command, [], {
     shell: true,
     cwd: cwd || (() => { console.warn('Warning: cwd not resolved for execute, falling back to process.cwd()'); return process.cwd(); })(),
+    detached: !isWindows,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -93,7 +143,19 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
 
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
-    child.kill();
+
+    try {
+      if (isWindows) {
+        child.kill();
+      } else {
+        child.kill('SIGTERM');
+      }
+    } catch {}
+
+    setTimeout(() => {
+      forceKillProcess(child);
+    }, 5000).unref();
+
   }, timeout);
 
   child.stdout?.on('data', (data: Buffer) => {
@@ -104,13 +166,14 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
     stderr += data.toString();
   });
 
-  const processDone = new Promise<TerminalResult>((resolve) => {
-    let resolved = false;
+  let resolved = false;
 
+  const processDone = new Promise<TerminalResult>((resolve) => {
     child.on('close', (exitCode) => {
       if (resolved) return;
       resolved = true;
       clearTimeout(timeoutHandle);
+      clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
       const combinedOutput = stripAnsiCodes(stdout + stderr);
       if (timedOut) {
@@ -124,10 +187,20 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
       if (resolved) return;
       resolved = true;
       clearTimeout(timeoutHandle);
+      clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
       resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration });
     });
   });
+
+  const safetyTimeout = setTimeout(() => {
+    if (!resolved) {
+      timedOut = true;
+      forceKillProcess(child);
+    }
+  }, timeout + 10000);
+
+  safetyTimeout.unref();
 
   await delay(1000);
 
@@ -135,7 +208,6 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
     try {
       child.stdin?.write(answer + '\n');
     } catch {
-      // process may have already exited
     }
     await delay(500);
   }
@@ -143,7 +215,6 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
   try {
     child.stdin?.end();
   } catch {
-    // process may have already exited
   }
 
   return processDone;

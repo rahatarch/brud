@@ -82,6 +82,47 @@ echo "Answers: $ans1 $ans2 $ans3"
     assert.ok(result.output.includes(tempDir), `expected ${tempDir} in output: ${result.output}`);
   });
 
+  it('TEST 1: Timeout kills long-running command', async () => {
+    const start = Date.now();
+    const result = await executeCommand('sleep 30', undefined, 2000);
+    const elapsed = Date.now() - start;
+    assert.ok(elapsed < 10000, `Expected completion in < 10000ms, got ${elapsed}ms`);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.exitCode, null);
+  });
+
+  it('TEST 2: Process is actually dead after timeout', { skip: process.platform === 'win32' }, async () => {
+    const pidFile = path.join(tempDir, 'timeout_pid.txt');
+    const result = await executeCommand(`echo $$ > "${pidFile}"; exec sleep 30`, undefined, 2000);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.exitCode, null);
+    const contents = await fs.readFile(pidFile, 'utf-8');
+    const pid = parseInt(contents.trim(), 10);
+    assert.ok(Number.isInteger(pid) && pid > 0, `Invalid PID from file: ${contents.trim()}`);
+    assert.throws(
+      () => process.kill(pid, 0),
+      (err: unknown) => (err as NodeJS.ErrnoException).code === 'ESRCH',
+    );
+  });
+
+  it('TEST 3: Grace period kills process that ignores SIGTERM', async () => {
+    const start = Date.now();
+    const result = await executeCommand('trap "" TERM; sleep 30', undefined, 1000);
+    const elapsed = Date.now() - start;
+    assert.ok(elapsed < 12000, `Expected completion in < 12000ms, got ${elapsed}ms`);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.exitCode, null);
+  });
+
+  it('TEST 4: Normal command still works with timeout', async () => {
+    const start = Date.now();
+    const result = await executeCommand('echo hello', undefined, 5000);
+    const elapsed = Date.now() - start;
+    assert.ok(elapsed < 3000, `Expected completion in < 3000ms, got ${elapsed}ms`);
+    assert.strictEqual(result.success, true);
+    assert.ok(result.output.includes('hello'));
+  });
+
   describe('executeCommand', () => {
     it('succeeds with echo', async () => {
       const result = await executeCommand('echo hello world');
