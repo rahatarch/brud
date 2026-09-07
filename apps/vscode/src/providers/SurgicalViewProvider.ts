@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { parseOperations } from '@brud/core';
+import { parseOperations, cleanBrudInput } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
 import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
@@ -474,7 +474,7 @@ fileIndex: this._currentFileIndex,
     this._originalPrompt = text;
     let operations;
     try {
-      operations = parseOperations(text, getWorkspaceFolders());
+      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
       this._sendParseErrorToWebview();
       return;
@@ -978,7 +978,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text, getWorkspaceFolders());
+      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
@@ -1141,7 +1141,7 @@ fileIndex: this._currentFileIndex,
 
     let operations;
     try {
-      operations = parseOperations(text, getWorkspaceFolders());
+      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
       this._sendParseErrorToWebview();
       return;
