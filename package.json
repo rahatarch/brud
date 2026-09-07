@@ -16,7 +16,7 @@
     "apps/*"
   ],
   "engines": {
-    "vscode": "^1.136.0"
+    "vscode": "^1.80.0"
   },
   "categories": [
     "Other",
@@ -104,7 +104,7 @@
     "@types/node": "22.x",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "@types/vscode": "^1.120.0",
+    "@types/vscode": "^1.80.0",
     "@vitejs/plugin-react": "^6.1.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",

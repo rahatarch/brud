@@ -18,3 +18,10 @@ packages/*/src/**
 apps/vscode/src/**
 tests/**
 .github/**
+
+
+.brud/
+.kilo/
+docs/
+packages/*/src/
+apps/vscode/src/
