@@ -10,6 +10,7 @@ export interface TerminalCommand {
   cwd?: string;
   timeout?: number;
   env?: Record<string, string>;
+  raw?: boolean;
 }
 
 export interface CommandGroup {

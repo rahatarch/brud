@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { parseOperations, cleanBrudInput } from '@brud/core';
+import { parseOperations, cleanBrudInput, BrudError } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
 import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
@@ -477,7 +477,11 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
-      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      if (e instanceof BrudError) {
+        this._sendParseErrorToWebview(e.friendly || e.message);
+      } else {
+        this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      }
       return;
     }
 
@@ -994,7 +998,11 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
-      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      if (e instanceof BrudError) {
+        this._sendParseErrorToWebview(e.friendly || e.message);
+      } else {
+        this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      }
       return;
     }
 
@@ -1143,7 +1151,11 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
-      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      if (e instanceof BrudError) {
+        this._sendParseErrorToWebview(e.friendly || e.message);
+      } else {
+        this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
+      }
       return;
     }
 
@@ -1344,7 +1356,7 @@ fileIndex: this._currentFileIndex,
       const msg: ExtensionMessage = { command: 'error', message: 'Failed. Check the report at the Report Panel.' };
       this._view.webview.postMessage(msg);
     }
-    this._outputChannel.appendLine('ERROR: Parse error - unrecognized patch format');
+    this._outputChannel.appendLine('ERROR: ' + friendlyMessage);
   }
 
   private async _closePreviewTabs() {

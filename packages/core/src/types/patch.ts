@@ -173,6 +173,7 @@ export interface TerminalInteractiveOperation {
   answers: string[];
   timeout?: number;
   cwd?: string;
+  raw?: boolean;
   index: string;
 }
 
@@ -187,6 +188,7 @@ export interface TerminalCommandOperation {
   cwd?: string;
   timeout?: number;
   env?: Record<string, string>;
+  raw?: boolean;
   index: string;
 }
 

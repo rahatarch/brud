@@ -388,6 +388,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (!command) {
           throw new Error('Missing command field in terminal_interactive operation');
         }
+        const raw = parsed.raw as boolean | undefined;
         const cmdResult = BrudAPI.validate.command(command);
         if (!cmdResult.success) {
           throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${command}` });
@@ -403,14 +404,18 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
         }
         const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-        operations.push({
+        const interactiveOp: any = {
           kind: 'terminal_interactive',
           command,
           answers,
           timeout: timeout ?? 120,
           cwd: cwdData?.resolvedCwd,
           index: String(index),
-        });
+        };
+        if (raw) {
+          interactiveOp.raw = true;
+        }
+        operations.push(interactiveOp as FileOperation);
         break;
       }
       case 'terminal_command': {
@@ -419,6 +424,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (!command && (!commands || !Array.isArray(commands) || commands.length === 0)) {
           throw new Error('Missing command or commands field in terminal_command operation');
         }
+        const raw = parsed.raw as boolean | undefined;
         if (command) {
           const cmdResult = BrudAPI.validate.command(command);
           if (!cmdResult.success) {
@@ -466,6 +472,9 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         op.timeout = timeout ?? undefined;
         op.cwd = cwdData?.resolvedCwd;
         op.env = env && typeof env === 'object' ? env : undefined;
+        if (raw) {
+          op.raw = true;
+        }
         if (onSuccess) {
           op.onSuccess = onSuccess;
         }

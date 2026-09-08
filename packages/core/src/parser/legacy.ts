@@ -1,7 +1,7 @@
 import { FileOperation } from '../types/patch';
 import { BrudAPI, BrudError } from '../api/index';
 
-type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'GET_TOOL_INFO';
+type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'TERMINAL_COMMAND_RAW' | 'TERMINAL_INTERACTIVE_RAW' | 'GET_TOOL_INFO';
 
 export function parseLegacyFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
@@ -42,6 +42,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentTerminalStopOnFailure: boolean | undefined = undefined;
   let currentTerminalOnSuccess: string | undefined = undefined;
   let currentTerminalOnFailure: string | undefined = undefined;
+  let currentTerminalRaw = false;
   let currentToolKind: string | undefined = undefined;
 
   function flushSearchReplace() {
@@ -306,19 +307,24 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
       }
       const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-      operations.push({
+      const op: any = {
         kind: 'terminal_interactive',
         command: currentTerminalCommand,
         answers: currentTerminalAnswers,
         timeout: currentTerminalTimeout,
         cwd: cwdData?.resolvedCwd,
         index: currentIndex,
-      });
+      };
+      if (currentTerminalRaw) {
+        op.raw = true;
+      }
+      operations.push(op as FileOperation);
     }
     currentTerminalCommand = '';
     currentTerminalAnswers = [];
     currentTerminalTimeout = 120;
     currentTerminalCwd = '';
+    currentTerminalRaw = false;
   }
 
   function flushTerminalCommand() {
@@ -370,6 +376,9 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (currentTerminalOnFailure) {
         op.onFailure = { type: 'sequential', commands: [currentTerminalOnFailure] };
       }
+      if (currentTerminalRaw) {
+        op.raw = true;
+      }
       operations.push(op as FileOperation);
     }
     currentTerminalCommand = '';
@@ -382,6 +391,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentTerminalStopOnFailure = undefined;
     currentTerminalOnSuccess = undefined;
     currentTerminalOnFailure = undefined;
+    currentTerminalRaw = false;
   }
 
   function flushGetToolInfo() {
@@ -417,6 +427,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentReadExclude = [];
     currentReadImportSyntax = [];
     currentTerminalEnvLines = [];
+    currentTerminalRaw = false;
   }
 
   for (const line of lines) {
@@ -490,6 +501,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     const getToolInfoMatch = line.match(/^<<<<<<< GET_TOOL_INFO \[([\w\d.-]+)\]/);
     const endGetToolInfoMatch = line.match(/^>>>>>>> END GET_TOOL_INFO \[([\w\d.-]+)\]/);
     const toolKindFieldMatch = line.match(/^Tool:\s*(.+)/);
+    const rawCmdStart = /^<command>\s*$/;
+    const rawCmdEnd = /^<\/command>\s*$/;
 
     if (currentState === 'IDLE') {
       const noIndexMarkerMatch = line.match(/^<<<<<<< (\w+)\b(?!\s*\[)/);
@@ -1179,6 +1192,7 @@ currentTerminalEnvLines = [];
         reset();
         continue;
       }
+      if (rawCmdStart.test(line)) { currentState = 'TERMINAL_INTERACTIVE_RAW'; currentTerminalCommand = ''; continue; }
       if (commandMatch) {
         currentTerminalCommand = commandMatch[1].trim();
         continue;
@@ -1209,6 +1223,7 @@ currentTerminalEnvLines = [];
         reset();
         continue;
       }
+      if (rawCmdStart.test(line)) { currentState = 'TERMINAL_COMMAND_RAW'; currentTerminalCommand = ''; continue; }
       if (commandMatch) {
         currentTerminalCommand = commandMatch[1].trim();
         continue;
@@ -1252,6 +1267,36 @@ currentTerminalEnvLines = [];
           currentTerminalEnv[key] = val;
         }
         continue;
+      }
+      continue;
+    }
+
+    if (currentState === 'TERMINAL_COMMAND_RAW') {
+      if (rawCmdEnd.test(line)) {
+        currentTerminalRaw = true;
+        flushTerminalCommand();
+        reset();
+        continue;
+      }
+      if (currentTerminalCommand) {
+        currentTerminalCommand += '\n' + line;
+      } else {
+        currentTerminalCommand = line;
+      }
+      continue;
+    }
+
+    if (currentState === 'TERMINAL_INTERACTIVE_RAW') {
+      if (rawCmdEnd.test(line)) {
+        currentTerminalRaw = true;
+        flushTerminalInteractive();
+        reset();
+        continue;
+      }
+      if (currentTerminalCommand) {
+        currentTerminalCommand += '\n' + line;
+      } else {
+        currentTerminalCommand = line;
       }
       continue;
     }

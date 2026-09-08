@@ -278,6 +278,13 @@ Timeout: 120
 - User must know their tool's question order
 - Works with any interactive CLI (npm init, scaffolding tools, wizards)
 
+Raw mode: Use <command>...</command> tags inside the block for complex commands with pipes, multi-line, or special characters. This prevents the Brud parser from confusing command content with Brud syntax. It does NOT bypass any security checks. Dangerous commands like rm -rf / are still blocked.
+  Example inside TERMINAL_INTERACTIVE block:
+  <command>
+  sudo cat /var/log/syslog | grep error
+  echo done
+  </command>
+
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
 
 export const getToolInfoPrompt = `Use GET_TOOL_INFO to discover available tools and their documentation.
@@ -336,6 +343,13 @@ OnFailure: npm run build:fix
 - Sequential: multiple commands run one after another; StopOnFailure controls whether to stop on error (default true)
 - Parallel: multiple commands run simultaneously
 - Conditional: run a command; run OnSuccess if it succeeds, or OnFailure if it fails
+
+Raw mode: Use <command>...</command> tags inside the block for complex commands with pipes, multi-line, or special characters. This prevents the Brud parser from confusing command content with Brud syntax. It does NOT bypass any security checks. Dangerous commands like rm -rf / are still blocked.
+  Example inside TERMINAL_COMMAND block:
+  <command>
+  sudo cat file | grep pattern
+  echo done
+  </command>
 
 Revert commands are NOT currently available. The Brud Code team has deliberately chosen not to implement them because running a saved revert command months later can be dangerous — the command might not work, might corrupt data, or might have unintended consequences. Brud Code does not know what a revert command actually does and cannot guarantee it will safely undo changes.
 
