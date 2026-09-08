@@ -797,6 +797,12 @@ fileIndex: this._currentFileIndex,
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
     unifiedOps.push(...terminalOps);
 
+    for (const op of result.operationResults) {
+      if (op.kind !== 'terminal_command') {
+        unifiedOps.push({ toolKind: op.kind, data: op });
+      }
+    }
+
     if (unifiedOps.length > 0) {
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
@@ -835,6 +841,12 @@ fileIndex: this._currentFileIndex,
     const unifiedOps: { toolKind: string; data: any }[] = [];
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
     unifiedOps.push(...terminalOps);
+
+    for (const op of result.operationResults) {
+      if (op.kind !== 'terminal_command') {
+        unifiedOps.push({ toolKind: op.kind, data: op });
+      }
+    }
 
     if (unifiedOps.length > 0) {
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
@@ -1102,11 +1114,15 @@ fileIndex: this._currentFileIndex,
   if (opResult.kind === 'terminal_command' && opResult.data) {
     const items = this._toTerminalOperationData([opResult], fileOps);
     unifiedResults.operations.push(...items);
-  }
-  if (opResult.kind === 'get_tool_info') {
+  } else if (opResult.kind === 'get_tool_info') {
     unifiedResults.operations.push({
       toolKind: 'tool_info',
       data: { message: opResult.message, status: opResult.status },
+    });
+  } else {
+    unifiedResults.operations.push({
+      toolKind: opResult.kind,
+      data: opResult,
     });
   }
 }
