@@ -459,6 +459,9 @@ fileIndex: this._currentFileIndex,
         case 'openPromptLibrary':
           vscode.commands.executeCommand('brud.openManagement');
           break;
+        case 'openGetStarted':
+          vscode.commands.executeCommand('brud.getStarted');
+          break;
         case 'openUnifiedResults':
           if (this._lastExecutionResult) {
             this._unifiedResultsPanelManager?.openUnifiedResultsPanel(this._lastExecutionResult);

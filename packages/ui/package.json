@@ -8,15 +8,16 @@
   "dependencies": {
     "@brud/core": "*",
     "@brud/protocol": "*",
+    "lucide-react": "latest",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "zustand": "^5.0.0",
-    "lucide-react": "latest"
+    "react-markdown": "^10.1.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.1.1",
-    "vite": "^8.2.2",
     "tailwindcss": "^4.3.3",
-    "@tailwindcss/vite": "^4.3.3"
+    "vite": "^8.2.2"
   }
 }

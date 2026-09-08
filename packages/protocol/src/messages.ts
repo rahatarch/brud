@@ -29,6 +29,7 @@ export type WebviewCommand =
   | 'getSessionSnapshots'
   | 'openUnifiedResults'
   | 'openPromptLibrary'
+  | 'openGetStarted'
   | 'previewNoChanges';
 
 export type ExtensionCommand =

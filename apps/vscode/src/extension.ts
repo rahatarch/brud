@@ -6,6 +6,7 @@ import { BrudStructurePanelManager } from './providers/StructurePanelProvider';
 import { BrudReadPanelManager } from './providers/ReadPanelProvider';
 import { BrudDiffPreviewPanelManager } from './providers/DiffPreviewPanelProvider';
 import { BrudUnifiedResultsPanelManager } from './providers/UnifiedResultsPanelProvider';
+import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
@@ -35,6 +36,10 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   const unifiedResultsPanelManager = new BrudUnifiedResultsPanelManager(
+    context.extensionUri,
+  );
+
+  const getStartedManager = new BrudGetStartedManager(
     context.extensionUri,
   );
 
@@ -68,6 +73,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('brud.openManagement', () => {
       mainWindowManager.openMainWindow();
+    }),
+  );
+
+  // Register the command to open the Get Started panel
+  context.subscriptions.push(
+    vscode.commands.registerCommand('brud.getStarted', () => {
+      getStartedManager.openGetStarted();
     }),
   );
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { Send, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle, Trash2, Star } from 'lucide-react';
+import { Send, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle, Trash2, Star, Rocket } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
@@ -7,6 +7,7 @@ import StructurePanel from './components/StructurePanel';
 import ReadResultsPanel from './components/ReadResultsPanel';
 import DiffPreviewPanel from './components/DiffPreviewPanel';
 import UnifiedResultsPanel from './components/UnifiedResultsPanel';
+import GetStartedPanel from './components/GetStartedPanel';
 import { initResultRegistry } from './result-registry/init';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 import type { ReportSection } from '@brud/protocol';
@@ -152,6 +153,10 @@ function App() {
     return <UnifiedResultsPanel />;
   }
 
+  if (viewMode === 'get-started') {
+    return <GetStartedPanel />;
+  }
+
   const [inputText, setInputText] = useState('');
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
   const chatAreaRef = useRef<HTMLDivElement>(null);
@@ -220,6 +225,10 @@ function App() {
     sendToExtension({ command: 'openMainWindow' });
   };
 
+  const handleGetStarted = () => {
+    sendToExtension({ command: 'openGetStarted' });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -260,29 +269,29 @@ function App() {
               Brud Code is a full AI-assisted coding platform. Paste your Brud Prompt to
               control your codebase automatically.
             </p>
-            <div className="flex flex-row items-center justify-center gap-3 mt-5">
-              <button
-                onClick={handleCodebaseMetadata}
-                className="px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer"
-              >
-                Codebase Metadata
-              </button>
+
+            <button
+              onClick={handleGetStarted}
+              className="w-full max-w-[280px] mt-6 flex items-center justify-center gap-2 px-5 py-3 text-sm font-semibold text-white rounded-md bg-primary hover:bg-primary-hover transition-all cursor-pointer"
+            >
+              <Rocket size={18} />
+              Get Started
+            </button>
+
+            <div className="flex flex-row items-center justify-center gap-3 mt-4 flex-wrap">
               <button
                 onClick={handlePromptLibrary}
                 className="px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer"
               >
                 Prompt Library
               </button>
+              <button
+                onClick={handleCodebaseMetadata}
+                className="px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer"
+              >
+                Codebase Metadata
+              </button>
             </div>
-            <a
-              href="https://github.com/rahatarch/brud"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-4 flex items-center gap-2 px-4 py-2 text-sm font-medium text-primary bg-primary/20 rounded-md hover:brightness-110 transition-all"
-            >
-              <Star size={16} />
-              Star The Repo
-            </a>
           </div>
         ) : messages.length > 0 ? (
           <div className="flex flex-col gap-3">
@@ -343,10 +352,20 @@ function App() {
             </button>
           </div>
         </div>
-        <div className="flex items-center justify-center gap-1.5 mt-2 text-[11px] text-text-secondary">
+        <div className="flex items-center justify-center gap-2 mt-2 text-[11px] text-text-secondary flex-wrap">
           <span>Brud Code by Rahat Hasan</span>
           <span className="text-border">|</span>
           <span>© 2026 Akkhar-Labs</span>
+          <span className="text-border">|</span>
+          <a
+            href="https://github.com/rahatarch/brud"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-text-muted hover:text-primary transition-colors"
+          >
+            <Star size={10} />
+            Star on GitHub
+          </a>
         </div>
       </div>
     </div>
