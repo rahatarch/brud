@@ -476,7 +476,7 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
-      this._sendParseErrorToWebview();
+      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
     }
 
@@ -982,7 +982,7 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
-      this._sendParseErrorToWebview();
+      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
     }
 
@@ -1143,7 +1143,7 @@ fileIndex: this._currentFileIndex,
     try {
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
-      this._sendParseErrorToWebview();
+      this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       return;
     }
 
@@ -1318,8 +1318,8 @@ fileIndex: this._currentFileIndex,
     this._outputChannel.appendLine('ERROR: ' + friendlyMessage);
   }
 
-  private _sendParseErrorToWebview(): void {
-    const friendlyMessage = "I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML. Don't worry — you can browse ready-made prompts in the Prompt Library to see the correct format for each tool.";
+  private _sendParseErrorToWebview(errorMessage?: string): void {
+    const friendlyMessage = errorMessage || "I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML.\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven't seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don't guess field names or format from memory.";
     const structured: ReportSection[] = [
       { type: 'text', content: friendlyMessage },
       { type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' },

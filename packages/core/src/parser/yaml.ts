@@ -44,7 +44,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
 
     const index = parsed.index as string | undefined;
     if (index === undefined || index === null) {
-      throw new Error('Missing index field in YAML document');
+      throw new Error("You haven't used any index number with your instructions. Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]");
     }
 
     switch (operation) {

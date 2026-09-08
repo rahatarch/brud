@@ -492,6 +492,10 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     const toolKindFieldMatch = line.match(/^Tool:\s*(.+)/);
 
     if (currentState === 'IDLE') {
+      const noIndexMarkerMatch = line.match(/^<<<<<<< (\w+)(?!\s*\[)/);
+      if (noIndexMarkerMatch) {
+        throw new Error("You haven't used any index number with your instructions. Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]");
+      }
       if (searchMatch) {
         currentState = 'SEARCH';
         currentIndex = searchMatch[1];

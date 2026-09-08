@@ -155,13 +155,13 @@ wasting tokens on a shallow codebase or overwhelming the architect with a massiv
 Sure — I'll create that config file for you.
 
 <BRUD_INSTRUCTIONS>
-<<<<<<< CREATE_FILE
+<<<<<<< CREATE_FILE [1]
 File Path: src/config/settings.json
 Content:
 {
   "debug": false
 }
->>>>>>> END CREATE_FILE
+>>>>>>> END CREATE_FILE [1]
 </BRUD_INSTRUCTIONS>
 
 Paste that into Brud Code and it'll create the file at src/config/settings.json.
