@@ -4,12 +4,13 @@ import type { FileSystem } from '../types/filesystem.js';
 import { generateSessionId } from './sessionId.js';
 import type { HistorySession, SnapshotData, HistoryEntry, OperationResult } from './types.js';
 import type { HistoryStore } from './store.js';
+import type { BrudError } from '../api/types';
 
 let sequenceCounter = 0;
 
 export function recordSession(
   operations: FileOperation[],
-  result: { success: boolean; message: string; errors: string[] },
+  result: { success: boolean; message: string; errors: BrudError[] },
   filesAffected: string[],
   originalPrompt: string,
   operationResults: OperationResult[] = [],
@@ -159,7 +160,7 @@ export async function createSnapshot(
 
 export async function recordAndSaveSession(
   operations: FileOperation[],
-  result: { success: boolean; message: string; errors: string[] },
+  result: { success: boolean; message: string; errors: BrudError[] },
   filesAffected: string[],
   originalPrompt: string,
   preSnapshot: SnapshotData,

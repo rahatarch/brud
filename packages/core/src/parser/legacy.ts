@@ -1,5 +1,5 @@
 import { FileOperation } from '../types/patch';
-import { BrudAPI, BrudError } from '../api/index';
+import { BrudAPI, BrudError, missingFieldError, missingIndexError } from '../api/index';
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'TERMINAL_COMMAND_RAW' | 'TERMINAL_INTERACTIVE_RAW' | 'GET_TOOL_INFO';
 
@@ -48,7 +48,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   function flushSearchReplace() {
     if (currentIndex && searchBuffer.length > 0) {
       if (!currentFilePath) {
-        throw new Error('Missing File Path for search/replace block');
+        throw new BrudError(missingFieldError('path', 'search/replace block'));
       }
       operations.push({
         kind: 'search_replace',
@@ -507,7 +507,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     if (currentState === 'IDLE') {
       const noIndexMarkerMatch = line.match(/^<<<<<<< (\w+)\b(?!\s*\[)/);
       if (noIndexMarkerMatch) {
-        throw new Error("You haven't used any index number with your instructions. Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]");
+        throw new BrudError(missingIndexError());
       }
       if (searchMatch) {
         currentState = 'SEARCH';

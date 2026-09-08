@@ -932,7 +932,7 @@ fileIndex: this._currentFileIndex,
     return result;
   }
 
-  private _getChatStatusMessage(result: { success: boolean; operationResults?: any[]; errors?: string[] }): string {
+  private _getChatStatusMessage(result: { success: boolean; operationResults?: any[]; errors?: any[] }): string {
     if (result.success && (!result.errors || result.errors.length === 0)) {
       return 'Successful. Check the report at the Report Panel.';
     }
@@ -947,10 +947,10 @@ fileIndex: this._currentFileIndex,
     return 'Failed. Check the report at the Report Panel.';
   }
 
-  private _reportExecutionResult(result: ExecutionResult): ReadResultData | null {
+  private _reportExecutionResult(result: { success: boolean; message: string; errors: any[]; operationResults: OperationResult[] }): ReadResultData | null {
     this._outputChannel.appendLine(result.message);
     for (const err of result.errors) {
-      this._outputChannel.appendLine(`  ERROR: ${err}`);
+      this._outputChannel.appendLine(`  ERROR: ${err.details}`);
     }
 
     if (result.success) {
@@ -1020,8 +1020,8 @@ fileIndex: this._currentFileIndex,
       op.kind !== 'codebase_metadata'
     );
 
-    let queryResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
-    let fileResult: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[] } | null = null;
+    let queryResult: { success: boolean; message: string; errors: any[]; operationResults: OperationResult[] } | null = null;
+    let fileResult: { success: boolean; message: string; errors: any[]; operationResults: OperationResult[] } | null = null;
     const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
 
     if (queryOps.length > 0) {
@@ -1119,12 +1119,12 @@ fileIndex: this._currentFileIndex,
 
     if (queryResult) {
       combinedSuccess = combinedSuccess && queryResult.success;
-      combinedErrors.push(...queryResult.errors);
+      combinedErrors.push(...queryResult.errors.map(e => e.details));
     }
 
     if (fileResult) {
       combinedSuccess = combinedSuccess && fileResult.success;
-      combinedErrors.push(...fileResult.errors);
+      combinedErrors.push(...fileResult.errors.map(e => e.details));
     }
 
     let combinedOpResults: OperationResult[] = [];

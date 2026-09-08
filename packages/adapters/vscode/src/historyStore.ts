@@ -1,7 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { HistoryEntry, HistorySession, HistoryStore, SnapshotData, RevertResult, RevertHistoryEntry, RevertHistory, DeleteHistoryEntry, DeleteHistory, SoftDeleteEvent } from '@brud/core';
-import { revertSession } from '@brud/core';
+import { revertSession, sessionNotFoundError } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 import { getWorkspaceFolders } from './workspace';
 
@@ -563,10 +563,11 @@ export class WorkspaceHistoryStore implements HistoryStore {
   async revertSession(sessionId: string, targetState: 'pre' | 'post'): Promise<RevertResult> {
     const entry = await this.getSession(sessionId);
     if (!entry) {
+      const err = sessionNotFoundError(sessionId);
       return {
         success: false,
-        message: `Session ${sessionId} not found`,
-        errors: [`Session ${sessionId} does not exist in history`],
+        message: err.friendly,
+        errors: [err],
         revertedOperationIds: [],
       };
     }

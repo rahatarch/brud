@@ -1,6 +1,5 @@
-import { executeFileOperations, FileOperation, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
-import type { HistoryStore } from '@brud/core';
-import type { OperationResult } from '@brud/core';
+import { executeFileOperations, FileOperation, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, noWorkspaceError } from '@brud/core';
+import type { HistoryStore, FileOperationResult } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
 
@@ -9,15 +8,16 @@ export async function executeOperationsFromVSCode(
   historyStore?: HistoryStore,
   originalPrompt?: string,
   sessionIdOverride?: string,
-): Promise<{ success: boolean; message: string; errors: string[]; operationResults: OperationResult[]; sessionId?: string }> {
+): Promise<FileOperationResult> {
   const fs = new VSCodeFileSystem();
   const workspaceFolders = getWorkspaceFolders();
   
   if (workspaceFolders.length === 0) {
+    const err = noWorkspaceError();
     return {
       success: false,
-      message: 'No workspace is currently open. Open a folder in VS Code to use file operations.',
-      errors: ['No workspace is currently open. Open a folder in VS Code to use file operations.'],
+      message: err.friendly,
+      errors: [err],
       operationResults: [],
     };
   }

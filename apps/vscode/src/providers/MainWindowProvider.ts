@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
-import { revertOperations } from '@brud/core';
+import { revertOperations, invalidRevertRequestError } from '@brud/core';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
@@ -133,7 +133,7 @@ export class BrudMainWindowManager {
   }
 
   private async _handleRevertSession(sessionId?: string, targetState?: 'pre' | 'post'): Promise<void> {
-    const revertError = { code: 'INVALID_REVERT_REQUEST', friendly: 'Missing sessionId or targetState', details: 'Cannot revert session without both sessionId and targetState.' };
+    const revertError = invalidRevertRequestError();
     if (!this._historyStore || !sessionId || !targetState) {
       this._panel?.webview.postMessage({
         command: 'revertResult',
@@ -143,11 +143,11 @@ export class BrudMainWindowManager {
     }
 
     const result = await this._historyStore.revertSession(sessionId, targetState);
-    this._panel?.webview.postMessage({ command: 'revertResult', revertResult: result } satisfies ExtensionMessage);
+    this._panel?.webview.postMessage({ command: 'revertResult', revertResult: { ...result, errors: result.errors.map(e => e.details) } } satisfies ExtensionMessage);
   }
 
   private async _handleRevertOperations(sessionId?: string, operationIds?: string[], targetState?: 'pre' | 'post'): Promise<void> {
-    const revertOpError = { code: 'INVALID_REVERT_REQUEST', friendly: 'Missing sessionId, operationIds, or targetState', details: 'Cannot revert operations without sessionId, operationIds, and targetState.' };
+    const revertOpError = invalidRevertRequestError();
     if (!this._historyStore || !sessionId || !operationIds || !targetState) {
       this._panel?.webview.postMessage({
         command: 'revertOperationsResult',
@@ -167,7 +167,7 @@ export class BrudMainWindowManager {
         this._historyStore!.saveRevertHistory(sessionId, revertEntry).catch(() => {});
       },
     );
-    this._panel?.webview.postMessage({ command: 'revertOperationsResult', revertOperationsResult: result } satisfies ExtensionMessage);
+    this._panel?.webview.postMessage({ command: 'revertOperationsResult', revertOperationsResult: { ...result, errors: result.errors.map(e => e.details) } } satisfies ExtensionMessage);
   }
 
   private async _handleDeleteSingleSession(sessionId?: string, triggeredBy?: 'user' | 'system'): Promise<void> {

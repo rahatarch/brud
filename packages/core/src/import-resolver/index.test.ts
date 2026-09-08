@@ -193,7 +193,7 @@ describe('resolveImports with custom patterns', () => {
     const invalidPattern = "[invalid";
     await assert.rejects(
       () => resolveImports(content, pathModule.join(tempDir, 'index.ts'), fileExists, [invalidPattern]),
-      { message: /Invalid importSyntax pattern/ },
+      { code: 'INVALID_FIELD', friendly: 'Invalid value for field: importSyntax' },
     );
   });
 

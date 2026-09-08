@@ -129,3 +129,109 @@ export function noExtractOperationsError(): BrudError {
     details: 'No extract_structure operations found.',
   };
 }
+
+export function missingFieldError(field: string, operation?: string): BrudError {
+  return {
+    code: 'MISSING_FIELD',
+    friendly: `Missing required field: ${field}`,
+    details: `The field "${field}" is required${operation ? ` in ${operation} operation` : ''}.`,
+  };
+}
+
+export function invalidFieldError(field: string, message: string): BrudError {
+  return {
+    code: 'INVALID_FIELD',
+    friendly: `Invalid value for field: ${field}`,
+    details: message,
+  };
+}
+
+export function missingIndexError(): BrudError {
+  return {
+    code: 'MISSING_INDEX',
+    friendly: 'You haven\'t used any index number with your instructions.',
+    details: 'Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]',
+  };
+}
+
+export function parseError(): BrudError {
+  return {
+    code: 'PARSE_ERROR',
+    friendly: 'I couldn\'t understand the format of your message.',
+    details: 'Brud Code understands two formats: the legacy block format and YAML. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
+  };
+}
+
+export function unknownOperationError(operation: string): BrudError {
+  return {
+    code: 'UNKNOWN_OPERATION',
+    friendly: `Unrecognized operation: ${operation}`,
+    details: `The operation "${operation}" is not supported by Brud Code. Use GET_TOOL_INFO to see available tools.`,
+  };
+}
+
+export function deleteFailedError(path: string): BrudError {
+  return {
+    code: 'DELETE_FAILED',
+    friendly: `Failed to delete: ${path}`,
+    details: `The file or directory at "${path}" could not be deleted. Check permissions and try again.`,
+    path,
+  };
+}
+
+export function toolNotFoundError(toolKind: string): BrudError {
+  return {
+    code: 'TOOL_NOT_FOUND',
+    friendly: `Tool not found: ${toolKind}`,
+    details: `The tool "${toolKind}" does not exist. Use GET_TOOL_INFO to see available tools.`,
+  };
+}
+
+export function terminalUnavailableError(): BrudError {
+  return {
+    code: 'TERMINAL_UNAVAILABLE',
+    friendly: 'Terminal executor is not available.',
+    details: 'The terminal executor could not be initialized. Check the platform adapter configuration.',
+  };
+}
+
+export function executionFailedError(message: string): BrudError {
+  return {
+    code: 'EXECUTION_FAILED',
+    friendly: 'Execution failed.',
+    details: message,
+  };
+}
+
+export function revertFailedError(path: string): BrudError {
+  return {
+    code: 'REVERT_FAILED',
+    friendly: `Failed to revert: ${path}`,
+    details: `The revert operation for "${path}" could not be completed. Check the history and try again.`,
+    path,
+  };
+}
+
+export function sessionNotFoundError(sessionId: string): BrudError {
+  return {
+    code: 'SESSION_NOT_FOUND',
+    friendly: `Session not found: ${sessionId}`,
+    details: `The session "${sessionId}" does not exist in history. It may have been deleted or expired.`,
+  };
+}
+
+export function invalidRevertRequestError(): BrudError {
+  return {
+    code: 'INVALID_REVERT_REQUEST',
+    friendly: 'Invalid revert request.',
+    details: 'Cannot revert without sessionId and targetState.',
+  };
+}
+
+export function unexpectedError(operationKind: string, message: string): BrudError {
+  return {
+    code: 'UNEXPECTED_ERROR',
+    friendly: 'An unexpected error occurred.',
+    details: `Unexpected error during ${operationKind}: ${message}`,
+  };
+}
