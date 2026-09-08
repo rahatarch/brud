@@ -21,6 +21,7 @@ import {
   toolNotFoundError,
   unexpectedError,
   noValidOperationsError,
+  validationError,
 } from '../api/errors';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
@@ -195,7 +196,7 @@ export async function executeFileOperations(
         case 'search_replace': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -218,7 +219,7 @@ export async function executeFileOperations(
                 operationId: generateOperationId(),
                 kind: 'search_replace',
                 status: 'aborted',
-                message: `Search text not found in ${operation.path}. No changes made.`,
+                message: searchNotFoundError(operation.path, operation.search).details,
                 path: operation.path,
               });
             } else {
@@ -228,7 +229,7 @@ export async function executeFileOperations(
                 operationId: generateOperationId(),
                 kind: 'search_replace',
                 status: 'aborted',
-                message: `Multiple matches found in ${operation.path}. Patch aborted to avoid ambiguity.`,
+                message: multipleMatchesError(operation.path).details,
                 path: operation.path,
               });
             }
@@ -254,7 +255,7 @@ export async function executeFileOperations(
         case 'create_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -276,7 +277,7 @@ export async function executeFileOperations(
               operationId: generateOperationId(),
               kind: 'create_file',
               status: 'aborted',
-              message: `File already exists: ${operation.path}. Creation aborted, existing content preserved.`,
+              message: fileAlreadyExistsError(operation.path).details,
               path: operation.path,
             });
             continue;
@@ -299,7 +300,7 @@ export async function executeFileOperations(
         case 'delete_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -335,7 +336,7 @@ export async function executeFileOperations(
               operationId: generateOperationId(),
               kind: 'delete_file',
               status: 'failed',
-              message: `Failed to delete ${operation.path}.`,
+              message: deleteFailedError(operation.path).details,
               path: operation.path,
             });
           } else {
@@ -354,7 +355,7 @@ export async function executeFileOperations(
 case 'rename_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
+            errors.push(validationError(fromResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -368,7 +369,7 @@ case 'rename_file': {
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
+            errors.push(validationError(toResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -391,7 +392,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'aborted',
-              message: `Source file not found: ${operation.from}. Rename aborted.`,
+              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -405,7 +406,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'rename_file',
               status: 'aborted',
-              message: `Destination file already exists: ${operation.to}. Rename aborted.`,
+              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -428,7 +429,7 @@ case 'rename_file': {
         case 'move_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
+            errors.push(validationError(fromResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -442,7 +443,7 @@ case 'rename_file': {
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
+            errors.push(validationError(toResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -465,7 +466,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'move_file',
               status: 'aborted',
-              message: `Source file not found: ${operation.from}. Move aborted.`,
+              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -479,7 +480,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'move_file',
               status: 'aborted',
-              message: `Destination file already exists: ${operation.to}. Move aborted.`,
+              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -504,7 +505,7 @@ case 'rename_file': {
         case 'copy_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
+            errors.push(validationError(fromResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -518,7 +519,7 @@ case 'rename_file': {
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
+            errors.push(validationError(toResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -541,7 +542,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'aborted',
-              message: `Source file not found: ${operation.from}. Copy aborted.`,
+              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -555,7 +556,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'copy_file',
               status: 'aborted',
-              message: `Destination file already exists: ${operation.to}. Copy aborted.`,
+              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -580,7 +581,7 @@ case 'rename_file': {
         case 'append_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -603,7 +604,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'append_file',
               status: 'aborted',
-              message: `File not found: ${operation.path}. Append aborted.`,
+              message: fileNotFoundError(operation.path).details,
               path: operation.path,
             });
             continue;
@@ -629,7 +630,7 @@ case 'rename_file': {
         case 'create_directory': {
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -647,7 +648,7 @@ case 'rename_file': {
           for (const file of operation.files) {
             const fileResult = validateWorkspacePath(path.join(operation.directoryPath, file), workspaceFolders);
             if (!fileResult.valid) {
-              errors.push({ code: 'VALIDATION_ERROR', friendly: fileResult.error, details: fileResult.error });
+              errors.push(validationError(fileResult.error));
               continue;
             }
             const filePath = fileResult.resolvedPath;
@@ -671,7 +672,7 @@ case 'rename_file': {
         case 'delete_directory': {
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -707,7 +708,7 @@ case 'rename_file': {
               operationId: generateOperationId(),
               kind: 'delete_directory',
               status: 'failed',
-              message: `Failed to delete directory ${operation.directoryPath}.`,
+              message: deleteFailedError(operation.directoryPath).details,
               path: operation.directoryPath,
             });
           } else {
@@ -727,7 +728,7 @@ operationResults.push({
         case 'move_directory': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
+            errors.push(validationError(fromResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -741,7 +742,7 @@ operationResults.push({
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
+            errors.push(validationError(toResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -764,7 +765,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'aborted',
-              message: `Source directory not found: ${operation.from}. Move aborted.`,
+              message: directoryNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -778,7 +779,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'move_directory',
               status: 'aborted',
-              message: `Destination directory already exists: ${operation.to}. Move aborted.`,
+              message: directoryAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -804,7 +805,7 @@ operationResults.push({
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -827,7 +828,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'extract_structure',
               status: 'aborted',
-              message: `Directory not found: ${operation.directoryPath}. Extraction aborted.`,
+              message: directoryNotFoundError(operation.directoryPath).details,
               path: operation.directoryPath,
             });
             continue;
@@ -880,7 +881,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'codebase_metadata',
               status: 'aborted',
-              message: 'No workspace root available for codebase metadata.',
+              message: noWorkspaceError().details,
               path: '',
             });
             continue;
@@ -910,7 +911,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'search_files',
               status: 'aborted',
-              message: 'No workspace root available for file search.',
+              message: noWorkspaceError().details,
               path: '',
             });
             continue;
@@ -966,7 +967,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'append_file_multi',
               status: 'aborted',
-              message: 'No workspace root available for file search.',
+              message: noWorkspaceError().details,
               path: '',
             });
             continue;
@@ -1054,7 +1055,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'search_replace_multi',
               status: 'aborted',
-              message: 'No workspace root available for file search.',
+              message: noWorkspaceError().details,
               path: '',
             });
             continue;
@@ -1136,7 +1137,7 @@ operationResults.push({
         case 'read_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1177,7 +1178,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'read_files',
               status: 'aborted',
-              message: 'No workspace root available for file read.',
+              message: noWorkspaceError().details,
               path: '',
             });
             continue;
@@ -1239,7 +1240,7 @@ operationResults.push({
         case 'read_directory': {
           const dirResult = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!dirResult.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: dirResult.error, details: dirResult.error });
+            errors.push(validationError(dirResult.error));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1286,7 +1287,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_interactive',
               status: 'failed',
-              message: 'Terminal executor not available.',
+              message: terminalUnavailableError().details,
               path: '',
             });
             continue;
@@ -1300,7 +1301,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_interactive',
               status: 'failed',
-              message: `Dangerous terminal command blocked: ${termOp.command}`,
+              message: dangerousCommandError(termOp.command).details,
               path: '',
             });
             continue;
@@ -1313,7 +1314,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_interactive',
               status: 'failed',
-              message: cwdValidation.error || 'Invalid working directory for terminal command',
+message: invalidCwdError(termOp.cwd || '').details,
               path: '',
             });
             continue;
@@ -1355,7 +1356,7 @@ operationResults.push({
                 operationId: generateOperationId(),
                 kind: 'get_tool_info',
                 status: 'failed',
-                message: `Tool not found: ${toolOp.toolKind}`,
+                message: toolNotFoundError(toolOp.toolKind).details,
                 path: '',
               });
             } else {
@@ -1384,7 +1385,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: 'failed',
-              message: 'Terminal executor not available.',
+              message: terminalUnavailableError().details,
               path: '',
             });
             continue;
@@ -1402,7 +1403,7 @@ operationResults.push({
                   operationId: generateOperationId(),
                   kind: 'terminal_command',
                   status: 'failed',
-                  message: `Dangerous terminal command blocked: ${cmd}`,
+                  message: dangerousCommandError(cmd).details,
                   path: '',
                 });
                 hasDangerous = true;
@@ -1420,7 +1421,7 @@ operationResults.push({
                 operationId: generateOperationId(),
                 kind: 'terminal_command',
                 status: 'failed',
-                message: cwdValidation.error || 'Invalid working directory for terminal command',
+message: invalidCwdError(termCmdOp.cwd || '').details,
                 path: '',
               });
               continue;
@@ -1459,7 +1460,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: 'failed',
-              message: `Dangerous terminal command blocked: ${termCmdOp.command}`,
+              message: dangerousCommandError(termCmdOp.command).details,
               path: '',
             });
             continue;
@@ -1472,7 +1473,7 @@ operationResults.push({
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: 'failed',
-              message: cwdValidation.error || 'Invalid working directory for terminal command',
+message: invalidCwdError(termCmdOp.cwd || '').details,
               path: '',
             });
             continue;

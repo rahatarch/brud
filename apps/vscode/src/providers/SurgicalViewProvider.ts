@@ -7,7 +7,7 @@ import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, Wor
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { BrudAPI } from '@brud/core';
-import { fileOpenError, previewNotAvailableError, noValidOperationsError, noPreviewError, noExtractOperationsError } from '@brud/core';
+import { fileOpenError, previewNotAvailableError, noValidOperationsError, noPreviewError, noExtractOperationsError, executionFailedError, parseError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
@@ -1173,13 +1173,13 @@ fileIndex: this._currentFileIndex,
       this._outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
       this._outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
       this._outputChannel.show(true);
-      this._sendErrorToWebview({ code: 'EXECUTION_FAILED', friendly: result.message, details: result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '') });
+      this._sendErrorToWebview(executionFailedError(result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '')));
       return;
     }
 
     if (result.errors.length > 0) {
       this._outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
-      this._sendErrorToWebview({ code: 'EXECUTION_FAILED', friendly: result.message, details: result.message + ' Errors: ' + result.errors.join('; ') });
+      this._sendErrorToWebview(executionFailedError(result.message + ' Errors: ' + result.errors.join('; ')));
       return;
     }
 
@@ -1340,7 +1340,7 @@ fileIndex: this._currentFileIndex,
   }
 
   private _sendParseErrorToWebview(errorMessage?: string): void {
-    const friendlyMessage = errorMessage || "I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML.\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven't seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don't guess field names or format from memory.";
+    const friendlyMessage = errorMessage || parseError().friendly + '\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven\'t seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don\'t guess field names or format from memory.';
     const structured: ReportSection[] = [
       { type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' },
     ];

@@ -300,11 +300,11 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     if (currentIndex && currentTerminalCommand) {
       const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
       if (!cmdResult.success) {
-        throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${currentTerminalCommand}` });
+        throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
       }
       const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
       if (!cwdResult.success) {
-        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
+        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
       }
       const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
       const op: any = {
@@ -332,20 +332,20 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (currentTerminalCommand) {
         const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
         if (!cmdResult.success) {
-          throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${currentTerminalCommand}` });
+throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
         }
       }
       if (currentTerminalCommands.length > 0) {
         for (const cmd of currentTerminalCommands) {
           const cmdResult = BrudAPI.validate.command(cmd);
           if (!cmdResult.success) {
-            throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly || 'Dangerous command blocked', details: cmdResult.details || `Dangerous terminal command blocked: ${cmd}` });
+            throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
           }
         }
       }
       const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
       if (!cwdResult.success) {
-        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly || 'Invalid working directory', details: cwdResult.details || 'Invalid working directory for terminal command' });
+        throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
       }
       const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
       const op: any = {

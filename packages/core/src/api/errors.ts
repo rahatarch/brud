@@ -228,6 +228,14 @@ export function invalidRevertRequestError(): BrudError {
   };
 }
 
+export function validationError(errorString: string): BrudError {
+  return {
+    code: 'VALIDATION_ERROR',
+    friendly: errorString,
+    details: errorString,
+  };
+}
+
 export function unexpectedError(operationKind: string, message: string): BrudError {
   return {
     code: 'UNEXPECTED_ERROR',

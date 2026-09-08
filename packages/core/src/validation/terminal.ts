@@ -11,7 +11,7 @@ export function validateTerminalCwd(
 ): { valid: boolean; resolvedCwd?: string; error?: string } {
   const result = BrudAPI.validate.cwd(cwd, workspaceFolders);
   if (!result.success) {
-    return { valid: false, error: result.friendly || result.details || 'Invalid working directory' };
+    return { valid: false, error: result.friendly || result.details };
   }
   const data = result.data as { resolvedCwd?: string } | undefined;
   return { valid: true, resolvedCwd: data?.resolvedCwd };

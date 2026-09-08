@@ -4,7 +4,7 @@ import type { HistoryEntry, OperationResult, RevertHistoryEntry } from './types.
 import type { FileSystem } from '../types/filesystem.js';
 import type { HistoryStore } from './store.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
-import { revertFailedError, unknownOperationError, unexpectedError, sessionNotFoundError } from '../api/errors.js';
+import { revertFailedError, unknownOperationError, unexpectedError, sessionNotFoundError, validationError } from '../api/errors.js';
 import type { BrudError } from '../api/types.js';
 
 export interface RevertResult {
@@ -85,7 +85,7 @@ export async function revertSession(
         case 'append_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           await revertFileContent(result.resolvedPath, targetState, preFiles, postFiles, fs, errors);
@@ -96,7 +96,7 @@ export async function revertSession(
         case 'create_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedPath = result.resolvedPath;
@@ -128,7 +128,7 @@ export async function revertSession(
         case 'delete_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedPath = result.resolvedPath;
@@ -157,8 +157,8 @@ export async function revertSession(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
@@ -180,8 +180,8 @@ export async function revertSession(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 const parentDir = path.dirname(fromResult.resolvedPath);
@@ -211,8 +211,8 @@ export async function revertSession(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.deleteFile(toResult.resolvedPath);
@@ -239,7 +239,7 @@ export async function revertSession(
 
           const result = validateWorkspacePath(dirPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedDirPath = result.resolvedPath;
@@ -269,7 +269,7 @@ export async function revertSession(
 
           const result = validateWorkspacePath(dirPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedDirPath = result.resolvedPath;
@@ -302,8 +302,8 @@ export async function revertSession(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 const parentDir = path.dirname(fromResult.resolvedPath);
@@ -423,7 +423,7 @@ export async function revertOperations(
         case 'append_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           await revertFileContent(result.resolvedPath, targetState, preFiles, postFiles, fs, errors);
@@ -434,7 +434,7 @@ export async function revertOperations(
         case 'create_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedPath = result.resolvedPath;
@@ -466,7 +466,7 @@ export async function revertOperations(
         case 'delete_file': {
           const result = validateWorkspacePath(op.path, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedPath = result.resolvedPath;
@@ -495,8 +495,8 @@ export async function revertOperations(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.renameFile(toResult.resolvedPath, fromResult.resolvedPath);
@@ -518,8 +518,8 @@ export async function revertOperations(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 const parentDir = path.dirname(fromResult.resolvedPath);
@@ -549,8 +549,8 @@ export async function revertOperations(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 await fs.deleteFile(toResult.resolvedPath);
@@ -577,7 +577,7 @@ export async function revertOperations(
 
           const result = validateWorkspacePath(dirPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedDirPath = result.resolvedPath;
@@ -607,7 +607,7 @@ export async function revertOperations(
 
           const result = validateWorkspacePath(dirPath, workspaceFolders);
           if (!result.valid) {
-            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
+            errors.push(validationError(result.error));
             break;
           }
           const resolvedDirPath = result.resolvedPath;
@@ -640,8 +640,8 @@ export async function revertOperations(
           if (from && to) {
             const fromResult = validateWorkspacePath(from, workspaceFolders);
             const toResult = validateWorkspacePath(to, workspaceFolders);
-            if (!fromResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error }); break; }
-            if (!toResult.valid) { errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error }); break; }
+            if (!fromResult.valid) { errors.push(validationError(fromResult.error)); break; }
+            if (!toResult.valid) { errors.push(validationError(toResult.error)); break; }
             if (targetState === 'pre') {
               if (await fs.exists(toResult.resolvedPath)) {
                 const parentDir = path.dirname(fromResult.resolvedPath);
