@@ -13,7 +13,30 @@ import {
   directoryAlreadyExistsError,
   searchNotFoundError,
   multipleMatchesError,
+  fileOpenError,
+  previewNotAvailableError,
+  noValidOperationsError,
+  noPreviewError,
+  noExtractOperationsError,
 } from './errors';
+
+export {
+  noWorkspaceError,
+  pathOutsideWorkspaceError,
+  dangerousCommandError,
+  invalidCwdError,
+  fileNotFoundError,
+  fileAlreadyExistsError,
+  directoryNotFoundError,
+  directoryAlreadyExistsError,
+  searchNotFoundError,
+  multipleMatchesError,
+  fileOpenError,
+  previewNotAvailableError,
+  noValidOperationsError,
+  noPreviewError,
+  noExtractOperationsError,
+};
 
 export type { ValidationResult } from './types';
 

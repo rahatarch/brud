@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
-import { Send, PlusCircle, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle, Trash2, Star } from 'lucide-react';
+import { Send, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle, Trash2, Star } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
@@ -153,7 +153,6 @@ function App() {
   }
 
   const [inputText, setInputText] = useState('');
-  const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -171,12 +170,6 @@ function App() {
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, []);
-
-  const handleCopyMessage = (messageId: string, content: string) => {
-    navigator.clipboard.writeText(content);
-    setCopiedMessageId(messageId);
-    setTimeout(() => setCopiedMessageId(null), 2000);
-  };
 
   const handleSend = () => {
     if (!inputText.trim()) return;
@@ -311,32 +304,6 @@ function App() {
                     <p>{msg.content}</p>
                   )}
                 </div>
-                {msg.type === 'brud' && (
-                  <button
-                    onClick={() => {
-                      const textToCopy = msg.structured && msg.structured.length > 0
-                        ? msg.structured
-                            .map(section => {
-                              const parts: string[] = [];
-                              if (section.title) parts.push(section.title);
-                              if (section.content) parts.push(section.content);
-                              if (section.items) {
-                                parts.push(section.items.map(item => `${item.label}: ${item.value}`).join('\n'));
-                              }
-                              if (section.copyText) parts.push(section.copyText);
-                              return parts.filter(Boolean).join('\n');
-                            })
-                            .filter(text => text.length > 0)
-                            .join('\n\n')
-                        : msg.content;
-                      handleCopyMessage(msg.id, textToCopy);
-                    }}
-                    className="ml-1 mt-1 text-text-muted hover:text-text transition-colors cursor-pointer"
-                    title="Copy message"
-                  >
-                    {copiedMessageId === msg.id ? <Check size={14} /> : <Copy size={14} />}
-                  </button>
-                )}
               </div>
             ))}
             {sessionState === 'working' && (

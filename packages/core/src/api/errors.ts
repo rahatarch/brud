@@ -88,3 +88,44 @@ export function multipleMatchesError(path: string): BrudError {
     path,
   };
 }
+
+export function fileOpenError(path: string): BrudError {
+  return {
+    code: 'FILE_OPEN_ERROR',
+    friendly: 'Could not open file.',
+    details: `Could not open file: ${path}`,
+    path,
+  };
+}
+
+export function previewNotAvailableError(): BrudError {
+  return {
+    code: 'PREVIEW_NOT_AVAILABLE',
+    friendly: 'Preview not available for this operation type.',
+    details: 'Preview not available for this operation type.',
+  };
+}
+
+export function noValidOperationsError(): BrudError {
+  return {
+    code: 'NO_VALID_OPERATIONS',
+    friendly: 'No valid operations found.',
+    details: 'No valid operations found.',
+  };
+}
+
+export function noPreviewError(): BrudError {
+  return {
+    code: 'NO_PREVIEW',
+    friendly: 'No preview could be generated for any file.',
+    details: 'No preview could be generated for any file.',
+  };
+}
+
+export function noExtractOperationsError(): BrudError {
+  return {
+    code: 'NO_EXTRACT_OPERATIONS',
+    friendly: 'No extract_structure operations found.',
+    details: 'No extract_structure operations found.',
+  };
+}

@@ -7,6 +7,7 @@ import { executeOperationsFromVSCode, getWorkspaceFolders, VSCodeFileSystem, Wor
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { BrudAPI } from '@brud/core';
+import { fileOpenError, previewNotAvailableError, noValidOperationsError, noPreviewError, noExtractOperationsError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
@@ -179,7 +180,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       try {
         document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
       } catch {
-        this._sendErrorToWebview({ code: 'FILE_OPEN_ERROR', friendly: 'Could not open file.', details: `Could not open file: ${filePath}`, path: filePath });
+        this._sendErrorToWebview(fileOpenError(filePath));
         const headerMsg: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -328,7 +329,7 @@ fileIndex: this._currentFileIndex,
           this._view?.webview.postMessage(headerMsg);
           return;
         }
-        this._sendErrorToWebview({ code: 'FILE_OPEN_ERROR', friendly: 'Could not open file.', details: `Could not open file: ${filePath}`, path: filePath });
+        this._sendErrorToWebview(fileOpenError(filePath));
         const headerMsg2: ExtensionMessage = {
           command: 'updatePreviewHeader',
           fileName: filePath,
@@ -397,7 +398,7 @@ fileIndex: this._currentFileIndex,
       return;
     }
 
-    this._sendErrorToWebview({ code: 'PREVIEW_NOT_AVAILABLE', friendly: 'Preview not available for this operation type.', details: 'Preview not available for this operation type.' });
+    this._sendErrorToWebview(previewNotAvailableError());
     const headerMsg2: ExtensionMessage = {
       command: 'updatePreviewHeader',
       fileName: filePath,
@@ -485,7 +486,7 @@ fileIndex: this._currentFileIndex,
     this._currentFileIndex = 0;
 
     if (this._fileList.length === 0) {
-      this._sendErrorToWebview({ code: 'NO_VALID_OPERATIONS', friendly: 'No valid operations found.', details: 'No valid operations found.' });
+      this._sendErrorToWebview(noValidOperationsError());
       return;
     }
 
@@ -701,7 +702,7 @@ fileIndex: this._currentFileIndex,
     }
 
     if (combinedParts.length === 0) {
-      this._sendErrorToWebview({ code: 'NO_PREVIEW', friendly: 'No preview could be generated for any file.', details: 'No preview could be generated for any file.' });
+      this._sendErrorToWebview(noPreviewError());
       return;
     }
 
@@ -927,13 +928,26 @@ fileIndex: this._currentFileIndex,
     return result;
   }
 
+  private _getChatStatusMessage(result: { success: boolean; operationResults?: any[]; errors?: string[] }): string {
+    if (result.success && (!result.errors || result.errors.length === 0)) {
+      return 'Successful. Check the report at the Report Panel.';
+    }
+
+    if (result.operationResults && result.operationResults.length > 0) {
+      const successCount = result.operationResults.filter(r => r.status === 'success').length;
+      if (successCount > 0) {
+        return 'Partially succeeded. Please check the report at the Report Panel.';
+      }
+    }
+
+    return 'Failed. Check the report at the Report Panel.';
+  }
+
   private _reportExecutionResult(result: ExecutionResult): ReadResultData | null {
     this._outputChannel.appendLine(result.message);
     for (const err of result.errors) {
       this._outputChannel.appendLine(`  ERROR: ${err}`);
     }
-
-    const structured = this._generateStructuredReport(result);
 
     if (result.success) {
       let readData: any;
@@ -946,11 +960,6 @@ fileIndex: this._currentFileIndex,
       const isReadResult = readData && (readData.totalFiles !== undefined || (Array.isArray(readData) && readData.some((d: any) => d.totalFiles !== undefined)));
 
       if (isReadResult) {
-        const fileCount = Array.isArray(readData) ? readData.reduce((sum: number, d: any) => sum + d.totalFiles, 0) : readData.totalFiles;
-        const report = `Read ${fileCount} file(s). Results available in the Read panel.`;
-        const msg: ExtensionMessage = { command: 'success', message: report, structured };
-        this._view?.webview.postMessage(msg);
-
         const readResultData: ReadResultData = Array.isArray(readData)
           ? readData.reduce((merged: ReadResultData, d: any) => ({
               files: [...(merged.files || []), ...(d.files || [])],
@@ -959,15 +968,18 @@ fileIndex: this._currentFileIndex,
             }), { files: [], totalFiles: 0, totalSize: 0 })
           : readData;
         return readResultData;
-      } else {
-        const msg: ExtensionMessage = { command: 'success', message: structured ? 'Session completed. See details below.' : result.message, structured };
-        this._view?.webview.postMessage(msg);
       }
-    } else {
-      const msg: ExtensionMessage = { command: 'error', message: result.message + ' Errors: ' + result.errors.join('; '), structured };
-      this._view?.webview.postMessage(msg);
+    }
+
+    const pointerMsg = this._getChatStatusMessage(result);
+    const command = result.success ? 'success' : 'error';
+    const msg: ExtensionMessage = { command, message: pointerMsg };
+    this._view?.webview.postMessage(msg);
+
+    if (!result.success) {
       this._outputChannel.show(true);
     }
+
     return null;
   }
 
@@ -1094,45 +1106,33 @@ fileIndex: this._currentFileIndex,
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel(unifiedResults);
     }
 
-    const combinedMessages: string[] = [];
     let combinedSuccess = true;
     const combinedErrors: string[] = [];
 
     if (queryResult) {
-      combinedMessages.push(queryResult.message);
       combinedSuccess = combinedSuccess && queryResult.success;
       combinedErrors.push(...queryResult.errors);
     }
 
     if (fileResult) {
-      combinedMessages.push(fileResult.message);
       combinedSuccess = combinedSuccess && fileResult.success;
       combinedErrors.push(...fileResult.errors);
     }
-
-    const report = combinedMessages.join('\n');
 
     let combinedOpResults: OperationResult[] = [];
     if (queryResult) combinedOpResults.push(...queryResult.operationResults);
     if (fileResult) combinedOpResults.push(...fileResult.operationResults);
 
-    const structured = combinedOpResults.length > 0
-      ? this._generateStructuredReport({ success: combinedSuccess, message: report, errors: combinedErrors, operationResults: combinedOpResults })
-      : undefined;
+    const pointerMsg = this._getChatStatusMessage({ success: combinedSuccess, operationResults: combinedOpResults, errors: combinedErrors });
+    const command = combinedSuccess ? 'success' : 'error';
+    const msg: ExtensionMessage = { command, message: pointerMsg };
+    this._view?.webview.postMessage(msg);
 
-    if (combinedSuccess) {
-      const msg: ExtensionMessage = { command: 'success', message: structured ? 'Session completed. See details below.' : report, structured };
-      this._view?.webview.postMessage(msg);
-    } else {
+    if (!combinedSuccess) {
       this._outputChannel.appendLine('=== EXECUTION SUMMARY ===');
       this._outputChannel.appendLine('Query result: ' + JSON.stringify(queryResult));
       this._outputChannel.appendLine('File result: ' + JSON.stringify(fileResult));
       this._outputChannel.show(true);
-      const executionError = { code: 'EXECUTION_FAILED', friendly: 'Something went wrong. Here are the details:', details: report };
-      const structuredSections = this._generateErrorReport(executionError);
-      const friendlyText = structuredSections[0].content;
-      const msg: ExtensionMessage = { command: 'error', message: friendlyText, structured: structuredSections };
-      this._view?.webview.postMessage(msg);
     }
   }
 
@@ -1149,7 +1149,7 @@ fileIndex: this._currentFileIndex,
 
     const extractOps = operations.filter(op => op.kind === 'extract_structure');
     if (extractOps.length === 0) {
-      this._sendErrorToWebview({ code: 'NO_EXTRACT_OPERATIONS', friendly: 'No extract_structure operations found.', details: 'No extract_structure operations found.' });
+      this._sendErrorToWebview(noExtractOperationsError());
       return;
     }
 
@@ -1187,8 +1187,8 @@ fileIndex: this._currentFileIndex,
       return;
     }
     const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
-    const successMsg: ExtensionMessage = { command: 'success', message: `Extracted directory structure${extractOps.length > 1 ? 's' : ''} from ${structureNames}. Results available in the Structure panel.` };
-    this._view?.webview.postMessage(successMsg);
+    const pointerMsg: ExtensionMessage = { command: 'success', message: 'Successful. Check the report at the Report Panel.' };
+    this._view?.webview.postMessage(pointerMsg);
     this._unifiedResultsPanelManager?.openUnifiedResultsPanel({
       operations: structureResults.map(s => ({
         toolKind: 'extractionResults',
@@ -1296,8 +1296,9 @@ fileIndex: this._currentFileIndex,
       detailMessage = error.details || friendlyMessage;
     }
 
-    sections.push({ type: 'text', content: friendlyMessage });
-    sections.push({ type: 'details', title: 'Error Details', content: detailMessage });
+    if (detailMessage !== friendlyMessage) {
+      sections.push({ type: 'details', title: 'Error Details', content: detailMessage });
+    }
     sections.push({ type: 'button', buttonText: 'See Details', buttonAction: 'openUnifiedResults' });
 
     return sections;
@@ -1311,8 +1312,16 @@ fileIndex: this._currentFileIndex,
     } else {
       friendlyMessage = error.friendly || 'Something went wrong.';
     }
+
+    this._unifiedResultsPanelManager?.openUnifiedResultsPanel({
+      operations: [{
+        toolKind: 'error',
+        data: { structured, friendlyMessage },
+      }],
+    });
+
     if (this._view) {
-      const msg: ExtensionMessage = { command: 'error', message: friendlyMessage, structured };
+      const msg: ExtensionMessage = { command: 'error', message: 'Failed. Check the report at the Report Panel.' };
       this._view.webview.postMessage(msg);
     }
     this._outputChannel.appendLine('ERROR: ' + friendlyMessage);
@@ -1321,11 +1330,18 @@ fileIndex: this._currentFileIndex,
   private _sendParseErrorToWebview(errorMessage?: string): void {
     const friendlyMessage = errorMessage || "I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML.\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven't seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don't guess field names or format from memory.";
     const structured: ReportSection[] = [
-      { type: 'text', content: friendlyMessage },
       { type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' },
     ];
+
+    this._unifiedResultsPanelManager?.openUnifiedResultsPanel({
+      operations: [{
+        toolKind: 'error',
+        data: { structured, friendlyMessage },
+      }],
+    });
+
     if (this._view) {
-      const msg: ExtensionMessage = { command: 'error', message: friendlyMessage, structured };
+      const msg: ExtensionMessage = { command: 'error', message: 'Failed. Check the report at the Report Panel.' };
       this._view.webview.postMessage(msg);
     }
     this._outputChannel.appendLine('ERROR: Parse error - unrecognized patch format');
