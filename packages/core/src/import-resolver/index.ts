@@ -1,6 +1,7 @@
 import path from 'path';
 import { FileSystem } from '../types/filesystem.js';
 import { getPatternsForFile, ImportPattern } from './languagePatterns.js';
+import { invalidFieldError, unexpectedError } from '../api/errors.js';
 
 const EXTENSIONS = ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts'];
 const INDEX_FILES = ['index.ts', 'index.tsx', 'index.js', 'index.jsx', 'index.mjs', 'index.cjs', 'index.mts', 'index.cts'];
@@ -58,7 +59,7 @@ export async function resolveImports(
         patterns.push({ regex, type: 'import' });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        throw new Error(`Invalid importSyntax pattern "${patternStr}": ${message}`);
+        throw invalidFieldError('importSyntax', message);
       }
     }
   } else {
@@ -123,7 +124,7 @@ export async function readFileWithImports(
         }
       }
     } catch (error) {
-      errors.push({ filePath: currentPath, error: error instanceof Error ? error.message : String(error) });
+      errors.push({ filePath: currentPath, error: unexpectedError('import-resolution', error instanceof Error ? error.message : String(error)).details });
     }
   }
 

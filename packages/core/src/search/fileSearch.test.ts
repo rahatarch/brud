@@ -183,7 +183,7 @@ describe('fileSearch', () => {
   it('throws error for empty patterns', async () => {
     await assert.rejects(
       () => searchFiles(nodeFs, { patterns: [], directory: tempDir, recursive: true }),
-      { message: 'At least one search pattern is required' },
+      { code: 'MISSING_FIELD', friendly: 'Missing required field: patterns' },
     );
   });
 

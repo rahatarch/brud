@@ -1,7 +1,7 @@
 import * as yaml from 'js-yaml';
 import { FileOperation } from '../types/patch';
 import { CommandGroup } from '../terminal/types';
-import { BrudAPI, BrudError } from '../api/index';
+import { BrudAPI, BrudError, missingFieldError, invalidFieldError, missingIndexError, unknownOperationError } from '../api/index';
 
 function parseCommandGroup(value: unknown): CommandGroup | undefined {
   if (typeof value === 'string') {
@@ -39,12 +39,12 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
 
     const operation = parsed.operation as string | undefined;
     if (!operation) {
-      throw new Error('Missing operation field in YAML document');
+      throw new BrudError(missingFieldError('operation', 'YAML document'));
     }
 
     const index = parsed.index as string | undefined;
     if (index === undefined || index === null) {
-      throw new Error("You haven't used any index number with your instructions. Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]");
+      throw new BrudError(missingIndexError());
     }
 
     switch (operation) {
@@ -53,13 +53,13 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const search = parsed.search as string | undefined;
         const replace = parsed.replace as string | undefined;
         if (!path) {
-          throw new Error('Missing path field in replace operation');
+          throw new BrudError(missingFieldError('path', 'replace operation'));
         }
         if (search === undefined || search === null) {
-          throw new Error('Missing search field in replace operation');
+          throw new BrudError(missingFieldError('search', 'replace operation'));
         }
         if (replace === undefined || replace === null) {
-          throw new Error('Missing replace field in replace operation');
+          throw new BrudError(missingFieldError('replace', 'replace operation'));
         }
         operations.push({
           kind: 'search_replace',
@@ -74,10 +74,10 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const path = parsed.path as string | undefined;
         const content = parsed.content as string | undefined;
         if (!path) {
-          throw new Error('Missing path field in create_file operation');
+          throw new BrudError(missingFieldError('path', 'create_file operation'));
         }
         if (content === undefined || content === null) {
-          throw new Error('Missing content field in create_file operation');
+          throw new BrudError(missingFieldError('content', 'create_file operation'));
         }
         operations.push({
           kind: 'create_file',
@@ -90,7 +90,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'delete_file': {
         const path = parsed.path as string | undefined;
         if (!path) {
-          throw new Error('Missing path field in delete_file operation');
+          throw new BrudError(missingFieldError('path', 'delete_file operation'));
         }
         operations.push({
           kind: 'delete_file',
@@ -103,10 +103,10 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const from = parsed.from as string | undefined;
         const to = parsed.to as string | undefined;
         if (!from) {
-          throw new Error('Missing from field in rename_file operation');
+          throw new BrudError(missingFieldError('from', 'rename_file operation'));
         }
         if (!to) {
-          throw new Error('Missing to field in rename_file operation');
+          throw new BrudError(missingFieldError('to', 'rename_file operation'));
         }
         operations.push({
           kind: 'rename_file',
@@ -120,10 +120,10 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const from = parsed.from as string | undefined;
         const to = parsed.to as string | undefined;
         if (!from) {
-          throw new Error('Missing from field in move_file operation');
+          throw new BrudError(missingFieldError('from', 'move_file operation'));
         }
         if (!to) {
-          throw new Error('Missing to field in move_file operation');
+          throw new BrudError(missingFieldError('to', 'move_file operation'));
         }
         operations.push({
           kind: 'move_file',
@@ -137,10 +137,10 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const from = parsed.from as string | undefined;
         const to = parsed.to as string | undefined;
         if (!from) {
-          throw new Error('Missing from field in copy_file operation');
+          throw new BrudError(missingFieldError('from', 'copy_file operation'));
         }
         if (!to) {
-          throw new Error('Missing to field in copy_file operation');
+          throw new BrudError(missingFieldError('to', 'copy_file operation'));
         }
         operations.push({
           kind: 'copy_file',
@@ -154,14 +154,14 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const path = parsed.path as string | undefined;
         const content = parsed.content as string | undefined;
         if (!path) {
-          throw new Error('Missing path field in append_file operation');
+          throw new BrudError(missingFieldError('path', 'append_file operation'));
         }
         if (content === undefined || content === null) {
-          throw new Error('Missing content field in append_file operation');
+          throw new BrudError(missingFieldError('content', 'append_file operation'));
         }
         const position = parsed.position as string | undefined;
         if (position !== undefined && position !== 'start' && position !== 'end') {
-          throw new Error('Position field must be "start" or "end" in append_file operation');
+          throw new BrudError(invalidFieldError('position', 'Position field must be "start" or "end" in append_file operation'));
         }
         operations.push({
           kind: 'append_file',
@@ -176,7 +176,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const directoryPath = parsed.directoryPath as string | undefined;
         const files = parsed.files as string[] | undefined;
         if (!directoryPath) {
-          throw new Error('Missing directoryPath field in create_directory operation');
+          throw new BrudError(missingFieldError('directoryPath', 'create_directory operation'));
         }
         operations.push({
           kind: 'create_directory',
@@ -189,7 +189,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'delete_directory': {
         const directoryPath = parsed.directoryPath as string | undefined;
         if (!directoryPath) {
-          throw new Error('Missing directoryPath field in delete_directory operation');
+          throw new BrudError(missingFieldError('directoryPath', 'delete_directory operation'));
         }
         operations.push({
           kind: 'delete_directory',
@@ -202,10 +202,10 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const from = parsed.from as string | undefined;
         const to = parsed.to as string | undefined;
         if (!from) {
-          throw new Error('Missing from field in move_directory operation');
+          throw new BrudError(missingFieldError('from', 'move_directory operation'));
         }
         if (!to) {
-          throw new Error('Missing to field in move_directory operation');
+          throw new BrudError(missingFieldError('to', 'move_directory operation'));
         }
         operations.push({
           kind: 'move_directory',
@@ -226,7 +226,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const directoryPath = parsed.directoryPath as string | undefined;
         const depth = parsed.depth as number | undefined;
         if (!directoryPath) {
-          throw new Error('Missing directoryPath field in extract_structure operation');
+          throw new BrudError(missingFieldError('directoryPath', 'extract_structure operation'));
         }
         operations.push({
           kind: 'extract_structure',
@@ -239,7 +239,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'search_files': {
         const patterns = parsed.patterns as string[] | undefined;
         if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
-          throw new Error('Missing or empty patterns field in search_files operation');
+          throw new BrudError(missingFieldError('patterns', 'search_files operation'));
         }
         const extensions = parsed.extensions as string[] | undefined;
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
@@ -260,17 +260,17 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'append_file_multi': {
         const patterns = parsed.patterns as string[] | undefined;
         if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
-          throw new Error('Missing or empty patterns field in append_file_multi operation');
+          throw new BrudError(missingFieldError('patterns', 'append_file_multi operation'));
         }
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
         const directory = parsed.directory as string | undefined;
         const position = parsed.position as string | undefined;
         if (position !== undefined && position !== 'start' && position !== 'end') {
-          throw new Error('Position field must be "start" or "end" in append_file_multi operation');
+          throw new BrudError(invalidFieldError('position', 'Position field must be "start" or "end" in append_file_multi operation'));
         }
         const content = parsed.content as string | undefined;
         if (content === undefined || content === null) {
-          throw new Error('Missing content field in append_file_multi operation');
+          throw new BrudError(missingFieldError('content', 'append_file_multi operation'));
         }
         const maxResults = parsed.maxResults as number | undefined;
         operations.push({
@@ -289,17 +289,17 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'search_replace_multi': {
         const patterns = parsed.patterns as string[] | undefined;
         if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
-          throw new Error('Missing or empty patterns field in search_replace_multi operation');
+          throw new BrudError(missingFieldError('patterns', 'search_replace_multi operation'));
         }
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
         const directory = parsed.directory as string | undefined;
         const search = parsed.search as string | undefined;
         if (search === undefined || search === null) {
-          throw new Error('Missing search field in search_replace_multi operation');
+          throw new BrudError(missingFieldError('search', 'search_replace_multi operation'));
         }
         const replace = parsed.replace as string | undefined;
         if (replace === undefined || replace === null) {
-          throw new Error('Missing replace field in search_replace_multi operation');
+          throw new BrudError(missingFieldError('replace', 'search_replace_multi operation'));
         }
         const maxResults = parsed.maxResults as number | undefined;
         operations.push({
@@ -318,7 +318,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'read_file': {
         const path = parsed.path as string | undefined;
         if (!path) {
-          throw new Error('Missing path field in read_file operation');
+          throw new BrudError(missingFieldError('path', 'read_file operation'));
         }
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
@@ -338,7 +338,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'read_files': {
         const patterns = parsed.patterns as string[] | undefined;
         if (!patterns || !Array.isArray(patterns) || patterns.length === 0) {
-          throw new Error('Missing or empty patterns field in read_files operation');
+          throw new BrudError(missingFieldError('patterns', 'read_files operation'));
         }
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
         const directory = parsed.directory as string | undefined;
@@ -364,7 +364,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'read_directory': {
         const directoryPath = parsed.directoryPath as string | undefined;
         if (!directoryPath) {
-          throw new Error('Missing directoryPath field in read_directory operation');
+          throw new BrudError(missingFieldError('directoryPath', 'read_directory operation'));
         }
         const recursive = parsed.recursive as boolean | undefined;
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
@@ -386,7 +386,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       case 'terminal_interactive': {
         const command = parsed.command as string | undefined;
         if (!command) {
-          throw new Error('Missing command field in terminal_interactive operation');
+          throw new BrudError(missingFieldError('command', 'terminal_interactive operation'));
         }
         const raw = parsed.raw as boolean | undefined;
         const cmdResult = BrudAPI.validate.command(command);
@@ -395,7 +395,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         }
         const answers = parsed.answers as string[] | undefined;
         if (!answers || !Array.isArray(answers)) {
-          throw new Error('Missing or invalid answers field in terminal_interactive operation');
+          throw new BrudError(missingFieldError('answers', 'terminal_interactive operation'));
         }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
@@ -422,7 +422,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const command = parsed.command as string | undefined;
         const commands = parsed.commands as string[] | undefined;
         if (!command && (!commands || !Array.isArray(commands) || commands.length === 0)) {
-          throw new Error('Missing command or commands field in terminal_command operation');
+          throw new BrudError(missingFieldError('command or commands', 'terminal_command operation'));
         }
         const raw = parsed.raw as boolean | undefined;
         if (command) {
@@ -447,7 +447,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const onSuccess = parseCommandGroup(parsed.on_success);
         const onFailure = parseCommandGroup(parsed.on_failure);
         if (mode !== undefined && mode !== 'sequential' && mode !== 'parallel') {
-          throw new Error('Mode field must be "sequential" or "parallel" in terminal_command operation');
+          throw new BrudError(invalidFieldError('mode', 'Mode field must be "sequential" or "parallel" in terminal_command operation'));
         }
         const cwdResult = BrudAPI.validate.cwd(cwd, workspaceFolders);
         if (!cwdResult.success) {
@@ -494,7 +494,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         break;
       }
       default:
-        throw new Error(`Unrecognized operation type: ${operation}`);
+        throw new BrudError(unknownOperationError(operation));
     }
   }
 

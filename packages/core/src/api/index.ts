@@ -1,5 +1,6 @@
 import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
+import type { FileOperation } from '../types/patch';
 import { getWorkspaceRootForPath } from '../utils/workspacePath';
 import type { BrudError as BrudErrorType, ValidationResult } from './types';
 import {
@@ -18,6 +19,17 @@ import {
   noValidOperationsError,
   noPreviewError,
   noExtractOperationsError,
+  missingFieldError,
+  invalidFieldError,
+  missingIndexError,
+  unknownOperationError,
+  parseError,
+  deleteFailedError,
+  toolNotFoundError,
+  terminalUnavailableError,
+  sessionNotFoundError,
+  invalidRevertRequestError,
+  unexpectedError,
 } from './errors';
 
 export {
@@ -36,6 +48,17 @@ export {
   noValidOperationsError,
   noPreviewError,
   noExtractOperationsError,
+  missingFieldError,
+  invalidFieldError,
+  missingIndexError,
+  unknownOperationError,
+  parseError,
+  deleteFailedError,
+  toolNotFoundError,
+  terminalUnavailableError,
+  sessionNotFoundError,
+  invalidRevertRequestError,
+  unexpectedError,
 };
 
 export type { ValidationResult } from './types';
@@ -77,6 +100,54 @@ const DANGEROUS_PATTERNS: RegExp[] = [
   /\bapt-get\s+--force-yes\b/,
   /\bnpm\s+--unsafe-perm\b/,
 ];
+
+const KNOWN_OPERATIONS = [
+  'search_replace',
+  'create_file',
+  'delete_file',
+  'rename_file',
+  'move_file',
+  'copy_file',
+  'append_file',
+  'append_file_multi',
+  'search_replace_multi',
+  'create_directory',
+  'delete_directory',
+  'move_directory',
+  'extract_structure',
+  'codebase_metadata',
+  'search_files',
+  'read_file',
+  'read_files',
+  'read_directory',
+  'terminal_interactive',
+  'terminal_command',
+  'get_tool_info',
+] as const;
+
+const KNOWN_TOOLS = [
+  'search_replace',
+  'create_file',
+  'delete_file',
+  'rename_file',
+  'move_file',
+  'copy_file',
+  'append_file',
+  'append_file_multi',
+  'search_replace_multi',
+  'create_directory',
+  'delete_directory',
+  'move_directory',
+  'extract_structure',
+  'codebase_metadata',
+  'search_files',
+  'read_file',
+  'read_files',
+  'read_directory',
+  'terminal_interactive',
+  'terminal_command',
+  'get_tool_info',
+] as const;
 
 function success(data?: unknown): ValidationResult {
   return { success: true, data };
@@ -211,6 +282,175 @@ export const BrudAPI = {
       }
 
       return success({ path, searchText, index: firstIndex });
+    },
+
+    requiredField(field: string, value: any, operation?: string): ValidationResult {
+      if (value === undefined || value === null || value === '') {
+        return fail(missingFieldError(field, operation));
+      }
+      return success({ field, value });
+    },
+
+    validPosition(position: string): ValidationResult {
+      if (position !== 'start' && position !== 'end') {
+        return fail(invalidFieldError('position', `Position must be 'start' or 'end', got '${position}'`));
+      }
+      return success({ position });
+    },
+
+    validMode(mode: string): ValidationResult {
+      if (mode !== 'sequential' && mode !== 'parallel') {
+        return fail(invalidFieldError('mode', `Mode must be 'sequential' or 'parallel', got '${mode}'`));
+      }
+      return success({ mode });
+    },
+
+    hasPatterns(patterns: string[]): ValidationResult {
+      if (!patterns || patterns.length === 0) {
+        return fail(missingFieldError('patterns'));
+      }
+      return success({ patterns });
+    },
+
+    knownOperation(operation: string): ValidationResult {
+      if (!KNOWN_OPERATIONS.includes(operation as typeof KNOWN_OPERATIONS[number])) {
+        return fail(unknownOperationError(operation));
+      }
+      return success({ operation });
+    },
+
+    hasIndex(index: string | undefined): ValidationResult {
+      if (!index || index.trim() === '') {
+        return fail(missingIndexError());
+      }
+      return success({ index });
+    },
+
+    validAnswers(answers: any): ValidationResult {
+      if (!answers || !Array.isArray(answers)) {
+        return fail(missingFieldError('answers'));
+      }
+      return success({ answers });
+    },
+
+    validCommandOrCommands(command: string | undefined, commands: string[] | undefined): ValidationResult {
+      if (!command && (!commands || commands.length === 0)) {
+        return fail(missingFieldError('command or commands'));
+      }
+      return success({ command, commands });
+    },
+
+    async canOpenFile(fs: FileSystem, path: string): Promise<ValidationResult> {
+      const existsResult = await this.fileExists(fs, path);
+      if (!existsResult.success) {
+        return fail(fileNotFoundError(path));
+      }
+      try {
+        await fs.readFile(path);
+      } catch {
+        return fail(fileOpenError(path));
+      }
+      return success({ path });
+    },
+
+    hasPreview(operationType: string): ValidationResult {
+      const previewOps = ['search_replace', 'create_file', 'append_file'];
+      if (!previewOps.includes(operationType)) {
+        return fail(previewNotAvailableError());
+      }
+      return success({ operationType });
+    },
+
+    hasValidOperations(operations: FileOperation[]): ValidationResult {
+      if (!operations || operations.length === 0) {
+        return fail(noValidOperationsError());
+      }
+      return success({ operations });
+    },
+
+    canGeneratePreview(files: any[]): ValidationResult {
+      if (!files || files.length === 0) {
+        return fail(noPreviewError());
+      }
+      return success({ files });
+    },
+
+    hasExtractOperations(operations: FileOperation[]): ValidationResult {
+      const hasExtract = operations?.some((op) => op.kind === 'extract_structure');
+      if (!hasExtract) {
+        return fail(noExtractOperationsError());
+      }
+      return success({ operations });
+    },
+
+    validFormat(message: string): ValidationResult {
+      const hasBlockMarkers = message.includes('<<<<<<<') && message.includes('=======') && message.includes('>>>>>>>');
+      if (!hasBlockMarkers) {
+        return fail(parseError());
+      }
+      return success({ message });
+    },
+
+    async canDelete(fs: FileSystem, path: string): Promise<ValidationResult> {
+      const exists = await fs.exists(path);
+      if (!exists) {
+        const isFileLike = path.includes('.');
+        if (isFileLike) {
+          return fail(fileNotFoundError(path));
+        }
+        return fail(directoryNotFoundError(path));
+      }
+      try {
+        const isDir = !path.includes('.');
+        if (isDir) {
+          await fs.deleteDirectoryRecursive(path);
+        } else {
+          await fs.deleteFile(path);
+        }
+      } catch {
+        return fail(deleteFailedError(path));
+      }
+      return success({ path });
+    },
+
+    knownTool(toolKind: string): ValidationResult {
+      if (!KNOWN_TOOLS.includes(toolKind as typeof KNOWN_TOOLS[number])) {
+        return fail(toolNotFoundError(toolKind));
+      }
+      return success({ toolKind });
+    },
+
+    terminalAvailable(config: any): ValidationResult {
+      if (!config?.terminalExecutor) {
+        return fail(terminalUnavailableError());
+      }
+      return success({ config });
+    },
+
+    async canRevert(sessionId: string, historyStore: any): Promise<ValidationResult> {
+      const sessionResult = await this.sessionExists(sessionId, historyStore);
+      if (!sessionResult.success) {
+        return sessionResult;
+      }
+      return success({ sessionId });
+    },
+
+    async sessionExists(sessionId: string, historyStore: any): Promise<ValidationResult> {
+      if (!historyStore?.getSession) {
+        return fail(sessionNotFoundError(sessionId));
+      }
+      const session = await historyStore.getSession(sessionId);
+      if (!session) {
+        return fail(sessionNotFoundError(sessionId));
+      }
+      return success({ sessionId });
+    },
+
+    validRevertRequest(sessionId: string | undefined, targetState: string | undefined): ValidationResult {
+      if (!sessionId || !targetState) {
+        return fail(invalidRevertRequestError());
+      }
+      return success({ sessionId, targetState });
     },
   },
 };

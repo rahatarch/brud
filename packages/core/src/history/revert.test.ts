@@ -445,7 +445,7 @@ describe('revertOperations', () => {
     const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, false);
-    assert.ok(result.errors.some((e: string) => e.includes('Cannot revert operation kind')));
+    assert.ok(result.errors.some((e) => e.code === 'UNKNOWN_OPERATION'));
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].status, 'failed');
   });
@@ -465,7 +465,7 @@ describe('revertOperations', () => {
     const result = await revertOperations('test-session', [op.operationId], 'pre', store, nodeFs, workspaceFolders, onRevertComplete);
 
     assert.strictEqual(result.success, false);
-    assert.ok(result.errors.some((e: string) => e.includes('Cannot revert operation kind')));
+    assert.ok(result.errors.some((e) => e.code === 'UNKNOWN_OPERATION'));
     assert.strictEqual(revertEntries.length, 1);
     assert.strictEqual(revertEntries[0].status, 'failed');
   });

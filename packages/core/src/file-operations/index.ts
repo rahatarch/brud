@@ -4,6 +4,24 @@ import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
 import { BrudAPI } from '../api/index';
+import type { BrudError } from '../api/types';
+import {
+  searchNotFoundError,
+  multipleMatchesError,
+  fileNotFoundError,
+  fileAlreadyExistsError,
+  deleteFailedError,
+  directoryNotFoundError,
+  directoryAlreadyExistsError,
+  noWorkspaceError,
+  pathOutsideWorkspaceError,
+  terminalUnavailableError,
+  dangerousCommandError,
+  invalidCwdError,
+  toolNotFoundError,
+  unexpectedError,
+  noValidOperationsError,
+} from '../api/errors';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
@@ -48,7 +66,7 @@ export interface OperationResult {
 export interface FileOperationResult {
   success: boolean;
   message: string;
-  errors: string[];
+  errors: BrudError[];
   operationResults: OperationResult[];
   sessionId?: string;
 }
@@ -65,10 +83,10 @@ export async function executeFileOperations(
   sessionIdOverride?: string,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
-    return { success: false, message: 'No operations to execute.', errors: ['No operations to execute.'], operationResults: [], sessionId: undefined };
+    return { success: false, message: 'No operations to execute.', errors: [noValidOperationsError()], operationResults: [], sessionId: undefined };
   }
 
-  const errors: string[] = [];
+  const errors: BrudError[] = [];
   const operationResults: OperationResult[] = [];
   const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
 
@@ -177,7 +195,7 @@ export async function executeFileOperations(
         case 'search_replace': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -194,7 +212,7 @@ export async function executeFileOperations(
           const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, operation.search);
           if (!matchResult.success) {
             if (matchResult.code === 'SEARCH_NOT_FOUND') {
-              errors.push(`Search text not found in file: ${operation.path}`);
+              errors.push(searchNotFoundError(operation.path, operation.search));
               operationResults.push({
                 operationIndex: i,
                 operationId: generateOperationId(),
@@ -204,7 +222,7 @@ export async function executeFileOperations(
                 path: operation.path,
               });
             } else {
-              errors.push(`Multiple matches found for search text in file: ${operation.path}. Please provide more context to make the search unique.`);
+              errors.push(multipleMatchesError(operation.path));
               operationResults.push({
                 operationIndex: i,
                 operationId: generateOperationId(),
@@ -236,7 +254,7 @@ export async function executeFileOperations(
         case 'create_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -252,7 +270,7 @@ export async function executeFileOperations(
 
           const fileNotExistsResult = await BrudAPI.validate.fileNotExists(fs, filePath);
           if (!fileNotExistsResult.success) {
-            errors.push(`File already exists: ${operation.path}`);
+            errors.push(fileAlreadyExistsError(operation.path));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -281,7 +299,7 @@ export async function executeFileOperations(
         case 'delete_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -311,7 +329,7 @@ export async function executeFileOperations(
           await fs.deleteFile(filePath);
 
           if (await fs.exists(filePath)) {
-            errors.push(`Failed to delete file: ${operation.path}`);
+            errors.push(deleteFailedError(operation.path));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -333,10 +351,10 @@ export async function executeFileOperations(
           break;
         }
 
-        case 'rename_file': {
+case 'rename_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(fromResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -350,7 +368,7 @@ export async function executeFileOperations(
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(toResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -367,7 +385,7 @@ export async function executeFileOperations(
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(`Source file not found: ${operation.from}`);
+            errors.push(fileNotFoundError(operation.from));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -381,7 +399,7 @@ export async function executeFileOperations(
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(`Destination file already exists: ${operation.to}`);
+            errors.push(fileAlreadyExistsError(operation.to));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -410,7 +428,7 @@ export async function executeFileOperations(
         case 'move_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(fromResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -424,7 +442,7 @@ export async function executeFileOperations(
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(toResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -441,7 +459,7 @@ export async function executeFileOperations(
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(`Source file not found: ${operation.from}`);
+            errors.push(fileNotFoundError(operation.from));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -455,7 +473,7 @@ export async function executeFileOperations(
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(`Destination file already exists: ${operation.to}`);
+            errors.push(fileAlreadyExistsError(operation.to));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -486,7 +504,7 @@ export async function executeFileOperations(
         case 'copy_file': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(fromResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -500,7 +518,7 @@ export async function executeFileOperations(
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(toResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -517,7 +535,7 @@ export async function executeFileOperations(
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(`Source file not found: ${operation.from}`);
+            errors.push(fileNotFoundError(operation.from));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -531,7 +549,7 @@ export async function executeFileOperations(
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(`Destination file already exists: ${operation.to}`);
+            errors.push(fileAlreadyExistsError(operation.to));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -562,7 +580,7 @@ export async function executeFileOperations(
         case 'append_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -579,7 +597,7 @@ export async function executeFileOperations(
           let existingContent = '';
           const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
           if (!fileExistsResult.success) {
-            errors.push(`File not found: ${operation.path}`);
+            errors.push(fileNotFoundError(operation.path));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -611,7 +629,7 @@ export async function executeFileOperations(
         case 'create_directory': {
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -629,7 +647,7 @@ export async function executeFileOperations(
           for (const file of operation.files) {
             const fileResult = validateWorkspacePath(path.join(operation.directoryPath, file), workspaceFolders);
             if (!fileResult.valid) {
-              errors.push(fileResult.error);
+              errors.push({ code: 'VALIDATION_ERROR', friendly: fileResult.error, details: fileResult.error });
               continue;
             }
             const filePath = fileResult.resolvedPath;
@@ -653,7 +671,7 @@ export async function executeFileOperations(
         case 'delete_directory': {
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -683,7 +701,7 @@ export async function executeFileOperations(
           await fs.deleteDirectoryRecursive(directoryPath);
 
           if (await fs.exists(directoryPath)) {
-            errors.push(`Failed to delete directory: ${operation.directoryPath}`);
+            errors.push(deleteFailedError(operation.directoryPath));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -709,7 +727,7 @@ operationResults.push({
         case 'move_directory': {
           const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(fromResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: fromResult.error, details: fromResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -723,7 +741,7 @@ operationResults.push({
 
           const toResult = validateWorkspacePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(toResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: toResult.error, details: toResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -740,7 +758,7 @@ operationResults.push({
 
           const sourceExistsResult = await BrudAPI.validate.directoryExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(`Source directory not found: ${operation.from}`);
+            errors.push(directoryNotFoundError(operation.from));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -754,7 +772,7 @@ operationResults.push({
 
           const targetNotExistsResult = await BrudAPI.validate.directoryNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(`Destination directory already exists: ${operation.to}`);
+            errors.push(directoryAlreadyExistsError(operation.to));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -786,7 +804,7 @@ operationResults.push({
           const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -803,7 +821,7 @@ operationResults.push({
           console.error('DEBUG extract_structure: fs.exists result=' + exists);
           const dirExistsResult = await BrudAPI.validate.directoryExists(fs, directoryPath);
           if (!dirExistsResult.success) {
-            errors.push(`Directory not found: ${operation.directoryPath}`);
+            errors.push(directoryNotFoundError(operation.directoryPath));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -856,7 +874,7 @@ operationResults.push({
         case 'codebase_metadata': {
           const wsResult = BrudAPI.validate.workspace(workspaceFolders);
           if (!wsResult.success) {
-            errors.push('No workspace root available for codebase metadata.');
+            errors.push(noWorkspaceError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -886,7 +904,7 @@ operationResults.push({
         case 'search_files': {
           const wsResult = BrudAPI.validate.workspace(workspaceFolders);
           if (!wsResult.success) {
-            errors.push('No workspace root available for file search.');
+            errors.push(noWorkspaceError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -904,7 +922,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
-            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -942,7 +960,7 @@ operationResults.push({
         case 'append_file_multi': {
           const wsResult = BrudAPI.validate.workspace(workspaceFolders);
           if (!wsResult.success) {
-            errors.push('No workspace root available for file search.');
+            errors.push(noWorkspaceError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -960,7 +978,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
-            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1030,7 +1048,7 @@ operationResults.push({
         case 'search_replace_multi': {
           const wsResult = BrudAPI.validate.workspace(workspaceFolders);
           if (!wsResult.success) {
-            errors.push('No workspace root available for file search.');
+            errors.push(noWorkspaceError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1048,7 +1066,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
-            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1118,7 +1136,7 @@ operationResults.push({
         case 'read_file': {
           const result = validateWorkspacePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(result.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: result.error, details: result.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1153,7 +1171,7 @@ operationResults.push({
         case 'read_files': {
           const wsResult = BrudAPI.validate.workspace(workspaceFolders);
           if (!wsResult.success) {
-            errors.push('No workspace root available for file read.');
+            errors.push(noWorkspaceError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1171,7 +1189,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
-            errors.push(`Search directory is outside workspace root: ${operation.directory}`);
+            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1221,7 +1239,7 @@ operationResults.push({
         case 'read_directory': {
           const dirResult = validateWorkspacePath(operation.directoryPath, workspaceFolders);
           if (!dirResult.valid) {
-            errors.push(dirResult.error);
+            errors.push({ code: 'VALIDATION_ERROR', friendly: dirResult.error, details: dirResult.error });
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1262,7 +1280,7 @@ operationResults.push({
 
         case 'terminal_interactive': {
           if (!terminalExecutor) {
-            errors.push('Terminal executor not available. This operation requires a VS Code environment.');
+            errors.push(terminalUnavailableError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1276,7 +1294,7 @@ operationResults.push({
 
           const termOp = operation as TerminalInteractiveOperation;
           if (isDangerousCommand(termOp.command)) {
-            errors.push(`Dangerous terminal command blocked: ${termOp.command}`);
+            errors.push(dangerousCommandError(termOp.command));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1289,7 +1307,7 @@ operationResults.push({
           }
           const cwdValidation = validateTerminalCwd(termOp.cwd, workspaceFolders);
           if (!cwdValidation.valid) {
-            errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+            errors.push(invalidCwdError(termOp.cwd || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1331,7 +1349,7 @@ operationResults.push({
           } else {
             const doc = globalToolRegistry.getTool(toolOp.toolKind);
             if (!doc) {
-              errors.push(`Tool not found: ${toolOp.toolKind}`);
+              errors.push(toolNotFoundError(toolOp.toolKind));
               operationResults.push({
                 operationIndex: i,
                 operationId: generateOperationId(),
@@ -1360,7 +1378,7 @@ operationResults.push({
 
         case 'terminal_command': {
           if (!terminalExecutor) {
-            errors.push('Terminal executor not available. This operation requires a VS Code environment.');
+            errors.push(terminalUnavailableError());
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1378,7 +1396,7 @@ operationResults.push({
             let hasDangerous = false;
             for (const cmd of termCmdOp.commands) {
               if (isDangerousCommand(cmd)) {
-                errors.push(`Dangerous terminal command blocked: ${cmd}`);
+                errors.push(dangerousCommandError(cmd));
                 operationResults.push({
                   operationIndex: i,
                   operationId: generateOperationId(),
@@ -1396,7 +1414,7 @@ operationResults.push({
             }
             const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
             if (!cwdValidation.valid) {
-              errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+              errors.push(invalidCwdError(termCmdOp.cwd || ''));
               operationResults.push({
                 operationIndex: i,
                 operationId: generateOperationId(),
@@ -1435,7 +1453,7 @@ operationResults.push({
           }
 
           if (isDangerousCommand(termCmdOp.command)) {
-            errors.push(`Dangerous terminal command blocked: ${termCmdOp.command}`);
+            errors.push(dangerousCommandError(termCmdOp.command));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1448,7 +1466,7 @@ operationResults.push({
           }
           const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
           if (!cwdValidation.valid) {
-            errors.push(cwdValidation.error || 'Invalid working directory for terminal command');
+            errors.push(invalidCwdError(termCmdOp.cwd || ''));
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
@@ -1510,7 +1528,7 @@ operationResults.push({
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const stack = err instanceof Error && err.stack ? `\nStack: ${err.stack}` : '';
-      errors.push(`Unexpected error during ${operation.kind}: ${message}${operation.kind === 'extract_structure' ? stack : ''}`);
+      errors.push(unexpectedError(operation.kind, message + (operation.kind === 'extract_structure' ? stack : '')));
       operationResults.push({
         operationIndex: i,
               operationId: generateOperationId(),
@@ -1522,7 +1540,7 @@ operationResults.push({
     }
   }
 
-  let result: { success: boolean; message: string; errors: string[]; operationResults: OperationResult[]; sessionId?: string };
+  let result: { success: boolean; message: string; errors: BrudError[]; operationResults: OperationResult[]; sessionId?: string };
 
   const combined: any = {};
 

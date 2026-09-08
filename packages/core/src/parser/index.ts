@@ -1,6 +1,7 @@
 import { PatchBlock, FileOperation } from '../types/patch';
 import { parseLegacyFormat } from './legacy';
 import { parseYamlFormat } from './yaml';
+import { parseError } from '../api/errors';
 
 export function parseOperations(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const trimmed = input.trim();
@@ -38,7 +39,7 @@ export function parseOperations(input: string, workspaceFolders: string[] = []):
     return parseYamlFormat(trimmed, workspaceFolders);
   }
 
-  throw new Error("I couldn't understand the format of your message. Brud Code understands two formats: the legacy block format and YAML.\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven't seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don't guess field names or format from memory.");
+  throw parseError();
 }
 
 export function parseBlocks(input: string): PatchBlock[] {

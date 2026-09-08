@@ -1,4 +1,5 @@
 import { PatchBlock, MatchResult } from '../types/patch';
+import { searchNotFoundError, multipleMatchesError } from '../api/errors';
 
 /**
  * Brud Core Engine
@@ -41,7 +42,7 @@ export function findMatches(
     }
 
     if (candidates.length === 0) {
-      onError(`Block [${block.index}] not found in the source content.`, block);
+      onError(searchNotFoundError('unknown', block.search).details, block);
       return null;
     }
 
@@ -61,7 +62,7 @@ export function findMatches(
 
     if (uniqueMatches.size > 1) {
       onError(
-        `Block [${block.index}] is ambiguous (multiple matches found).`,
+        multipleMatchesError('unknown').details,
         block,
       );
       return null;

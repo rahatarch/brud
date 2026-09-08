@@ -2,6 +2,7 @@ import * as pathModule from 'path';
 import { FileSystem } from '../types/filesystem.js';
 import { isGlobPattern, matchGlob } from './globMatcher.js';
 import { FileSearchQuery, FileSearchResponse, FileSearchResult } from './types.js';
+import { missingFieldError } from '../api/errors.js';
 
 const SKIP_DIRECTORIES = new Set(['node_modules', 'dist', 'build', '.git', '.svn', '.hg', '.next', '.nuxt', 'out', '.cache', '__pycache__', '.yarn', '.pnp']);
 
@@ -117,7 +118,7 @@ async function walkDirectory(
 
 export async function searchFiles(fs: FileSystem, query: FileSearchQuery): Promise<FileSearchResponse> {
   if (!query.patterns || query.patterns.length === 0) {
-    throw new Error('At least one search pattern is required');
+    throw missingFieldError('patterns', 'search');
   }
 
   const baseDir = query.directory || process.cwd();
