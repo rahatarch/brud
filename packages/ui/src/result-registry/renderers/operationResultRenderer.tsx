@@ -13,6 +13,11 @@ interface OperationResultData {
   to?: string;
   directoryPath?: string;
   files?: string[];
+  fileResults?: {
+    modified: string[];
+    skipped: string[];
+    failed: string[];
+  };
   data?: any;
 }
 
@@ -132,6 +137,49 @@ export const operationResultRenderer: ToolResultRenderer = {
             <div className="text-sm text-text leading-relaxed">{op.message}</div>
           </div>
         )}
+        {op.fileResults && (
+          <div className="px-6 pb-2 space-y-1">
+            {op.fileResults.modified.length > 0 && (
+              <details className="group">
+                <summary className="text-xs font-medium text-green-400 cursor-pointer list-none flex items-center gap-1 hover:text-green-300 select-none py-1">
+                  <span className="opacity-60 group-open:opacity-100 transition-opacity">▶</span>
+                  Modified ({op.fileResults.modified.length})
+                </summary>
+                <div className="mt-1 ml-3 space-y-0.5">
+                  {op.fileResults.modified.map((f, i) => (
+                    <div key={i} className="text-xs text-green-400/80 font-mono truncate">{f}</div>
+                  ))}
+                </div>
+              </details>
+            )}
+            {op.fileResults.skipped.length > 0 && (
+              <details className="group">
+                <summary className="text-xs font-medium text-yellow-400 cursor-pointer list-none flex items-center gap-1 hover:text-yellow-300 select-none py-1">
+                  <span className="opacity-60 group-open:opacity-100 transition-opacity">▶</span>
+                  Skipped ({op.fileResults.skipped.length})
+                </summary>
+                <div className="mt-1 ml-3 space-y-0.5">
+                  {op.fileResults.skipped.map((f, i) => (
+                    <div key={i} className="text-xs text-yellow-400/80 font-mono truncate">{f}</div>
+                  ))}
+                </div>
+              </details>
+            )}
+            {op.fileResults.failed.length > 0 && (
+              <details className="group">
+                <summary className="text-xs font-medium text-red-400 cursor-pointer list-none flex items-center gap-1 hover:text-red-300 select-none py-1">
+                  <span className="opacity-60 group-open:opacity-100 transition-opacity">▶</span>
+                  Failed ({op.fileResults.failed.length})
+                </summary>
+                <div className="mt-1 ml-3 space-y-0.5">
+                  {op.fileResults.failed.map((f, i) => (
+                    <div key={i} className="text-xs text-red-400/80 font-mono truncate">{f}</div>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
         <div className="px-6 pb-3">
           <CopyButton text={`[${op.status}] ${kindLabel}: ${op.path || op.directoryPath || ''} — ${op.message}`} />
         </div>
@@ -143,6 +191,18 @@ export const operationResultRenderer: ToolResultRenderer = {
     if (!op || !op.kind) return '';
     const kindLabel = getKindLabel(op.kind);
     const path = op.path || op.directoryPath || '';
-    return `[${op.status}] ${kindLabel}: ${path} — ${op.message}`;
+    let result = `[${op.status}] ${kindLabel}: ${path} — ${op.message}`;
+    if (op.fileResults) {
+      if (op.fileResults.modified.length > 0) {
+        result += `\n  Modified: ${op.fileResults.modified.join(', ')}`;
+      }
+      if (op.fileResults.skipped.length > 0) {
+        result += `\n  Skipped: ${op.fileResults.skipped.join(', ')}`;
+      }
+      if (op.fileResults.failed.length > 0) {
+        result += `\n  Failed: ${op.fileResults.failed.join(', ')}`;
+      }
+    }
+    return result;
   },
 };

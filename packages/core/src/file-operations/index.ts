@@ -61,6 +61,11 @@ export interface OperationResult {
   to?: string;
   directoryPath?: string;
   files?: string[];
+  fileResults?: {
+    modified: string[];
+    skipped: string[];
+    failed: string[];
+  };
   data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
 
@@ -1042,6 +1047,11 @@ operationResults.push({
             status: failedFiles.length === 0 ? 'success' : 'failed',
             message: `Appended content to ${modifiedFiles.length} files.`,
             path: operation.directory || '',
+            fileResults: {
+              modified: modifiedFiles,
+              skipped: skippedFiles,
+              failed: failedFiles,
+            },
           });
           break;
         }
@@ -1130,6 +1140,11 @@ operationResults.push({
             status: failedFiles.length === 0 ? 'success' : 'failed',
             message: `Patched ${modifiedFiles.length} files.${skipMsg}`,
             path: operation.directory || '',
+            fileResults: {
+              modified: modifiedFiles,
+              skipped: skippedFiles,
+              failed: failedFiles,
+            },
           });
           break;
         }
