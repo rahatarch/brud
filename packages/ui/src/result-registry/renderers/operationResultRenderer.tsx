@@ -205,4 +205,18 @@ export const operationResultRenderer: ToolResultRenderer = {
     }
     return result;
   },
+  summaryFormatter: (data: any) => {
+    const op = data as OperationResultData;
+    if (!op || !op.kind) return '';
+    const kindLabel = getKindLabel(op.kind);
+    const status = op.status;
+    if (op.fileResults) {
+      const patched = op.fileResults.modified.length;
+      const skipped = op.fileResults.skipped.length;
+      const failed = op.fileResults.failed.length;
+      return `[${status}] ${kindLabel}: ${patched} patched, ${skipped} skipped, ${failed} failed`;
+    }
+    const path = op.path || op.directoryPath || '';
+    return `[${status}] ${kindLabel}: ${path} — ${op.message}`;
+  },
 };

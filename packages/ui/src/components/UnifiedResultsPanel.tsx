@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { sendToExtension } from '../bridge/vscodeBridge';
 import { globalRegistry } from '../result-registry/registry';
+import { ToolResultRenderer } from '../result-registry/types';
 
 export interface UnifiedOperationResult {
   toolKind: string;
@@ -14,7 +15,8 @@ export interface UnifiedSessionResults {
 
 function UnifiedResultsPanel() {
   const [results, setResults] = useState<UnifiedSessionResults | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [summaryCopied, setSummaryCopied] = useState(false);
+  const [fullCopied, setFullCopied] = useState(false);
 
   useEffect(() => {
     sendToExtension({ command: 'ready' });
@@ -32,24 +34,58 @@ function UnifiedResultsPanel() {
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  const handleCopyAll = useCallback(() => {
-    if (!results) return;
+  const buildSummaryParts = useCallback(() => {
+    if (!results) return [];
     const parts: string[] = [];
+    for (const op of results.operations) {
+      const renderer = globalRegistry.getRenderer(op.toolKind);
+      if (renderer && renderer.summaryFormatter) {
+        const formatted = renderer.summaryFormatter(op.data);
+        if (formatted) {
+          parts.push(formatted);
+        }
+      }
+    }
+    return parts;
+  }, [results]);
+
+  const handleCopySummary = useCallback(() => {
+    const parts = buildSummaryParts();
+    if (parts.length > 0) {
+      navigator.clipboard.writeText(parts.join('\n'));
+      setSummaryCopied(true);
+      setTimeout(() => setSummaryCopied(false), 2000);
+    }
+  }, [buildSummaryParts]);
+
+  const handleCopyFull = useCallback(() => {
+    if (!results) return;
+    const summaryParts = buildSummaryParts();
+    const detailParts: string[] = [];
     for (const op of results.operations) {
       const renderer = globalRegistry.getRenderer(op.toolKind);
       if (renderer) {
         const formatted = renderer.copyFormatter(op.data);
         if (formatted) {
-          parts.push(`=== ${renderer.title} ===\n${formatted}`);
+          detailParts.push(`=== ${renderer.title} ===\n${formatted}`);
         }
       }
     }
-    if (parts.length > 0) {
-      navigator.clipboard.writeText(parts.join('\n\n'));
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+    const allParts: string[] = [];
+    if (summaryParts.length > 0) {
+      allParts.push('SUMMARY:');
+      allParts.push(summaryParts.join('\n'));
     }
-  }, [results]);
+    if (detailParts.length > 0) {
+      allParts.push('DETAILS:');
+      allParts.push(detailParts.join('\n\n'));
+    }
+    if (allParts.length > 0) {
+      navigator.clipboard.writeText(allParts.join('\n\n'));
+      setFullCopied(true);
+      setTimeout(() => setFullCopied(false), 2000);
+    }
+  }, [results, buildSummaryParts]);
 
   if (!results || results.operations.length === 0) {
     return (
@@ -66,19 +102,28 @@ function UnifiedResultsPanel() {
   const sections = results.operations.map(op => ({
     renderer: globalRegistry.getRenderer(op.toolKind),
     data: op.data
-  })).filter(s => s.renderer);
+  })).filter((s): s is { renderer: ToolResultRenderer; data: any } => s.renderer !== undefined);
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
       <div className="border-b border-border bg-surface-2 px-6 py-4 flex items-center justify-between shrink-0">
         <h1 className="text-xl font-semibold text-text">Brud Session Results</h1>
-        <button
-          onClick={handleCopyAll}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
-        >
-          {copied ? <Check size={14} /> : <Copy size={14} />}
-          {copied ? 'Copied!' : 'Copy All'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopySummary}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
+          >
+            {summaryCopied ? <Check size={14} /> : <Copy size={14} />}
+            {summaryCopied ? 'Copied!' : 'Copy Summary'}
+          </button>
+          <button
+            onClick={handleCopyFull}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
+          >
+            {fullCopied ? <Check size={14} /> : <Copy size={14} />}
+            {fullCopied ? 'Copied!' : 'Copy Full'}
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto">

@@ -5,4 +5,5 @@ export interface ToolResultRenderer {
   title: string;
   renderSection: (data: any) => ReactNode;
   copyFormatter: (data: any) => string;
+  summaryFormatter?: (data: any) => string;
 }
