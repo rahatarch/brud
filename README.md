@@ -43,11 +43,15 @@ Your AI gives you a Brud block. You paste it. Brud executes everything — every
 | Create Files | 1,000 files | Each file with unique content, all manually verified | ~4,000 | 2 | Under 1 second |
 | Search & Replace | 467 files, 384K LOC | 467 patched, 0 skipped, 0 failed | ~2,802 | 2 | Milliseconds |
 | Append Multi | 467 files | 467 modified, 0 failed | ~1,868 | 2 | Milliseconds |
+| Revert Session | 1,000 files | All changes undone, files removed | ~3,000 | 1 | Milliseconds |
+| Restore Session | 1,000 files | All files recovered to post-state | ~3,000 | 1 | Milliseconds |
 
 **Verified results:**
 - 1,000/1,000 files created with unique contents — manually verified
 - 467/467 files patched — zero skipped, zero failed
 - 467/467 files appended — zero failed
+- 1,000/1,000 files reverted (undone) with one click — manually verified
+- 1,000/1,000 files restored (recovered) with one click — manually verified
 - 100% success rate across all benchmarks
 - All results captured in a single Copy All
 
@@ -81,8 +85,22 @@ Extract your project structure as a token-efficient JSON tree, query codebase me
 ### Terminal
 Run single commands, sequential chains, parallel groups, or conditional pipelines — all driven by AI-generated blocks. Interactive CLI programs work too: Brud feeds answers back to the AI for dynamic workflows.
 
-### History
-Every operation is snapshotted. Revert individual edits or entire sessions. A 7-day trash bin protects against accidental loss. Full audit trail so you always know what changed and when.
+### Your Codebase, Your Authority
+
+Brud's history and revert system is fully built-in. You don't need Git, GitHub, or any third-party tool to use Brud's core capabilities.
+
+Every Brud session is automatically recorded with pre/post snapshots, enabling instant revert and restore — all stored locally in your workspace. No external service. No forced dependency. No account required.
+
+**What you get:**
+
+- **Complete autonomy** — Brud works in any workspace, with or without Git. Your codebase stays under your control.
+- **Hybrid snapshot engine** — Pre-snapshots store full file contents; post-snapshots store unified diffs. This enables instant revert to either state with minimal storage overhead.
+- **One-click session revert** — Revert an entire session or select specific operations. Verified at scale: 1,000 files reverted in milliseconds.
+- **One-click session restore** — Undo a revert instantly. Verified at scale: 1,000 files restored in milliseconds.
+- **7-day trash protection** — Deleted sessions are soft-deleted with a 7-day recovery window. Restore any trashed session before permanent cleanup.
+- **Automatic retention** — Sessions older than 3 months are automatically soft-deleted. Restoring a session resets its retention clock.
+- **Local storage only** — All history is stored as JSON files in `.brud/history/` in the workspace root. Auto-added to `.gitignore` and excluded from VS Code search and file watching.
+- **Own diff engine** — Built-in diff engine computes unified diffs between pre and post states. No external diff tool required.
 
 ### AI Integration
 Works with **any** AI chatbot — free or paid, API or web UI. Use `GET_TOOL_INFO` to let the AI discover every available tool dynamically. The built-in Prompt Library provides ready-made prompts for common workflows.
