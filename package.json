@@ -1,15 +1,19 @@
 {
   "name": "brud",
-  "private": true,
   "displayName": "Brud Code",
   "description": "Brud Code: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
   "publisher": "Akkhar-Labs",
-  "author": "Akkhar-Labs",
+  "author": "Rahat Hasan",
+  "license": "MIT",
   "version": "0.1.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/rahatarch/brud.git"
   },
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "homepage": "https://github.com/rahatarch/brud#readme",
   "workspaces": [
     "packages/*",
     "packages/adapters/*",
@@ -19,18 +23,32 @@
     "vscode": "^1.80.0"
   },
   "categories": [
-    "Other",
-    "Programming Languages",
-    "Machine Learning"
+    "AI",
+    "Other"
   ],
   "keywords": [
-    "surgical",
-    "patch",
-    "search",
-    "replace",
+    "brud",
     "ai",
-    "orchestration",
-    "brud"
+    "ai coding",
+    "ai coding assistant",
+    "ai code editor",
+    "chatgpt",
+    "claude",
+    "gemini",
+    "deepseek",
+    "grok",
+    "free ai",
+    "no api key",
+    "copy paste code",
+    "apply ai code",
+    "ai file editor",
+    "vscode automation",
+    "edit multiple files",
+    "ai in vscode",
+    "vscode ai extension",
+    "code patch",
+    "cursor free",
+    "unlimited ai"
   ],
   "icon": "assets/images/brud_icon.png",
   "activationEvents": [],

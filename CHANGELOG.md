@@ -4,7 +4,7 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-## [Unreleased]
+## [0.1.0] - 2026-09-10
 
 ### Added
 - Create, delete, rename, move, copy, and append files and directories
@@ -25,15 +25,13 @@ All notable changes to **Brud Code** are documented in this file. This project a
 - GET_TOOL_INFO for AI tool discovery
 - Workspace security with dangerous command blocking
 - Friendly chat interface with structured reports
-- Fuzzy matching for finding files and content
-- AI mistake auto-fix to correct AI-generated code errors
 - AI output cleaner to remove extraneous AI formatting
-- Confidence indicators showing match accuracy
 - Support for multiple output formats
 - Apply changes to all occurrences of a pattern
-- Git integration for version control workflows
 - Syntax validation to catch errors before applying
 - Template library with reusable code templates
+- Copy Summary button for token-efficient AI feedback
+- Verified benchmarks on 384K LOC codebase (1,000 files, 467 patches, 467 appends, revert/restore)
 
 ### Changed
 - Rebranded from Akkhar Code Patcher to Brud Code
