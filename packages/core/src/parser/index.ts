@@ -2,6 +2,7 @@ import { PatchBlock, FileOperation } from '../types/patch';
 import { parseLegacyFormat } from './legacy';
 import { parseYamlFormat } from './yaml';
 import { parseError } from '../api/errors';
+import { BrudError } from '../api/index';
 
 export function parseOperations(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const trimmed = input.trim();
@@ -39,7 +40,7 @@ export function parseOperations(input: string, workspaceFolders: string[] = []):
     return parseYamlFormat(trimmed, workspaceFolders);
   }
 
-  throw parseError();
+  throw new BrudError(parseError());
 }
 
 export function parseBlocks(input: string): PatchBlock[] {

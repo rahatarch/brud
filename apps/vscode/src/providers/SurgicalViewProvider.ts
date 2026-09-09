@@ -481,7 +481,7 @@ fileIndex: this._currentFileIndex,
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
       if (e instanceof BrudError) {
-        this._sendParseErrorToWebview(e.friendly || e.message);
+        this._sendParseErrorToWebview(e);
       } else {
         this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       }
@@ -1014,7 +1014,7 @@ fileIndex: this._currentFileIndex,
     } catch (e) {
       this._outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
       if (e instanceof BrudError) {
-        this._sendParseErrorToWebview(e.friendly || e.message);
+        this._sendParseErrorToWebview(e);
       } else {
         this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       }
@@ -1171,7 +1171,7 @@ fileIndex: this._currentFileIndex,
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
       if (e instanceof BrudError) {
-        this._sendParseErrorToWebview(e.friendly || e.message);
+        this._sendParseErrorToWebview(e);
       } else {
         this._sendParseErrorToWebview(e instanceof Error ? e.message : String(e));
       }
@@ -1358,11 +1358,16 @@ fileIndex: this._currentFileIndex,
     this._outputChannel.appendLine('ERROR: ' + friendlyMessage);
   }
 
-  private _sendParseErrorToWebview(errorMessage?: string): void {
-    const friendlyMessage = errorMessage || parseError().friendly + '\n\nIf you are an AI generating this block, you may have used a tool by just knowing its name without loading its usage guide, or you haven\'t seen the Brud syntax yet. Call GET_TOOL_INFO first to fetch the tool syntax and understand Brud grammar before generating any block. Don\'t guess field names or format from memory.';
-    const structured: ReportSection[] = [
-      { type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' },
-    ];
+  private _sendParseErrorToWebview(error: string | BrudError | ValidationResult): void {
+    const structured = this._generateErrorReport(error);
+    structured.push({ type: 'button', buttonText: 'Go to Prompt Library', buttonAction: 'openPromptLibrary' });
+
+    let friendlyMessage: string;
+    if (typeof error === 'string') {
+      friendlyMessage = error;
+    } else {
+      friendlyMessage = error.friendly || 'I couldn\'t understand the format of your message.';
+    }
 
     this._unifiedResultsPanelManager?.openUnifiedResultsPanel({
       operations: [{
