@@ -31,8 +31,9 @@ export async function readFiles(
 
   for (const filePath of filePaths) {
     try {
-      if (isImportRead && maxDepth > 0) {
-        const { files: fileMap } = await readFileWithImports(fs, filePath, maxDepth, excludePatterns, importSyntax);
+      if (isImportRead) {
+        const effectiveDepth = maxDepth === 0 ? Infinity : maxDepth;
+        const { files: fileMap } = await readFileWithImports(fs, filePath, effectiveDepth, excludePatterns, importSyntax);
         let isFirst = true;
         for (const [p, content] of fileMap) {
           const size = Buffer.byteLength(content, 'utf8');
@@ -72,7 +73,7 @@ export async function readDirectoryFiles(
     excludePatterns,
     directory: directoryPath,
     recursive,
-    maxResults: maxResults ?? 500,
+    maxResults: maxResults ?? Infinity,
   };
 
   const response = await searchFiles(fs, query);

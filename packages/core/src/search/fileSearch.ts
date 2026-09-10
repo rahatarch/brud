@@ -102,7 +102,7 @@ async function walkDirectory(
 
       state.totalMatches++;
 
-      if (results.length < (query.maxResults ?? 500)) {
+      if (results.length < (query.maxResults ?? Infinity)) {
         let statSize = 0;
         try {
           const content = await fs.readFile(fullPath);
@@ -130,6 +130,6 @@ export async function searchFiles(fs: FileSystem, query: FileSearchQuery): Promi
   return {
     results,
     totalMatches: state.totalMatches,
-    truncated: state.totalMatches > (query.maxResults ?? 500),
+    truncated: state.totalMatches > (query.maxResults ?? Infinity),
   };
 }

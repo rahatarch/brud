@@ -149,13 +149,12 @@ Describe the files you want to search for below:
 Pattern: **/*.ts
 Exclude: *.test.ts
 Scope: src
-MaxResults: 500
 >>>>>>> END SEARCH_FILES [1]
 
 - Pattern: glob patterns or simple words (comma-separated for multiple)
 - Exclude: patterns to skip (optional)
 - Scope: directory to search (optional, default workspace root)
-- MaxResults: maximum files to return (optional, default 500)
+- MaxResults: maximum files to return (optional, default unlimited)
 - Returns file paths, names, extensions, and sizes
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
@@ -229,7 +228,7 @@ isImportRead: false
 
 - Pattern: glob pattern to match files
 - Scope: directory to search (optional, default workspace root)
-- MaxResults: maximum files to return (optional, default 10)
+- MaxResults: maximum files to return (optional, default unlimited)
 - isImportRead: true to also read imported files (optional, default false)
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;

@@ -597,7 +597,7 @@ fileIndex: this._currentFileIndex,
         .map(op => (op as any).search)
         .filter(Boolean);
       const searchText = searchBlocks.length > 0
-        ? searchBlocks.slice(0, 3).join('\n\n---\n\n')
+        ? searchBlocks.join('\n\n---\n\n')
         : 'N/A';
       const copyMessage = "The search text was not found in the file. Please check the content and provide the correct search block.";
       const structured: ReportSection[] = [

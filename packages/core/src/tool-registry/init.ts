@@ -290,7 +290,7 @@ Depth: [number or 0 for unlimited]
       { name: 'pattern', type: 'string', required: true, description: 'Glob pattern or simple words (comma-separated)' },
       { name: 'exclude', type: 'string', required: false, description: 'Patterns to skip' },
       { name: 'scope', type: 'string', required: false, description: 'Directory to search' },
-      { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return', default: '500' },
+      { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return. Not set returns all results.', default: 'unlimited' },
     ],
     example: `<<<<<<< SEARCH_FILES [1]
 Pattern: **/*.ts
@@ -300,7 +300,7 @@ MaxResults: 500
 >>>>>>> END SEARCH_FILES [1]`,
     rules: [
       'Returns file paths, names, extensions, and sizes',
-      'Default maxResults is 500',
+      'No limit by default. Specify maxResults to cap results.',
     ],
   });
 
@@ -312,7 +312,7 @@ MaxResults: 500
     parameters: [
       { name: 'filePath', type: 'string', required: true, description: 'File path to read' },
       { name: 'isImportRead', type: 'boolean', required: false, description: 'Follow imports recursively', default: 'false' },
-      { name: 'maxDepth', type: 'number', required: false, description: 'How deep to follow imports', default: '5' },
+      { name: 'maxDepth', type: 'number', required: false, description: 'How deep to follow imports. 0 for unlimited.', default: '0' },
       { name: 'importSyntax', type: 'string', required: false, description: 'Custom import pattern regex' },
       { name: 'exclude', type: 'string', required: false, description: 'Patterns to skip when following imports' },
     ],
@@ -325,7 +325,7 @@ Exclude: [patterns to skip, optional]
 >>>>>>> END READ_FILE [1]`,
     rules: [
       'isImportRead: true to also read imported files recursively',
-      'MaxDepth: default 5, 0 for unlimited',
+      'MaxDepth: default 0 (unlimited). Specify a number to limit depth.',
       'importSyntax: custom import pattern regex for non-standard languages',
     ],
   });
@@ -338,7 +338,7 @@ Exclude: [patterns to skip, optional]
     parameters: [
       { name: 'pattern', type: 'string', required: true, description: 'Glob pattern to match files' },
       { name: 'scope', type: 'string', required: false, description: 'Directory to search' },
-      { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return', default: '10' },
+      { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return. Not set returns all results.', default: 'unlimited' },
       { name: 'isImportRead', type: 'boolean', required: false, description: 'Follow imports', default: 'false' },
     ],
     example: `<<<<<<< READ_FILES [1]
@@ -349,7 +349,7 @@ isImportRead: false
 >>>>>>> END READ_FILES [1]`,
     rules: [
       'Pattern is a glob pattern',
-      'Default maxResults is 10',
+      'No limit by default. Specify maxResults to cap results.',
     ],
   });
 

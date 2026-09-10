@@ -22,13 +22,13 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentSearchPatterns: string[] = [];
   let currentSearchExclude: string[] = [];
   let currentSearchScope = '';
-  let currentSearchMaxResults = 500;
+  let currentSearchMaxResults = Infinity;
   let currentMultiPosition: 'start' | 'end' = 'end';
   let currentMultiSearch = '';
   let currentMultiReplace = '';
   let multiBuffer: string[] = [];
   let currentReadIsImportRead = false;
-  let currentReadMaxDepth = 5;
+  let currentReadMaxDepth = 0;
   let currentReadExclude: string[] = [];
   let currentReadImportSyntax: string[] = [];
   let currentTerminalCommand = '';
@@ -1001,7 +1001,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (maxResultsMatch) {
-        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || Infinity;
         continue;
       }
       continue;
@@ -1035,7 +1035,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (maxResultsMatch) {
-        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || Infinity;
         continue;
       }
       multiBuffer.push(line);
@@ -1071,7 +1071,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (maxResultsMatch) {
-        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || 500;
+        currentSearchMaxResults = parseInt(maxResultsMatch[1].trim(), 10) || Infinity;
         continue;
       }
       continue;
