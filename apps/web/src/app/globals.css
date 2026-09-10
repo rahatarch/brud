@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200..800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  /* Core UI - Dark Developer Tool */
+  --color-surface: #131114;
+  --color-surface-2: #191518;
+  --color-surface-3: #211B1F;
+
+  /* Borders */
+  --color-border: #30262B;
+  --color-border-subtle: #241E21;
+
+  /* Text */
+  --color-text: #F5F2F3;
+  --color-text-secondary: #B8AFB3;
+  --color-text-muted: #766C71;
+
+  /* Brand Primary - Ember Orange */
+  --color-primary: #F28C28;
+  --color-primary-hover: #FF9F3D;
+  --color-primary-active: #D97416;
+  --color-primary-soft: #F28C281A;
+
+  /* Secondary Accent - Electric Rose */
+  --color-accent: #E83F78;
+  --color-accent-hover: #F05287;
+  --color-accent-soft: #E83F781A;
+
+  /* Status */
+  --color-success: #45C486;
+  --color-warning: #F2A93B;
+  --color-error: #F05D6F;
+  --color-info: #6FA8FF;
+
+  /* Light mode surfaces (for body sections) */
+  --color-light-bg: #FAFAF9;
+  --color-light-surface: #FFFFFF;
+  --color-light-border: #E7E5E4;
+  --color-light-text: #131114;
+  --color-light-text-secondary: #57534E;
+  --color-light-text-muted: #A8A29E;
+
+  /* Font */
+  --font-sans: Manrope, ui-sans-serif, system-ui, sans-serif;
+}
+
+@utility brand-gradient {
+  background: linear-gradient(135deg, #F7A62A 0%, #F28C28 45%, #E83F78 100%);
+}
+
+@utility brand-gradient-text {
+  background: linear-gradient(135deg, #F7A62A 0%, #F28C28 45%, #E83F78 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(118, 108, 113, 0.4);
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(184, 175, 179, 0.5);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-button {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(118, 108, 113, 0.4) transparent;
+}
