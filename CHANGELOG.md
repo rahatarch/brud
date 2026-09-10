@@ -4,6 +4,11 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [0.1.1] - 2026-10-10
+
+### Fixed
+- Restore sidebar icon in the published extension
+
 ## [0.1.0] - 2026-09-10
 
 ### Added
