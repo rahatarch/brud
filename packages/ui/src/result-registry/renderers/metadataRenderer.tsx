@@ -44,4 +44,9 @@ export const metadataRenderer: ToolResultRenderer = {
   copyFormatter: (data: any) => {
     return JSON.stringify(data);
   },
+  summaryFormatter: (data: any) => {
+    const metadata = data as CodebaseMetadataResult;
+    if (!metadata || metadata.root === undefined) return '';
+    return `[success] Codebase Metadata: ${metadata.totalFiles} files in ${metadata.totalFolders} folders`;
+  },
 };

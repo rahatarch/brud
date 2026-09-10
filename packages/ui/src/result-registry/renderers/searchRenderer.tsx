@@ -56,4 +56,15 @@ export const searchRenderer: ToolResultRenderer = {
     if (!searchData || !searchData.results) return '';
     return searchData.results.map(r => r.path).join('\n');
   },
+  summaryFormatter: (data: any) => {
+    const searchData = data as SearchFilesResult;
+    if (!searchData || !searchData.results) return '';
+    const total = searchData.totalMatches;
+    const truncated = searchData.truncated;
+    let summary = `[success] Search Files: ${total} files found`;
+    if (truncated) {
+      summary += ` (showing first ${searchData.results.length})`;
+    }
+    return summary;
+  },
 };

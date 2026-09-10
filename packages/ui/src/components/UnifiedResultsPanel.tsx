@@ -39,12 +39,22 @@ function UnifiedResultsPanel() {
     const parts: string[] = [];
     for (const op of results.operations) {
       const renderer = globalRegistry.getRenderer(op.toolKind);
-      if (renderer && renderer.summaryFormatter) {
+      if (!renderer) continue;
+      if (renderer.summaryFormatter) {
         const formatted = renderer.summaryFormatter(op.data);
         if (formatted) {
           parts.push(formatted);
         }
+      } else {
+        const formatted = renderer.copyFormatter(op.data);
+        if (formatted) {
+          const firstLine = formatted.split('\n')[0];
+          parts.push(firstLine);
+        }
       }
+    }
+    if (parts.length === 0) {
+      parts.push(`${results.operations.length} operations executed`);
     }
     return parts;
   }, [results]);

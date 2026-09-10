@@ -23,4 +23,10 @@ export const toolInfoRenderer: ToolResultRenderer = {
     if (!data || !data.message) return '';
     return data.message;
   },
+  summaryFormatter: (data: any) => {
+    if (!data) return '';
+    const status = data.status || 'success';
+    const kind = data.kind || 'tool_info';
+    return `[${status}] Tool Info: ${kind}`;
+  },
 };

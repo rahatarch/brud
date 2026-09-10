@@ -50,4 +50,9 @@ export const structureRenderer: ToolResultRenderer = {
     } catch {}
     return `${summary}\n${compactJson}`;
   },
+  summaryFormatter: (data: any) => {
+    const s = data as StructureData;
+    if (!s) return '';
+    return `[success] Extract Structure: ${s.fileCount} files, ${s.directoryCount} dirs`;
+  },
 };

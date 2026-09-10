@@ -107,4 +107,9 @@ export const readRenderer: ToolResultRenderer = {
       return `File: ${f.path}\nSize: ${formatSize(f.size)}\n---\n${f.content}`;
     }).join('\n\n');
   },
+  summaryFormatter: (data: any) => {
+    const readData = data as ReadResultData;
+    if (!readData || !readData.files) return '';
+    return `[success] Read Files: ${readData.totalFiles} files, ${formatSize(readData.totalSize || 0)} total`;
+  },
 };

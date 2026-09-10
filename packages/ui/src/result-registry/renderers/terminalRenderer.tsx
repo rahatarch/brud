@@ -136,4 +136,21 @@ export const terminalRenderer: ToolResultRenderer = {
     if (!termData) return '';
     return formatSingleCopy(termData);
   },
+  summaryFormatter: (data: any) => {
+    if (isGroupResultData(data)) {
+      const status = data.failed > 0 ? 'failure' : 'success';
+      return `[${status}] Terminal Group (${data.mode}): ${data.results.length} commands, ${data.succeeded} succeeded, ${data.failed} failed, ${formatDuration(data.totalDuration)}`;
+    }
+    if (Array.isArray(data)) {
+      const succeeded = data.filter(r => r.success).length;
+      const failed = data.filter(r => !r.success).length;
+      const totalDuration = data.reduce((sum, r) => sum + (r.duration || 0), 0);
+      const status = failed > 0 ? 'failure' : 'success';
+      return `[${status}] Terminal Commands: ${data.length} commands, ${succeeded} succeeded, ${failed} failed, ${formatDuration(totalDuration)}`;
+    }
+    const termData = data as TerminalResultData;
+    if (!termData || !termData.command) return '';
+    const status = termData.success ? 'success' : 'failure';
+    return `[${status}] Terminal: ${termData.command} — exit ${termData.exitCode !== null ? termData.exitCode : 'N/A'}, ${formatDuration(termData.duration)}`;
+  },
 };

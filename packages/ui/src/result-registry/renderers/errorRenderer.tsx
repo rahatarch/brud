@@ -170,4 +170,9 @@ export const errorRenderer: ToolResultRenderer = {
     }
     return lines.join('\n');
   },
+  summaryFormatter: (data: any) => {
+    const errorData = data as ErrorResultData;
+    if (!errorData || !errorData.friendlyMessage) return '';
+    return `[error] ${errorData.friendlyMessage}`;
+  },
 };
