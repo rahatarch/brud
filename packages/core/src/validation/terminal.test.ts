@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { isDangerousCommand, validateTerminalCwd } from './terminal.js';
+import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from './terminal.js';
 
 describe('Terminal Validation - Dangerous Commands', () => {
   it('catches "rm -rf /"', () => {
@@ -57,6 +57,67 @@ describe('Terminal Validation - Dangerous Commands', () => {
 
   it('catches "fdisk /dev/sda"', () => {
     assert.strictEqual(isDangerousCommand('fdisk /dev/sda'), true);
+  });
+});
+
+describe('Terminal Validation - CD Escape Detection', () => {
+  const workspaceFolders = ['/workspace', '/workspace/sub'];
+
+  it('a) rejects "cd /outside && npm install"', () => {
+    const result = validateTerminalCommand('cd /outside && npm install', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('b) rejects "cd ~/other-project && ls"', () => {
+    const result = validateTerminalCommand('cd ~/other-project && ls', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('c) allows "cd packages/core && npm test"', () => {
+    const result = validateTerminalCommand('cd packages/core && npm test', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, true);
+  });
+
+  it('d) rejects "pushd /outside && command"', () => {
+    const result = validateTerminalCommand('pushd /outside && command', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('e) rejects "cd $HOME && ls"', () => {
+    const result = validateTerminalCommand('cd $HOME && ls', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('f) rejects "cd $DYNAMIC_VAR && ls" (cannot statically verify)', () => {
+    const result = validateTerminalCommand('cd $DYNAMIC_VAR && ls', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'DYNAMIC_PATH');
+  });
+
+  it('g) rejects "cd /workspace/../outside && ls" (path traversal)', () => {
+    const result = validateTerminalCommand('cd /workspace/../outside && ls', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('h) allows "cd /workspace && ls" (workspace root)', () => {
+    const result = validateTerminalCommand('cd /workspace && ls', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, true);
+  });
+
+  it('i) rejects "(cd /outside && ls)" (subshell)', () => {
+    const result = validateTerminalCommand('(cd /outside && ls)', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+  });
+
+  it('j) allows "cd packages/core; npm test; cd ../ui; npm test"', () => {
+    const result = validateTerminalCommand('cd packages/core; npm test; cd ../ui; npm test', '/workspace', workspaceFolders);
+    assert.strictEqual(result.success, true);
   });
 });
 

@@ -803,6 +803,22 @@ fileIndex: this._currentFileIndex,
       }
     }
 
+    for (const op of result.operationResults) {
+      if (op.kind === 'terminal_command' && !op.data) {
+        const origOp = operations[op.operationIndex] as any;
+        unifiedOps.push({
+          toolKind: 'terminal_command',
+          data: {
+            command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
+            output: op.message || '',
+            exitCode: null,
+            duration: 0,
+            success: false,
+          },
+        });
+      }
+    }
+
     if (unifiedOps.length > 0) {
       this._unifiedResultsPanelManager?.openUnifiedResultsPanel({ operations: unifiedOps });
     }
@@ -845,6 +861,22 @@ fileIndex: this._currentFileIndex,
     for (const op of result.operationResults) {
       if (op.kind !== 'terminal_command') {
         unifiedOps.push({ toolKind: op.kind, data: op });
+      }
+    }
+
+    for (const op of result.operationResults) {
+      if (op.kind === 'terminal_command' && !op.data) {
+        const origOp = allOperations[op.operationIndex] as any;
+        unifiedOps.push({
+          toolKind: 'terminal_command',
+          data: {
+            command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
+            output: op.message || '',
+            exitCode: null,
+            duration: 0,
+            success: false,
+          },
+        });
       }
     }
 
@@ -1114,6 +1146,18 @@ fileIndex: this._currentFileIndex,
   if (opResult.kind === 'terminal_command' && opResult.data) {
     const items = this._toTerminalOperationData([opResult], fileOps);
     unifiedResults.operations.push(...items);
+  } else if (opResult.kind === 'terminal_command' && !opResult.data) {
+    const origOp = fileOps[opResult.operationIndex] as any;
+    unifiedResults.operations.push({
+      toolKind: 'terminal_command',
+      data: {
+        command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : opResult.message || ''),
+        output: opResult.message || '',
+        exitCode: null,
+        duration: 0,
+        success: false,
+      },
+    });
   } else if (opResult.kind === 'get_tool_info') {
     unifiedResults.operations.push({
       toolKind: 'tool_info',

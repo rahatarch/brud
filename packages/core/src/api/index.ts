@@ -27,6 +27,8 @@ import {
   deleteFailedError,
   toolNotFoundError,
   terminalUnavailableError,
+  cwdEscapeError,
+  dynamicPathError,
   executionFailedError,
   sessionNotFoundError,
   invalidRevertRequestError,
@@ -57,6 +59,8 @@ export {
   deleteFailedError,
   toolNotFoundError,
   terminalUnavailableError,
+  cwdEscapeError,
+  dynamicPathError,
   executionFailedError,
   sessionNotFoundError,
   invalidRevertRequestError,
@@ -165,6 +169,65 @@ function fail(error: { code: string; friendly: string; details: string; path?: s
   };
 }
 
+function validateCdInCommand(command: string, cwd?: string, workspaceFolders?: string[]): ValidationResult {
+  const initialCwd = cwd || (workspaceFolders?.[0] ?? '');
+  const cdCommands = ['cd', 'pushd', 'chdir'];
+  const parts = command.split(/\s*(?:&&|\|\||;|\||\(|\))\s*/);
+
+  let currentCwd = initialCwd;
+
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+
+    for (const cmd of cdCommands) {
+      const cmdPattern = new RegExp(`^${cmd}(?:\\s+(.+))?$`);
+      const match = trimmed.match(cmdPattern);
+      if (match) {
+        const target = match[1]?.trim();
+        if (!target || target === '') continue;
+
+        if (/\$\{?\w+\}?/.test(target)) {
+          if (/^\$HOME(?:\/|$)/.test(target) || /^\$\{HOME\}(?:\/|$)/.test(target)) {
+            const relativePart = target.replace(/^\$HOME/, '').replace(/^\$\{HOME\}/, '');
+            const expandedPath = '~' + relativePart;
+            const cdResult = validateCdTarget(command, expandedPath, currentCwd, workspaceFolders);
+            if (!cdResult.success) return cdResult;
+            currentCwd = pathModule.resolve(currentCwd, target);
+          } else {
+            return fail(dynamicPathError(command, target));
+          }
+        } else {
+          const cdResult = validateCdTarget(command, target, currentCwd, workspaceFolders);
+          if (!cdResult.success) return cdResult;
+          currentCwd = pathModule.resolve(currentCwd, target);
+        }
+        continue;
+      }
+    }
+  }
+
+  return success(null);
+}
+
+function validateCdTarget(command: string, target: string, currentCwd: string, workspaceFolders?: string[]): ValidationResult {
+  let resolvedTarget: string;
+
+  if (target.startsWith('~')) {
+    const homedir = process.env.HOME || '/home';
+    const relativePart = target.slice(1);
+    resolvedTarget = pathModule.resolve(homedir + relativePart);
+  } else {
+    resolvedTarget = pathModule.resolve(currentCwd, target);
+  }
+
+  const root = getWorkspaceRootForPath(resolvedTarget, workspaceFolders!);
+  if (!root) {
+    return fail(cwdEscapeError(command, resolvedTarget));
+  }
+  return success(null);
+}
+
 export const BrudAPI = {
   validate: {
     workspace(workspaceFolders: string[]): ValidationResult {
@@ -192,10 +255,18 @@ export const BrudAPI = {
       return success({ resolvedPath, path, root, operationKind: options?.operationKind });
     },
 
-    command(command: string): ValidationResult {
+    command(command: string, cwd?: string, workspaceFolders?: string[]): ValidationResult {
       if (DANGEROUS_PATTERNS.some((pattern) => pattern.test(command))) {
         return fail(dangerousCommandError(command));
       }
+
+      if (workspaceFolders && workspaceFolders.length > 0) {
+        const cdResult = validateCdInCommand(command, cwd, workspaceFolders);
+        if (!cdResult.success) {
+          return cdResult;
+        }
+      }
+
       return success({ command });
     },
 

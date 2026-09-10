@@ -2,7 +2,7 @@ import path from 'path';
 import { FileOperation, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
-import { isDangerousCommand, validateTerminalCwd } from '../validation/terminal';
+import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
 import { BrudAPI } from '../api/index';
 import type { BrudError } from '../api/types';
 import {
@@ -18,6 +18,8 @@ import {
   terminalUnavailableError,
   dangerousCommandError,
   invalidCwdError,
+  cwdEscapeError,
+  dynamicPathError,
   toolNotFoundError,
   unexpectedError,
   noValidOperationsError,
@@ -1309,14 +1311,22 @@ operationResults.push({
           }
 
           const termOp = operation as TerminalInteractiveOperation;
-          if (isDangerousCommand(termOp.command)) {
-            errors.push(dangerousCommandError(termOp.command));
+          const cmdValidation = validateTerminalCommand(termOp.command, termOp.cwd, workspaceFolders);
+          if (!cmdValidation.success) {
+            const code = cmdValidation.code;
+            const target = typeof cmdValidation.data === 'string' ? cmdValidation.data : termOp.command;
+            const error = code === 'CWD_ESCAPE'
+              ? cwdEscapeError(termOp.command, target)
+              : code === 'DYNAMIC_PATH'
+                ? dynamicPathError(termOp.command, termOp.command)
+                : dangerousCommandError(termOp.command);
+            errors.push(error);
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_interactive',
               status: 'failed',
-              message: dangerousCommandError(termOp.command).details,
+              message: error.details,
               path: '',
             });
             continue;
@@ -1411,14 +1421,22 @@ message: invalidCwdError(termOp.cwd || '').details,
           if (termCmdOp.commands && termCmdOp.commands.length > 0) {
             let hasDangerous = false;
             for (const cmd of termCmdOp.commands) {
-              if (isDangerousCommand(cmd)) {
-                errors.push(dangerousCommandError(cmd));
+              const cmdValidation = validateTerminalCommand(cmd, termCmdOp.cwd, workspaceFolders);
+              if (!cmdValidation.success) {
+                const code = cmdValidation.code;
+                const target = typeof cmdValidation.data === 'string' ? cmdValidation.data : cmd;
+                const error = code === 'CWD_ESCAPE'
+                  ? cwdEscapeError(cmd, target)
+                  : code === 'DYNAMIC_PATH'
+                    ? dynamicPathError(cmd, cmd)
+                    : dangerousCommandError(cmd);
+                errors.push(error);
                 operationResults.push({
                   operationIndex: i,
                   operationId: generateOperationId(),
                   kind: 'terminal_command',
                   status: 'failed',
-                  message: dangerousCommandError(cmd).details,
+                  message: error.details,
                   path: '',
                 });
                 hasDangerous = true;
@@ -1468,14 +1486,22 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             break;
           }
 
-          if (isDangerousCommand(termCmdOp.command)) {
-            errors.push(dangerousCommandError(termCmdOp.command));
+          const singleCmdValidation = validateTerminalCommand(termCmdOp.command, termCmdOp.cwd, workspaceFolders);
+          if (!singleCmdValidation.success) {
+            const code = singleCmdValidation.code;
+            const target = typeof singleCmdValidation.data === 'string' ? singleCmdValidation.data : termCmdOp.command;
+            const error = code === 'CWD_ESCAPE'
+              ? cwdEscapeError(termCmdOp.command, target)
+              : code === 'DYNAMIC_PATH'
+                ? dynamicPathError(termCmdOp.command, termCmdOp.command)
+                : dangerousCommandError(termCmdOp.command);
+            errors.push(error);
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: 'failed',
-              message: dangerousCommandError(termCmdOp.command).details,
+              message: error.details,
               path: '',
             });
             continue;

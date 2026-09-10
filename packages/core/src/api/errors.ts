@@ -187,6 +187,25 @@ export function toolNotFoundError(toolKind: string): BrudError {
   };
 }
 
+export function cwdEscapeError(command: string, target: string): BrudError {
+  return {
+    code: 'CWD_ESCAPE',
+    friendly: 'Command attempts to leave the workspace.',
+    details: `The command attempts to cd to "${target}", which is outside the current workspace. Commands can only run inside the workspace.`,
+    command,
+    path: target,
+  };
+}
+
+export function dynamicPathError(command: string, target: string): BrudError {
+  return {
+    code: 'DYNAMIC_PATH',
+    friendly: 'Command uses a dynamic path that cannot be verified.',
+    details: `The command attempts to cd to "${target}", which contains a variable or expression that cannot be statically resolved. Commands can only use static paths.`,
+    command,
+  };
+}
+
 export function terminalUnavailableError(): BrudError {
   return {
     code: 'TERMINAL_UNAVAILABLE',
