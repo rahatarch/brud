@@ -511,7 +511,7 @@ fileIndex: this._currentFileIndex,
     webviewView.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
       switch (data.command) {
         case 'applyPatch':
-          await this._handleApplyPatch(data.text ?? '');
+          await this.applyPatchHandler.handle(data.text ?? '');
           break;
         case 'previewPatch':
           await this._handlePreviewPatch(data.text ?? '');
@@ -526,25 +526,25 @@ fileIndex: this._currentFileIndex,
           await this._handlePreviewAllFiles();
           break;
         case 'executeCurrentFile':
-          await this._handleExecuteCurrentFile(data.fileIndex);
+          await this.executeCurrentFileHandler.handle(data.fileIndex);
           break;
         case 'executeAllFiles':
-          await this._handleExecuteAllFiles();
+          await this.executeAllFilesHandler.handle();
           break;
         case 'rejectPreview':
           await this._handleRejectPreview();
           break;
         case 'extractStructure':
-          await this._handleExtractStructure(data.text ?? '');
+          await this.extractStructureHandler.handle(data.text ?? '');
           break;
         case 'openMainWindow':
-          vscode.commands.executeCommand('brud.openManagement');
+          await this.managementHandler.handle();
           break;
         case 'openPromptLibrary':
-          vscode.commands.executeCommand('brud.openManagement');
+          await this.managementHandler.handle();
           break;
         case 'openGetStarted':
-          vscode.commands.executeCommand('brud.getStarted');
+          await this.getStartedHandler.handle();
           break;
         case 'openUnifiedResults':
           if (this._lastExecutionResult) {
