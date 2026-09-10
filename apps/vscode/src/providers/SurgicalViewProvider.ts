@@ -13,6 +13,16 @@ import { PatchBlock, FileOperation } from '@brud/core';
 import { extractDirectoryStructure } from '@brud/core';
 import { createTwoFilesPatch } from 'diff';
 import type { WebviewMessage, ExtensionMessage, ExecutionResult, OperationResult, StructureResult, CodebaseMetadataResult, ReadResultData, DiffPreviewData, DiffFileEntry, ReportSection } from '@brud/protocol';
+import { ExecutionCoordinator } from './services/ExecutionCoordinator';
+import { PanelManager } from './services/PanelManager';
+import { ErrorReporter } from './services/ErrorReporter';
+import { WorkspaceResolver } from './services/WorkspaceResolver';
+import { ApplyPatchHandler } from './handlers/ApplyPatchHandler';
+import { ExecuteCurrentFileHandler } from './handlers/ExecuteCurrentFileHandler';
+import { ExecuteAllFilesHandler } from './handlers/ExecuteAllFilesHandler';
+import { ExtractStructureHandler } from './handlers/ExtractStructureHandler';
+import { ManagementHandler } from './handlers/ManagementHandler';
+import { GetStartedHandler } from './handlers/GetStartedHandler';
 
 function countStructure(obj: Record<string, any>, files = 0, dirs = 0): { files: number; dirs: number } {
   for (const value of Object.values(obj)) {
@@ -46,6 +56,18 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _diffPreviewSessionId: string | undefined = undefined;
   private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
 
+  // Phase 3.1 — New services and handlers (coexisting with old code)
+  private workspaceResolver: WorkspaceResolver;
+  private executionCoordinator: ExecutionCoordinator;
+  private errorReporter: ErrorReporter;
+  private panelManager: PanelManager;
+  private applyPatchHandler: ApplyPatchHandler;
+  private executeCurrentFileHandler: ExecuteCurrentFileHandler;
+  private executeAllFilesHandler: ExecuteAllFilesHandler;
+  private extractStructureHandler: ExtractStructureHandler;
+  private managementHandler: ManagementHandler;
+  private getStartedHandler: GetStartedHandler;
+
   constructor(
     private readonly _extensionUri: vscode.Uri,
     private readonly _outputChannel: vscode.OutputChannel,
@@ -64,6 +86,68 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     this._diffPreviewPanelManager.setMessageHandler((msg) => {
       this._handleDiffPreviewPanelMessage(msg);
     });
+
+    // Phase 3.1 — Instantiate services and handlers (coexisting with old code)
+    this.workspaceResolver = new WorkspaceResolver();
+    this.executionCoordinator = new ExecutionCoordinator();
+    this.errorReporter = new ErrorReporter(
+      () => this._view?.webview,
+      () => this._unifiedResultsPanelManager,
+      this._outputChannel,
+    );
+    this.panelManager = new PanelManager(
+      this._unifiedResultsPanelManager,
+      this._diffPreviewPanelManager,
+      this._mainWindowProvider,
+      this._structurePanelManager,
+      this._readPanelManager,
+    );
+    this.applyPatchHandler = new ApplyPatchHandler(
+      this._outputChannel,
+      this.errorReporter,
+      this.panelManager,
+      this.executionCoordinator,
+      () => this._view?.webview,
+      () => this._lastExecutionResult,
+      (val) => { this._lastExecutionResult = val; },
+    );
+    this.executeCurrentFileHandler = new ExecuteCurrentFileHandler(
+      this._outputChannel,
+      this.panelManager,
+      this.executionCoordinator,
+      this.workspaceResolver,
+      () => this._fileList,
+      () => this._currentFileIndex,
+      () => this._operationsByFile,
+      () => this._originalPrompt,
+      () => this._diffPreviewSessionId,
+      (id) => { this._diffPreviewSessionId = id; },
+      () => this._view?.webview,
+    );
+    this.executeAllFilesHandler = new ExecuteAllFilesHandler(
+      this._outputChannel,
+      this.panelManager,
+      this.executionCoordinator,
+      this.workspaceResolver,
+      () => this._fileList,
+      () => this._currentFileIndex,
+      () => this._operationsByFile,
+      () => this._originalPrompt,
+      () => this._diffPreviewSessionId,
+      (id) => { this._diffPreviewSessionId = id; },
+      () => this._view?.webview,
+      () => { this._fileList = []; },
+      () => { this._operationsByFile.clear(); },
+      () => { this._currentFileIndex = 0; },
+    );
+    this.extractStructureHandler = new ExtractStructureHandler(
+      this._outputChannel,
+      this.panelManager,
+      this.errorReporter,
+      () => this._view?.webview,
+    );
+    this.managementHandler = new ManagementHandler();
+    this.getStartedHandler = new GetStartedHandler();
   }
 
   private _groupOperationsByFile(operations: FileOperation[]): Map<string, FileOperation[]> {

@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
-import { executeFileOperations, getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore } from '@brud/vscode-adapter';
-import { executeOperationsFromVSCode } from '@brud/vscode-adapter';
+import { getWorkspaceFolders, VSCodeFileSystem, WorkspaceHistoryStore, executeOperationsFromVSCode } from '@brud/vscode-adapter';
+import { executeFileOperations } from '@brud/core';
 import { parseOperations, cleanBrudInput, BrudError } from '@brud/core';
-import type { FileOperation, OperationResult } from '@brud/protocol';
+import type { FileOperation, OperationResult } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
@@ -70,16 +70,17 @@ export class ApplyPatchHandler {
 
     if (queryOps.length > 0) {
       this.outputChannel.appendLine('DEBUG: Before executeFileOperations for query operations');
-      queryResult = await executeFileOperations(queryOps, new VSCodeFileSystem(), getWorkspaceFolders());
-      this.outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + queryResult.success + ' - errors: ' + queryResult.errors.length);
+      const qr = await executeFileOperations(queryOps, new VSCodeFileSystem(), getWorkspaceFolders());
+      queryResult = qr;
+      this.outputChannel.appendLine('DEBUG: After executeFileOperations - success: ' + qr.success + ' - errors: ' + qr.errors.length);
 
-      for (const err of queryResult.errors) {
+      for (const err of qr.errors) {
         this.outputChannel.appendLine(`  ERROR: ${err}`);
       }
 
       let parsedMessage: any;
       try {
-        parsedMessage = JSON.parse(queryResult.message);
+        parsedMessage = JSON.parse(qr.message);
       } catch {
         parsedMessage = null;
       }

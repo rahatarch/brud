@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperationResult } from '@brud/core';
+import type { FileOperation, FileOperationResult } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
