@@ -1662,9 +1662,20 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
 
   if (historyStore && sessionId && preSnapshot) {
     if (existingSessionData) {
+      // Invariant: pre-snapshot is immutable.
+      // Once a file's original state is captured in a session,
+      // it must never be overwritten by a later intermediate state.
+      // The session's pre-state represents the workspace BEFORE the session began.
       for (const [filePath, content] of existingSessionData.preSnapshot.files) {
-        if (!preSnapshot.files.has(filePath)) {
-          preSnapshot.files.set(filePath, content);
+        preSnapshot.files.set(filePath, content);
+      }
+      // Invariant: files absent from the existing pre-snapshot but present in the
+      // existing filesAffected were created DURING the session and must remain
+      // absent from the merged pre-snapshot. A fresh capture reads them from disk
+      // after creation, which would shadow their non-existence during revert.
+      for (const filePath of existingSessionData.filesAffected) {
+        if (!existingSessionData.preSnapshot.files.has(filePath)) {
+          preSnapshot.files.delete(filePath);
         }
       }
     }

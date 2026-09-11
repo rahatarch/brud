@@ -129,16 +129,20 @@ export async function createSnapshot(
       }
     }
   } else {
+    // Invariant: post-snapshot stores only meaningful diffs.
+    // Files unchanged by the current execution are omitted entirely.
+    // This allows the session merge to preserve diffs from prior executions.
+    // An empty-diff entry would shadow a meaningful prior diff during merge.
     for (const filePath of filesAffected) {
       try {
         const exists = await fs.exists(filePath);
         if (exists) {
           const postContent = await fs.readFile(filePath);
           const preContent = preSnapshot?.files.get(filePath) ?? '';
-          const diff = preContent === postContent
-            ? ''
-            : createTwoFilesPatch(filePath, filePath, preContent, postContent, 'pre', 'post');
-          files.set(filePath, diff);
+          if (preContent !== postContent) {
+            const diff = createTwoFilesPatch(filePath, filePath, preContent, postContent, 'pre', 'post');
+            files.set(filePath, diff);
+          }
         } else if (preSnapshot?.files.has(filePath)) {
           const preContent = preSnapshot.files.get(filePath)!;
           const diff = createTwoFilesPatch(filePath, filePath, preContent, '', 'pre', 'post');
