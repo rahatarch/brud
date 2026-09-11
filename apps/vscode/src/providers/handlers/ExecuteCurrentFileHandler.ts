@@ -3,7 +3,7 @@ import type { FileOperation, FileOperationResult } from '@brud/core';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
-import { reportExecutionResult, transformTerminalOperationData, closePreviewTabs } from '../services/SharedExecutionHelpers';
+import { reportExecutionResult, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
 
 export class ExecuteCurrentFileHandler {
   constructor(
@@ -18,6 +18,8 @@ export class ExecuteCurrentFileHandler {
     private getDiffPreviewSessionId: () => string | undefined,
     private setDiffPreviewSessionId: (id: string | undefined) => void,
     private getWebview: () => vscode.Webview | undefined,
+    private getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
+    private setLastExecutionResult: (val: { operations: { toolKind: string; data: any }[] } | null) => void,
   ) {}
 
   async handle(fileIndex?: number): Promise<void> {
@@ -70,7 +72,14 @@ export class ExecuteCurrentFileHandler {
     }
 
     if (unifiedOps.length > 0) {
-      this.panelManager.showUnifiedResults({ operations: unifiedOps });
+      const existing = this.getLastExecutionResult();
+      if (existing) {
+        this.setLastExecutionResult({
+          operations: [...existing.operations, ...unifiedOps],
+        });
+      } else {
+        this.setLastExecutionResult({ operations: unifiedOps });
+      }
     }
 
     if (result.success) {
@@ -82,8 +91,6 @@ export class ExecuteCurrentFileHandler {
         command: 'filePatched',
         fileIndex: idx,
       });
-
-      await closePreviewTabs();
     }
   }
 }
