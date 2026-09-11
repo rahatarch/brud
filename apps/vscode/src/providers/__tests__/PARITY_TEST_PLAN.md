@@ -201,10 +201,51 @@ path: /tmp/parity-order.txt
 
 ### Checklist
 
-- [ ] Read_file fails with file-not-found error
+- [ ] Read_file fails with file-not-found error (god-object only — see Intentionally Divergent Behavior below)
 - [ ] Create_file succeeds
 - [ ] The bug is documented: queryOps execute before fileOps in god-object
-- [ ] New handlers must reproduce this exact behavior (bug-for-bug compatible)
+- [ ] Single-pass execution INTENTIONALLY diverges here — read_file succeeds in new handler
+
+---
+
+## Intentionally Divergent Behavior
+
+### Background
+The god-object's `ApplyPatch` handler splits operations into `queryOps` and `fileOps`, then executes query ops **first** and file ops **second**. This two-batch approach causes three defects:
+
+1. **Indexing misalignment**: Both query ops and file ops start at index 0, so result indices collide and do not reflect the original operation order.
+2. **Ordering bug**: Query ops (read, search, extract) execute before file ops (create, write, delete), violating sequential operation semantics.
+3. **Disappearing query results**: Downstream code in the god-object processes results in a way that can cause query operation outputs to be lost.
+
+### Scenario (d) is the only divergence
+| Aspect | God-object (old) | New handler (single-pass) |
+|---|---|---|
+| Execution model | Two-batch: queryOps then fileOps | Single-pass: operations execute in declaration order |
+| `create_file` + `read_file` | `read_file` fails (query runs before file creation) | `read_file` succeeds (file exists when read executes) |
+| Result indices | Reset per batch (0-based per batch) | Sequential, reflecting original operation order |
+| **Status** | **Bug** | **Correct behavior** |
+
+This is the **only scenario** where the new handler produces a different result from the god-object. All other scenarios reproduce god-object behavior exactly.
+
+### Why this divergence is intentional
+- The god-object's two-batch split is an implementation artifact, not a design decision.
+- Sequential operation execution (each operation sees the side effects of prior operations) is the expected semantics.
+- The upstream Brud CLI processes operations in a single pass.
+- Fixing this bug during Phase 3.4 (handler extraction) is safer than deferring it, because a later behavioral change would require re-running the entire parity suite to revalidate non-divergent scenarios.
+
+### How to verify correct behavior
+1. Send the Scenario (d) block: `create_file` then `read_file` on the same path.
+2. **Expected**: `read_file` succeeds and returns the file content.
+3. **God-object baseline** (before swap): `read_file` fails with file-not-found.
+4. **New handler** (after swap): `read_file` succeeds with content `created first`.
+5. Confirm all non-(d) scenarios still match the god-object baseline.
+
+### Checklist
+
+- [ ] read_file succeeds with correct content in new handler
+- [ ] All other scenarios (a–c, e–p) pass identically to god-object
+- [ ] The divergence is documented in this section
+- [ ] The divergence is intentional and reviewed
 
 ---
 
