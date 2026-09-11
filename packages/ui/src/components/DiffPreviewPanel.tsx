@@ -204,6 +204,14 @@ function DiffPreviewPanel() {
   }, []);
 
   const allPatched = diffData ? patchedFileIndices.size === diffData.files.length : false;
+  const autoCompleteFiredRef = useRef(false);
+
+  useEffect(() => {
+    if (allPatched && !autoCompleteFiredRef.current) {
+      autoCompleteFiredRef.current = true;
+      sendToExtension({ command: 'doneDiffPreview' });
+    }
+  }, [allPatched]);
 
   if (noPreview) {
     const heading = noPreviewDetail ? "No Changes Found" : "Preview Not Available";
