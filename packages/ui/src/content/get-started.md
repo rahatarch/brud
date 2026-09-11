@@ -1,675 +1,77 @@
-# Welcome to Brud Code
+# Get Started
 
-## AI Thinks. Brud Executes.
+Follow these steps to run your first task.
 
-Brud Code is a free, open-source AI-assisted coding platform that lets you work with the AI tools you already use while keeping code execution inside your workspace under your control.
+## 1. Open Prompt Library
+Click **Prompt Library** in the Brud sidebar.
 
-Brud works alongside AI chatbots such as ChatGPT, Claude, Gemini, and other AI systems that can generate text.
+![Open Prompt Library](./screenshots/1.png)
 
-The important thing to understand is:
+## 2. Open Master System Prompt
+In the **Prompt Library**, find the Master System Prompt
 
-> **Brud is not the AI that thinks about your code. Brud is the execution layer that turns structured AI instructions into controlled changes in your codebase.**
-
-Your AI reasons about the task.
-
-Brud validates and executes the result.
-
-You remain in control of the workflow.
-
----
-
-# Before You Start
-
-If you have used tools where you simply type:
-
-> “Add authentication to my project.”
-
-and the AI immediately edits your files, Brud works differently.
-
-Brud uses a **manual AI-to-execution workflow**.
-
-The AI does the reasoning and produces structured instructions.
-
-You provide those instructions to Brud.
-
-Brud then validates and executes them against your workspace.
-
-The basic loop is:
-
-```text
-You
- ↓
-AI
- ↓
-AI understands the task
- ↓
-AI generates Brud instructions
- ↓
-Brud validates them
- ↓
-Brud executes them
- ↓
-Report Panel
- ↓
-You / AI inspect the result
- ↓
-Next task
-```
-
-Once you understand this loop, Brud becomes much easier to use.
-
----
-
-# Your First Brud Workflow
-
-Follow these steps for your first task.
-
-## 1. Open Your Project
-
-Open the project or folder you want Brud to work with in VS Code.
-
-Brud operates against your current workspace, so make sure you have opened the correct project before executing instructions.
-
----
-
-## 2. Open the Prompt Library
-
-From Brud's welcome interface, open the **Prompt Library**.
-
-The Prompt Library contains the instructions your AI needs to understand how to communicate with Brud.
-
-For your first setup, find the **Master Prompt**.
-
----
+![Management panel](./screenshots/2.png)
 
 ## 3. Copy the Master Prompt
+In the **Master System Prompt**, click **Copy**.
 
-Copy the Master Prompt using the provided copy action.
+![Copy Master Prompt](./screenshots/3.png)
 
-The Master Prompt teaches your AI:
+## 4. Open Your AI
+Open any AI chatbot — ChatGPT, Claude, Gemini, Google AI Studio, or any other.
 
-* what Brud is
-* how Brud instructions are formatted
-* which tools are available
-* how tool calls are structured
-* how discovery should be performed
-* how to avoid guessing tool parameters
-* how to produce instructions Brud can execute
+![Open AI chatbot](./screenshots/4.png)
 
-You normally provide this to your AI at the beginning of your Brud workflow.
+## 5. Paste the Master Prompt
+Paste the Master Prompt into your AI's chat input and send it.
 
----
+![Paste Master Prompt](./screenshots/5.png)
 
-# 4. Open Your AI
+## 6. Confirm the AI Understands
+The AI should reply that it understands the protocol and is ready to collaborate. If it doesn't, send the Master Prompt again.
 
-Open the AI chatbot you want to use.
+![AI confirms](./screenshots/6.png)
 
-For example:
+## 7. Ask the AI to Do Something
+Type what you want done — for example: "Explore my codebase."
 
-* ChatGPT
-* Claude
-* Gemini
-* another compatible AI chatbot
+![Ask the AI](./screenshots/7.png)
 
-Brud does not require the AI itself to be built into the extension.
+## 8. Copy the Brud Block
+Your AI will reply with a code block wrapped in `<BRUD_INSTRUCTIONS>` tags. Click the **Copy** icon to copy the entire block.
 
-You can use the AI service you already prefer.
+![Copy Brud Block](./screenshots/8.png)
 
----
+## 9. Paste Into Brud
+Paste the block into the Brud input box at the bottom of the sidebar.
 
-# 5. Give the AI the Master Prompt
+![Paste into Brud](./screenshots/9.png)
 
-Paste the Master Prompt into your AI.
+## 10. Preview or Execute
+Click **Preview** to review the changes first, or **Execute** to apply them immediately.
 
-Think of the Master Prompt as the **communication protocol between your AI and Brud**.
+![Preview or Execute](./screenshots/10.png)
 
-It tells the AI how to produce instructions that Brud understands.
+## 11. Copy the Result Back to Your AI
+Brud shows the operation results. Copy the response and paste it back into your AI.
 
-After the AI has received the instructions, you can start giving it development tasks.
+![Copy result back](./screenshots/11.png)
 
----
+## 12. Continue the Loop
+Your AI now knows what happened. Ask it the next task. Repeat steps 7-11.
 
-# 6. Give the AI a Task
+![Continue the loop](./screenshots/12.png)
 
-Tell the AI what you want to accomplish.
+## Quick Start Checklist
 
-For example:
-
-```text
-Create a TypeScript file at src/hello.ts
-that exports a greeting constant.
-```
-
-For larger tasks, describe:
-
-* what you want to change
-* where the change belongs
-* relevant requirements
-* how the result should be verified
-
-For complex tasks, let the AI investigate the codebase before asking it to modify anything.
-
-A good workflow is:
-
-```text
-Understand the project
-        ↓
-Investigate the relevant code
-        ↓
-Determine what needs to change
-        ↓
-Generate Brud instructions
-        ↓
-Execute
-        ↓
-Verify
-```
-
----
-
-# 7. The AI Generates Brud Instructions
-
-Instead of directly modifying your workspace, the AI produces a structured **Brud instruction block**.
-
-Brud instructions are wrapped in:
-
-```text
-<BRUD_INSTRUCTIONS>
-...
-</BRUD_INSTRUCTIONS>
-```
-
-Inside the wrapper are one or more Brud operations.
-
-For example, a simple task may result in a `CREATE_FILE` operation containing:
-
-* the file path
-* the file contents
-* the operation index
-
-You do not need to manually construct these instructions.
-
-**Let the AI generate them.**
-
-If the AI does not know how a particular Brud tool works, it should use `GET_TOOL_INFO` to obtain the appropriate tool documentation rather than guessing the format.
-
----
-
-# 8. Copy the Brud Instructions
-
-Copy the complete Brud instruction block generated by your AI.
-
-Make sure you copy the entire block, including:
-
-```text
-<BRUD_INSTRUCTIONS>
-```
-
-and:
-
-```text
-</BRUD_INSTRUCTIONS>
-```
-
-The wrapper helps Brud distinguish executable instructions from normal AI conversation.
-
----
-
-# 9. Paste the Instructions into Brud
-
-Return to Brud Code and paste the Brud instructions into the Brud interface.
-
-Brud will parse the instructions and determine what operations the AI requested.
-
-At this point, Brud takes over the execution side of the workflow.
-
----
-
-# 10. Preview or Execute
-
-Depending on the operation and workflow available to you, you can preview the requested changes before applying them or execute them directly.
-
-Preview is useful when you want to inspect what the AI is asking Brud to change.
-
-Execution applies the validated operations to your workspace.
-
-The important distinction is:
-
-> **The AI requested the changes. Brud performs them.**
-
----
-
-# 11. Read the Report
-
-After execution, check the **Report Panel**.
-
-The Report Panel is the central place for execution results.
-
-It can show:
-
-* successful operations
-* failed operations
-* partial execution
-* validation errors
-* parser errors
-* operation details
-* technical information
-* structured execution results
-
-The sidebar provides the execution status.
-
-The Report Panel provides the details.
-
-If something failed, **read the report before trying again**.
-
-It may tell you whether the problem came from:
-
-* an invalid instruction
-* an incorrect path
-* a validation failure
-* a blocked command
-* a missing file
-* a failed operation
-* an AI-generated formatting mistake
-* another execution problem
-
----
-
-# 12. Continue the Loop
-
-Brud is designed for iterative work.
-
-After an operation completes:
-
-```text
-Execute
-   ↓
-Inspect the result
-   ↓
-Understand what actually happened
-   ↓
-Give the AI the new information
-   ↓
-Generate the next Brud instructions
-   ↓
-Execute again
-```
-
-Do not assume that because an AI said something was complete, the codebase is necessarily correct.
-
-**Verify the result.**
-
-For important changes, ask the AI to inspect the relevant files, run appropriate tests, and verify the connections between the changed components.
-
----
-
-# The Core Brud Mental Model
-
-If you remember only one thing, remember this:
-
-```text
-┌──────────────────────┐
-│         AI           │
-│                      │
-│ Understands          │
-│ Investigates         │
-│ Reasons              │
-│ Plans                │
-│ Generates instructions│
-└──────────┬───────────┘
-           │
-           │ Brud Instructions
-           ↓
-┌──────────────────────┐
-│        BRUD          │
-│                      │
-│ Parses               │
-│ Validates            │
-│ Executes             │
-│ Records               │
-│ Reports              │
-└──────────┬───────────┘
-           │
-           ↓
-      Your Workspace
-```
-
-**AI thinks. Brud executes.**
-
-That is the foundation of the entire workflow.
-
----
-
-# Why Does Brud Work This Way?
-
-Brud separates **reasoning** from **execution**.
-
-Your AI can focus on understanding the problem and deciding what should happen.
-
-Brud focuses on performing the requested operations against the actual workspace.
-
-This separation gives you a clear boundary between:
-
-**What the AI wants to do**
-
-and
-
-**What actually happened in your codebase.**
-
-The result is a workflow where execution can be validated, recorded, inspected, and reported independently from the AI conversation.
-
----
-
-# Working With Your AI Effectively
-
-## Let the AI Discover Before It Changes Things
-
-For unfamiliar or large projects, do not immediately ask the AI to modify files.
-
-A better workflow is:
-
-```text
-Discover
-   ↓
-Understand
-   ↓
-Plan
-   ↓
-Change
-   ↓
-Verify
-```
-
-Brud provides tools for codebase metadata, structure extraction, file reading, searching, and other forms of discovery.
-
-The AI should use these tools to understand the project rather than guessing file locations, architecture, or APIs.
-
----
-
-## Do Not Guess Brud Tool Syntax
-
-Brud provides many operations for working with a codebase.
-
-If the AI is unsure about a tool's parameters or syntax, it can request its documentation through:
-
-```text
-GET_TOOL_INFO
-```
-
-This allows the AI to retrieve the exact information it needs instead of inventing field names or formats.
-
-For example:
-
-```text
-GET_TOOL_INFO
-Tool: read_file
-```
-
-The AI can then use the returned documentation to construct the operation correctly.
-
----
-
-# One Prompt Can Contain Many Operations
-
-A Brud prompt does not mean one file operation.
-
-A single Brud instruction block can contain many operations.
-
-For example, one task might require:
-
-```text
-Create a file
-      ↓
-Modify another file
-      ↓
-Rename a file
-      ↓
-Update imports
-      ↓
-Run tests
-```
-
-These operations can be represented inside one Brud instruction block.
-
-So think of a Brud block as a **structured execution plan**, not a single command.
-
----
-
-# Understanding Errors
-
-If Brud reports an error, don't immediately assume the extension is broken.
-
-There are several different possibilities.
-
-### AI instruction problem
-
-The AI may have generated an invalid operation or incorrect parameter.
-
-### Validation problem
-
-Brud may reject an operation because it violates workspace or operation rules.
-
-### Execution problem
-
-The requested operation may have failed while being executed.
-
-### Security restriction
-
-Certain dangerous commands or unsafe operations are blocked.
-
-### Parser problem
-
-The AI may have produced malformed Brud syntax.
-
-The Report Panel provides the information needed to understand which case occurred.
-
-When an instruction is invalid, use the error message as feedback for the AI rather than repeatedly sending the same invalid instruction.
-
----
-
-# Safety
-
-Brud validates operations before execution.
-
-Workspace and path boundaries are checked, and potentially dangerous terminal commands can be blocked.
-
-The AI does not get to bypass these protections simply by requesting a different command format.
-
-For privileged or sensitive actions, authorization remains under your control.
-
-**Complex terminal syntax does not mean unrestricted terminal access.**
-
-Brud can support complex commands while still applying its security and validation rules.
-
----
-
-# History and Recovery
-
-Brud records execution history so you can inspect previous operations and recover from changes when supported by the history system.
-
-Use history and revert capabilities when you need to undo an operation or restore a previous state.
-
-Before performing large changes, it is still good practice to understand what the AI intends to modify and verify the result afterward.
-
----
-
-# What Can Brud Do?
-
-Brud provides a broad set of operations for interacting with a real codebase.
-
-These include operations for:
-
-* creating files
-* reading files
-* reading multiple files
-* searching files
-* searching and replacing text
-* performing multiple search/replace operations
-* deleting files
-* renaming files
-* moving files
-* copying files
-* creating directories
-* deleting directories
-* moving directories
-* appending content
-* extracting project structure
-* analyzing codebase metadata
-* following imports while reading code
-* executing terminal commands
-* working with interactive terminal sessions
-* inspecting available tool documentation
-* and more
-
-The exact available operations and their parameters can be discovered through `GET_TOOL_INFO`.
-
-You do not need to memorize them.
-
----
-
-# A Complete Example
-
-Suppose you want to add a new utility to an existing TypeScript project.
-
-Your workflow could look like this:
-
-### You → AI
-
-```text
-Add a date formatting utility to the existing utilities
-module. First inspect the project structure and existing
-utility conventions. Then implement it consistently with
-the current codebase and verify the result.
-```
-
-### AI → Brud
-
-The AI investigates the project, identifies the appropriate files, determines the required changes, and generates a `BRUD_INSTRUCTIONS` block.
-
-### Brud
-
-```text
-Parse
-  ↓
-Validate
-  ↓
-Preview / Execute
-  ↓
-Record
-  ↓
-Report
-```
-
-### You → Report Panel
-
-Inspect what actually happened.
-
-### AI → Next Step
-
-Give the AI the relevant result and continue.
-
-This is the normal Brud development loop.
-
----
-
-# Brud Is Not a Replacement for Your AI
-
-Brud does not require you to abandon the AI you already use.
-
-Instead, Brud provides an execution layer that can work alongside your AI workflow.
-
-You can use:
-
-* ChatGPT
-* Claude
-* Gemini
-* other compatible AI systems
-
-The AI provides the reasoning.
-
-Brud provides controlled execution.
-
-You provide the direction, context, and final judgment.
-
----
-
-# The Brud Workflow in One Picture
-
-```text
-                 YOU
-                  │
-                  │ Task / Direction
-                  ↓
-                 AI
-                  │
-                  │ Investigation
-                  │ Reasoning
-                  │ Planning
-                  ↓
-        BRUD_INSTRUCTIONS
-                  │
-                  ↓
-               BRUD
-                  │
-          ┌───────┼────────┐
-          ↓       ↓        ↓
-       Validate Execute  Record
-                  │
-                  ↓
-             Codebase
-                  │
-                  ↓
-            Report Panel
-                  │
-                  ↓
-          Inspect / Verify
-                  │
-                  ↓
-             Next Task
-```
-
-The workflow is intentionally simple:
-
-> **AI thinks. Brud executes. You stay in control.**
-
----
-
-# Quick Start Checklist
-
-Before your first task:
-
-* [ ] Open your project in VS Code
-* [ ] Open Brud Code
-* [ ] Open the Prompt Library
-* [ ] Copy the Master Prompt
-* [ ] Paste it into your AI
-* [ ] Give the AI a task
-* [ ] Let the AI discover the codebase when necessary
-* [ ] Let the AI generate `BRUD_INSTRUCTIONS`
-* [ ] Copy the complete Brud instruction block
-* [ ] Paste it into Brud
-* [ ] Preview or execute the operation
-* [ ] Open the Report Panel
-* [ ] Inspect the result
-* [ ] Verify important changes
-* [ ] Continue with the next task
-
----
+- [ ] Project opened in VS Code
+- [ ] Master Prompt copied to your AI
+- [ ] AI confirmed it understands the protocol
+- [ ] First Brud block received
+- [ ] Block pasted into Brud
+- [ ] Operations previewed or executed
+- [ ] Result copied back to the AI
 
 # You're Ready
 
-You do **not** need to understand Brud's internal architecture to start using it.
-
-You do not need to memorize every tool.
-
-You do not need to know the Brud source code.
-
-Start with the workflow:
-
-**Give your AI the instructions → give it a task → receive Brud instructions → paste them into Brud → execute → inspect the report → continue.**
-
-Once that loop becomes familiar, explore the advanced capabilities as you need them.
-
-Welcome to Brud Code.
-
-**AI thinks. Brud executes.**
+You now know the full Brud workflow. Ask your AI to do anything.

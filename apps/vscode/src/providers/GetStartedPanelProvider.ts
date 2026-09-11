@@ -55,6 +55,9 @@ export class BrudGetStartedManager {
     html = html.replace(/<link[^>]*fonts\.googleapis\.com[^>]*>/g, '');
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
+    const csp = `default-src 'none'; img-src ${webview.cspSource} https: data:; style-src ${webview.cspSource} 'unsafe-inline'; script-src ${webview.cspSource} 'unsafe-inline'; font-src ${webview.cspSource};`;
+    html = html.replace('</title>', `</title>\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`);
+
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
     html = html.replace(assetRegex, (match, assetPath) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
