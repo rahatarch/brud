@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/core';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { WorkspaceResolver } from './services/WorkspaceResolver';
@@ -21,6 +21,16 @@ import { DonePreviewHandler } from './handlers/DonePreviewHandler';
 import { DiffPreviewRouter } from './handlers/DiffPreviewRouter';
 
 export class SurgicalViewDependencies {
+  private _sessionMetadata: SessionMetadata | undefined;
+
+  public getSessionMetadata(): SessionMetadata | undefined {
+    return this._sessionMetadata;
+  }
+
+  public setSessionMetadata(m: SessionMetadata | undefined): void {
+    this._sessionMetadata = m;
+  }
+
   readonly services: {
     workspaceResolver: WorkspaceResolver;
     executionCoordinator: ExecutionCoordinator;
@@ -102,6 +112,7 @@ export class SurgicalViewDependencies {
       () => this._getWebview(),
       () => this._getLastExecutionResult(),
       (val) => { this._setLastExecutionResult(val); },
+      (m) => { this.setSessionMetadata(m); },
     );
 
     const executeCurrentFileHandler = new ExecuteCurrentFileHandler(
@@ -118,6 +129,7 @@ export class SurgicalViewDependencies {
       () => this._getWebview(),
       () => this._getLastExecutionResult(),
       (val) => { this._setLastExecutionResult(val); },
+      () => this.getSessionMetadata(),
     );
 
     const executeAllFilesHandler = new ExecuteAllFilesHandler(
@@ -135,6 +147,7 @@ export class SurgicalViewDependencies {
       () => { this._clearFileList(); },
       () => { this._clearOperationsByFile(); },
       () => { this._resetCurrentFileIndex(); },
+      () => this.getSessionMetadata(),
     );
 
     const extractStructureHandler = new ExtractStructureHandler(
@@ -157,6 +170,7 @@ export class SurgicalViewDependencies {
       (list) => { this._setFileList(list); },
       (idx) => { this._setCurrentFileIndex(idx); },
       () => this._getFileList(),
+      (m) => { this.setSessionMetadata(m); },
     );
 
     const previewNextFileHandler = new PreviewNextFileHandler(
@@ -189,6 +203,7 @@ export class SurgicalViewDependencies {
       (idx) => { this._setCurrentFileIndex(idx); },
       (id) => { this._setDiffPreviewSessionId(id); },
       () => this._getWebview(),
+      (m) => { this.setSessionMetadata(m); },
     );
 
     const donePreviewHandler = new DonePreviewHandler(
@@ -201,6 +216,7 @@ export class SurgicalViewDependencies {
       (map) => { this._setOperationsByFile(map); },
       (idx) => { this._setCurrentFileIndex(idx); },
       (id) => { this._setDiffPreviewSessionId(id); },
+      (m) => { this.setSessionMetadata(m); },
     );
 
     this.handlers = {

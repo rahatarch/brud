@@ -9,6 +9,8 @@ interface OperationResultData {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
+  title?: string;
+  description?: string;
   from?: string;
   to?: string;
   directoryPath?: string;
@@ -107,6 +109,9 @@ export const operationResultRenderer: ToolResultRenderer = {
           <div className="flex items-start gap-3">
             <span className={`shrink-0 mt-0.5 ${statusCfg.text}`}>{statusCfg.icon}</span>
             <div className="flex-1 min-w-0">
+              {op.title && (
+                <div className="text-sm font-semibold text-text mb-1">{op.title}</div>
+              )}
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-sm font-medium text-text">{kindLabel}</span>
                 <StatusBadge status={op.status} />
@@ -191,7 +196,8 @@ export const operationResultRenderer: ToolResultRenderer = {
     if (!op || !op.kind) return '';
     const kindLabel = getKindLabel(op.kind);
     const path = op.path || op.directoryPath || '';
-    let result = `[${op.status}] ${kindLabel}: ${path} — ${op.message}`;
+    const titlePrefix = op.title ? `${op.title}: ` : '';
+    let result = `[${op.status}] ${titlePrefix}${kindLabel}: ${path} — ${op.message}`;
     if (op.fileResults) {
       if (op.fileResults.modified.length > 0) {
         result += `\n  Modified: ${op.fileResults.modified.join(', ')}`;
@@ -209,14 +215,15 @@ export const operationResultRenderer: ToolResultRenderer = {
     const op = data as OperationResultData;
     if (!op || !op.kind) return '';
     const kindLabel = getKindLabel(op.kind);
+    const titlePrefix = op.title ? `${op.title} — ` : '';
     const status = op.status;
     if (op.fileResults) {
       const patched = op.fileResults.modified.length;
       const skipped = op.fileResults.skipped.length;
       const failed = op.fileResults.failed.length;
-      return `[${status}] ${kindLabel}: ${patched} patched, ${skipped} skipped, ${failed} failed`;
+      return `[${status}] ${titlePrefix}${kindLabel}: ${patched} patched, ${skipped} skipped, ${failed} failed`;
     }
     const path = op.path || op.directoryPath || '';
-    return `[${status}] ${kindLabel}: ${path} — ${op.message}`;
+    return `[${status}] ${titlePrefix}${kindLabel}: ${path} — ${op.message}`;
   },
 };

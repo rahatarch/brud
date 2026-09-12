@@ -108,6 +108,8 @@ export class BrudMainWindowManager {
       metadataUsed: s.metadataUsed,
       terminalCommands: s.terminalCommands,
       revertCommands: s.revertCommands,
+      sessionTitle: s.sessionTitle,
+      sessionDescription: s.sessionDescription,
     }));
 
     this._panel?.webview.postMessage({ command: 'historyResult', history } satisfies ExtensionMessage);
@@ -199,6 +201,8 @@ export class BrudMainWindowManager {
       metadataUsed: s.metadataUsed,
       terminalCommands: s.terminalCommands,
       revertCommands: s.revertCommands,
+      sessionTitle: s.sessionTitle,
+      sessionDescription: s.sessionDescription,
       isDeleted: s.isDeleted,
       deletedAt: s.deletedAt,
       expiresAt: s.expiresAt,

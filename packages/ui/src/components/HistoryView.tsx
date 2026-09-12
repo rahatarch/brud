@@ -240,6 +240,8 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
         timestamp: session.timestamp,
         status: session.status,
         operationCount: session.operationCount,
+        sessionTitle: session.sessionTitle,
+        sessionDescription: session.sessionDescription,
         operationTypes: session.operationTypes,
         terminalCommands: session.terminalCommands,
         revertCommands: session.revertCommands,
@@ -291,8 +293,18 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
 
         <div className="flex items-start justify-between gap-4 mb-1">
           <div>
-            <h2 className="text-xl font-semibold text-text font-mono">{sessionId}</h2>
+            {session.sessionTitle ? (
+              <h2 className="text-xl font-semibold text-text">{session.sessionTitle}</h2>
+            ) : (
+              <h2 className="text-xl font-semibold text-text font-mono">{sessionId}</h2>
+            )}
+            {session.sessionTitle && (
+              <p className="text-sm font-mono text-text-secondary mt-0.5">{sessionId}</p>
+            )}
             <p className="text-sm text-text-secondary mt-1">{timestamp ? formatFullDateTime(timestamp) : 'No date recorded'}</p>
+            {session.sessionDescription && (
+              <p className="text-sm text-text-secondary mt-2">{session.sessionDescription}</p>
+            )}
           </div>
           {statusBadge(status)}
         </div>
@@ -448,8 +460,13 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
                       <div className="shrink-0">{statusIcon(op.status)}</div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-medium text-text">{formatKind(op.kind || '')}</span>
-                          <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
+                          <span className="text-sm font-medium text-text">{op.title || formatKind(op.kind || '')}</span>
+                          {!op.title && (
+                            <span className="text-xs font-mono text-text-secondary">#{op.operationIndex}</span>
+                          )}
+                          {op.title && (
+                            <span className="text-xs text-text-secondary">{formatKind(op.kind || '')}</span>
+                          )}
                           {op.operationId && (
                             <span className="text-xs font-mono text-text-secondary opacity-60">{op.operationId}</span>
                           )}
@@ -1176,12 +1193,12 @@ function HistoryView() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <span className="text-sm font-mono font-medium text-text">
-                          {sid}
-                        </span>
-                        <span className="text-xs text-text-secondary shrink-0">
-                          {sessionTimestamp ? formatTime(sessionTimestamp) : '--:--'}
-                        </span>
+<span className="text-sm font-mono font-medium text-text">
+                    {session.sessionTitle || sid}
+                  </span>
+                  <span className="text-xs text-text-secondary shrink-0">
+                    {sessionTimestamp ? formatTime(sessionTimestamp) : '--:--'}
+                  </span>
                       </div>
                       <p className="text-sm text-text-secondary line-clamp-1 mb-1.5">
                         {sessionPrompt.length > 50
