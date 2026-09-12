@@ -234,16 +234,15 @@ element after \`<BRUD_INSTRUCTIONS>\`.
 
 ### 8.2 Operation Metadata
 
-Place \`<operation_metadata>\` inside an operation block, after the operation header
-line and before the \`=======\` content separator. Same strict lowercase rules apply.
+Place \`<operation_metadata>\` inside an operation block, after the \`File Path:\` line and before the \`=======\` content separator. Same strict lowercase rules apply.
 
 \`\`\`
 <<<<<<< CREATE_FILE [1]
+File Path: src/routes/login.ts
 <operation_metadata>
 title: Add login route handler
 description: Creates the Express route for POST /api/login with validation.
 </operation_metadata>
-File Path: src/routes/login.ts
 Content:
 ...
 =======
