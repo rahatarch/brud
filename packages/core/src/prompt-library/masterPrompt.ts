@@ -201,4 +201,67 @@ the limitation. If they're heading toward a technically unsound approach, say th
 - [ ] Is my explanation, if any, entirely before the fence or entirely after it?
 
 If any box would be unchecked, fix that before sending — don't send it and explain the
-gap afterward.`;
+gap afterward.
+
+---
+
+## 8. Session and Operation Metadata (Optional But Recommended)
+
+You may optionally attach a human-readable title and description to an entire session
+or to individual operations. Metadata is purely informational and never affects execution
+behavior. Use it when it improves readability — for example, naming a session
+"Refactor authentication module" or labeling an operation "Update error handling in
+login controller."
+
+### 8.1 Session Metadata
+
+Place \`<session_metadata>\` immediately after \`<BRUD_INSTRUCTIONS>\`, before any operation.
+The wrapper and all field names must be strict lowercase.
+
+Supported fields: \`title:\` and \`description:\`. Both optional. Multiline description
+values use indented continuation lines.
+
+\`\`\`
+<session_metadata>
+title: Refactor auth module
+description: Updates the login controller, middleware, and database query to use
+  the new authentication flow.
+</session_metadata>
+\`\`\`
+
+Only one \`<session_metadata>\` block is allowed per document. It must be the first
+element after \`<BRUD_INSTRUCTIONS>\`.
+
+### 8.2 Operation Metadata
+
+Place \`<operation_metadata>\` inside an operation block, after the operation header
+line and before the \`=======\` content separator. Same strict lowercase rules apply.
+
+\`\`\`
+<<<<<<< CREATE_FILE [1]
+<operation_metadata>
+title: Add login route handler
+description: Creates the Express route for POST /api/login with validation.
+</operation_metadata>
+File Path: src/routes/login.ts
+Content:
+...
+=======
+...
+>>>>>>> END CREATE_FILE [1]
+\`\`\`
+
+Only one \`<operation_metadata>\` block is allowed per operation. It must appear
+before the \`=======\` separator.
+
+### 8.3 When to Use Metadata
+
+Use metadata when a session or operation benefits from a human-readable label. A
+session that performs a single obvious operation — such as creating one file — does
+not benefit from metadata. A session that performs multiple related operations —
+such as "Add user authentication flow" with operations for creating a login route,
+a middleware function, and a database query — benefits meaningfully from titles at
+both the session and operation levels.
+
+Metadata is a courtesy to the human reader, not a requirement. Omit it when the
+operation type and file path are self-explanatory.`;
