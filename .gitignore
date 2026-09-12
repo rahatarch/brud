@@ -4,4 +4,6 @@ node_modules
 .vscode-test/
 *.vsix
 .brud/
-.brud/
+.VSCodeCounter/
+.kilo/
+BRUD_TEST_LOG.md
