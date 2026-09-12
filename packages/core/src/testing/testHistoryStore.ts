@@ -123,19 +123,70 @@ export class TestHistoryStore implements HistoryStore {
     return { sessionId: _sessionId, reverts: [] };
   }
 
-  async softDeleteSession(_sessionId: string, _deletedBy: 'user' | 'system', _reason: 'manual_delete' | 'manual_wipe' | 'retention_cleanup'): Promise<void> {
-    // no-op
+  async softDeleteSession(sessionId: string, deletedBy: 'user' | 'system', reason: 'manual_delete' | 'manual_wipe' | 'retention_cleanup'): Promise<void> {
+    const sessionPath = this.sessionFile(sessionId);
+    if (!(await this.fs.exists(sessionPath))) return;
+    const raw = await this.fs.readFile(sessionPath);
+    const session: HistorySession = JSON.parse(raw);
+    session.isDeleted = true;
+    session.deletedAt = new Date().toISOString();
+    session.deletedBy = deletedBy;
+    session.deleteReason = reason;
+    session.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    await this.fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
   }
 
-  async restoreSession(_sessionId: string): Promise<void> {
-    // no-op
+  async restoreSession(sessionId: string): Promise<void> {
+    const sessionPath = this.sessionFile(sessionId);
+    if (!(await this.fs.exists(sessionPath))) return;
+    const raw = await this.fs.readFile(sessionPath);
+    const session: HistorySession = JSON.parse(raw);
+    session.isDeleted = false;
+    session.deletedAt = undefined;
+    session.expiresAt = undefined;
+    session.deletedBy = undefined;
+    session.deleteReason = undefined;
+    await this.fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
   }
 
   async getTrashedSessions(): Promise<HistorySession[]> {
-    return [];
+    const sessionsDirExists = await this.fs.exists(this.sessionsDir);
+    if (!sessionsDirExists) return [];
+    const entries = await this.fs.listDirectoryContents(this.sessionsDir);
+    const sessionDirs = entries.filter(e => e.isDirectory).map(e => e.name);
+    const sessions: HistorySession[] = [];
+    for (const dir of sessionDirs) {
+      try {
+        const raw = await this.fs.readFile(this.sessionFile(dir));
+        const session: HistorySession = JSON.parse(raw);
+        if (session.isDeleted) {
+          sessions.push(session);
+        }
+      } catch {
+        // skip invalid
+      }
+    }
+    return sessions;
   }
 
   async getExpiredSessions(): Promise<HistorySession[]> {
-    return [];
+    const sessionsDirExists = await this.fs.exists(this.sessionsDir);
+    if (!sessionsDirExists) return [];
+    const entries = await this.fs.listDirectoryContents(this.sessionsDir);
+    const sessionDirs = entries.filter(e => e.isDirectory).map(e => e.name);
+    const now = new Date();
+    const sessions: HistorySession[] = [];
+    for (const dir of sessionDirs) {
+      try {
+        const raw = await this.fs.readFile(this.sessionFile(dir));
+        const session: HistorySession = JSON.parse(raw);
+        if (session.isDeleted && session.expiresAt && new Date(session.expiresAt) <= now) {
+          sessions.push(session);
+        }
+      } catch {
+        // skip invalid
+      }
+    }
+    return sessions;
   }
 }
