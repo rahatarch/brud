@@ -112,6 +112,8 @@ export interface HistorySessionResult {
   metadataUsed: Record<string, any>;
   terminalCommands: string[];
   revertCommands: string[];
+  sessionTitle?: string;
+  sessionDescription?: string;
   isDeleted?: boolean;
   deletedAt?: string;
   expiresAt?: string;
@@ -141,6 +143,13 @@ export interface OperationResult {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
+  title?: string;
+  description?: string;
+  fileResults?: {
+    modified: string[];
+    skipped: string[];
+    failed: string[];
+  };
   data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
 

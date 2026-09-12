@@ -33,6 +33,11 @@ import {
   sessionNotFoundError,
   invalidRevertRequestError,
   unexpectedError,
+  metadataWrapperCaseError,
+  duplicateMetadataError,
+  invalidMetadataFieldError,
+  metadataPositionError,
+  unterminatedMetadataError,
 } from './errors';
 
 export {
@@ -65,6 +70,11 @@ export {
   sessionNotFoundError,
   invalidRevertRequestError,
   unexpectedError,
+  metadataWrapperCaseError,
+  duplicateMetadataError,
+  invalidMetadataFieldError,
+  metadataPositionError,
+  unterminatedMetadataError,
 };
 
 export type { ValidationResult } from './types';
