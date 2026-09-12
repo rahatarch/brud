@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
-import { parseOperations, cleanBrudInput, BrudError } from '@brud/core';
-import type { FileOperation, OperationResult } from '@brud/core';
+import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
+import type { FileOperation, OperationResult, SessionMetadata } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
@@ -20,6 +20,7 @@ export class ApplyPatchHandler {
     private getWebview: () => vscode.Webview | undefined,
     private getSetLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
     private setLastExecutionResult: (result: { operations: { toolKind: string; data: any }[] } | null) => void,
+    private setSessionMetadata: (m: SessionMetadata | undefined) => void,
   ) {}
 
   get lastExecutionResult(): { operations: { toolKind: string; data: any }[] } | null {
@@ -36,11 +37,15 @@ export class ApplyPatchHandler {
     this.outputChannel.appendLine('DEBUG: Before parseOperations');
 
     let operations: any[];
+    let sessionMetadata: SessionMetadata | undefined;
     try {
-      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
-      this.outputChannel.appendLine('DEBUG: After parseOperations - operations count: ' + operations.length);
+      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), getWorkspaceFolders());
+      operations = parsed.operations;
+      sessionMetadata = parsed.sessionMetadata;
+      this.setSessionMetadata(sessionMetadata);
+      this.outputChannel.appendLine('DEBUG: After parseOperationsWithMetadata - operations count: ' + operations.length);
     } catch (e) {
-      this.outputChannel.appendLine('DEBUG: parseOperations threw: ' + (e instanceof Error ? e.message : String(e)));
+      this.outputChannel.appendLine('DEBUG: parseOperationsWithMetadata threw: ' + (e instanceof Error ? e.message : String(e)));
       if (e instanceof BrudError) {
         this.errorReporter.sendParseError(e);
       } else {
@@ -51,7 +56,7 @@ export class ApplyPatchHandler {
 
     const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
 
-    const executionResult = await this.executionCoordinator.execute(operations, text);
+    const executionResult = await this.executionCoordinator.execute(operations, text, undefined, sessionMetadata);
     this.outputChannel.appendLine('DEBUG: After executionCoordinator.execute - success: ' + executionResult.success + ' - errors: ' + executionResult.errors.length);
 
     for (const err of executionResult.errors) {

@@ -1,9 +1,9 @@
 import * as vscode from 'vscode';
-import { parseOperations, cleanBrudInput, BrudError } from '@brud/core';
+import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudAPI } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
-import type { FileOperation, PatchBlock } from '@brud/core';
+import type { FileOperation, PatchBlock, SessionMetadata } from '@brud/core';
 import type { DiffFileEntry, DiffPreviewData, ExtensionMessage, ReportSection } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
@@ -56,13 +56,18 @@ export class PreviewPatchHandler {
     private setFileList: (list: string[]) => void,
     private setCurrentFileIndex: (idx: number) => void,
     private getFileList: () => string[],
+    private setSessionMetadata: (m: SessionMetadata | undefined) => void,
   ) {}
 
   async handle(text: string): Promise<void> {
     this.setOriginalPrompt(text);
     let operations: FileOperation[];
+    let sessionMetadata: SessionMetadata | undefined;
     try {
-      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
+      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), getWorkspaceFolders());
+      operations = parsed.operations;
+      sessionMetadata = parsed.sessionMetadata;
+      this.setSessionMetadata(sessionMetadata);
     } catch (e) {
       if (e instanceof BrudError) {
         this.errorReporter.sendParseError(e);

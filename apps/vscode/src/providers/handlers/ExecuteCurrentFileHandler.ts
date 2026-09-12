@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation, FileOperationResult } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
@@ -20,6 +20,7 @@ export class ExecuteCurrentFileHandler {
     private getWebview: () => vscode.Webview | undefined,
     private getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
     private setLastExecutionResult: (val: { operations: { toolKind: string; data: any }[] } | null) => void,
+    private getSessionMetadata: () => SessionMetadata | undefined,
   ) {}
 
   async handle(fileIndex?: number): Promise<void> {
@@ -40,6 +41,7 @@ export class ExecuteCurrentFileHandler {
       operations,
       this.getOriginalPrompt(),
       this.getDiffPreviewSessionId(),
+      this.getSessionMetadata(),
     );
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 

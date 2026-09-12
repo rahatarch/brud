@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation, FileOperationResult } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
@@ -22,6 +22,7 @@ export class ExecuteAllFilesHandler {
     private clearFileList: () => void,
     private clearOperationsByFile: () => void,
     private resetCurrentFileIndex: () => void,
+    private getSessionMetadata: () => SessionMetadata | undefined,
   ) {}
 
   async handle(): Promise<void> {
@@ -38,6 +39,7 @@ export class ExecuteAllFilesHandler {
       allOperations,
       this.getOriginalPrompt(),
       this.getDiffPreviewSessionId(),
+      this.getSessionMetadata(),
     );
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 

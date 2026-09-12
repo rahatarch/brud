@@ -1,5 +1,5 @@
 import path from 'path';
-import { FileOperation, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
+import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
@@ -63,6 +63,8 @@ export interface OperationResult {
   to?: string;
   directoryPath?: string;
   files?: string[];
+  title?: string;
+  description?: string;
   fileResults?: {
     modified: string[];
     skipped: string[];
@@ -89,6 +91,7 @@ export async function executeFileOperations(
   originalPrompt?: string,
   terminalExecutor?: TerminalExecutor,
   sessionIdOverride?: string,
+  sessionMetadata?: SessionMetadata,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: [noValidOperationsError()], operationResults: [], sessionId: undefined };
@@ -1582,6 +1585,17 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
     }
   }
 
+  for (let i = 0; i < operations.length && i < operationResults.length; i++) {
+    const op = operations[i];
+    const res = operationResults[i];
+    if (op.title !== undefined) {
+      res.title = op.title;
+    }
+    if (op.description !== undefined) {
+      res.description = op.description;
+    }
+  }
+
   let result: { success: boolean; message: string; errors: BrudError[]; operationResults: OperationResult[]; sessionId?: string };
 
   const combined: any = {};
@@ -1704,6 +1718,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
       historyStore,
       mergedOperationResults,
       sessionId,
+      sessionMetadata,
     );
   }
 

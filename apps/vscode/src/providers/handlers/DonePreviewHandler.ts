@@ -14,6 +14,7 @@ export class DonePreviewHandler {
     private setOperationsByFile: (map: Map<string, FileOperation[]>) => void,
     private setCurrentFileIndex: (idx: number) => void,
     private setDiffPreviewSessionId: (id: string | undefined) => void,
+    private setSessionMetadata: (m: any) => void,
   ) {}
 
   async handle(): Promise<void> {
@@ -27,6 +28,7 @@ export class DonePreviewHandler {
     this.setOperationsByFile(new Map());
     this.setCurrentFileIndex(0);
     this.setDiffPreviewSessionId(undefined);
+    this.setSessionMetadata(undefined);
     const hideMsg: ExtensionMessage = { command: 'hidePreviewNavigation' };
     this.getWebview()?.postMessage(hideMsg);
   }
