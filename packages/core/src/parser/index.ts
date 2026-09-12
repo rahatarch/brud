@@ -1,8 +1,9 @@
-import { PatchBlock, FileOperation } from '../types/patch';
+import { PatchBlock, FileOperation, SessionMetadata } from '../types/patch';
 import { parseLegacyFormat } from './legacy';
 import { parseYamlFormat } from './yaml';
 import { parseError } from '../api/errors';
 import { BrudError } from '../api/index';
+import { extractMetadata } from './metadata';
 
 export function parseOperations(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const trimmed = input.trim();
@@ -41,6 +42,31 @@ export function parseOperations(input: string, workspaceFolders: string[] = []):
   }
 
   throw new BrudError(parseError());
+}
+
+export function parseOperationsWithMetadata(
+  input: string,
+  workspaceFolders: string[] = [],
+): {
+  operations: FileOperation[];
+  sessionMetadata?: SessionMetadata;
+} {
+  const { cleanedInput, sessionMetadata, operationMetadata } = extractMetadata(input);
+
+  const operations = parseOperations(cleanedInput, workspaceFolders);
+
+  for (const op of operations) {
+    const meta = operationMetadata.get(op.index);
+    if (meta) {
+      (op as any).title = meta.title;
+      (op as any).description = meta.description;
+    }
+  }
+
+  return {
+    operations,
+    sessionMetadata,
+  };
 }
 
 export function parseBlocks(input: string): PatchBlock[] {
