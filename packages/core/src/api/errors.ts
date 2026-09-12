@@ -262,3 +262,66 @@ export function unexpectedError(operationKind: string, message: string): BrudErr
     details: `Unexpected error during ${operationKind}: ${message}`,
   };
 }
+
+export function metadataWrapperCaseError(wrapper: string): BrudError {
+  return {
+    code: 'E_METADATA_WRONG_CASE',
+    friendly: 'Metadata wrapper must be lowercase.',
+    details: `Metadata wrapper '<${wrapper}>' must be lowercase. Found '<${wrapper}>'.`,
+  };
+}
+
+export function duplicateMetadataError(scope: 'session' | 'operation', index?: string): BrudError {
+  if (scope === 'session') {
+    return {
+      code: 'E_DUPLICATE_SESSION_METADATA',
+      friendly: 'Duplicate session metadata block.',
+      details: 'Duplicate session metadata block. Only one <session_metadata> block is allowed.',
+    };
+  }
+  return {
+    code: 'E_DUPLICATE_OPERATION_METADATA',
+    friendly: `Duplicate operation metadata block in operation '${index}'.`,
+    details: `Duplicate operation metadata block in operation '${index}'. Only one <operation_metadata> block is allowed per operation.`,
+  };
+}
+
+export function invalidMetadataFieldError(field: string): BrudError {
+  const stripped = field.endsWith(':') ? field.slice(0, -1) : field;
+  const lower = stripped.toLowerCase();
+  if (lower === 'title' || lower === 'description') {
+    return {
+      code: 'E_METADATA_FIELD_CASE',
+      friendly: `Metadata field '${field}' must be lowercase. Did you mean '${lower}:'?`,
+      details: `Metadata field '${field}' must be lowercase. Did you mean '${lower}:'?`,
+    };
+  }
+  return {
+    code: 'E_METADATA_UNKNOWN_FIELD',
+    friendly: `Unknown metadata field '${field}'. Only 'title:' and 'description:' are allowed.`,
+    details: `Unknown metadata field '${field}'. Only 'title:' and 'description:' are allowed.`,
+  };
+}
+
+export function metadataPositionError(wrapper: string): BrudError {
+  if (wrapper === 'session_metadata') {
+    return {
+      code: 'E_SESSION_METADATA_POSITION',
+      friendly: 'Session metadata must be the first element after <BRUD_INSTRUCTIONS>.',
+      details: 'Session metadata must be the first element after <BRUD_INSTRUCTIONS>.',
+    };
+  }
+  return {
+    code: 'E_OPERATION_METADATA_POSITION',
+    friendly: 'Operation metadata must appear before the content separator.',
+    details: `Operation metadata must appear before the content separator in operation '%s'.`,
+  };
+}
+
+export function unterminatedMetadataError(wrapper: string): BrudError {
+  return {
+    code: 'E_METADATA_UNCLOSED',
+    friendly: `Unclosed <${wrapper}> wrapper. Expected </${wrapper}>.`,
+    details: `Unclosed <${wrapper}> wrapper. Expected </${wrapper}>.`,
+  };
+}

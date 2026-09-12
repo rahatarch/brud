@@ -22,6 +22,8 @@ export interface SearchReplaceOperation {
   index: string;
   search: string;
   replace: string;
+  title?: string;
+  description?: string;
 }
 
 export interface CreateFileOperation {
@@ -29,12 +31,16 @@ export interface CreateFileOperation {
   path: string;
   index: string;
   content: string;
+  title?: string;
+  description?: string;
 }
 
 export interface DeleteFileOperation {
   kind: 'delete_file';
   path: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface RenameFileOperation {
@@ -42,6 +48,8 @@ export interface RenameFileOperation {
   from: string;
   to: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface MoveFileOperation {
@@ -49,6 +57,8 @@ export interface MoveFileOperation {
   from: string;
   to: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface CopyFileOperation {
@@ -56,6 +66,8 @@ export interface CopyFileOperation {
   from: string;
   to: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface AppendFileOperation {
@@ -64,6 +76,8 @@ export interface AppendFileOperation {
   position: 'start' | 'end';
   index: string;
   content: string;
+  title?: string;
+  description?: string;
 }
 
 export interface CreateDirectoryOperation {
@@ -71,12 +85,16 @@ export interface CreateDirectoryOperation {
   directoryPath: string;
   files: string[];
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface DeleteDirectoryOperation {
   kind: 'delete_directory';
   directoryPath: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface MoveDirectoryOperation {
@@ -84,6 +102,8 @@ export interface MoveDirectoryOperation {
   from: string;
   to: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface ExtractStructureOperation {
@@ -91,11 +111,15 @@ export interface ExtractStructureOperation {
   directoryPath: string;
   depth: number;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface CodebaseMetadataOperation {
   kind: 'codebase_metadata';
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface SearchFilesOperation {
@@ -107,6 +131,8 @@ export interface SearchFilesOperation {
   recursive: boolean;
   maxResults: number;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface AppendFileMultiOperation {
@@ -119,6 +145,8 @@ export interface AppendFileMultiOperation {
   position: 'start' | 'end';
   content: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface SearchReplaceMultiOperation {
@@ -131,6 +159,8 @@ export interface SearchReplaceMultiOperation {
   search: string;
   replace: string;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface ReadFileOperation {
@@ -141,6 +171,8 @@ export interface ReadFileOperation {
   excludePatterns?: string[];
   importSyntax?: string[];
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface ReadFilesOperation {
@@ -154,6 +186,8 @@ export interface ReadFilesOperation {
   maxDepth: number;
   importSyntax?: string[];
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface ReadDirectoryOperation {
@@ -165,6 +199,8 @@ export interface ReadDirectoryOperation {
   maxDepth: number;
   importSyntax?: string[];
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface TerminalInteractiveOperation {
@@ -175,6 +211,8 @@ export interface TerminalInteractiveOperation {
   cwd?: string;
   raw?: boolean;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface TerminalCommandOperation {
@@ -190,12 +228,21 @@ export interface TerminalCommandOperation {
   env?: Record<string, string>;
   raw?: boolean;
   index: string;
+  title?: string;
+  description?: string;
 }
 
 export interface GetToolInfoOperation {
   kind: 'get_tool_info';
   toolKind?: string;
   index: string;
+  title?: string;
+  description?: string;
+}
+
+export interface SessionMetadata {
+  title?: string;
+  description?: string;
 }
 
 export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation | TerminalCommandOperation | GetToolInfoOperation;
