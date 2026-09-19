@@ -1,50 +1,37 @@
 import { useState, useEffect, useCallback } from 'react';
 import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 
-const ALL_TOOLS = [
-  'search_replace',
-  'create_file',
-  'delete_file',
-  'rename_file',
-  'move_file',
-  'copy_file',
-  'append_file',
-  'create_directory',
-  'delete_directory',
-  'move_directory',
-  'extract_structure',
-  'codebase_metadata',
-  'search_files',
-  'append_file_multi',
-  'search_replace_multi',
-  'read_file',
-  'read_files',
-  'read_directory',
-  'terminal_interactive',
-  'terminal_command',
-  'get_tool_info',
-];
+interface ToolInfo {
+  kind: string;
+  name: string;
+  description: string;
+}
+
+type ViewState = 'main' | 'tools';
 
 function SettingsView() {
+  const [view, setView] = useState<ViewState>('main');
   const [workspaceBoundaryEnabled, setWorkspaceBoundaryEnabled] = useState(true);
   const [toolAllowList, setToolAllowList] = useState<Record<string, boolean>>({});
+  const [tools, setTools] = useState<ToolInfo[]>([]);
   const [source, setSource] = useState<string>('default');
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    console.log('[SettingsView] Sending getSettings message');
     sendToExtension({ command: 'getSettings' });
+    sendToExtension({ command: 'getToolList' });
     return onExtensionMessage((message) => {
-      console.log('[SettingsView] Received message:', message);
       if (message.command === 'settingsResult' && message.settings) {
         setWorkspaceBoundaryEnabled(message.settings.workspaceBoundaryEnabled !== false);
         setToolAllowList(message.settings.toolAllowList || {});
         setSource(message.source || 'default');
         setWarnings(message.warnings || []);
         setLoaded(true);
-        console.log('[SettingsView] Settings loaded:', message.settings);
+      }
+      if (message.command === 'toolListResult' && message.tools) {
+        setTools(message.tools);
       }
     });
   }, []);
@@ -72,6 +59,9 @@ function SettingsView() {
     setTimeout(() => setSaving(false), 300);
   }, [workspaceBoundaryEnabled, toolAllowList]);
 
+  const disabledCount = tools.filter(t => toolAllowList[t.kind] === false).length;
+  const enabledCount = tools.length - disabledCount;
+
   if (!loaded) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -86,6 +76,61 @@ function SettingsView() {
     'vscode-workspace': 'VS Code (Workspace)',
     'brud-json': '.brud/settings.json',
   };
+
+  if (view === 'tools') {
+    return (
+      <div className="flex-1 overflow-y-auto px-6 py-6">
+        <div className="flex items-center gap-2 mb-6">
+          <button
+            onClick={() => setView('main')}
+            className="text-sm text-text-secondary hover:text-text transition-colors cursor-pointer"
+          >
+            ← Back
+          </button>
+        </div>
+
+        <h2 className="text-xl font-semibold text-text mb-4">Tool Allow List</h2>
+
+        <div className="bg-surface-2 border border-border rounded-lg p-4">
+          <p className="text-xs text-text-secondary mb-3">
+            Disable specific tools. Disabled tools will return an error when used.
+          </p>
+          <div className="space-y-1 max-h-[500px] overflow-y-auto">
+            {tools.map((tool) => {
+              const isEnabled = toolAllowList[tool.kind] !== false;
+              return (
+                <div
+                  key={tool.kind}
+                  className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-surface-3 transition-colors"
+                >
+                  <div className="flex-1 min-w-0 pr-3">
+                    <span className="text-sm text-text font-medium block truncate">
+                      {tool.name}
+                    </span>
+                    <span className="text-xs text-text-secondary block truncate">
+                      {tool.description}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => handleToolToggle(tool.kind)}
+                    className={`relative w-9 h-5 rounded-full transition-colors shrink-0 cursor-pointer ${
+                      isEnabled ? 'bg-primary' : 'bg-surface-3'
+                    }`}
+                  >
+                    <span
+                      className={`block w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
+                        isEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-6">
@@ -108,7 +153,7 @@ function SettingsView() {
         </div>
       )}
 
-      <div className="space-y-6">
+      <div className="space-y-4">
         <div className="bg-surface-2 border border-border rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -141,37 +186,22 @@ function SettingsView() {
           </div>
         </div>
 
-        <div className="bg-surface-2 border border-border rounded-lg p-4">
-          <h3 className="text-sm font-medium text-text mb-1">Tool Allow List</h3>
-          <p className="text-xs text-text-secondary mb-3">
-            Disable specific tools. Disabled tools will return an error when used.
-          </p>
-          <div className="space-y-1 max-h-[400px] overflow-y-auto">
-            {ALL_TOOLS.map((toolKind) => {
-              const isEnabled = toolAllowList[toolKind] !== false;
-              return (
-                <div
-                  key={toolKind}
-                  className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-surface-3 transition-colors"
-                >
-                  <span className="text-sm text-text font-mono">{toolKind}</span>
-                  <button
-                    onClick={() => handleToolToggle(toolKind)}
-                    className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${
-                      isEnabled ? 'bg-primary' : 'bg-surface-3'
-                    }`}
-                  >
-                    <span
-                      className={`block w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${
-                        isEnabled ? 'translate-x-[18px]' : 'translate-x-0.5'
-                      }`}
-                    />
-                  </button>
-                </div>
-              );
-            })}
+        <button
+          onClick={() => setView('tools')}
+          className="w-full bg-surface-2 border border-border rounded-lg p-4 hover:bg-surface-3 transition-colors text-left cursor-pointer"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-text">Tool Allow List</h3>
+              <p className="text-xs text-text-secondary mt-1">
+                {disabledCount > 0
+                  ? `${disabledCount} tool${disabledCount !== 1 ? 's' : ''} disabled, ${enabledCount} enabled`
+                  : `All ${tools.length} tools enabled`}
+              </p>
+            </div>
+            <span className="text-text-secondary text-lg">›</span>
           </div>
-        </div>
+        </button>
       </div>
     </div>
   );

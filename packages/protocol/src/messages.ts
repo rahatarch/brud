@@ -32,7 +32,8 @@ export type WebviewCommand =
   | 'openGetStarted'
   | 'previewNoChanges'
   | 'getSettings'
-  | 'saveSettings';
+  | 'saveSettings'
+  | 'getToolList';
 
 export type ExtensionCommand =
   | 'success'
@@ -58,7 +59,8 @@ export type ExtensionCommand =
   | 'sessionSnapshotsResult'
   | 'previewNoChanges'
   | 'settingsResult'
-  | 'settingsSaved';
+  | 'settingsSaved'
+  | 'toolListResult';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -106,6 +108,7 @@ export interface ExtensionMessage {
   settings?: Record<string, any>;
   source?: string;
   warnings?: string[];
+  tools?: Array<{ kind: string; name: string; description: string }>;
 }
 
 export interface HistorySessionResult {

@@ -10,12 +10,17 @@ import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { initializeToolRegistry } from '@brud/core';
 
 /**
  * Entry point for the Brud extension.
  * Orchestrates the registration of providers and commands.
  */
 export function activate(context: vscode.ExtensionContext) {
+  // Initialize tool registry early so all providers and handlers can query it.
+  // This must run before any webview can send a getToolList or GET_TOOL_INFO request.
+  initializeToolRegistry();
+
   const logger = BrudLogger.getInstance();
   const previewProvider = new BrudCodePreviewProvider();
 
@@ -53,6 +58,9 @@ export function activate(context: vscode.ExtensionContext) {
     diffPreviewPanelManager,
     unifiedResultsPanelManager,
   );
+
+  // Wire settings reload: after MainWindow saves settings, reload sidebar immediately
+  mainWindowManager.setOnSettingsSaved(() => provider.loadSettings());
 
   // Register the Virtual Document Provider for surgical diff previews
   context.subscriptions.push(

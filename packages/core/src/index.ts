@@ -16,3 +16,6 @@ export * from './validation/terminal';
 export * from './cleaner';
 export * from './api';
 export * from './settings';
+export { globalToolRegistry } from './tool-registry/registry';
+export { initializeToolRegistry } from './tool-registry/init';
+export type { ToolDoc } from './tool-registry/types';

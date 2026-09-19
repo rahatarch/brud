@@ -1,19 +1,24 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings } from '@brud/vscode-adapter';
-import { mergeSettings } from '@brud/core';
+import { mergeSettings, globalToolRegistry } from '@brud/core';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError } from '@brud/core';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
   private _historyStore: WorkspaceHistoryStore | undefined;
+  private _onSettingsSaved?: () => Promise<void>;
 
   constructor(private readonly _extensionUri: vscode.Uri) {
     const folders = getWorkspaceFolders();
     if (folders.length > 0) {
       this._historyStore = new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem());
     }
+  }
+
+  public setOnSettingsSaved(callback: () => Promise<void>): void {
+    this._onSettingsSaved = callback;
   }
 
   public postMessage(message: any): void {
@@ -92,6 +97,9 @@ export class BrudMainWindowManager {
           break;
         case 'saveSettings':
           await this._handleSaveSettings(data.settings);
+          break;
+        case 'getToolList':
+          await this._handleGetToolList();
           break;
       }
     });
@@ -337,12 +345,24 @@ export class BrudMainWindowManager {
     }
   }
 
+  private async _handleGetToolList(): Promise<void> {
+    const allTools = globalToolRegistry.getAllTools();
+    const tools = allTools.map(t => ({
+      kind: t.kind,
+      name: t.name,
+      description: t.description,
+    }));
+    this._panel?.webview.postMessage({ command: 'toolListResult', tools } satisfies ExtensionMessage);
+  }
+
   private async _handleSaveSettings(settings?: Record<string, any>): Promise<void> {
     const folders = getWorkspaceFolders();
     if (folders.length === 0 || !settings) {
       return;
     }
     await saveBrudSettings(folders[0], settings);
+    console.log('[MainWindowProvider] Settings saved to disk, reloading sidebar settings...');
+    await this._onSettingsSaved?.();
     this._panel?.webview.postMessage({
       command: 'settingsSaved',
     } satisfies ExtensionMessage);
