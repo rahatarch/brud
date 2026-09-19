@@ -325,3 +325,19 @@ export function unterminatedMetadataError(wrapper: string): BrudError {
     details: `Unclosed <${wrapper}> wrapper. Expected </${wrapper}>.`,
   };
 }
+
+export function toolDisabledError(toolKind: string): BrudError {
+  return {
+    code: 'TOOL_DISABLED',
+    friendly: `Tool "${toolKind}" is disabled.`,
+    details: `The tool "${toolKind}" has been disabled in .brud/settings.json. Enable it to use this operation.`,
+  };
+}
+
+export function workspaceBoundaryWarning(): BrudError {
+  return {
+    code: 'WORKSPACE_BOUNDARY_DISABLED',
+    friendly: 'Workspace boundary enforcement is disabled.',
+    details: 'Operations may target files outside the workspace. This setting is enabled in .brud/settings.json.',
+  };
+}

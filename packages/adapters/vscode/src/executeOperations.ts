@@ -1,5 +1,6 @@
 import { executeFileOperations, FileOperation, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, noWorkspaceError } from '@brud/core';
-import type { HistoryStore, FileOperationResult, SessionMetadata } from '@brud/core';
+import type { HistoryStore, FileOperationResult, SessionMetadata, BrudSettings } from '@brud/core';
+import { DEFAULT_SETTINGS } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
 
@@ -9,6 +10,7 @@ export async function executeOperationsFromVSCode(
   originalPrompt?: string,
   sessionIdOverride?: string,
   sessionMetadata?: SessionMetadata,
+  settings: BrudSettings = DEFAULT_SETTINGS,
 ): Promise<FileOperationResult> {
   const fs = new VSCodeFileSystem();
   const workspaceFolders = getWorkspaceFolders();
@@ -23,5 +25,5 @@ export async function executeOperationsFromVSCode(
     };
   }
   
-  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional }, sessionIdOverride, sessionMetadata);
+  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional }, sessionIdOverride, sessionMetadata, settings);
 }

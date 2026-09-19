@@ -86,6 +86,21 @@ export function activate(context: vscode.ExtensionContext) {
   // Register implementation-agnostic commands
   registerExecutePatchCommand(context);
 
+  // Load settings
+  provider.loadSettings().catch(err => {
+    logger.appendLine(`[brud] Failed to load settings: ${err}`);
+  });
+
+  // Watch .brud/settings.json for changes
+  const settingsWatcher = vscode.workspace.createFileSystemWatcher('**/.brud/settings.json');
+  settingsWatcher.onDidChange(async () => {
+    await provider.loadSettings();
+  });
+  settingsWatcher.onDidCreate(async () => {
+    await provider.loadSettings();
+  });
+  context.subscriptions.push(settingsWatcher);
+
   // Run retention cleanup on activation
   const workspaceFolders = vscode.workspace.workspaceFolders;
   if (workspaceFolders && workspaceFolders.length > 0) {

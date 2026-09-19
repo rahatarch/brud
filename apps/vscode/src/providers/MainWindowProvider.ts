@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings } from '@brud/vscode-adapter';
+import { mergeSettings } from '@brud/core';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError } from '@brud/core';
 
@@ -48,6 +49,7 @@ export class BrudMainWindowManager {
     });
 
     this._panel.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
+      console.log('[MainWindowProvider] Received message:', data.command);
       switch (data.command) {
         case 'getHistory':
           await this._handleGetHistory();
@@ -84,6 +86,12 @@ export class BrudMainWindowManager {
           break;
         case 'getSessionSnapshots':
           await this._handleGetSessionSnapshots(data.sessionId);
+          break;
+        case 'getSettings':
+          await this._handleGetSettings();
+          break;
+        case 'saveSettings':
+          await this._handleSaveSettings(data.settings);
           break;
       }
     });
@@ -292,6 +300,51 @@ export class BrudMainWindowManager {
     this._panel?.webview.postMessage({
       command: 'sessionSnapshotsResult',
       snapshotData: { pre: preSnapshot, post: postSnapshot },
+    } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetSettings(): Promise<void> {
+    console.log('[MainWindowProvider] Handling getSettings');
+    try {
+      const folders = getWorkspaceFolders();
+      console.log('[MainWindowProvider] Workspace folders:', folders.length);
+      if (folders.length === 0) {
+        console.log('[MainWindowProvider] No workspace folders, using defaults');
+        this._panel?.webview.postMessage({
+          command: 'settingsResult',
+          settings: { workspaceBoundaryEnabled: true, toolAllowList: {} },
+          source: 'default',
+          warnings: [],
+        } satisfies ExtensionMessage);
+        return;
+      }
+      const result = await getEffectiveSettings(folders[0]);
+      console.log('[MainWindowProvider] Loaded settings, source:', result.source);
+      this._panel?.webview.postMessage({
+        command: 'settingsResult',
+        settings: result.settings,
+        source: result.source,
+        warnings: result.warnings,
+      } satisfies ExtensionMessage);
+    } catch (error) {
+      console.error('[MainWindowProvider] Failed to load settings:', error);
+      this._panel?.webview.postMessage({
+        command: 'settingsResult',
+        settings: { workspaceBoundaryEnabled: true, toolAllowList: {} },
+        source: 'default',
+        warnings: ['Failed to load settings: ' + String(error)],
+      } satisfies ExtensionMessage);
+    }
+  }
+
+  private async _handleSaveSettings(settings?: Record<string, any>): Promise<void> {
+    const folders = getWorkspaceFolders();
+    if (folders.length === 0 || !settings) {
+      return;
+    }
+    await saveBrudSettings(folders[0], settings);
+    this._panel?.webview.postMessage({
+      command: 'settingsSaved',
     } satisfies ExtensionMessage);
   }
 

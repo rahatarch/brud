@@ -24,7 +24,10 @@ import {
   unexpectedError,
   noValidOperationsError,
   validationError,
+  toolDisabledError,
 } from '../api/errors';
+import type { BrudSettings } from '../settings/types';
+import { DEFAULT_SETTINGS } from '../settings/types';
 import { extractDirectoryStructure } from '../structure-extractor';
 import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
@@ -92,12 +95,20 @@ export async function executeFileOperations(
   terminalExecutor?: TerminalExecutor,
   sessionIdOverride?: string,
   sessionMetadata?: SessionMetadata,
+  settings: BrudSettings = DEFAULT_SETTINGS,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: [noValidOperationsError()], operationResults: [], sessionId: undefined };
   }
 
   const errors: BrudError[] = [];
+
+  function validatePath(inputPath: string, folders: string[]): { valid: true; resolvedPath: string } | { valid: false; error: string } {
+    if (!settings.workspaceBoundaryEnabled) {
+      return { valid: true, resolvedPath: path.resolve(inputPath) };
+    }
+    return validateWorkspacePath(inputPath, folders);
+  }
   const operationResults: OperationResult[] = [];
   const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
 
@@ -118,7 +129,7 @@ export async function executeFileOperations(
         case 'create_file':
         case 'delete_file':
         case 'append_file': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (result.valid && !filesAffected.includes(result.resolvedPath)) {
             filesAffected.push(result.resolvedPath);
           }
@@ -127,11 +138,11 @@ export async function executeFileOperations(
         case 'rename_file':
         case 'move_file':
         case 'copy_file': {
-          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          const fromResult = validatePath(operation.from, workspaceFolders);
           if (fromResult.valid && !filesAffected.includes(fromResult.resolvedPath)) {
             filesAffected.push(fromResult.resolvedPath);
           }
-          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          const toResult = validatePath(operation.to, workspaceFolders);
           if (toResult.valid && !filesAffected.includes(toResult.resolvedPath)) {
             filesAffected.push(toResult.resolvedPath);
           }
@@ -139,15 +150,17 @@ export async function executeFileOperations(
         }
         case 'append_file_multi':
         case 'search_replace_multi': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            break;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              break;
+            }
           }
           const workspaceRoot = workspaceFolders[0];
           const searchDirectory = operation.directory
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
-          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
             break;
           }
           const query: FileSearchQuery = {
@@ -201,10 +214,26 @@ export async function executeFileOperations(
 
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
+
+    const toolEnabled = settings.toolAllowList[operation.kind];
+    if (toolEnabled === false) {
+      errors.push(toolDisabledError(operation.kind));
+      const opPath = 'path' in operation ? (operation as any).path : ('directoryPath' in operation ? (operation as any).directoryPath : '');
+      operationResults.push({
+        operationIndex: i,
+        operationId: generateOperationId(),
+        kind: operation.kind,
+        status: 'failed',
+        message: `Tool "${operation.kind}" is disabled.`,
+        path: opPath || '',
+      });
+      continue;
+    }
+
     try {
       switch (operation.kind) {
         case 'search_replace': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -263,7 +292,7 @@ export async function executeFileOperations(
         }
 
         case 'create_file': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -308,7 +337,7 @@ export async function executeFileOperations(
         }
 
         case 'delete_file': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -363,7 +392,7 @@ export async function executeFileOperations(
         }
 
 case 'rename_file': {
-          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(validationError(fromResult.error));
             operationResults.push({
@@ -377,7 +406,7 @@ case 'rename_file': {
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(validationError(toResult.error));
             operationResults.push({
@@ -437,7 +466,7 @@ case 'rename_file': {
         }
 
         case 'move_file': {
-          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(validationError(fromResult.error));
             operationResults.push({
@@ -451,7 +480,7 @@ case 'rename_file': {
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(validationError(toResult.error));
             operationResults.push({
@@ -513,7 +542,7 @@ case 'rename_file': {
         }
 
         case 'copy_file': {
-          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(validationError(fromResult.error));
             operationResults.push({
@@ -527,7 +556,7 @@ case 'rename_file': {
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(validationError(toResult.error));
             operationResults.push({
@@ -589,7 +618,7 @@ case 'rename_file': {
         }
 
         case 'append_file': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -638,7 +667,7 @@ case 'rename_file': {
         }
 
         case 'create_directory': {
-          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          const result = validatePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -656,7 +685,7 @@ case 'rename_file': {
           await fs.createDirectory(directoryPath);
 
           for (const file of operation.files) {
-            const fileResult = validateWorkspacePath(path.join(operation.directoryPath, file), workspaceFolders);
+            const fileResult = validatePath(path.join(operation.directoryPath, file), workspaceFolders);
             if (!fileResult.valid) {
               errors.push(validationError(fileResult.error));
               continue;
@@ -680,7 +709,7 @@ case 'rename_file': {
         }
 
         case 'delete_directory': {
-          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          const result = validatePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -736,7 +765,7 @@ operationResults.push({
         }
 
         case 'move_directory': {
-          const fromResult = validateWorkspacePath(operation.from, workspaceFolders);
+          const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
             errors.push(validationError(fromResult.error));
             operationResults.push({
@@ -750,7 +779,7 @@ operationResults.push({
             continue;
           }
 
-          const toResult = validateWorkspacePath(operation.to, workspaceFolders);
+          const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
             errors.push(validationError(toResult.error));
             operationResults.push({
@@ -812,7 +841,7 @@ operationResults.push({
         case 'extract_structure': {
           console.error('DEBUG extract_structure: directoryPath=' + operation.directoryPath + ', depth=' + operation.depth);
           console.error('DEBUG extract_structure: workspaceFolders=' + JSON.stringify(workspaceFolders));
-          const result = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          const result = validatePath(operation.directoryPath, workspaceFolders);
           console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
           if (!result.valid) {
             errors.push(validationError(result.error));
@@ -883,18 +912,20 @@ operationResults.push({
         }
 
         case 'codebase_metadata': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            errors.push(noWorkspaceError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'codebase_metadata',
-              status: 'aborted',
-              message: noWorkspaceError().details,
-              path: '',
-            });
-            continue;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              errors.push(noWorkspaceError());
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'codebase_metadata',
+                status: 'aborted',
+                message: noWorkspaceError().details,
+                path: '',
+              });
+              continue;
+            }
           }
 
           const workspaceRoot = workspaceFolders[0];
@@ -913,18 +944,20 @@ operationResults.push({
         }
 
         case 'search_files': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            errors.push(noWorkspaceError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_files',
-              status: 'aborted',
-              message: noWorkspaceError().details,
-              path: '',
-            });
-            continue;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              errors.push(noWorkspaceError());
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'search_files',
+                status: 'aborted',
+                message: noWorkspaceError().details,
+                path: '',
+              });
+              continue;
+            }
           }
 
           const workspaceRoot = workspaceFolders[0];
@@ -932,7 +965,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -969,18 +1002,20 @@ operationResults.push({
         }
 
         case 'append_file_multi': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            errors.push(noWorkspaceError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'append_file_multi',
-              status: 'aborted',
-              message: noWorkspaceError().details,
-              path: '',
-            });
-            continue;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              errors.push(noWorkspaceError());
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'append_file_multi',
+                status: 'aborted',
+                message: noWorkspaceError().details,
+                path: '',
+              });
+              continue;
+            }
           }
 
           const workspaceRoot = workspaceFolders[0];
@@ -988,7 +1023,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1062,18 +1097,20 @@ operationResults.push({
         }
 
         case 'search_replace_multi': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            errors.push(noWorkspaceError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_replace_multi',
-              status: 'aborted',
-              message: noWorkspaceError().details,
-              path: '',
-            });
-            continue;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              errors.push(noWorkspaceError());
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'search_replace_multi',
+                status: 'aborted',
+                message: noWorkspaceError().details,
+                path: '',
+              });
+              continue;
+            }
           }
 
           const workspaceRoot = workspaceFolders[0];
@@ -1081,7 +1118,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1155,7 +1192,7 @@ operationResults.push({
         }
 
         case 'read_file': {
-          const result = validateWorkspacePath(operation.path, workspaceFolders);
+          const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
             errors.push(validationError(result.error));
             operationResults.push({
@@ -1190,18 +1227,20 @@ operationResults.push({
         }
 
         case 'read_files': {
-          const wsResult = BrudAPI.validate.workspace(workspaceFolders);
-          if (!wsResult.success) {
-            errors.push(noWorkspaceError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'read_files',
-              status: 'aborted',
-              message: noWorkspaceError().details,
-              path: '',
-            });
-            continue;
+          if (settings.workspaceBoundaryEnabled) {
+            const wsResult = BrudAPI.validate.workspace(workspaceFolders);
+            if (!wsResult.success) {
+              errors.push(noWorkspaceError());
+              operationResults.push({
+                operationIndex: i,
+                operationId: generateOperationId(),
+                kind: 'read_files',
+                status: 'aborted',
+                message: noWorkspaceError().details,
+                path: '',
+              });
+              continue;
+            }
           }
 
           const workspaceRoot = workspaceFolders[0];
@@ -1209,7 +1248,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (!searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1258,7 +1297,7 @@ operationResults.push({
         }
 
         case 'read_directory': {
-          const dirResult = validateWorkspacePath(operation.directoryPath, workspaceFolders);
+          const dirResult = validatePath(operation.directoryPath, workspaceFolders);
           if (!dirResult.valid) {
             errors.push(validationError(dirResult.error));
             operationResults.push({

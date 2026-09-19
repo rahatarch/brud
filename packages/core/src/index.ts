@@ -15,3 +15,4 @@ export * from './terminal';
 export * from './validation/terminal';
 export * from './cleaner';
 export * from './api';
+export * from './settings';

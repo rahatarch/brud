@@ -54,6 +54,21 @@
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
+    "configuration": {
+      "title": "Brud Code",
+      "properties": {
+        "brud.workspaceBoundaryEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enforce workspace boundary on all operations. When disabled, operations can target files outside the workspace."
+        },
+        "brud.toolAllowList": {
+          "type": "object",
+          "default": {},
+          "description": "Per-tool enable/disable map. Keys are tool kinds (e.g., 'terminal_command', 'delete_file'). Missing keys default to enabled."
+        }
+      }
+    },
     "viewsContainers": {
       "activitybar": [
         {

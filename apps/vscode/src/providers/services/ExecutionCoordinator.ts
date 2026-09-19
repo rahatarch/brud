@@ -1,9 +1,11 @@
 import { executeOperationsFromVSCode, getWorkspaceFolders, WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings } from '@brud/core';
+import { DEFAULT_SETTINGS } from '@brud/core';
 
 export class ExecutionCoordinator {
   constructor(
     private getWorkspaceFoldersFunc: () => string[] = getWorkspaceFolders,
+    private getSettings: () => BrudSettings = () => DEFAULT_SETTINGS,
   ) {}
 
   async execute(
@@ -27,6 +29,6 @@ export class ExecutionCoordinator {
       ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem())
       : undefined;
 
-    return executeOperationsFromVSCode(operations, historyStore, sourceText, sessionIdOverride, sessionMetadata);
+    return executeOperationsFromVSCode(operations, historyStore, sourceText, sessionIdOverride, sessionMetadata, this.getSettings());
   }
 }

@@ -30,7 +30,9 @@ export type WebviewCommand =
   | 'openUnifiedResults'
   | 'openPromptLibrary'
   | 'openGetStarted'
-  | 'previewNoChanges';
+  | 'previewNoChanges'
+  | 'getSettings'
+  | 'saveSettings';
 
 export type ExtensionCommand =
   | 'success'
@@ -54,7 +56,9 @@ export type ExtensionCommand =
   | 'diffPreviewResult'
   | 'filePatched'
   | 'sessionSnapshotsResult'
-  | 'previewNoChanges';
+  | 'previewNoChanges'
+  | 'settingsResult'
+  | 'settingsSaved';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -65,6 +69,7 @@ export interface WebviewMessage {
   triggeredBy?: 'user' | 'system';
   permanentDelete?: boolean;
   fileIndex?: number;
+  settings?: Record<string, any>;
 }
 
 export interface ReportSection {
@@ -98,6 +103,9 @@ export interface ExtensionMessage {
   diffPreviewData?: DiffPreviewData;
   snapshotData?: SessionSnapshotsResult | null;
   structured?: ReportSection[];
+  settings?: Record<string, any>;
+  source?: string;
+  warnings?: string[];
 }
 
 export interface HistorySessionResult {

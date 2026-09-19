@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import type { FileOperation, SessionMetadata } from '@brud/core';
+import * as path from 'path';
+import type { FileOperation, SessionMetadata, BrudSettings } from '@brud/core';
+import { DEFAULT_SETTINGS } from '@brud/core';
+import { getEffectiveSettings } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { WorkspaceResolver } from './services/WorkspaceResolver';
@@ -22,6 +25,8 @@ import { DiffPreviewRouter } from './handlers/DiffPreviewRouter';
 
 export class SurgicalViewDependencies {
   private _sessionMetadata: SessionMetadata | undefined;
+  private _settings: BrudSettings | undefined;
+  private _settingsWarnings: string[] = [];
 
   public getSessionMetadata(): SessionMetadata | undefined {
     return this._sessionMetadata;
@@ -29,6 +34,27 @@ export class SurgicalViewDependencies {
 
   public setSessionMetadata(m: SessionMetadata | undefined): void {
     this._sessionMetadata = m;
+  }
+
+  public async loadSettings(): Promise<void> {
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    if (workspaceFolders && workspaceFolders.length > 0) {
+      const workspaceRoot = workspaceFolders[0].uri.fsPath;
+      const result = await getEffectiveSettings(workspaceRoot);
+      this._settings = result.settings;
+      this._settingsWarnings = result.warnings;
+    } else {
+      this._settings = DEFAULT_SETTINGS;
+      this._settingsWarnings = [];
+    }
+  }
+
+  public getSettings(): BrudSettings {
+    return this._settings ?? DEFAULT_SETTINGS;
+  }
+
+  public getSettingsWarnings(): string[] {
+    return this._settingsWarnings;
   }
 
   readonly services: {
@@ -87,7 +113,10 @@ export class SurgicalViewDependencies {
   ) {
     // Services
     const workspaceResolver = new WorkspaceResolver();
-    const executionCoordinator = new ExecutionCoordinator();
+    const executionCoordinator = new ExecutionCoordinator(
+      undefined,
+      () => this.getSettings(),
+    );
     const errorReporter = new ErrorReporter(
       () => this._getWebview(),
       () => this._unifiedResultsPanelManager,

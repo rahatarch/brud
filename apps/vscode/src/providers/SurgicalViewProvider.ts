@@ -424,6 +424,10 @@ fileIndex: this._currentFileIndex,
     return sections;
   }
 
+  public async loadSettings(): Promise<void> {
+    await this._deps.loadSettings();
+  }
+
   private _sendErrorToWebview(error: string | { code: string; friendly: string; details: string; path?: string; command?: string } | ValidationResult): void {
     const structured = this._generateErrorReport(error);
     let friendlyMessage: string;

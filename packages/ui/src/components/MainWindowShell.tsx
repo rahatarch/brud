@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Star } from 'lucide-react';
 import PromptLibrary from './PromptLibrary';
 import HistoryView from './HistoryView';
+import SettingsView from './SettingsView';
 
 type TabId = 'prompt-library' | 'history' | 'templates' | 'tools' | 'rules' | 'settings';
 
@@ -39,6 +40,8 @@ function MainWindowShell() {
         return <PromptLibrary />;
       case 'history':
         return <HistoryView />;
+      case 'settings':
+        return <SettingsView />;
       default:
         return (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">
