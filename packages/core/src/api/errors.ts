@@ -333,11 +333,3 @@ export function toolDisabledError(toolKind: string): BrudError {
     details: `The tool "${toolKind}" has been disabled in .brud/settings.json. Enable it to use this operation.`,
   };
 }
-
-export function workspaceBoundaryWarning(): BrudError {
-  return {
-    code: 'WORKSPACE_BOUNDARY_DISABLED',
-    friendly: 'Workspace boundary enforcement is disabled.',
-    details: 'Operations may target files outside the workspace. This setting is enabled in .brud/settings.json.',
-  };
-}

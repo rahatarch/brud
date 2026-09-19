@@ -2,8 +2,9 @@ import * as vscode from 'vscode';
 import { parseOperations, cleanBrudInput, BrudError } from '@brud/core';
 import { executeFileOperations } from '@brud/core';
 import { getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
-import { noExtractOperationsError, executionFailedError } from '@brud/core';
-import type { StructureResult, ExtensionMessage } from '@brud/protocol';
+import { noExtractOperationsError } from '@brud/core';
+import type { BrudSettings } from '@brud/core';
+import type { ExtensionMessage } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { closePreviewTabs } from '../services/SharedExecutionHelpers';
@@ -14,6 +15,7 @@ export class ExtractStructureHandler {
     private panelManager: PanelManager,
     private errorReporter: ErrorReporter,
     private getWebview: () => vscode.Webview | undefined,
+    private getSettings: () => BrudSettings,
   ) {}
 
   async handle(text: string): Promise<void> {
@@ -37,7 +39,10 @@ export class ExtractStructureHandler {
       return;
     }
 
-    const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders());
+    const result = await executeFileOperations(extractOps, new VSCodeFileSystem(), getWorkspaceFolders(), undefined, undefined, undefined, undefined, undefined, this.getSettings());
+
+    const unifiedOps: { toolKind: string; data: any }[] = [];
+
     if (!result.success) {
       this.outputChannel.appendLine('=== EXECUTION FAILURE ===');
       this.outputChannel.appendLine('Operations: ' + JSON.stringify(extractOps));
@@ -45,41 +50,45 @@ export class ExtractStructureHandler {
       this.outputChannel.appendLine('DirectoryPath: ' + (extractOps[0] as any).directoryPath);
       this.outputChannel.appendLine('Depth: ' + (extractOps[0] as any).depth);
       this.outputChannel.show(true);
-      this.errorReporter.sendError(executionFailedError(result.message + (result.errors.length > 0 ? ' Errors: ' + result.errors.join('; ') : '')));
-      return;
     }
 
     if (result.errors.length > 0) {
       this.outputChannel.appendLine('Extraction had errors: ' + result.errors.join('; '));
-      this.errorReporter.sendError(executionFailedError(result.message + ' Errors: ' + result.errors.join('; ')));
-      return;
     }
 
-    let structureResults: StructureResult[] = [];
-    try {
-      const parsed = JSON.parse(result.message);
-      const parsedArray = Array.isArray(parsed) ? parsed : [parsed];
-      structureResults = parsedArray.map((item: any) => ({
-        json: item.json,
-        directoryPath: item.directoryPath,
-        depth: item.depth,
-        fileCount: item.fileCount,
-        directoryCount: item.directoryCount,
-      }));
-    } catch (e) {
-      this.outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
-      return;
+    if (result.success && result.errors.length === 0) {
+      try {
+        const parsed = JSON.parse(result.message);
+        const parsedArray = Array.isArray(parsed) ? parsed : [parsed];
+        const structureResults = parsedArray.map((item: any) => ({
+          json: item.json,
+          directoryPath: item.directoryPath,
+          depth: item.depth,
+          fileCount: item.fileCount,
+          directoryCount: item.directoryCount,
+        }));
+        unifiedOps.push(...structureResults.map(s => ({
+          toolKind: 'extractionResults',
+          data: s,
+        })));
+        const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+        this.outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
+        const pointerMsg: ExtensionMessage = { command: 'success', message: 'Successful. Check the report at the Report Panel.' };
+        this.getWebview()?.postMessage(pointerMsg);
+      } catch (e) {
+        this.outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
+      }
     }
 
-    const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
-    const pointerMsg: ExtensionMessage = { command: 'success', message: 'Successful. Check the report at the Report Panel.' };
-    this.getWebview()?.postMessage(pointerMsg);
-    this.panelManager.showUnifiedResults({
-      operations: structureResults.map(s => ({
-        toolKind: 'extractionResults',
-        data: s,
-      })),
-    });
-    this.outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
+    for (const opResult of result.operationResults) {
+      unifiedOps.push({
+        toolKind: opResult.kind,
+        data: opResult,
+      });
+    }
+
+    if (unifiedOps.length > 0) {
+      this.panelManager.showUnifiedResults({ operations: unifiedOps });
+    }
   }
 }

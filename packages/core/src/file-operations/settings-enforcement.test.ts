@@ -95,4 +95,30 @@ describe('Settings enforcement during execution', () => {
     assert.ok(result.operationResults[0].message.includes('outside the workspace') ||
               result.operationResults[0].path === outsidePath);
   });
+
+  it('f) extract_structure disabled in toolAllowList fails with TOOL_DISABLED', async () => {
+    const ops: FileOperation[] = [
+      { kind: 'extract_structure', directoryPath: tempDir, depth: 1, index: '1' },
+    ];
+    const result = await executeFileOperations(
+      ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
+      { workspaceBoundaryEnabled: true, toolAllowList: { extract_structure: false } },
+    );
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.errors.length, 1);
+    assert.strictEqual(result.errors[0].code, 'TOOL_DISABLED');
+    assert.strictEqual(result.operationResults[0].status, 'failed');
+  });
+
+  it('g) extract_structure enabled in toolAllowList executes normally', async () => {
+    const ops: FileOperation[] = [
+      { kind: 'extract_structure', directoryPath: tempDir, depth: 1, index: '1' },
+    ];
+    const result = await executeFileOperations(
+      ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
+      { workspaceBoundaryEnabled: true, toolAllowList: { extract_structure: true } },
+    );
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.operationResults[0].status, 'success');
+  });
 });

@@ -22,6 +22,7 @@ const OPERATION_RESULT_KINDS = [
   'delete_directory',
   'move_directory',
   'terminal_interactive',
+  'extract_structure',
 ];
 
 export function initResultRegistry(): void {

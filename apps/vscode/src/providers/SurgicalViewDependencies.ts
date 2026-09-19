@@ -184,6 +184,7 @@ export class SurgicalViewDependencies {
       panelManager,
       errorReporter,
       () => this._getWebview(),
+      () => this.getSettings(),
     );
 
     const managementHandler = new ManagementHandler();

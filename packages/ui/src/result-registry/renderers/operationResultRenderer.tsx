@@ -37,6 +37,7 @@ const KIND_LABELS: Record<string, string> = {
   delete_directory: 'Delete Directory',
   move_directory: 'Move Directory',
   terminal_interactive: 'Terminal (Interactive)',
+  extract_structure: 'Extract Structure',
 };
 
 function getKindLabel(kind: string): string {
