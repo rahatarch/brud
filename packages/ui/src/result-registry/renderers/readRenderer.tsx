@@ -88,6 +88,9 @@ function ReadFileList({ data }: { data: ReadResultData }) {
 export const readRenderer: ToolResultRenderer = {
   toolKind: 'readResults',
   title: 'File Reading',
+  canRender: (data: any) => {
+    return data && data.files && Array.isArray(data.files) && data.files.length > 0;
+  },
   renderSection: (data: any) => {
     const readData = data as ReadResultData;
     if (!readData || !readData.files || readData.files.length === 0) return null;

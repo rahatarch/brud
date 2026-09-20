@@ -12,6 +12,9 @@ interface StructureData {
 export const structureRenderer: ToolResultRenderer = {
   toolKind: 'extractionResults',
   title: 'Structure Extraction',
+  canRender: (data: any) => {
+    return data && typeof data.json === 'string';
+  },
   renderSection: (data: any) => {
     const s = data as StructureData;
     if (!s || !s.json) return null;

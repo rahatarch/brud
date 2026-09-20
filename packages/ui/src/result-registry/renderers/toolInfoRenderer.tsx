@@ -3,6 +3,9 @@ import { ToolResultRenderer } from '../types';
 export const toolInfoRenderer: ToolResultRenderer = {
   toolKind: 'tool_info',
   title: 'Tool Information',
+  canRender: (data: any) => {
+    return data && typeof data.message === 'string';
+  },
   renderSection: (data: any) => {
     if (!data || !data.message) return null;
     return (

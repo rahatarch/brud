@@ -100,6 +100,9 @@ function CopyButton({ text }: { text: string }) {
 export const operationResultRenderer: ToolResultRenderer = {
   toolKind: 'operation_result',
   title: 'Operation Result',
+  canRender: (data: any) => {
+    return data && typeof data.status === 'string' && typeof data.kind === 'string';
+  },
   renderSection: (data: any) => {
     const op = data as OperationResultData;
     if (!op || !op.status) {

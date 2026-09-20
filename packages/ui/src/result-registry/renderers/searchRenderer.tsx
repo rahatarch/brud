@@ -24,6 +24,9 @@ function formatSize(bytes: number): string {
 export const searchRenderer: ToolResultRenderer = {
   toolKind: 'search_files',
   title: 'Search Results',
+  canRender: (data: any) => {
+    return data && data.results && Array.isArray(data.results);
+  },
   renderSection: (data: any) => {
     const searchData = data as SearchFilesResult;
     if (!searchData || !searchData.results) return null;

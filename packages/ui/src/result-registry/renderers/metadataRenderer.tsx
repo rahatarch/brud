@@ -11,6 +11,9 @@ interface CodebaseMetadataResult {
 export const metadataRenderer: ToolResultRenderer = {
   toolKind: 'codebase_metadata',
   title: 'Codebase Metadata',
+  canRender: (data: any) => {
+    return data && typeof data.root === 'string';
+  },
   renderSection: (data: any) => {
     const metadata = data as CodebaseMetadataResult;
     if (!metadata || metadata.root === undefined) return null;

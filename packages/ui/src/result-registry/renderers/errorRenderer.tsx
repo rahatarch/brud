@@ -133,6 +133,9 @@ function formatSectionForCopy(section: ReportSection): string {
 export const errorRenderer: ToolResultRenderer = {
   toolKind: 'error',
   title: 'Error',
+  canRender: (data: any) => {
+    return data && typeof data.friendlyMessage === 'string';
+  },
   renderSection: (data: any) => {
     const errorData = data as ErrorResultData;
     if (!errorData || !errorData.friendlyMessage) return null;

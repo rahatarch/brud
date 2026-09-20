@@ -95,6 +95,9 @@ function renderGroupCommand(groupData: GroupResultData) {
 export const terminalRenderer: ToolResultRenderer = {
   toolKind: 'terminal_command',
   title: 'Terminal Command',
+  canRender: (data: any) => {
+    return data && (isGroupResultData(data) || Array.isArray(data) || typeof data.command === 'string');
+  },
   renderSection: (data: any) => {
     if (isGroupResultData(data)) {
       return renderGroupCommand(data);

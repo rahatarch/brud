@@ -39,9 +39,10 @@ function UnifiedResultsPanel() {
     if (!results) return [];
     const parts: string[] = [];
     for (const op of results.operations) {
-      const renderer = globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer;
-      if (renderer.summaryFormatter) {
-        const formatted = renderer.summaryFormatter(op.data);
+      const renderer = globalRegistry.getRenderer(op.toolKind);
+      const activeRenderer = (renderer && renderer.canRender(op.data)) ? renderer : operationResultRenderer;
+      if (activeRenderer.summaryFormatter) {
+        const formatted = activeRenderer.summaryFormatter(op.data);
         if (formatted) {
           parts.push(formatted);
         }
@@ -73,7 +74,8 @@ function UnifiedResultsPanel() {
     const summaryParts = buildSummaryParts();
     const detailParts: string[] = [];
     for (const op of results.operations) {
-      const renderer = globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer;
+      const matchedRenderer = globalRegistry.getRenderer(op.toolKind);
+      const renderer = (matchedRenderer && matchedRenderer.canRender(op.data)) ? matchedRenderer : operationResultRenderer;
       const formatted = renderer.copyFormatter(op.data);
       if (formatted) {
         detailParts.push(`=== ${renderer.title} ===\n${formatted}`);
@@ -106,11 +108,11 @@ function UnifiedResultsPanel() {
     );
   }
 
-  const renderers = globalRegistry.getAllRenderers();
-  const sections = results.operations.map(op => ({
-    renderer: globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer,
-    data: op.data
-  }));
+  const sections = results.operations.map(op => {
+    const matched = globalRegistry.getRenderer(op.toolKind);
+    const renderer = (matched && matched.canRender(op.data)) ? matched : operationResultRenderer;
+    return { renderer, data: op.data };
+  });
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">
