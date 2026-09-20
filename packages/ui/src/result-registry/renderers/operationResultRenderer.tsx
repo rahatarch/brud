@@ -38,6 +38,11 @@ const KIND_LABELS: Record<string, string> = {
   move_directory: 'Move Directory',
   terminal_interactive: 'Terminal (Interactive)',
   extract_structure: 'Extract Structure',
+  read_file: 'Read File',
+  read_files: 'Read Files',
+  read_directory: 'Read Directory',
+  get_tool_info: 'Tool Info',
+  codebase_metadata: 'Codebase Metadata',
 };
 
 function getKindLabel(kind: string): string {
@@ -97,7 +102,15 @@ export const operationResultRenderer: ToolResultRenderer = {
   title: 'Operation Result',
   renderSection: (data: any) => {
     const op = data as OperationResultData;
-    if (!op || !op.kind) return null;
+    if (!op || !op.status) {
+      return (
+        <div className="px-6 py-3 border-b border-border bg-red-500/10">
+          <div className="text-sm text-red-400">
+            Unknown result type: {op?.kind || 'unknown'}
+          </div>
+        </div>
+      );
+    }
 
     const kindLabel = getKindLabel(op.kind);
     const statusCfg = STATUS_CONFIG[op.status] || STATUS_CONFIG.failed;

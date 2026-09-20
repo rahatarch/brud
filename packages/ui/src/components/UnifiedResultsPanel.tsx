@@ -3,6 +3,7 @@ import { Copy, Check } from 'lucide-react';
 import { sendToExtension } from '../bridge/vscodeBridge';
 import { globalRegistry } from '../result-registry/registry';
 import { ToolResultRenderer } from '../result-registry/types';
+import { operationResultRenderer } from '../result-registry/renderers/operationResultRenderer';
 
 export interface UnifiedOperationResult {
   toolKind: string;
@@ -38,8 +39,7 @@ function UnifiedResultsPanel() {
     if (!results) return [];
     const parts: string[] = [];
     for (const op of results.operations) {
-      const renderer = globalRegistry.getRenderer(op.toolKind);
-      if (!renderer) continue;
+      const renderer = globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer;
       if (renderer.summaryFormatter) {
         const formatted = renderer.summaryFormatter(op.data);
         if (formatted) {
@@ -73,12 +73,10 @@ function UnifiedResultsPanel() {
     const summaryParts = buildSummaryParts();
     const detailParts: string[] = [];
     for (const op of results.operations) {
-      const renderer = globalRegistry.getRenderer(op.toolKind);
-      if (renderer) {
-        const formatted = renderer.copyFormatter(op.data);
-        if (formatted) {
-          detailParts.push(`=== ${renderer.title} ===\n${formatted}`);
-        }
+      const renderer = globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer;
+      const formatted = renderer.copyFormatter(op.data);
+      if (formatted) {
+        detailParts.push(`=== ${renderer.title} ===\n${formatted}`);
       }
     }
     const allParts: string[] = [];
@@ -110,9 +108,9 @@ function UnifiedResultsPanel() {
 
   const renderers = globalRegistry.getAllRenderers();
   const sections = results.operations.map(op => ({
-    renderer: globalRegistry.getRenderer(op.toolKind),
+    renderer: globalRegistry.getRenderer(op.toolKind) ?? operationResultRenderer,
     data: op.data
-  })).filter((s): s is { renderer: ToolResultRenderer; data: any } => s.renderer !== undefined);
+  }));
 
   return (
     <div className="min-h-screen flex flex-col bg-surface">

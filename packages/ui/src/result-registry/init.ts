@@ -23,6 +23,10 @@ const OPERATION_RESULT_KINDS = [
   'move_directory',
   'terminal_interactive',
   'extract_structure',
+  'read_file',
+  'read_files',
+  'read_directory',
+  'get_tool_info',
 ];
 
 export function initResultRegistry(): void {
@@ -35,6 +39,8 @@ export function initResultRegistry(): void {
   globalRegistry.registerRenderer(errorRenderer);
 
   for (const kind of OPERATION_RESULT_KINDS) {
-    globalRegistry.registerRenderer({ ...operationResultRenderer, toolKind: kind });
+    if (!globalRegistry.getRenderer(kind)) {
+      globalRegistry.registerRenderer({ ...operationResultRenderer, toolKind: kind });
+    }
   }
 }

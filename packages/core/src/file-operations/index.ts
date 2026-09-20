@@ -1206,6 +1206,21 @@ operationResults.push({
             continue;
           }
 
+          const filePath = result.resolvedPath;
+          const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
+          if (!fileExistsResult.success) {
+            errors.push(fileNotFoundError(filePath));
+            operationResults.push({
+              operationIndex: i,
+              operationId: generateOperationId(),
+              kind: 'read_file',
+              status: 'failed',
+              message: fileNotFoundError(filePath).details,
+              path: operation.path,
+            });
+            continue;
+          }
+
           const resultData = await readFiles(
             fs,
             [result.resolvedPath],
