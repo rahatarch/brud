@@ -51,8 +51,10 @@ export class ExecuteCurrentFileHandler {
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
     unifiedOps.push(...terminalOps);
 
+    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory']);
+
     for (const op of result.operationResults) {
-      if (op.kind !== 'terminal_command') {
+      if (op.kind !== 'terminal_command' && !(READ_SUCCESS_KINDS.has(op.kind) && op.status === 'success')) {
         unifiedOps.push({ toolKind: op.kind, data: op });
       }
     }

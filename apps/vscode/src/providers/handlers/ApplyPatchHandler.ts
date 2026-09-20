@@ -119,6 +119,8 @@ export class ApplyPatchHandler {
       });
     }
 
+    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory', 'search_files', 'codebase_metadata']);
+
     for (const opResult of executionResult.operationResults) {
       if (opResult.kind === 'terminal_command' && opResult.data) {
         const items = transformTerminalOperationData([opResult] as any, operations);
@@ -134,7 +136,7 @@ export class ApplyPatchHandler {
           toolKind: 'tool_info',
           data: { message: opResult.message, status: opResult.status },
         });
-      } else {
+      } else if (!(READ_SUCCESS_KINDS.has(opResult.kind) && opResult.status === 'success')) {
         unifiedResults.operations.push({
           toolKind: opResult.kind,
           data: opResult,
