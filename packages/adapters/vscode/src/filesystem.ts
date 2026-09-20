@@ -21,7 +21,7 @@ export class VSCodeFileSystem implements FileSystem {
   async renameFile(from: string, to: string): Promise<void> {
     const fromUri = vscode.Uri.file(from);
     const toUri = vscode.Uri.file(to);
-    await vscode.workspace.fs.rename(fromUri, toUri);
+    await vscode.workspace.fs.rename(fromUri, toUri, { overwrite: true });
   }
 
   async copyFile(from: string, to: string): Promise<void> {

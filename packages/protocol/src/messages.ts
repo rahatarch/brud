@@ -33,7 +33,12 @@ export type WebviewCommand =
   | 'previewNoChanges'
   | 'getSettings'
   | 'saveSettings'
-  | 'getToolList';
+  | 'getToolList'
+  | 'getPrompts'
+  | 'savePrompt'
+  | 'deletePrompt'
+  | 'getPromptVersions'
+  | 'revertPrompt';
 
 export type ExtensionCommand =
   | 'success'
@@ -60,7 +65,12 @@ export type ExtensionCommand =
   | 'previewNoChanges'
   | 'settingsResult'
   | 'settingsSaved'
-  | 'toolListResult';
+  | 'toolListResult'
+  | 'promptsResult'
+  | 'promptSaved'
+  | 'promptDeleted'
+  | 'promptVersionsResult'
+  | 'promptReverted';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -72,6 +82,10 @@ export interface WebviewMessage {
   permanentDelete?: boolean;
   fileIndex?: number;
   settings?: Record<string, any>;
+  promptId?: string;
+  promptData?: any;
+  promptScope?: 'global' | 'workspace';
+  version?: number;
 }
 
 export interface ReportSection {
@@ -109,6 +123,11 @@ export interface ExtensionMessage {
   source?: string;
   warnings?: string[];
   tools?: Array<{ kind: string; name: string; description: string }>;
+  prompts?: any[];
+  prompt?: any;
+  versions?: any[];
+  savedPromptId?: string;
+  errorMessage?: string;
 }
 
 export interface HistorySessionResult {

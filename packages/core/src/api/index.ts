@@ -38,6 +38,8 @@ import {
   invalidMetadataFieldError,
   metadataPositionError,
   unterminatedMetadataError,
+  promptNotFoundError,
+  promptInvalidFieldError,
 } from './errors';
 
 export {
@@ -75,6 +77,8 @@ export {
   invalidMetadataFieldError,
   metadataPositionError,
   unterminatedMetadataError,
+  promptNotFoundError,
+  promptInvalidFieldError,
 };
 
 export type { ValidationResult } from './types';

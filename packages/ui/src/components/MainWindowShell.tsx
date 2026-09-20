@@ -3,8 +3,9 @@ import { Star } from 'lucide-react';
 import PromptLibrary from './PromptLibrary';
 import HistoryView from './HistoryView';
 import SettingsView from './SettingsView';
+import PromptsView from './PromptsView';
 
-type TabId = 'prompt-library' | 'history' | 'templates' | 'tools' | 'rules' | 'settings';
+type TabId = 'prompt-library' | 'history' | 'prompts' | 'tools' | 'rules' | 'settings';
 
 interface Tab {
   id: TabId;
@@ -14,7 +15,7 @@ interface Tab {
 const tabs: Tab[] = [
   { id: 'prompt-library', label: 'Prompt Library' },
   { id: 'history', label: 'History' },
-  { id: 'templates', label: 'Templates' },
+  { id: 'prompts', label: 'My Prompts' },
   { id: 'tools', label: 'Tools' },
   { id: 'rules', label: 'Rules' },
   { id: 'settings', label: 'Settings' },
@@ -23,7 +24,7 @@ const tabs: Tab[] = [
 const tabContent: Record<TabId, { title: string; description: string }> = {
   'prompt-library': { title: 'Prompt Library', description: 'Browse and manage your saved Brud prompts. Organize frequently used prompts for quick access.' },
   'history': { title: 'History', description: 'View your past Brud sessions, including prompts, patches, and execution results.' },
-  'templates': { title: 'Templates', description: 'Create and manage reusable prompt templates for common code modification patterns.' },
+  'prompts': { title: 'My Prompts', description: 'Create and manage your personal, versioned prompt vault with dynamic field substitution.' },
   'tools': { title: 'Tools', description: 'Configure and access Brud tools including code analysis, refactoring, and batch operations.' },
   'rules': { title: 'Rules', description: 'Define custom rules and constraints for Brud to follow during code generation and patching.' },
   'settings': { title: 'Settings', description: 'Configure Brud preferences, keybindings, and extension behavior.' },
@@ -40,6 +41,8 @@ function MainWindowShell() {
         return <PromptLibrary />;
       case 'history':
         return <HistoryView />;
+      case 'prompts':
+        return <PromptsView />;
       case 'settings':
         return <SettingsView />;
       default:

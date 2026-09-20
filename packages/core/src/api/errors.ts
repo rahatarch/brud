@@ -333,3 +333,19 @@ export function toolDisabledError(toolKind: string): BrudError {
     details: `The tool "${toolKind}" has been disabled in .brud/settings.json. Enable it to use this operation.`,
   };
 }
+
+export function promptNotFoundError(id: string): BrudError {
+  return {
+    code: 'PROMPT_NOT_FOUND',
+    friendly: `Prompt not found: ${id}`,
+    details: `No prompt found with ID "${id}".`,
+  };
+}
+
+export function promptInvalidFieldError(field: string): BrudError {
+  return {
+    code: 'PROMPT_INVALID_FIELD',
+    friendly: `Invalid prompt field: ${field}`,
+    details: `The field "${field}" is not valid in this context.`,
+  };
+}

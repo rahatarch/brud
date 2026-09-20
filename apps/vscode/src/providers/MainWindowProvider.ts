@@ -1,20 +1,45 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings } from '@brud/vscode-adapter';
+import * as path from 'path';
+import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings, VSCodePromptStore, CascadingPromptStore, getGlobalPromptsDir, ensureBrudHomeDir } from '@brud/vscode-adapter';
 import { mergeSettings, globalToolRegistry } from '@brud/core';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
-import { revertOperations, invalidRevertRequestError } from '@brud/core';
+import { revertOperations, invalidRevertRequestError, type UserPrompt, type UserPromptVersion } from '@brud/core';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
   private _historyStore: WorkspaceHistoryStore | undefined;
+  private _promptStore: CascadingPromptStore | undefined;
   private _onSettingsSaved?: () => Promise<void>;
+
+  private _promptStoreInit: Promise<void>;
 
   constructor(private readonly _extensionUri: vscode.Uri) {
     const folders = getWorkspaceFolders();
     if (folders.length > 0) {
       this._historyStore = new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem());
     }
+
+    this._promptStoreInit = this._initPromptStore();
+  }
+
+  private async _initPromptStore(): Promise<void> {
+    const fs = new VSCodeFileSystem();
+    await ensureBrudHomeDir(fs);
+
+    const globalDir = getGlobalPromptsDir();
+    const globalStore = new VSCodePromptStore(globalDir, fs);
+
+    const folders = getWorkspaceFolders();
+    let workspaceStore: VSCodePromptStore;
+    if (folders.length > 0) {
+      const workspacePromptsDir = path.join(folders[0], '.brud', 'prompts');
+      workspaceStore = new VSCodePromptStore(workspacePromptsDir, fs);
+    } else {
+      workspaceStore = new VSCodePromptStore('', fs);
+    }
+
+    this._promptStore = new CascadingPromptStore(globalStore, workspaceStore);
   }
 
   public setOnSettingsSaved(callback: () => Promise<void>): void {
@@ -100,6 +125,21 @@ export class BrudMainWindowManager {
           break;
         case 'getToolList':
           await this._handleGetToolList();
+          break;
+        case 'getPrompts':
+          await this._handleGetPrompts();
+          break;
+        case 'savePrompt':
+          await this._handleSavePrompt(data);
+          break;
+        case 'deletePrompt':
+          await this._handleDeletePrompt(data);
+          break;
+        case 'getPromptVersions':
+          await this._handleGetPromptVersions(data);
+          break;
+        case 'revertPrompt':
+          await this._handleRevertPrompt(data);
           break;
       }
     });
@@ -366,6 +406,79 @@ export class BrudMainWindowManager {
     this._panel?.webview.postMessage({
       command: 'settingsSaved',
     } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetPrompts(): Promise<void> {
+    await this._promptStoreInit;
+    if (!this._promptStore) {
+      this._panel?.webview.postMessage({ command: 'promptsResult', prompts: [] } satisfies ExtensionMessage);
+      return;
+    }
+    const prompts = await this._promptStore.list();
+    this._panel?.webview.postMessage({ command: 'promptsResult', prompts } satisfies ExtensionMessage);
+  }
+
+  private async _handleSavePrompt(data: WebviewMessage): Promise<void> {
+    await this._promptStoreInit;
+    if (!this._promptStore || !data.promptData) {
+      this._panel?.webview.postMessage({ command: 'promptSaved', savedPromptId: undefined, errorMessage: 'No prompt data provided' } satisfies ExtensionMessage);
+      return;
+    }
+    const prompt = data.promptData as UserPrompt;
+    await this._promptStore.save(prompt);
+    this._panel?.webview.postMessage({ command: 'promptSaved', savedPromptId: prompt.id } satisfies ExtensionMessage);
+  }
+
+  private async _handleDeletePrompt(data: WebviewMessage): Promise<void> {
+    await this._promptStoreInit;
+    if (!this._promptStore || !data.promptId) {
+      return;
+    }
+    await this._promptStore.delete(data.promptId);
+    this._panel?.webview.postMessage({ command: 'promptDeleted', savedPromptId: data.promptId } satisfies ExtensionMessage);
+  }
+
+  private async _handleGetPromptVersions(data: WebviewMessage): Promise<void> {
+    await this._promptStoreInit;
+    if (!this._promptStore || !data.promptId) {
+      this._panel?.webview.postMessage({ command: 'promptVersionsResult', versions: [] } satisfies ExtensionMessage);
+      return;
+    }
+    const prompt = await this._promptStore.get(data.promptId);
+    if (!prompt) {
+      this._panel?.webview.postMessage({ command: 'promptVersionsResult', versions: [] } satisfies ExtensionMessage);
+      return;
+    }
+    this._panel?.webview.postMessage({ command: 'promptVersionsResult', versions: prompt.versions } satisfies ExtensionMessage);
+  }
+
+  private async _handleRevertPrompt(data: WebviewMessage): Promise<void> {
+    await this._promptStoreInit;
+    if (!this._promptStore || !data.promptId || data.version === undefined) {
+      this._panel?.webview.postMessage({ command: 'promptReverted', savedPromptId: undefined, errorMessage: 'Invalid revert request' } satisfies ExtensionMessage);
+      return;
+    }
+    const prompt = await this._promptStore.get(data.promptId);
+    if (!prompt) {
+      this._panel?.webview.postMessage({ command: 'promptReverted', savedPromptId: undefined, errorMessage: 'Prompt not found' } satisfies ExtensionMessage);
+      return;
+    }
+    const targetVersion = prompt.versions.find(v => v.version === data.version);
+    if (!targetVersion) {
+      this._panel?.webview.postMessage({ command: 'promptReverted', savedPromptId: undefined, errorMessage: 'Version not found' } satisfies ExtensionMessage);
+      return;
+    }
+    const newVersion: UserPromptVersion = {
+      version: prompt.currentVersion + 1,
+      content: targetVersion.content,
+      timestamp: new Date().toISOString(),
+      message: `Reverted to version ${targetVersion.version}`,
+    };
+    prompt.versions.push(newVersion);
+    prompt.currentVersion = newVersion.version;
+    prompt.updatedAt = newVersion.timestamp;
+    await this._promptStore.save(prompt);
+    this._panel?.webview.postMessage({ command: 'promptReverted', savedPromptId: prompt.id } satisfies ExtensionMessage);
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
