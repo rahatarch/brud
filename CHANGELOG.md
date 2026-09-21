@@ -4,7 +4,32 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
-## [0.1.1] - 2026-10-10
+## [0.1.2] - 2026-09-21
+
+### Added
+- New Settings page with workspace boundary and tool allow-list controls
+- New landing page with interactive elements
+- My Prompts feature with versioning and dynamic fields
+- Operation metadata now shown in History panel and results
+
+### Changed
+- Search and read operations no longer limited to hardcoded result caps
+- Improved result summaries throughout the interface
+- Get Started page redesigned with visual walkthrough and screenshots
+- Updated application icon
+- Improved Settings user interface
+
+### Fixed
+- Snapshots are no longer corrupted when follow-on operations are applied
+- Diff Preview panel stays open after executing a single file
+- Session auto-completes when all files in a batch have been reviewed
+- Read operations now validate input correctly
+- Results panel displays all operation results reliably
+
+### Security
+- Block terminal commands that attempt to escape the workspace
+
+## [0.1.1] - 2026-09-10
 
 ### Fixed
 - Restore sidebar icon in the published extension

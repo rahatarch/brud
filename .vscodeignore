@@ -9,8 +9,6 @@ vite.config.ts
 tsconfig.json
 *.map
 **/*.map
-assets/images/brud_super_high.png
-assets/images/brud_editor_view.png
 assets/images/brud_compressed_high.png
 .brud/**
 .kilo/**
@@ -21,9 +19,8 @@ tests/**
 .vscode-test.mjs
 eslint.config.mjs
 ARCHITECTURE.md
-DOCS_README.md
-DOCUMENTATION.md
-ENGINEERING_README.md
-PACKAGE_README.md
+ENGINEERING.md
 docs/**
 .gitignore
+temporary/
+BRUD_TEST_LOG.md

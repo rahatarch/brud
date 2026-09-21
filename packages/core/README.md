@@ -83,7 +83,7 @@ Test utilities in `src/testing/`:
 
 ## Deeper Documentation
 
-Public documentation for complex modules lives in `docs/public/`:
+Public documentation for complex modules includes:
 
 - `validation-api.md` — BrudAPI validation: what it validates, how to call it, how to test it, how to extend it
 - `history-system.md` — sessions, snapshots, reverts, soft-delete, retention

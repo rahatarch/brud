@@ -1,8 +1,8 @@
-# Documentation Standards for docs/public/
+# Documentation Standards for Deep Documentation
 
 ## Purpose
 
-This document defines how to write deep documentation for complex modules. These docs live in `docs/public/` and are linked from package READMEs.
+This document defines how to write deep documentation for complex modules. These docs are linked from package READMEs.
 
 
 

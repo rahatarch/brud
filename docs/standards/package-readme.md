@@ -51,7 +51,7 @@ This document defines how to write and maintain READMEs for individual packages 
 
 ## Deeper Documentation
 
-[Links to docs/public/ for complex modules]
+[Links to deep documentation for complex modules]
 
 ## Dependencies
 
@@ -60,10 +60,10 @@ This document defines how to write and maintain READMEs for individual packages 
 
 ## Writing Rules
 
-1. **Map, not manual** — Package READMEs give an overview and link to `docs/public/` for API-level details.
+1. **Map, not manual** — Package READMEs give an overview and link to deep documentation for API-level details.
 2. **Right-sized** — Cover the package's public API, child modules, usage, and testing comprehensively. No arbitrary length limit. Small packages get short READMEs; large packages get thorough ones.
 3. **Accurate** — every export and module name must be verified against actual code.
-4. **Linked** — point to `docs/public/` for deep dives. Do NOT reference `docs/arch/` (internal).
+4. **Linked** — point to deep documentation for deep dives. Do NOT reference `docs/arch/` (internal).
 5. **Current** — update when exports change, modules are added/removed, or dependencies shift.
 6. **Actionable** — a contributor should know what the package does and where to go for implementation details.
 

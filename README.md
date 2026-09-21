@@ -81,6 +81,8 @@ Once installed, open the **Prompt Library** in the sidebar, copy the Master Prom
 | **Code Discovery** | Give your AI a token-efficient map of your project so it writes changes that actually fit. |
 | **Terminal** | Run commands, chains, and interactive CLI tools, with output routed straight back to the AI. |
 | **Any AI, Any Time** | Works with ChatGPT, Claude, Gemini, DeepSeek, Grok, Llama — anything that can output text. |
+| **Settings** | Restrict Brud to your workspace and control which tools the AI is allowed to use. |
+| **My Prompts** | Save, version, and reuse your own prompts with dynamic fields that fill in on the fly. |
 
 ## It's fast — and we proved it
 
