@@ -19,6 +19,28 @@ tests/
 ├── integration/    — Full workflow integration tests
 ```
 
+## The Package-First Invariant: Zero Business Logic in `apps/`
+
+This is a **non-negotiable** architectural boundary. Any PR that violates it will be rejected.
+
+### `packages/` IS the product
+
+100% of domain logic, state machines, diffing algorithms, result formatters, security vaults, and orchestration rules must live in `packages/`. The `packages/` tree is the engine — it contains everything that makes Brud Code functionally valuable, all of it platform-agnostic and independently testable.
+
+### `apps/` is strictly a thin client UI shell
+
+Responsible **only** for:
+- Mounting views (webview panels, tree views, status bars)
+- Listening to host lifecycle events (activate, deactivate, configuration change)
+- Bridging IPC messages between the host and `packages/`
+- Injecting environment adapters (`FileSystem`, `TerminalExecutor`) into the core engine
+
+No data transformation, formatting algorithms, business validation, or AI orchestration belongs in `apps/`.
+
+### The Headless CLI Invariant
+
+Any feature or execution pipeline must be fully runnable in a headless CLI without importing or depending on anything inside `apps/`. This guarantees that all value-generating code stays portable, testable without a GUI host, and available to future non-VS Code surfaces.
+
 ## Core Engine
 
 The core engine is platform-agnostic TypeScript. It contains:

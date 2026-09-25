@@ -1,13 +1,12 @@
 import * as vscode from 'vscode';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
-import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
+import { parseOperationsWithMetadata, cleanBrudInput, BrudError, packageOperationResults, READ_SUCCESS_KINDS, getChatStatusMessage } from '@brud/core';
 import type { FileOperation, OperationResult, SessionMetadata } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
-import { closePreviewTabs, getChatStatusMessage, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
-import { buildFailedTerminalData } from '../services/TerminalDataAdapter';
+import { closePreviewTabs } from '../services/SharedExecutionHelpers';
 
 export class ApplyPatchHandler {
   private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
@@ -119,29 +118,15 @@ export class ApplyPatchHandler {
       });
     }
 
-    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory', 'search_files', 'codebase_metadata']);
-
-    for (const opResult of executionResult.operationResults) {
-      if (opResult.kind === 'terminal_command' && opResult.data) {
-        const items = transformTerminalOperationData([opResult] as any, operations);
-        unifiedResults.operations.push(...items);
-      } else if (opResult.kind === 'terminal_command' && !opResult.data) {
-        const origOp = operations[opResult.operationIndex] as any;
-        unifiedResults.operations.push({
-          toolKind: 'terminal_command',
-          data: buildFailedTerminalData(opResult, origOp),
-        });
-      } else if (opResult.kind === 'get_tool_info') {
-        unifiedResults.operations.push({
-          toolKind: 'tool_info',
-          data: { message: opResult.message, status: opResult.status },
-        });
-      } else if (!(READ_SUCCESS_KINDS.has(opResult.kind) && opResult.status === 'success')) {
-        unifiedResults.operations.push({
-          toolKind: opResult.kind,
-          data: opResult,
-        });
+    const packaged = packageOperationResults(executionResult.operationResults, operations);
+    for (const op of packaged.operations) {
+      if (READ_SUCCESS_KINDS.has(op.kind) && op.success) {
+        continue;
       }
+      unifiedResults.operations.push({
+        toolKind: op.kind === 'get_tool_info' ? 'tool_info' : op.kind,
+        data: op.details ?? { message: op.message, filePath: op.filePath, success: op.success },
+      });
     }
 
     if (unifiedResults.operations.length > 0) {

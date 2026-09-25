@@ -12,6 +12,7 @@ export * from './search';
 export * from './import-resolver';
 export * from './read-engine';
 export * from './terminal';
+export * from './result';
 export * from './validation/terminal';
 export * from './cleaner';
 export * from './api';

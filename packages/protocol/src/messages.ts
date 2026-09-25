@@ -30,6 +30,7 @@ export type WebviewCommand =
   | 'openUnifiedResults'
   | 'openPromptLibrary'
   | 'openGetStarted'
+  | 'openStreamTest'
   | 'previewNoChanges'
   | 'getSettings'
   | 'saveSettings'
@@ -38,7 +39,8 @@ export type WebviewCommand =
   | 'savePrompt'
   | 'deletePrompt'
   | 'getPromptVersions'
-  | 'revertPrompt';
+  | 'revertPrompt'
+  | 'aiChat';
 
 export type ExtensionCommand =
   | 'success'
@@ -70,7 +72,12 @@ export type ExtensionCommand =
   | 'promptSaved'
   | 'promptDeleted'
   | 'promptVersionsResult'
-  | 'promptReverted';
+  | 'promptReverted'
+  | 'aiChunk'
+  | 'aiDone'
+  | 'aiError'
+  | 'aiReasoningChunk'
+  | 'aiReasoningDone';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -128,6 +135,10 @@ export interface ExtensionMessage {
   versions?: any[];
   savedPromptId?: string;
   errorMessage?: string;
+  chunk?: string;
+  fullText?: string;
+  reasoningChunk?: string;
+  fullReasoning?: string;
 }
 
 export interface HistorySessionResult {
@@ -263,4 +274,41 @@ export interface SnapshotDataResult {
 export interface SessionSnapshotsResult {
   pre: SnapshotDataResult;
   post: SnapshotDataResult;
+}
+
+export interface UnifiedOperation {
+  kind: string;
+  filePath: string;
+  success: boolean;
+  message: string;
+  details?: unknown;
+}
+
+export interface PackageResultInput {
+  operations: UnifiedOperation[];
+  totalOperations: number;
+  successfulOperations: number;
+  failedOperations: number;
+  status: 'success' | 'failure' | 'partial';
+  summary: string;
+}
+
+export interface AiChatMessage extends WebviewMessage {
+  command: 'aiChat';
+  text: string;
+}
+
+export interface AiChunkMessage extends ExtensionMessage {
+  command: 'aiChunk';
+  chunk: string;
+}
+
+export interface AiDoneMessage extends ExtensionMessage {
+  command: 'aiDone';
+  fullText: string;
+}
+
+export interface AiErrorMessage extends ExtensionMessage {
+  command: 'aiError';
+  message: string;
 }

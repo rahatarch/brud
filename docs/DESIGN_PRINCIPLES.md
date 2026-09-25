@@ -144,3 +144,17 @@ Study these products' design systems:
 - **Framer** — depth through layered surfaces, not shadows
 
 When in doubt: **remove something**. Less is more. Restraint is premium.
+
+---
+
+## Architecture Principle: Platform-Agnostic Core
+
+### Rule 15: Applications are dumb viewports; packages are the sovereign engine
+
+This principle governs code organization, not visual design:
+
+- `packages/` contains all domain logic, state machines, diffing algorithms, security vaults, and orchestration rules. These modules are platform-agnostic TypeScript with zero VS Code API dependencies.
+- `apps/` is strictly a thin client shell. It mounts views, bridges IPC messages, and injects platform adapters — nothing more.
+- Any feature or execution pipeline must be fully runnable in a headless CLI without importing anything from `apps/`.
+
+Violations of this boundary are rejected at the PR level. See [ARCHITECTURE.md](../ARCHITECTURE.md) for the full invariant specification.

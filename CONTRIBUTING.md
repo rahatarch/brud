@@ -61,6 +61,7 @@ Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the ar
 - **Formatting** — Use the project's ESLint configuration. Run `npm run lint` before committing.
 - **Atomic Changes** — Each change must be minimal and context-aware. Changes should be designed to apply as a single transaction.
 - **Decoupled Core** — Core patching logic in `packages/core/` must remain free of VS Code API dependencies. Platform-specific concerns belong in the adapter layer.
+- **Zero Domain Logic in `apps/`** — Any PR that places data transformation, formatting algorithms, business validation, or AI orchestration inside `apps/vscode` (or any `apps/*` directory) will be rejected. All domain logic must be placed in a corresponding `packages/*` package with unit test coverage.
 
 ## Testing Requirements
 

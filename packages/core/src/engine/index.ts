@@ -118,3 +118,5 @@ export function reconstructContent(
 
   return resultLines.join('\n');
 }
+
+export { groupOperationsByFile } from './groupOperations';

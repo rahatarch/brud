@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import { packageOperationResults, READ_SUCCESS_KINDS } from '@brud/core';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
-import { reportExecutionResult, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
+import { reportExecutionResult } from '../services/SharedExecutionHelpers';
 
 export class ExecuteCurrentFileHandler {
   constructor(
@@ -45,34 +46,19 @@ export class ExecuteCurrentFileHandler {
     );
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 
-    const terminalOps = transformTerminalOperationData(result.operationResults, operations);
+    const packaged = packageOperationResults(result.operationResults, operations);
 
     const unifiedOps: { toolKind: string; data: any }[] = [];
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
-    unifiedOps.push(...terminalOps);
 
-    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory']);
-
-    for (const op of result.operationResults) {
-      if (op.kind !== 'terminal_command' && !(READ_SUCCESS_KINDS.has(op.kind) && op.status === 'success')) {
-        unifiedOps.push({ toolKind: op.kind, data: op });
+    for (const op of packaged.operations) {
+      if (READ_SUCCESS_KINDS.has(op.kind) && op.success) {
+        continue;
       }
-    }
-
-    for (const op of result.operationResults) {
-      if (op.kind === 'terminal_command' && !op.data) {
-        const origOp = operations[op.operationIndex] as any;
-        unifiedOps.push({
-          toolKind: 'terminal_command',
-          data: {
-            command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
-            output: op.message || '',
-            exitCode: null,
-            duration: 0,
-            success: false,
-          },
-        });
-      }
+      unifiedOps.push({
+        toolKind: op.kind === 'get_tool_info' ? 'tool_info' : op.kind,
+        data: op.details ?? { message: op.message, filePath: op.filePath, success: op.success },
+      });
     }
 
     if (unifiedOps.length > 0) {

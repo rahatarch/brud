@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import { packageOperationResults, READ_SUCCESS_KINDS } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
-import { reportExecutionResult, transformTerminalOperationData, closePreviewTabs } from '../services/SharedExecutionHelpers';
+import { reportExecutionResult, closePreviewTabs } from '../services/SharedExecutionHelpers';
 
 export class ExecuteAllFilesHandler {
   constructor(
@@ -43,34 +44,19 @@ export class ExecuteAllFilesHandler {
     );
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 
-    const terminalOps = transformTerminalOperationData(result.operationResults, allOperations);
+    const packaged = packageOperationResults(result.operationResults, allOperations);
 
     const unifiedOps: { toolKind: string; data: any }[] = [];
     if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
-    unifiedOps.push(...terminalOps);
 
-    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory']);
-
-    for (const op of result.operationResults) {
-      if (op.kind !== 'terminal_command' && !(READ_SUCCESS_KINDS.has(op.kind) && op.status === 'success')) {
-        unifiedOps.push({ toolKind: op.kind, data: op });
+    for (const op of packaged.operations) {
+      if (READ_SUCCESS_KINDS.has(op.kind) && op.success) {
+        continue;
       }
-    }
-
-    for (const op of result.operationResults) {
-      if (op.kind === 'terminal_command' && !op.data) {
-        const origOp = allOperations[op.operationIndex] as any;
-        unifiedOps.push({
-          toolKind: 'terminal_command',
-          data: {
-            command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
-            output: op.message || '',
-            exitCode: null,
-            duration: 0,
-            success: false,
-          },
-        });
-      }
+      unifiedOps.push({
+        toolKind: op.kind === 'get_tool_info' ? 'tool_info' : op.kind,
+        data: op.details ?? { message: op.message, filePath: op.filePath, success: op.success },
+      });
     }
 
     if (unifiedOps.length > 0) {
