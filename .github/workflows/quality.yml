@@ -1,0 +1,37 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main, 'feat/**', 'feature/**']
+    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - run: npx tsc --noEmit
