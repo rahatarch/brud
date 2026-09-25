@@ -1,3 +1,4 @@
+import * as vscode from 'vscode';
 import type { WebviewMessage } from '@brud/protocol';
 import { SurgicalViewDependencies } from './SurgicalViewDependencies';
 
@@ -37,13 +38,19 @@ export class SurgicalViewRouter {
         await this.deps.handlers.extractStructureHandler.handle(data.text ?? '');
         break;
       case 'openMainWindow':
-        await this.deps.handlers.managementHandler.handle();
+        await this.deps.handlers.managementHandler.handle(
+          (data as any).tab,
+          (data as any).subView
+        );
         break;
       case 'openPromptLibrary':
         await this.deps.handlers.managementHandler.handle();
         break;
       case 'openGetStarted':
         await this.deps.handlers.getStartedHandler.handle();
+        break;
+      case 'openStreamTest':
+        vscode.commands.executeCommand('brud.streamTest');
         break;
       case 'openUnifiedResults': {
         const result = this.getLastExecutionResult();
@@ -56,6 +63,17 @@ export class SurgicalViewRouter {
         this.deps.services.panelManager.showNoPreview(
           'No changes found. The search text was not found in any of the files.',
         );
+        break;
+      case 'aiChat':
+        this.deps.handlers.aiChatHandler.handle(data.text ?? '');
+        break;
+      case 'requestProviders':
+      case 'selectModel':
+      case 'saveProvider':
+      case 'deleteProvider':
+      case 'connectKey':
+      case 'disconnectKey':
+        await this.deps.handlers.providerVaultHandler.handleMessage(data);
         break;
     }
   }

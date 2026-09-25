@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Star } from 'lucide-react';
 import PromptLibrary from './PromptLibrary';
 import HistoryView from './HistoryView';
 import SettingsView from './SettingsView';
 import PromptsView from './PromptsView';
+import { onExtensionMessage } from '../bridge/vscodeBridge';
+import { useVaultStore } from '../stores/vaultStore';
 
 type TabId = 'prompt-library' | 'history' | 'prompts' | 'tools' | 'rules' | 'settings';
 
@@ -32,6 +34,21 @@ const tabContent: Record<TabId, { title: string; description: string }> = {
 
 function MainWindowShell() {
   const [activeTab, setActiveTab] = useState<TabId>('prompt-library');
+  const [settingsSubView, setSettingsSubView] = useState<'main' | 'tools' | 'providers'>('main');
+  const { initVault } = useVaultStore();
+
+  useEffect(() => initVault(), [initVault]);
+
+  useEffect(() => {
+    return onExtensionMessage((message) => {
+      if (message.command === 'setActiveTab') {
+        setActiveTab(message.tab as TabId);
+        if (message.subView) {
+          setSettingsSubView(message.subView as any);
+        }
+      }
+    });
+  }, []);
 
   const current = tabContent[activeTab];
 
@@ -44,7 +61,7 @@ function MainWindowShell() {
       case 'prompts':
         return <PromptsView />;
       case 'settings':
-        return <SettingsView />;
+        return <SettingsView initialSubView={settingsSubView} onSubViewChange={setSettingsSubView} />;
       default:
         return (
           <div className="flex-1 flex flex-col items-center justify-center px-6 py-12">

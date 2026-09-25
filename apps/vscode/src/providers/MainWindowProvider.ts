@@ -3,18 +3,25 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings, VSCodePromptStore, CascadingPromptStore, getGlobalPromptsDir, ensureBrudHomeDir } from '@brud/vscode-adapter';
 import { mergeSettings, globalToolRegistry } from '@brud/core';
+import { ProviderRegistry } from '@brud/automation';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError, type UserPrompt, type UserPromptVersion } from '@brud/core';
+import { ProviderVaultHandler } from './handlers/ProviderVaultHandler';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
   private _historyStore: WorkspaceHistoryStore | undefined;
   private _promptStore: CascadingPromptStore | undefined;
   private _onSettingsSaved?: () => Promise<void>;
+  private _providerVaultHandler?: ProviderVaultHandler;
+  private _getSidebarWebview?: () => vscode.Webview | undefined;
 
   private _promptStoreInit: Promise<void>;
 
-  constructor(private readonly _extensionUri: vscode.Uri) {
+  constructor(
+    private readonly _extensionUri: vscode.Uri,
+    private readonly providerRegistry: ProviderRegistry,
+  ) {
     const folders = getWorkspaceFolders();
     if (folders.length > 0) {
       this._historyStore = new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem());
@@ -46,15 +53,28 @@ export class BrudMainWindowManager {
     this._onSettingsSaved = callback;
   }
 
+  public setSidebarWebview(getter: () => vscode.Webview | undefined): void {
+    this._getSidebarWebview = getter;
+  }
+
   public postMessage(message: any): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     }
   }
 
-  public openMainWindow() {
+  public openMainWindow(tab?: string, subView?: string): void {
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
+      if (tab) {
+        setTimeout(() => {
+          this._panel?.webview.postMessage({
+            command: 'setActiveTab',
+            tab,
+            subView,
+          });
+        }, 100);
+      }
       return;
     }
 
@@ -74,9 +94,34 @@ export class BrudMainWindowManager {
 
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
+    this._providerVaultHandler = new ProviderVaultHandler(
+      this.providerRegistry,
+      (msg) => {
+        if (!this._panel) return Promise.resolve(false);
+        const result = this._panel.webview.postMessage(msg);
+        if (this._getSidebarWebview) {
+          const sidebar = this._getSidebarWebview();
+          if (sidebar) {
+            sidebar.postMessage(msg);
+          }
+        }
+        return result;
+      },
+    );
+
     this._panel.onDidDispose(() => {
       this._panel = undefined;
     });
+
+    if (tab) {
+      setTimeout(() => {
+        this._panel?.webview.postMessage({
+          command: 'setActiveTab',
+          tab,
+          subView,
+        });
+      }, 100);
+    }
 
     this._panel.webview.onDidReceiveMessage(async (data: WebviewMessage) => {
       console.log('[MainWindowProvider] Received message:', data.command);
@@ -140,6 +185,16 @@ export class BrudMainWindowManager {
           break;
         case 'revertPrompt':
           await this._handleRevertPrompt(data);
+          break;
+        case 'requestProviders':
+        case 'selectModel':
+        case 'saveProvider':
+        case 'deleteProvider':
+        case 'connectKey':
+        case 'disconnectKey':
+          if (this._providerVaultHandler) {
+            await this._providerVaultHandler.handleMessage(data);
+          }
           break;
       }
     });

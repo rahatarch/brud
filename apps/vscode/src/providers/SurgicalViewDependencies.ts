@@ -22,6 +22,8 @@ import { PreviewAllFilesHandler } from './handlers/PreviewAllFilesHandler';
 import { RejectPreviewHandler } from './handlers/RejectPreviewHandler';
 import { DonePreviewHandler } from './handlers/DonePreviewHandler';
 import { DiffPreviewRouter } from './handlers/DiffPreviewRouter';
+import { AiChatHandler } from './handlers/AiChatHandler';
+import { ProviderVaultHandler } from './handlers/ProviderVaultHandler';
 
 export class SurgicalViewDependencies {
   private _sessionMetadata: SessionMetadata | undefined;
@@ -77,6 +79,8 @@ export class SurgicalViewDependencies {
     previewAllFilesHandler: PreviewAllFilesHandler;
     rejectPreviewHandler: RejectPreviewHandler;
     donePreviewHandler: DonePreviewHandler;
+    aiChatHandler: AiChatHandler;
+    providerVaultHandler: ProviderVaultHandler;
   };
 
   readonly router: {
@@ -92,6 +96,7 @@ export class SurgicalViewDependencies {
     private readonly _readPanelManager: any,
     private readonly _diffPreviewPanelManager: BrudDiffPreviewPanelManager,
     private readonly _unifiedResultsPanelManager: any,
+    private readonly _providerRegistry: any,
     // State accessors — provided by the owner (SurgicalViewProvider)
     private readonly _getFileList: () => string[],
     private readonly _getCurrentFileIndex: () => number,
@@ -187,7 +192,7 @@ export class SurgicalViewDependencies {
       () => this.getSettings(),
     );
 
-    const managementHandler = new ManagementHandler();
+    const managementHandler = new ManagementHandler(this._mainWindowProvider);
     const getStartedHandler = new GetStartedHandler();
 
     const previewPatchHandler = new PreviewPatchHandler(
@@ -249,6 +254,15 @@ export class SurgicalViewDependencies {
       (m) => { this.setSessionMetadata(m); },
     );
 
+    const aiChatHandler = new AiChatHandler(
+      () => this._getWebview(),
+    );
+
+    const providerVaultHandler = new ProviderVaultHandler(
+      this._providerRegistry,
+      (msg) => this._getWebview()?.postMessage(msg) ?? Promise.resolve(true),
+    );
+
     this.handlers = {
       applyPatchHandler,
       executeCurrentFileHandler,
@@ -262,6 +276,8 @@ export class SurgicalViewDependencies {
       previewAllFilesHandler,
       rejectPreviewHandler,
       donePreviewHandler,
+      aiChatHandler,
+      providerVaultHandler,
     };
 
     // Routers

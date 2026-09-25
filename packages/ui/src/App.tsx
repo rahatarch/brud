@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useLayoutEffect, useCallback } from 'react';
 import { Send, ExternalLink, Copy, Check, Eye, ChevronRight, AlertCircle, CheckCircle, XCircle, Trash2, Star, Rocket } from 'lucide-react';
 import { useChatStore } from './stores/chatStore';
+import { useVaultStore } from './stores/vaultStore';
+import ModelSelector from './components/ModelSelector';
 import TypingIndicator from './components/TypingIndicator';
 import MainWindowShell from './components/MainWindowShell';
 import StructurePanel from './components/StructurePanel';
@@ -129,6 +131,12 @@ function StructuredReport({ sections }: { sections: ReportSection[] }) {
 }
 
 function App() {
+  const { initVault } = useVaultStore();
+  useEffect(() => {
+    const cleanup = initVault();
+    return cleanup;
+  }, [initVault]);
+
   const root = document.getElementById('root');
   const viewMode = root?.getAttribute('data-view-mode') || 'sidebar';
   const imageUri = root?.getAttribute('data-image-uri') || 'images/brud_compressed_high.png';
@@ -257,6 +265,14 @@ function App() {
           <ExternalLink size={12} />
           Management
         </button>
+        <button
+          onClick={() => sendToExtension({ command: 'openStreamTest' })}
+          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text cursor-pointer bg-surface-3 hover:bg-surface-3 border border-border-subtle rounded px-2.5 py-1.5 transition-colors"
+          title="Open Brud Stream Test"
+        >
+          <ExternalLink size={12} />
+          Stream Test
+        </button>
       </div>
       <div ref={chatAreaRef} onScroll={handleScroll} className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden px-4 py-4">
         {sessionState === 'idle' && messages.length === 0 ? (
@@ -326,6 +342,9 @@ function App() {
 
       <div className="shrink-0 pt-4 px-4 pb-2">
         <div className="bg-surface-2 border border-border rounded-md">
+          <div className="flex items-center justify-between px-3 pt-2 pb-1 border-b border-border-subtle">
+            <ModelSelector />
+          </div>
           <textarea
             value={inputText}
             onChange={e => setInputText(e.target.value)}

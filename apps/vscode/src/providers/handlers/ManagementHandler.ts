@@ -1,7 +1,9 @@
-import * as vscode from 'vscode';
+import { BrudMainWindowManager } from '../MainWindowProvider';
 
 export class ManagementHandler {
-  public async handle(): Promise<void> {
-    vscode.commands.executeCommand('brud.openManagement');
+  constructor(private mainWindowManager: BrudMainWindowManager) {}
+
+  public async handle(tab?: string, subView?: string): Promise<void> {
+    this.mainWindowManager.openMainWindow(tab, subView);
   }
 }

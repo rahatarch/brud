@@ -38,6 +38,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     readPanelManager?: any,
     diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
     unifiedResultsPanelManager?: any,
+    private readonly providerRegistry?: any,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
@@ -54,6 +55,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       readPanelManager,
       this._diffPreviewPanelManager,
       unifiedResultsPanelManager,
+      this.providerRegistry,
       () => this._fileList,
       () => this._currentFileIndex,
       (idx) => { this._currentFileIndex = idx; },

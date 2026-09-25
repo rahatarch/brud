@@ -97,12 +97,17 @@
         "command": "brud.openManagement",
         "title": "Open Brud Code Management",
         "category": "Brud Code"
+      },
+      {
+        "command": "brud.streamTest",
+        "title": "Brud: Open Stream Test",
+        "category": "Brud"
       }
     ]
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
-    "compile": "webpack && npm run build:webview",
+    "compile": "npm run build:all && webpack",
     "build:webview": "vite build --config packages/ui/vite.config.ts",
     "watch:webview": "vite build --config packages/ui/vite.config.ts --watch",
     "watch": "webpack --watch",
@@ -118,9 +123,12 @@
     "build:ui": "npm run build --workspace @brud/ui",
     "build:protocol": "npm run build --workspace @brud/protocol",
     "build:adapter": "npm run build --workspace @brud/vscode-adapter",
-    "build:all": "npm run build:core && npm run build:protocol && npm run build:adapter && npm run build:ui",
+    "build:utilities": "npm run build --workspace @brud/utilities",
+    "build:automation": "npm run build --workspace @brud/automation",
+    "build:all": "npm run build:protocol && npm run build:utilities && npm run build:core && npm run build:automation && npm run build:adapter && npm run build:ui",
     "ci": "npm run build:all && npm run test:core && npm run test:integration && npm run lint",
-    "ci:quick": "npm run build:core && npm run test:core"
+    "ci:quick": "npm run build:core && npm run test:core",
+    "prove:auto": "node --import tsx packages/automation/scripts/prove-loop.ts"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",

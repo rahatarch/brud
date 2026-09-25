@@ -40,7 +40,13 @@ export type WebviewCommand =
   | 'deletePrompt'
   | 'getPromptVersions'
   | 'revertPrompt'
-  | 'aiChat';
+  | 'aiChat'
+  | 'requestProviders'
+  | 'selectModel'
+  | 'saveProvider'
+  | 'deleteProvider'
+  | 'connectKey'
+  | 'disconnectKey';
 
 export type ExtensionCommand =
   | 'success'
@@ -77,7 +83,10 @@ export type ExtensionCommand =
   | 'aiDone'
   | 'aiError'
   | 'aiReasoningChunk'
-  | 'aiReasoningDone';
+  | 'aiReasoningDone'
+  | 'providersLoaded'
+  | 'modelSelected'
+  | 'setActiveTab';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -311,4 +320,93 @@ export interface AiDoneMessage extends ExtensionMessage {
 export interface AiErrorMessage extends ExtensionMessage {
   command: 'aiError';
   message: string;
+}
+
+// ── Vault / Provider message shapes ──────────────────────────────────
+
+export interface VaultProviderModel {
+  id: string;
+  name: string;
+  contextLength?: number;
+  supportsReasoning?: boolean;
+}
+
+export interface VaultProviderConfig {
+  id: string;
+  name: string;
+  baseUrl: string;
+  models: VaultProviderModel[];
+  isCustom?: boolean;
+  requiresKey?: boolean;
+}
+
+export interface VaultSanitizedProvider {
+  id: string;
+  name: string;
+  baseUrl: string;
+  models: VaultProviderModel[];
+  isCustom?: boolean;
+  requiresKey?: boolean;
+  hasKey: boolean;
+}
+
+export interface VaultModelSelection {
+  providerID: string;
+  modelID: string;
+}
+
+// Webview -> Extension
+export interface RequestProvidersMessage extends WebviewMessage {
+  command: 'requestProviders';
+}
+
+export interface SelectModelMessage extends WebviewMessage {
+  command: 'selectModel';
+  selection: VaultModelSelection;
+}
+
+export interface SaveProviderMessage extends WebviewMessage {
+  command: 'saveProvider';
+  provider: VaultProviderConfig;
+  apiKey?: string;
+}
+
+export interface DeleteProviderMessage extends WebviewMessage {
+  command: 'deleteProvider';
+  providerId: string;
+}
+
+export interface ConnectKeyMessage extends WebviewMessage {
+  command: 'connectKey';
+  providerId: string;
+  apiKey: string;
+}
+
+export interface DisconnectKeyMessage extends WebviewMessage {
+  command: 'disconnectKey';
+  providerId: string;
+}
+
+// Extension -> Webview
+export interface ProvidersLoadedMessage extends ExtensionMessage {
+  command: 'providersLoaded';
+  providers: VaultSanitizedProvider[];
+  activeSelection: VaultModelSelection;
+}
+
+export interface ModelSelectedMessage extends ExtensionMessage {
+  command: 'modelSelected';
+  selection: VaultModelSelection;
+}
+
+export interface OpenMainWindowMessage extends WebviewMessage {
+  command: 'openMainWindow';
+  tab?: string;
+  subView?: string;
+}
+
+export interface SetActiveTabMessage extends ExtensionMessage {
+  command: 'setActiveTab';
+  tab: string;
+  subView?: string;
 }

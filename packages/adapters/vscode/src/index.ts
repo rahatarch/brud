@@ -7,3 +7,5 @@ export * from './settingsProvider';
 export * from './promptStore';
 export * from './cascadingPromptStore';
 export * from './brudHome';
+export { VSCodeSecretVault } from './secretVault';
+export { VSCodeProviderStorage } from './providerStorage';

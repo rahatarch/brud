@@ -1,3 +1,8 @@
+import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config({ path: path.resolve(__dirname, '..', 'apps', 'vscode', '.env') });
+
 import * as vscode from 'vscode';
 import { BrudSRViewProvider } from './providers/SurgicalViewProvider';
 import { BrudCodePreviewProvider } from './providers/DiffPreviewProvider';
@@ -7,25 +12,34 @@ import { BrudReadPanelManager } from './providers/ReadPanelProvider';
 import { BrudDiffPreviewPanelManager } from './providers/DiffPreviewPanelProvider';
 import { BrudUnifiedResultsPanelManager } from './providers/UnifiedResultsPanelProvider';
 import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
+import { StreamTestPanelProvider } from './providers/StreamTestPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
-import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { WorkspaceHistoryStore, VSCodeFileSystem, VSCodeSecretVault, VSCodeProviderStorage } from '@brud/vscode-adapter';
 import { initializeToolRegistry } from '@brud/core';
+import { ProviderRegistry } from '@brud/automation';
 
 /**
  * Entry point for the Brud extension.
  * Orchestrates the registration of providers and commands.
  */
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
   // Initialize tool registry early so all providers and handlers can query it.
   // This must run before any webview can send a getToolList or GET_TOOL_INFO request.
   initializeToolRegistry();
+
+  // Initialize the vault-backed provider registry
+  const secretVault = new VSCodeSecretVault(context);
+  const providerStorage = new VSCodeProviderStorage(context);
+  const providerRegistry = new ProviderRegistry(secretVault, providerStorage);
+  await providerRegistry.init();
 
   const logger = BrudLogger.getInstance();
   const previewProvider = new BrudCodePreviewProvider();
 
   const mainWindowManager = new BrudMainWindowManager(
     context.extensionUri,
+    providerRegistry,
   );
 
   const structurePanelManager = new BrudStructurePanelManager(
@@ -48,6 +62,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.extensionUri,
   );
 
+  const streamTestProvider = new StreamTestPanelProvider(
+    context.extensionUri,
+  );
+
   const provider = new BrudSRViewProvider(
     context.extensionUri,
     logger.channel,
@@ -57,10 +75,14 @@ export function activate(context: vscode.ExtensionContext) {
     readPanelManager,
     diffPreviewPanelManager,
     unifiedResultsPanelManager,
+    providerRegistry,
   );
 
   // Wire settings reload: after MainWindow saves settings, reload sidebar immediately
   mainWindowManager.setOnSettingsSaved(() => provider.loadSettings());
+
+  // Wire sidebar webview for cross-panel vault broadcasts
+  mainWindowManager.setSidebarWebview(() => (provider as any)._view?.webview);
 
   // Register the Virtual Document Provider for surgical diff previews
   context.subscriptions.push(
@@ -88,6 +110,13 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('brud.getStarted', () => {
       getStartedManager.openGetStarted();
+    }),
+  );
+
+  // Register the command to open the stream test panel
+  context.subscriptions.push(
+    vscode.commands.registerCommand('brud.streamTest', () => {
+      streamTestProvider.open();
     }),
   );
 
