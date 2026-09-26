@@ -1,4 +1,5 @@
 import type { BrudPrompt, PromptLibrary } from './types';
+import { autonomousPrompt } from './autonomousPrompt';
 import { masterPrompt } from './masterPrompt';
 import {
   createFilePrompt,
@@ -33,6 +34,12 @@ export const brudPromptLibrary: PromptLibrary = {
       title: 'Master System Prompt',
       description: 'Full system prompt for Brud AI assistant covering all operations and output rules',
       content: masterPrompt,
+    },
+    {
+      id: 'autonomous-system',
+      title: 'Autonomous System Prompt',
+      description: 'System prompt for autonomous mode — AI drives the loop with no human between turns.',
+      content: autonomousPrompt,
     },
     {
       id: 'create-file',
