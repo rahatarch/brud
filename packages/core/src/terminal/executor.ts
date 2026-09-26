@@ -1,4 +1,4 @@
-import { spawn, ChildProcess } from 'child_process';
+import { spawn, spawnSync, ChildProcess } from 'child_process';
 import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup } from './types';
 
 function stripAnsiCodes(str: string): string {
@@ -23,8 +23,7 @@ function forceKillProcess(child: ChildProcess): void {
   }
   if (process.platform === 'win32') {
     try {
-      const { spawn } = require('child_process');
-      spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
+      spawnSync('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
     } catch {
       try { child.kill(); } catch {}
     }

@@ -160,7 +160,7 @@ describe('fileSearch', () => {
       directory: tempDir,
       recursive: false,
     });
-    assert.ok(!response.results.some(r => r.path.includes(pathModule.sep)));
+    assert.ok(!response.results.some(r => /[/\\]/.test(r.path)));
   });
 
   it('skips hidden directories', async () => {

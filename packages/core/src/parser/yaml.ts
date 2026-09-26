@@ -23,7 +23,7 @@ function parseCommandGroup(value: unknown): CommandGroup | undefined {
 
 export function parseYamlFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
-  const docs = input.split(/(?:^|\n)---\s*\n/);
+  const docs = input.replace(/\r\n/g, '\n').split(/(?:^|\n)---\s*\n/);
 
   for (const doc of docs) {
     const trimmed = doc.trim();

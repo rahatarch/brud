@@ -4,6 +4,7 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "strict": true,
+    "composite": true,
     "declaration": true,
     "outDir": "dist",
     "rootDir": "src"

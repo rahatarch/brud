@@ -95,7 +95,7 @@ export function reconstructContent(
 
   for (const match of sortedMatches) {
     const docBaseIndent = docLines[match.startLine].match(/^\s*/)?.[0] || '';
-    const aiReplaceLines = match.replace.split('\n');
+    const aiReplaceLines = match.replace.replace(/\r\n/g, '\n').split('\n');
     const aiBaseIndent = aiReplaceLines[0].match(/^\s*/)?.[0] || '';
 
     const replaceLines = aiReplaceLines.map(line => {

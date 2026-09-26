@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
+import * as pathModule from 'path';
 import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from './terminal.js';
 
 describe('Terminal Validation - Dangerous Commands', () => {
@@ -61,77 +62,77 @@ describe('Terminal Validation - Dangerous Commands', () => {
 });
 
 describe('Terminal Validation - CD Escape Detection', () => {
-  const workspaceFolders = ['/workspace', '/workspace/sub'];
+  const workspaceFolders = [pathModule.resolve('/workspace'), pathModule.resolve('/workspace/sub')];
 
   it('a) rejects "cd /outside && npm install"', () => {
-    const result = validateTerminalCommand('cd /outside && npm install', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd /outside && npm install', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('b) rejects "cd ~/other-project && ls"', () => {
-    const result = validateTerminalCommand('cd ~/other-project && ls', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd ~/other-project && ls', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('c) allows "cd packages/core && npm test"', () => {
-    const result = validateTerminalCommand('cd packages/core && npm test', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd packages/core && npm test', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, true);
   });
 
   it('d) rejects "pushd /outside && command"', () => {
-    const result = validateTerminalCommand('pushd /outside && command', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('pushd /outside && command', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('e) rejects "cd $HOME && ls"', () => {
-    const result = validateTerminalCommand('cd $HOME && ls', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd $HOME && ls', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('f) rejects "cd $DYNAMIC_VAR && ls" (cannot statically verify)', () => {
-    const result = validateTerminalCommand('cd $DYNAMIC_VAR && ls', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd $DYNAMIC_VAR && ls', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'DYNAMIC_PATH');
   });
 
   it('g) rejects "cd /workspace/../outside && ls" (path traversal)', () => {
-    const result = validateTerminalCommand('cd /workspace/../outside && ls', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd /workspace/../outside && ls', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('h) allows "cd /workspace && ls" (workspace root)', () => {
-    const result = validateTerminalCommand('cd /workspace && ls', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd /workspace && ls', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, true);
   });
 
   it('i) rejects "(cd /outside && ls)" (subshell)', () => {
-    const result = validateTerminalCommand('(cd /outside && ls)', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('(cd /outside && ls)', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.code, 'CWD_ESCAPE');
   });
 
   it('j) allows "cd packages/core; npm test; cd ../ui; npm test"', () => {
-    const result = validateTerminalCommand('cd packages/core; npm test; cd ../ui; npm test', '/workspace', workspaceFolders);
+    const result = validateTerminalCommand('cd packages/core; npm test; cd ../ui; npm test', pathModule.resolve('/workspace'), workspaceFolders);
     assert.strictEqual(result.success, true);
   });
 });
 
 describe('Terminal Validation - validateTerminalCwd', () => {
-  const workspaceFolders = ['/workspace', '/workspace/sub'];
+  const workspaceFolders = [pathModule.resolve('/workspace'), pathModule.resolve('/workspace/sub')];
 
   it('returns valid with cwd inside workspace', () => {
-    const result = validateTerminalCwd('/workspace/sub/dir', workspaceFolders);
+    const result = validateTerminalCwd(pathModule.resolve('/workspace/sub/dir'), workspaceFolders);
     assert.strictEqual(result.valid, true);
     assert.ok(result.resolvedCwd);
   });
 
   it('returns invalid with cwd outside workspace', () => {
-    const result = validateTerminalCwd('/outside', workspaceFolders);
+    const result = validateTerminalCwd(pathModule.resolve('/outside'), workspaceFolders);
     assert.strictEqual(result.valid, false);
     assert.ok(result.error);
   });
@@ -139,13 +140,13 @@ describe('Terminal Validation - validateTerminalCwd', () => {
   it('defaults to workspace root when cwd is undefined', () => {
     const result = validateTerminalCwd(undefined, workspaceFolders);
     assert.strictEqual(result.valid, true);
-    assert.strictEqual(result.resolvedCwd, '/workspace');
+    assert.strictEqual(pathModule.resolve(result.resolvedCwd!), pathModule.resolve('/workspace'));
   });
 
   it('defaults to workspace root when cwd is empty string', () => {
     const result = validateTerminalCwd('', workspaceFolders);
     assert.strictEqual(result.valid, true);
-    assert.strictEqual(result.resolvedCwd, '/workspace');
+    assert.strictEqual(pathModule.resolve(result.resolvedCwd!), pathModule.resolve('/workspace'));
   });
 
   it('returns invalid when no workspace folders', () => {
