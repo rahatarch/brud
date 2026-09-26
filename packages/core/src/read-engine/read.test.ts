@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { readFiles } from './index.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
@@ -13,7 +14,7 @@ describe('readFiles integration tests', () => {
   let nodeFs: NodeFileSystem;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-read-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-read-test-'));
     nodeFs = new NodeFileSystem();
   });
 

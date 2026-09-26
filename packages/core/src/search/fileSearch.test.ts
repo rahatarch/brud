@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { searchFiles } from './fileSearch.js';
 import { matchGlob, isGlobPattern } from './globMatcher.js';
@@ -72,7 +73,7 @@ describe('fileSearch', () => {
   let nodeFs: NodeFileSystem;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-search-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-search-test-'));
     nodeFs = new NodeFileSystem();
     await createTestFiles(tempDir, nodeFs);
   });

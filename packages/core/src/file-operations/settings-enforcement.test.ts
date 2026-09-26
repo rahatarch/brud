@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { createTestWorkspace, cleanupTestWorkspace } from '../testing/testUtils.js';
 import { executeFileOperations } from './index.js';
@@ -68,7 +69,7 @@ describe('Settings enforcement during execution', () => {
   });
 
   it('d) Workspace boundary disabled allows path outside workspace', async () => {
-    const outsidePath = '/tmp/brud-outside-test.txt';
+    const outsidePath = pathModule.join(os.tmpdir(), 'brud-outside-test.txt');
     try { await nodeFs.deleteFile(outsidePath); } catch {}
     const ops: FileOperation[] = [
       { kind: 'create_file', path: outsidePath, index: '1', content: 'outside' },
@@ -82,7 +83,7 @@ describe('Settings enforcement during execution', () => {
   });
 
   it('e) Workspace boundary enabled rejects path outside workspace', async () => {
-    const outsidePath = '/tmp/brud-outside-reject.txt';
+    const outsidePath = pathModule.join(os.tmpdir(), 'brud-outside-reject.txt');
     const ops: FileOperation[] = [
       { kind: 'create_file', path: outsidePath, index: '1', content: 'outside' },
     ];

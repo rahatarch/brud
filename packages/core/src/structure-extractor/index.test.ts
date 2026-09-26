@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { extractDirectoryStructure } from './index.js';
 
@@ -24,7 +25,7 @@ describe('extractDirectoryStructure', () => {
   let nodeFs: NodeFileSystem;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-structure-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-structure-test-'));
     nodeFs = new NodeFileSystem();
     await createTestStructure(tempDir, nodeFs);
   });

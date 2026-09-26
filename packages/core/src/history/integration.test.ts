@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { createTwoFilesPatch } from 'diff';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { executeFileOperations } from '../file-operations/index.js';
@@ -225,7 +226,7 @@ describe('Integration Tests (Real File Operations)', () => {
   let workspaceFolders: string[];
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-integration-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-integration-'));
     nodeFs = new NodeFileSystem();
     store = new TestHistoryStore(tempDir, nodeFs);
     workspaceFolders = [tempDir];

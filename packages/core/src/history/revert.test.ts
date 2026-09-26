@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { createTwoFilesPatch } from 'diff';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { TestHistoryStore } from '../testing/testHistoryStore.js';
@@ -69,7 +70,7 @@ describe('revertOperations', () => {
   let revertEntries: RevertHistoryEntry[] = [];
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-revert-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-revert-test-'));
     nodeFs = new NodeFileSystem();
     store = new TestHistoryStore(tempDir, nodeFs);
     workspaceFolders = [tempDir];

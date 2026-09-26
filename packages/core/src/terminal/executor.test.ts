@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import * as os from 'node:os';
 import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, executeCommandGroup } from './executor.js';
 import type { ConditionalCommand, CommandGroup } from './types.js';
 
@@ -9,7 +10,7 @@ describe('Terminal Executor', () => {
   let tempDir: string;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-executor-test-');
+    tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-executor-test-'));
   });
 
   after(async () => {

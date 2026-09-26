@@ -2,6 +2,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
+import * as os from 'node:os';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { resolveImports, readFileWithImports } from './index.js';
 import { getPatternsForFile, languagePatternsRegistry } from './languagePatterns.js';
@@ -48,7 +49,7 @@ describe('resolveImports', () => {
   let tempDir: string;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-import-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-import-test-'));
   });
 
   after(async () => {
@@ -155,7 +156,7 @@ describe('resolveImports with custom patterns', () => {
   let tempDir: string;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-custom-import-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-custom-import-'));
   });
 
   after(async () => {
@@ -231,7 +232,7 @@ describe('readFileWithImports', () => {
   let nodeFs: NodeFileSystem;
 
   before(async () => {
-    tempDir = await fs.mkdtemp('/tmp/brud-readimports-test-');
+    tempDir = await fs.mkdtemp(pathModule.join(os.tmpdir(), 'brud-readimports-test-'));
     nodeFs = new NodeFileSystem();
   });
 

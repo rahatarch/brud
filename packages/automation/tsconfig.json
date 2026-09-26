@@ -4,14 +4,11 @@
     "module": "Node16",
     "moduleResolution": "Node16",
     "strict": true,
-    "types": ["vscode", "node"],
     "declaration": true,
     "composite": true,
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"],
-  "references": [
-    { "path": "../../automation" }
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "scripts"]
 }

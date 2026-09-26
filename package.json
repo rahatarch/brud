@@ -117,7 +117,7 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint packages apps tests",
     "test": "vscode-test",
-    "test:core": "node --import tsx --test packages/core/src/**/*.test.ts",
+    "test:core": "node --import tsx --test \"packages/core/src/**/*.test.ts\"",
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
     "build:core": "npm run build --workspace @brud/core",
     "build:ui": "npm run build --workspace @brud/ui",
