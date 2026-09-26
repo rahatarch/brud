@@ -81,8 +81,9 @@ echo "Answers: $ans1 $ans2 $ans3"
 
   it('Test 8: Working directory', async () => {
     const result = await executeTerminalCommand('pwd', [], tempDir);
-    const normalizedOutput = path.resolve(result.output.trim());
-    const normalizedTempDir = realpathSync(tempDir);
+    const normalizeForPlatform = (p: string) => path.resolve(p).toLowerCase().replace(/\\/g, '/');
+    const normalizedOutput = normalizeForPlatform(result.output.trim());
+    const normalizedTempDir = normalizeForPlatform(tempDir);
     assert.ok(normalizedOutput.includes(normalizedTempDir), `expected ${tempDir} in output: ${result.output}`);
   });
 

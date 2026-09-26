@@ -136,20 +136,23 @@ describe('readFiles integration tests', () => {
   });
 
   it('TEST 8: validateWorkspacePath resolves relative paths against workspace folders', () => {
-    const workspaceFolders = ['/media/rahathasan/ubuntu-dev1/dev_rahatarch/brud-test'];
+    const workspaceFolder = pathModule.resolve('/media/rahathasan/ubuntu-dev1/dev_rahatarch/brud-test');
+    const workspaceFolders = [workspaceFolder];
     const input = 'src/history-test.ts';
     const result = validateWorkspacePath(input, workspaceFolders);
     assert.strictEqual(result.valid, true);
     if (result.valid) {
+      const expectedPath = pathModule.resolve(workspaceFolder, input);
       assert.strictEqual(
         result.resolvedPath,
-        '/media/rahathasan/ubuntu-dev1/dev_rahatarch/brud-test/src/history-test.ts',
+        expectedPath,
       );
     }
   });
 
   it('TEST 9: validateWorkspacePath rejects paths outside workspace', () => {
-    const workspaceFolders = ['/media/rahathasan/ubuntu-dev1/dev_rahatarch/brud-test'];
+    const workspaceFolder = pathModule.resolve('/media/rahathasan/ubuntu-dev1/dev_rahatarch/brud-test');
+    const workspaceFolders = [workspaceFolder];
     const result = validateWorkspacePath('/etc/passwd', workspaceFolders);
     assert.strictEqual(result.valid, false);
     if (!result.valid) {
