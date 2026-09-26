@@ -7,8 +7,10 @@
     "watch": "webpack --watch"
   },
   "dependencies": {
+    "@brud/automation": "*",
     "@brud/core": "*",
     "@brud/protocol": "*",
-    "@brud/vscode-adapter": "*"
+    "@brud/vscode-adapter": "*",
+    "dotenv": "^16.4.5"
   }
 }
