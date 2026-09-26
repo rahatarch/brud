@@ -16,6 +16,7 @@ apps/**
 packages/**
 out/**
 tests/**
+scripts/**
 .vscode-test.mjs
 eslint.config.mjs
 ARCHITECTURE.md
