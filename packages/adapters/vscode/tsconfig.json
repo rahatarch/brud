@@ -6,12 +6,8 @@
     "strict": true,
     "types": ["vscode", "node"],
     "declaration": true,
-    "composite": true,
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src"],
-  "references": [
-    { "path": "../../automation" }
-  ]
+  "include": ["src"]
 }

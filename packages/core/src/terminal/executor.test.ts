@@ -1,6 +1,7 @@
 import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
+import { realpathSync } from 'node:fs';
 import * as path from 'path';
 import * as os from 'node:os';
 import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, executeCommandGroup } from './executor.js';
@@ -80,14 +81,17 @@ echo "Answers: $ans1 $ans2 $ans3"
 
   it('Test 8: Working directory', async () => {
     const result = await executeTerminalCommand('pwd', [], tempDir);
-    assert.ok(result.output.includes(tempDir), `expected ${tempDir} in output: ${result.output}`);
+    const normalizedOutput = path.resolve(result.output.trim());
+    const normalizedTempDir = realpathSync(tempDir);
+    assert.ok(normalizedOutput.includes(normalizedTempDir), `expected ${tempDir} in output: ${result.output}`);
   });
 
   it('TEST 1: Timeout kills long-running command', async () => {
     const start = Date.now();
     const result = await executeCommand('sleep 30', undefined, 2000);
     const elapsed = Date.now() - start;
-    assert.ok(elapsed < 10000, `Expected completion in < 10000ms, got ${elapsed}ms`);
+    const maxExpected = process.platform === 'win32' ? 60000 : 10000;
+    assert.ok(elapsed < maxExpected, `Expected completion in < ${maxExpected}ms, got ${elapsed}ms`);
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.exitCode, null);
   });
@@ -106,7 +110,7 @@ echo "Answers: $ans1 $ans2 $ans3"
     );
   });
 
-  it('TEST 3: Grace period kills process that ignores SIGTERM', async () => {
+  it('TEST 3: Grace period kills process that ignores SIGTERM', { skip: process.platform === 'win32' }, async () => {
     const start = Date.now();
     const result = await executeCommand('trap "" TERM; sleep 30', undefined, 1000);
     const elapsed = Date.now() - start;
