@@ -3,10 +3,22 @@ name: Extension Package Verification
 on:
   push:
     branches: [main, 'feat/**', 'feature/**']
-    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+    paths:
+      - 'apps/vscode/**'
+      - 'packages/**'
+      - '.vscodeignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/package.yml'
   pull_request:
     branches: [main]
-    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+    paths:
+      - 'apps/vscode/**'
+      - 'packages/**'
+      - '.vscodeignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/package.yml'
   workflow_dispatch:
 
 concurrency:
