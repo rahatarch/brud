@@ -6,5 +6,9 @@ node_modules
 .brud/
 .VSCodeCounter/
 .kilo/
+.env
+.env.local
+.env.*.local
+apps/vscode/.env
 BRUD_TEST_LOG.md
 temporary

@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Brud Stream Test</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #1e1e1e; color: #d4d4d4; margin: 0; padding: 16px; }
+  .container { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 18px; margin: 0 0 16px 0; color: #569cd6; }
+  .input-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  #input { flex: 1; padding: 8px 12px; background: #2d2d2d; border: 1px solid #3c3c3c; color: #d4d4d4; border-radius: 4px; font-size: 14px; }
+  #send { padding: 8px 16px; background: #0e639c; color: #fff; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+  #send:hover { background: #1177bb; }
+  pre { background: #2d2d2d; border: 1px solid #3c3c3c; border-radius: 4px; padding: 12px; min-height: 200px; white-space: pre-wrap; word-wrap: break-word; font-size: 13px; line-height: 1.5; }
+  pre.streaming::after { content: '\u258a'; animation: blink 1s infinite; color: #569cd6; }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+  .error { color: #f44747; }
+  .info { color: #6a9955; }
+  #status { font-size: 12px; color: #808080; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Brud Stream Test</h1>
+  <div class="input-row">
+    <input type="text" id="input" placeholder="Enter a prompt..." autofocus>
+    <button id="send">Send</button>
+  </div>
+  <details id="reasoning-section" style="display:none">
+    <summary>Reasoning</summary>
+    <pre id="reasoning-output" style="opacity:0.7; font-style:italic;"></pre>
+  </details>
+  <pre id="output">Waiting for input...</pre>
+  <div id="status">Ready</div>
+</div>
+<script>
+(function() {
+  const vscode = acquireVsCodeApi();
+  const input = document.getElementById('input');
+  const sendBtn = document.getElementById('send');
+  const output = document.getElementById('output');
+  const status = document.getElementById('status');
+  const reasoningSection = document.getElementById('reasoning-section');
+  const reasoningOutput = document.getElementById('reasoning-output');
+
+  sendBtn.addEventListener('click', function() {
+    const value = input.value.trim();
+    if (!value) return;
+    output.textContent = '';
+    output.className = '';
+    status.textContent = 'Streaming...';
+    reasoningSection.style.display = 'none';
+    reasoningOutput.textContent = '';
+    reasoningSection.open = false;
+    vscode.postMessage({ command: 'aiChat', text: value });
+    input.value = '';
+  });
+
+  window.addEventListener('message', function(event) {
+    const data = event.data;
+    if (data.command === 'aiChunk') {
+      console.log('[webview<-stream] chunk len ' + data.chunk.length);
+      output.textContent += data.chunk;
+      output.classList.add('streaming');
+      status.textContent = 'Streaming... (' + output.textContent.length + ' chars)';
+    } else if (data.command === 'aiDone') {
+      output.classList.remove('streaming');
+      output.textContent += '\n\n[Done]';
+      status.textContent = 'Complete (' + output.textContent.length + ' chars)';
+    } else if (data.command === 'aiReasoningChunk') {
+      reasoningSection.style.display = 'block';
+      reasoningSection.open = true;
+      reasoningOutput.textContent += data.reasoningChunk;
+    } else if (data.command === 'aiReasoningDone') {
+      reasoningSection.open = false;
+    } else if (data.command === 'aiError') {
+      output.classList.remove('streaming');
+      output.innerHTML += '<br><span class="error">Error: ' + data.message + '</span>';
+      status.textContent = 'Error';
+    }
+  });
+})();
+</script>
+</body>
+</html>
