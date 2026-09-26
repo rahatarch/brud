@@ -47,13 +47,135 @@ export default function ProviderSettingsView({ onBack }: ProviderSettingsViewPro
         <ArrowLeft size={14} /> Back to Settings
       </button>
 
-      <h1 className="text-xl font-semibold text-text mb-1">AI Providers & Vault</h1>
-      <p className="text-sm text-text-secondary mb-4">
-        Configure AI providers, API keys, and reasoning models. All keys are stored in your system keychain.
-      </p>
+      <div className="flex items-center justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-xl font-semibold text-text mb-1">AI Providers</h1>
+          <p className="text-sm text-text-secondary">
+            Configure AI providers, API keys, and reasoning models. All keys are stored in your system keychain.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowAddCustom(!showAddCustom)}
+          className="px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-md shadow-sm transition-colors flex items-center gap-2 shrink-0 cursor-pointer"
+        >
+          <Plus size={14} />
+          {showAddCustom ? 'Cancel' : 'Add New Provider'}
+        </button>
+      </div>
 
-      {providers.length === 0 ? (
-        <p className="text-sm text-text-muted text-center py-8">No providers configured.</p>
+      {showAddCustom && (
+        <div className="mb-6 bg-surface-2 border border-border rounded-lg p-4 space-y-2">
+          <input
+            type="text"
+            placeholder="Provider ID (e.g., my-provider)"
+            value={newProvider.id}
+            onChange={(e) => setNewProvider((p) => ({ ...p, id: e.target.value }))}
+            className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
+          />
+          <input
+            type="text"
+            placeholder="Provider Name"
+            value={newProvider.name}
+            onChange={(e) => setNewProvider((p) => ({ ...p, name: e.target.value }))}
+            className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
+          />
+          <input
+            type="text"
+            placeholder="Base URL (e.g., https://api.example.com)"
+            value={newProvider.baseUrl}
+            onChange={(e) => setNewProvider((p) => ({ ...p, baseUrl: e.target.value }))}
+            className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
+          />
+          <input
+            type="text"
+            placeholder="Models (comma-separated, e.g., gpt-4, gpt-3.5-turbo)"
+            value={newProvider.models}
+            onChange={(e) => setNewProvider((p) => ({ ...p, models: e.target.value }))}
+            className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
+          />
+          <input
+            type="password"
+            placeholder="API Key (optional)"
+            value={newProvider.apiKey}
+            onChange={(e) => setNewProvider((p) => ({ ...p, apiKey: e.target.value }))}
+            className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
+          />
+          {formError && (
+            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-md text-xs text-red-400">
+              {formError}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setFormError(null);
+              const rawName = newProvider.name.trim();
+              const rawId = newProvider.id.trim() || rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
+              const rawUrl = newProvider.baseUrl.trim();
+
+              if (!rawName) {
+                setFormError("Please enter a Provider Name.");
+                return;
+              }
+              if (!rawId) {
+                setFormError("Please enter a valid Provider ID.");
+                return;
+              }
+              if (!rawUrl) {
+                setFormError("Please enter a Base URL.");
+                return;
+              }
+
+              const modelIds = newProvider.models
+                .split(',')
+                .map(m => m.trim())
+                .filter(Boolean);
+
+              if (modelIds.length === 0) {
+                setFormError("Please specify at least one model ID (e.g. gpt-4o, llama3).");
+                return;
+              }
+              if (providers.some(p => p.id === rawId)) {
+                setFormError("A provider with this ID already exists.");
+                return;
+              }
+
+              setIsSubmitting(true);
+              setPendingProviderId(rawId);
+              const timer = setTimeout(() => {
+                setIsSubmitting((current) => {
+                  if (current) {
+                    setFormError("Operation timed out. Please refresh or verify if the provider was saved.");
+                    setPendingProviderId(null);
+                    return false;
+                  }
+                  return false;
+                });
+              }, 8000);
+              saveProvider(
+                {
+                  id: rawId,
+                  name: rawName,
+                  baseUrl: rawUrl.replace(/\/+$/, ''),
+                  models: modelIds.map((id) => ({ id, name: id })),
+                  isCustom: true,
+                  requiresKey: true,
+                },
+                newProvider.apiKey.trim() || undefined
+              );
+            }}
+            disabled={isSubmitting}
+            className="w-full px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {isSubmitting ? "Adding Provider..." : "Add Provider"}
+          </button>
+        </div>
+      )}
+
+      {providers.length === 0 && !showAddCustom ? (
+        <div className="bg-surface-2 border border-border rounded-lg p-8 text-center">
+          <p className="text-sm text-text-muted">No AI providers configured yet.</p>
+          <p className="text-xs text-text-muted mt-1">Click "Add New Provider" above to configure your first provider.</p>
+        </div>
       ) : (
         providers.map((provider) => (
           <div
@@ -116,7 +238,7 @@ export default function ProviderSettingsView({ onBack }: ProviderSettingsViewPro
                     className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
                   />
                 </div>
-<button
+                <button
                   onClick={() => {
                     const key = keyInputs[provider.id];
                     if (key?.trim()) {
@@ -147,125 +269,6 @@ export default function ProviderSettingsView({ onBack }: ProviderSettingsViewPro
           </div>
         ))
       )}
-
-      <div className="mt-2">
-        <button
-          onClick={() => setShowAddCustom(!showAddCustom)}
-          className="flex items-center gap-1.5 text-xs text-text-secondary hover:text-text transition-colors cursor-pointer"
-        >
-          <Plus size={12} />
-          {showAddCustom ? 'Cancel' : 'Add New Provider'}
-        </button>
-
-        {showAddCustom && (
-          <div className="mt-3 bg-surface-2 border border-border rounded-lg p-4 space-y-2">
-            <input
-              type="text"
-              placeholder="Provider ID (e.g., my-provider)"
-              value={newProvider.id}
-              onChange={(e) => setNewProvider((p) => ({ ...p, id: e.target.value }))}
-              className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
-            />
-            <input
-              type="text"
-              placeholder="Provider Name"
-              value={newProvider.name}
-              onChange={(e) => setNewProvider((p) => ({ ...p, name: e.target.value }))}
-              className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
-            />
-            <input
-              type="text"
-              placeholder="Base URL (e.g., https://api.example.com)"
-              value={newProvider.baseUrl}
-              onChange={(e) => setNewProvider((p) => ({ ...p, baseUrl: e.target.value }))}
-              className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
-            />
-            <input
-              type="text"
-              placeholder="Models (comma-separated, e.g., gpt-4, gpt-3.5-turbo)"
-              value={newProvider.models}
-              onChange={(e) => setNewProvider((p) => ({ ...p, models: e.target.value }))}
-              className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
-            />
-            <input
-              type="password"
-              placeholder="API Key (optional)"
-              value={newProvider.apiKey}
-              onChange={(e) => setNewProvider((p) => ({ ...p, apiKey: e.target.value }))}
-              className="w-full bg-surface-3 border border-border focus:border-primary focus:outline-none rounded-md px-3 py-2 text-sm text-text placeholder:text-text-muted transition-colors"
-            />
-            {formError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-md text-xs text-red-400">
-                {formError}
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setFormError(null);
-                const rawName = newProvider.name.trim();
-                const rawId = newProvider.id.trim() || rawName.toLowerCase().replace(/[^a-z0-9_-]/g, '-').replace(/-+/g, '-');
-                const rawUrl = newProvider.baseUrl.trim();
-
-                if (!rawName) {
-                  setFormError("Please enter a Provider Name.");
-                  return;
-                }
-                if (!rawId) {
-                  setFormError("Please enter a valid Provider ID.");
-                  return;
-                }
-                if (!rawUrl) {
-                  setFormError("Please enter a Base URL.");
-                  return;
-                }
-
-                const modelIds = newProvider.models
-                  .split(',')
-                  .map(m => m.trim())
-                  .filter(Boolean);
-
-                if (modelIds.length === 0) {
-                  setFormError("Please specify at least one model ID (e.g. gpt-4o, llama3).");
-                  return;
-                }
-                if (providers.some(p => p.id === rawId)) {
-                  setFormError("A provider with this ID already exists.");
-                  return;
-                }
-
-                setIsSubmitting(true);
-                setPendingProviderId(rawId);
-                // Safety fallback: if no response arrives in 8 seconds, release the button
-                const timer = setTimeout(() => {
-                  setIsSubmitting((current) => {
-                    if (current) {
-                      setFormError("Operation timed out. Please refresh or verify if the provider was saved.");
-                      setPendingProviderId(null);
-                      return false;
-                    }
-                    return false;
-                  });
-                }, 8000);
-                saveProvider(
-                  {
-                    id: rawId,
-                    name: rawName,
-                    baseUrl: rawUrl.replace(/\/+$/, ''),
-                    models: modelIds.map((id) => ({ id, name: id })),
-                    isCustom: true,
-                    requiresKey: true,
-                  },
-                  newProvider.apiKey.trim() || undefined
-                );
-              }}
-              disabled={isSubmitting}
-              className="w-full px-4 py-2 bg-primary hover:bg-primary-hover text-white text-sm font-medium rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
-            >
-              {isSubmitting ? "Adding Provider..." : "Add Provider"}
-            </button>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

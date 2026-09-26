@@ -235,8 +235,8 @@ function SettingsView({ initialSubView, onSubViewChange }: SettingsViewProps) {
               <KeyRound size={20} />
             </div>
             <div>
-              <h3 className="text-sm font-medium text-text group-hover:text-primary transition-colors">AI Providers & Vault</h3>
-              <p className="text-xs text-text-muted">Configure API keys, custom OpenAI-compatible endpoints, and reasoning models</p>
+              <h3 className="text-sm font-medium text-text group-hover:text-primary transition-colors">AI Providers</h3>
+              <p className="text-xs text-text-muted">Configure AI providers, API keys, and reasoning models</p>
             </div>
           </div>
           <ChevronRight size={18} className="text-text-muted group-hover:text-primary transition-colors" />

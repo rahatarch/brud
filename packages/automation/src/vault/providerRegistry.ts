@@ -137,6 +137,12 @@ export class ProviderRegistry {
   }
 
   async resolveActiveCredentials(): Promise<ActiveCredentials> {
+    if (this.providers.size === 0) {
+      throw new Error(
+        'No AI providers configured. Please add a provider in AI Providers settings.',
+      );
+    }
+
     const provider = this.providers.get(this.activeSelection.providerID);
     if (!provider) {
       throw new Error(
