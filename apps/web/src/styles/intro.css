@@ -1,0 +1,117 @@
+/* ==========================================================================
+   HERO ENTRANCE
+   Plays once on load. <html class="intro"> (set by an inline head script in
+   src/app/layout.js) holds each piece at its start state; the same script
+   adds `intro-go` once the page has loaded and settled, and the pieces rise
+   in, in reading order. Both classes are removed once it has played.
+
+   Only opacity and the standalone translate / scale properties move, so it
+   all runs on the compositor and never touches the `transform` and inline
+   opacity the scroll journey writes to the hero's containers. Fill mode is
+   `backwards`: once a piece lands, the animation lets go of it completely.
+
+   The held state is opacity 0.001, not 0: invisible, but it makes the
+   browser rasterise every piece (the gooey headline filter above all) while
+   the hero is still dark. At 0 that raster was deferred to the entrance's
+   first frame and stalled it for a quarter of a second.
+   ========================================================================== */
+:root {
+  --intro-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html.intro:not(.intro-go)
+  :is(
+    .nav--fixed .wordmark,
+    .nav--fixed .switch,
+    .headline__title,
+    .headline__lede,
+    .headline__actions > *,
+    .points__row,
+    .meta__list,
+    .hero__art
+  ) {
+  opacity: 0.001;
+}
+
+/* Separate rule: a pseudo-element inside :is() would void the whole list. */
+html.intro:not(.intro-go) .hero__meta::before {
+  opacity: 0.001;
+}
+
+html.intro-go :is(.nav--fixed .wordmark, .nav--fixed .switch) {
+  animation: intro-drop 900ms var(--intro-ease) 150ms backwards;
+}
+
+html.intro-go .nav--fixed .switch {
+  animation-delay: 230ms;
+}
+
+/* Opacity only on the mark: the rim light reads the glyph's on-screen box
+   when it mounts, and a scale here would hand it the wrong size. */
+html.intro-go .hero__art {
+  animation: intro-fade 1400ms var(--intro-ease) backwards;
+}
+
+html.intro-go .headline__title {
+  animation: intro-rise 1100ms var(--intro-ease) 120ms backwards;
+}
+
+html.intro-go .headline__lede {
+  animation: intro-rise 1000ms var(--intro-ease) 260ms backwards;
+}
+
+html.intro-go .headline__actions > * {
+  animation: intro-rise 1000ms var(--intro-ease) 360ms backwards;
+}
+
+html.intro-go .headline__actions > :nth-child(2) {
+  animation-delay: 430ms;
+}
+
+html.intro-go .points__row {
+  animation: intro-rise 1000ms var(--intro-ease) 380ms backwards;
+}
+
+html.intro-go .points__row:nth-child(2) {
+  animation-delay: 460ms;
+}
+
+html.intro-go .points__row:nth-child(3) {
+  animation-delay: 540ms;
+}
+
+/* The strip's hairline draws out from the centre, then its facts fade in. */
+html.intro-go .hero__meta::before {
+  animation: intro-line 1100ms var(--intro-ease) 480ms backwards;
+}
+
+html.intro-go .meta__list {
+  animation: intro-fade 1000ms var(--intro-ease) 620ms backwards;
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    translate: 0 26px;
+  }
+}
+
+@keyframes intro-drop {
+  from {
+    opacity: 0;
+    translate: 0 -14px;
+  }
+}
+
+@keyframes intro-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes intro-line {
+  from {
+    opacity: 0;
+    scale: 0 1;
+  }
+}

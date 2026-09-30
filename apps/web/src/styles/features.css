@@ -1,0 +1,713 @@
+/* ==========================================================================
+   FEATURES
+   Same grammar as install and guide: centred serif heads, hairline rows,
+   muted mono numerals, one gradient. The benchmark card is the one card.
+   ========================================================================== */
+.features {
+  padding: clamp(64px, 10vh, 120px) var(--edge) clamp(64px, 10vh, 120px);
+  background: var(--color-background);
+}
+
+.features > * {
+  max-width: 820px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* -- heads ---------------------------------------------------------------- */
+.features__head {
+  max-width: 34ch;
+  margin-bottom: clamp(56px, 9vh, 104px);
+  text-align: center;
+}
+
+.features__title,
+.features__sub {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.features__title {
+  font-size: var(--text-h2);
+}
+
+.features__sub {
+  font-size: var(--text-h3);
+  text-align: center;
+}
+
+.features__lede,
+.features__sub-lede {
+  margin: clamp(10px, 1.6vh, 18px) 0 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+}
+
+.features__sub-lede {
+  text-align: center;
+}
+
+.features__block {
+  margin-top: clamp(112px, 18vh, 220px);
+}
+
+.features__block > :nth-child(2):not(.features__sub-lede):not(.features__table-wrap) {
+  margin-top: clamp(44px, 7vh, 80px);
+}
+
+/* -- pain points ----------------------------------------------------------- */
+.features__pains {
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.features__pain {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.1fr);
+  gap: clamp(14px, 2vw, 32px);
+  align-items: baseline;
+  padding: clamp(30px, 4.6vh, 52px) clamp(4px, 1.2vw, 18px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.features__num {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+/* The complaint is set in the display serif, like a pulled quote; the answer
+   stays in the sans at a comfortable measure. Serif vs sans is the hierarchy. */
+.features__quote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 1.75vw, 27px);
+  font-weight: 400;
+  line-height: 1.28;
+  letter-spacing: var(--track-display);
+  color: #f2f2f5;
+  text-wrap: balance;
+}
+
+.features__fix {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+/* -- capabilities ---------------------------------------------------------- */
+.features__caps {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: clamp(44px, 7vh, 80px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.features__cap {
+  padding: clamp(28px, 4.2vh, 48px) clamp(4px, 1.2vw, 18px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.features__cap:nth-child(odd) {
+  padding-right: clamp(16px, 3vw, 40px);
+}
+
+.features__cap-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(19px, 1.5vw, 23px);
+  font-weight: 400;
+  letter-spacing: var(--track-display);
+  color: #f2f2f5;
+}
+
+.features__cap-body {
+  margin: 12px 0 0;
+  max-width: 36ch;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text-muted);
+}
+
+/* -- benchmarks ------------------------------------------------------------ */
+/* One card, three references folded together: the framed card and floating
+   chips of a product analytics tile, the mono readout and dot-matrix bars of
+   a revenue widget, and the halftone halo, knob and dashed guide of a line
+   chart. Everything is dark and runs on the mark gradient. The dots are
+   static backgrounds; only transform, opacity and a one-off clip move. */
+.bench {
+  --pitch: 8px;
+  --name-col: 150px;
+  --time-col: 56px;
+  --col-gap: clamp(12px, 1.6vw, 24px);
+  --row-pad: clamp(12px, 1.6vw, 22px);
+  position: relative;
+  margin-top: clamp(44px, 7vh, 80px);
+  padding: clamp(20px, 2.6vw, 32px);
+  border: 1px solid var(--color-border);
+  border-radius: 28px;
+  background: linear-gradient(180deg, #121317 0%, #0c0d10 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 40px 90px -50px rgba(0, 0, 0, 0.9);
+  /* Hover changes inside the card never make the page re-lay itself out. */
+  contain: layout style;
+}
+
+/* -- head: live readout + chips -- */
+.bench__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px 32px;
+  padding: 0 clamp(4px, 0.6vw, 8px);
+}
+
+.bench__eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.bench__figure {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 12px 0 8px;
+}
+
+.bench__figure-num {
+  font-family: var(--font-display);
+  font-size: clamp(44px, 5.4vw, 72px);
+  line-height: 1;
+  letter-spacing: var(--track-hero);
+  font-variant-numeric: tabular-nums;
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.bench__figure-unit {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.bench__figure-name {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: #f2f2f5;
+}
+
+.bench__figure-time {
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border-strong);
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.04em;
+  color: var(--color-accent);
+}
+
+.bench__pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  max-width: 360px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bench__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.bench__pill b {
+  padding-left: 10px;
+  border-left: 1px solid var(--color-border-strong);
+  font-weight: 500;
+  color: var(--color-accent);
+}
+
+/* -- stage: the inset chart panel -- */
+.bench__stage {
+  position: relative;
+  margin-top: clamp(20px, 3vh, 28px);
+  padding: 6px 0 14px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 18px;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(255, 122, 26, 0.06), transparent 60%),
+    rgba(255, 255, 255, 0.015);
+  overflow: hidden;
+}
+
+/* Dashed guide that slides to the active bar's value. The inner line is as
+   wide as the track column, so translating it by --w lands it exactly. */
+.bench__guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--row-pad) + var(--name-col) + var(--col-gap));
+  right: calc(var(--row-pad) + var(--time-col) + var(--col-gap));
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity var(--dur-slow) var(--ease) 900ms;
+}
+
+[data-seen] .bench__guide {
+  opacity: 1;
+}
+
+.bench__guide-line {
+  position: absolute;
+  inset: 0;
+  transform: translateX(calc(var(--w) * 100%));
+  transition: transform 600ms var(--ease);
+}
+
+.bench__guide-line::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background: repeating-linear-gradient(180deg, rgba(255, 122, 26, 0.5) 0 4px, transparent 4px 9px);
+}
+
+.bench__axis,
+.bench__row {
+  display: grid;
+  grid-template-columns: var(--name-col) minmax(0, 1fr) var(--time-col);
+  gap: var(--col-gap);
+  align-items: center;
+}
+
+.bench__axis {
+  padding: 10px var(--row-pad) 0;
+}
+
+.bench__ticks {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.bench__rows {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bench__row {
+  width: 100%;
+  padding: clamp(24px, 3.4vh, 32px) var(--row-pad) clamp(14px, 2vh, 20px);
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: default;
+}
+
+.bench__row:focus-visible {
+  outline: 1px solid var(--color-border-strong);
+  outline-offset: -1px;
+  border-radius: 12px;
+}
+
+.bench__name {
+  font-size: var(--text-body-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  transition: color var(--dur-slow) var(--ease);
+}
+
+.bench__row[data-active] .bench__name {
+  color: #f2f2f5;
+}
+
+/* Three rows of dots, the empty slots dimly visible so every bar reads
+   against the full 0-1,000 run. */
+.bench__track {
+  position: relative;
+  height: calc(var(--pitch) * 3);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.08) 1.8px, transparent 2.2px) 0 0 /
+    var(--pitch) var(--pitch);
+}
+
+/* Reveal without repaints. clip-path on a masked layer is redrawn on every
+   frame; this is two opposite transforms instead. The box slides in from
+   the left while the dots inside slide back by the same amount on the same
+   curve, so on screen the dots never move, they are simply uncovered. */
+.bench__clip {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--w) * 100%);
+  overflow: hidden;
+  transform: translate3d(-100%, 0, 0);
+  /* Own layers for the clip and the masked dots, so the mask is rasterised
+     once and the reveal and hover fades are pure compositing. */
+  will-change: transform;
+  transition: transform 1000ms var(--ease) calc(var(--i) * 90ms);
+}
+
+[data-seen] .bench__clip {
+  transform: none;
+}
+
+.bench__fill {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: linear-gradient(90deg, rgba(255, 122, 26, 0.45), var(--grad-mark-from) 55%, var(--grad-mark-to));
+  -webkit-mask: radial-gradient(circle, #000 2px, transparent 2.4px) 0 0 / var(--pitch) var(--pitch);
+  mask: radial-gradient(circle, #000 2px, transparent 2.4px) 0 0 / var(--pitch) var(--pitch);
+  opacity: 0.38;
+  transform: translate3d(100%, 0, 0);
+  will-change: transform, opacity;
+  transition: transform 1000ms var(--ease) calc(var(--i) * 90ms), opacity var(--dur-slow) var(--ease);
+}
+
+[data-seen] .bench__fill {
+  transform: none;
+}
+
+.bench__row[data-active] .bench__fill {
+  opacity: 1;
+}
+
+/* Halftone halo round the bar's end, only on the active row. */
+.bench__halo {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--w) * 100%);
+  width: 150px;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: radial-gradient(circle, rgba(255, 110, 60, 0.6) 1px, transparent 1.4px) 0 0 / 6px 6px;
+  -webkit-mask: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 100%);
+  mask: radial-gradient(closest-side, #000 0%, rgba(0, 0, 0, 0.4) 55%, transparent 100%);
+  opacity: 0;
+  scale: 0.6;
+  will-change: scale, opacity;
+  pointer-events: none;
+  transition: opacity var(--dur-slow) var(--ease), scale 500ms var(--ease);
+}
+
+.bench__knob {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--w) * 100%);
+  width: 12px;
+  height: 12px;
+  translate: -50% -50%;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(255, 122, 26, 0.3), 0 0 18px 2px rgba(255, 90, 80, 0.55);
+  opacity: 0;
+  scale: 0.4;
+  transition: opacity var(--dur-base) var(--ease), scale 400ms var(--ease);
+}
+
+/* Value pill above the bar end. Anchored proportionally, so it sits left of
+   short bars and right-aligned on full ones, never spilling out. */
+.bench__tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: calc(var(--w) * 100%);
+  z-index: 2;
+  translate: calc(var(--w) * -100%) 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--grad-mark-from), var(--grad-mark-to));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: #fff;
+  opacity: 0;
+  transition: opacity var(--dur-base) var(--ease), translate var(--dur-slow) var(--ease);
+}
+
+[data-seen] .bench__row[data-active] .bench__halo {
+  opacity: 1;
+  scale: 1;
+}
+
+[data-seen] .bench__row[data-active] .bench__knob {
+  opacity: 1;
+  scale: 1;
+}
+
+[data-seen] .bench__row[data-active] .bench__tip {
+  opacity: 1;
+  translate: calc(var(--w) * -100%) 0;
+}
+
+.bench__time {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  text-align: right;
+  color: var(--color-text-muted);
+  transition: color var(--dur-slow) var(--ease);
+}
+
+.bench__row[data-active] .bench__time {
+  color: var(--color-accent);
+}
+
+/* -- footer readout -- */
+.bench__detail {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: clamp(18px, 2.6vh, 24px) 0 0;
+}
+
+.bench__detail > div {
+  display: grid;
+  gap: 6px;
+  padding: clamp(10px, 1.6vh, 16px) clamp(4px, 0.6vw, 8px);
+}
+
+.bench__detail > div + div {
+  border-left: 1px solid var(--color-border);
+  padding-left: clamp(14px, 2vw, 28px);
+}
+
+.bench__detail dt {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.bench__detail dd {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-tight);
+  color: #f2f2f5;
+}
+
+.bench__detail .bench__detail-time {
+  color: var(--color-accent);
+}
+
+.features__pull,
+.features__closing {
+  max-width: 30ch;
+  margin-top: clamp(112px, 18vh, 220px);
+  margin-bottom: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-wrap: balance;
+}
+
+.features__closing {
+  max-width: 24ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bench__clip,
+  .bench__fill,
+  .bench__guide,
+  .bench__guide-line,
+  .bench__halo,
+  .bench__knob,
+  .bench__tip {
+    transition: none;
+  }
+}
+
+.features__note {
+  margin: clamp(32px, 5vh, 56px) 0 0;
+  text-align: center;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+}
+
+.features__note strong {
+  font-weight: 500;
+  color: #f2f2f5;
+}
+
+/* -- proof ----------------------------------------------------------------- */
+.features__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: clamp(96px, 15vh, 180px);
+  margin-bottom: 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.features__stat {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  padding: clamp(36px, 5.5vh, 60px) clamp(4px, 1.2vw, 18px);
+  text-align: center;
+}
+
+.features__stat + .features__stat {
+  border-left: 1px solid var(--color-border);
+}
+
+.features__stat-value {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h3);
+  line-height: 1;
+  letter-spacing: var(--track-display);
+  color: #f2f2f5;
+}
+
+.features__stat-label {
+  font-size: var(--text-eyebrow);
+  line-height: 1.4;
+  color: var(--color-text-muted);
+}
+
+.features__points {
+  margin: clamp(40px, 6vh, 72px) auto 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 18px;
+  max-width: 52ch;
+  font-size: 15px;
+  line-height: 1.75;
+  color: var(--color-text-muted);
+  text-align: center;
+}
+
+/* -- small stuff ----------------------------------------------------------- */
+.features__small {
+  margin: clamp(44px, 7vh, 80px) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.features__small-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: clamp(14px, 2vw, 32px);
+  padding: clamp(22px, 3.4vh, 36px) clamp(4px, 1.2vw, 18px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.features__small-pain,
+.features__small-fix {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+
+.features__small-pain {
+  color: #f2f2f5;
+}
+
+.features__small-fix {
+  color: var(--color-text-muted);
+}
+
+/* -- narrow ---------------------------------------------------------------- */
+@media (max-width: 720px) {
+  .bench {
+    --name-col: 84px;
+    --time-col: 0px;
+    padding: 18px 14px;
+    border-radius: 22px;
+  }
+  .bench__axis,
+  .bench__row {
+    grid-template-columns: var(--name-col) minmax(0, 1fr);
+  }
+  .bench__guide {
+    right: var(--row-pad);
+  }
+  .bench__pills {
+    justify-content: flex-start;
+  }
+  .bench__axis > :last-child,
+  .bench__time {
+    display: none;
+  }
+  .bench__detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .bench__detail > div + div {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+    padding-left: clamp(4px, 1.2vw, 18px);
+  }
+  .features__pain {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .features__fix {
+    grid-column: 2;
+  }
+  .features__caps {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .features__cap:nth-child(odd) {
+    padding-right: clamp(4px, 1.2vw, 18px);
+  }
+  .features__stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .features__stat:nth-child(3) {
+    border-left: 0;
+  }
+  .features__stat:nth-child(n + 3) {
+    border-top: 1px solid var(--color-border);
+  }
+  .features__small-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+}

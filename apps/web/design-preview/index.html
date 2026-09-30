@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brud Code — Type &amp; Colour Specimen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,200..800;1,6..72,200..800&display=swap" rel="stylesheet">
+<style>
+/* ============ FONTS ============ */
+/* Newsreader loads from Google Fonts via the <link> in <head> */
+@font-face{font-family:'Satoshi';src:url('fonts/Satoshi-Variable.woff2') format('woff2');font-weight:300 900;font-style:normal;font-display:swap}
+@font-face{font-family:'Commit Mono';src:url('fonts/CommitMono-400-Regular.otf') format('opentype');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Commit Mono';src:url('fonts/CommitMono-700-Regular.otf') format('opentype');font-weight:700;font-style:normal;font-display:swap}
+@font-face{font-family:'Bubbledot Fine';src:url('fonts/Bubbledot-Fine.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Array';src:url('fonts/Array-Regular.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+@font-face{font-family:'Array Wide';src:url('fonts/Array-Wide.woff2') format('woff2');font-weight:400;font-style:normal;font-display:swap}
+
+/* ============ TOKENS ============ */
+:root{
+  /* locked */
+  --bg:#0D0E10;
+  --primary:#FFFFFF;
+  --accent:#FF3B30;
+  --text:#E5E5EA;
+  /* revised */
+  --surface:#1A1B1F;
+  --surface-2:#212226;
+  --border:#2C2C2E;
+  --border-strong:#3A3A3C;
+  --text-muted:#8E8E93;
+  --accent-hov:#FF5247;
+  --accent-dim:rgba(255,59,48,.12);
+  --success:#30D158;
+  --warning:#FFB020;
+  /* originals kept for comparison */
+  --surface-old:#16171A;
+
+  --display:'Newsreader',Georgia,'Times New Roman',serif;
+  --body:'Satoshi',system-ui,sans-serif;
+  --mono:'Commit Mono',ui-monospace,monospace;
+  --inst:'Bubbledot Fine','Array',monospace;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:var(--body);font-size:16px;line-height:1.7;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 32px}
+section{padding:88px 0;border-bottom:1px solid var(--border)}
+.eyebrow{font-family:var(--inst);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted);margin:0 0 20px}
+h1,h2,h3{font-family:var(--display);font-weight:400;font-variation-settings:'opsz' 72;letter-spacing:-.025em;margin:0 0 20px;color:var(--primary)}
+h1{font-size:clamp(44px,7vw,84px);line-height:1.02}
+h2{font-size:clamp(30px,4vw,46px);line-height:1.1}
+h3{font-size:24px;line-height:1.2}
+p{margin:0 0 18px;max-width:62ch}
+.muted{color:var(--text-muted)}
+.small{font-size:14px}
+code,.mono{font-family:var(--mono)}
+
+/* swatches */
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(220px,1fr))}
+.sw{border:1px solid var(--border-strong);border-radius:10px;overflow:hidden;background:var(--surface)}
+.sw .chip{height:96px;display:block}
+.sw .meta{padding:12px 14px;font-family:var(--mono);font-size:12px;line-height:1.55}
+.sw .name{color:var(--primary)}
+.sw .hex{color:var(--text-muted);text-transform:uppercase}
+.ratio{display:inline-block;margin-top:6px;padding:2px 7px;border-radius:4px;font-size:11px;border:1px solid var(--border-strong)}
+.pass{color:var(--success);border-color:rgba(48,209,88,.4)}
+.fail{color:var(--accent);border-color:rgba(255,59,48,.45)}
+.warn{color:var(--warning);border-color:rgba(255,176,32,.4)}
+
+/* cards */
+.card{background:var(--surface);border:1px solid var(--border-strong);border-radius:12px;padding:24px}
+.card-old{background:var(--surface-old);border:1px solid var(--border);border-radius:12px;padding:24px}
+.two{display:grid;gap:20px;grid-template-columns:1fr 1fr}
+@media(max-width:760px){.two{grid-template-columns:1fr}}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;gap:10px;font-family:var(--body);font-weight:500;font-size:15px;padding:13px 22px;border-radius:8px;border:1px solid transparent;text-decoration:none;cursor:pointer}
+.btn-primary{background:var(--primary);color:#0D0E10}
+.btn-ghost{background:transparent;color:var(--primary);border-color:var(--border-strong)}
+.btn-accent-white{background:var(--accent);color:#fff}
+.btn-accent-black{background:var(--accent);color:#0D0E10}
+.btn-row{display:flex;gap:14px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+
+/* type rows */
+.row{border-top:1px solid var(--border);padding:26px 0}
+.row:first-of-type{border-top:0}
+.label{font-family:var(--mono);font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:10px}
+.ys{font-family:var(--display);font-variation-settings:'opsz' 72;color:var(--primary);letter-spacing:-.025em}
+.sa{font-family:var(--body)}
+.cm{font-family:var(--mono)}
+.bd{font-family:'Bubbledot Fine',monospace;text-transform:uppercase;letter-spacing:.14em;color:var(--primary)}
+.ar{font-family:'Array',monospace;text-transform:uppercase;letter-spacing:.14em;color:var(--primary)}
+.arw{font-family:'Array Wide',monospace;text-transform:uppercase;letter-spacing:.1em;color:var(--primary)}
+
+table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:13px}
+th,td{text-align:left;padding:11px 12px;border-bottom:1px solid var(--border)}
+th{font-family:var(--inst);font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border-strong)}
+
+.stat{font-family:'Bubbledot Fine',monospace;font-size:clamp(56px,11vw,132px);line-height:1;color:var(--primary);letter-spacing:.06em}
+.pre{background:var(--surface-2);border:1px solid var(--border-strong);border-radius:8px;padding:18px;font-family:var(--mono);font-size:13.5px;overflow-x:auto}
+.note{border-left:2px solid var(--accent);padding:4px 0 4px 16px;margin:24px 0;color:var(--text-muted);font-size:14.5px}
+.ast{color:var(--accent);font-size:1.1em}
+.badge{font-family:var(--mono);font-size:11px;padding:3px 8px;border:1px solid var(--border-strong);border-radius:999px;color:var(--text-muted)}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<!-- ============ HEADER ============ -->
+<section style="padding-top:72px">
+  <p class="eyebrow">Brud Code <span class="ast">&#10033;</span> Specimen 01</p>
+  <h1>Type and colour,<br>tested on the real background.</h1>
+  <p class="muted">Every specimen below renders on <code>#0D0E10</code> at production sizes. Contrast ratios are measured against the background, not estimated. Two changes are proposed: a fourth typeface for prose, and four palette tokens that fix invisible surfaces and a failing button.</p>
+  <div class="btn-row" style="margin-top:28px">
+    <span class="badge">Newsreader &mdash; OFL, Google Fonts</span>
+    <span class="badge">Satoshi &mdash; Fontshare FFL</span>
+    <span class="badge">Commit Mono &mdash; OFL</span>
+    <span class="badge">Array &mdash; Fontshare FFL</span>
+    <span class="badge" style="color:var(--accent);border-color:rgba(255,59,48,.45)">Bubbledot &mdash; licence unclear</span>
+  </div>
+</section>
+
+<!-- ============ PROPOSAL 1: FOURTH FONT ============ -->
+<section>
+  <p class="eyebrow">Proposal 01</p>
+  <h2>Satoshi joins as the prose workhorse</h2>
+  <p>The locked three-font system has no neutral sans, which forced the rule <em>no paragraph may exceed three lines</em>. That rule is a workaround, not a design decision. Read the two columns below at the same size and the cost becomes obvious.</p>
+
+  <div class="two" style="margin-top:32px">
+    <div class="card">
+      <div class="label">Commit Mono &mdash; 16px / 1.7 &mdash; current body font</div>
+      <p class="cm" style="font-size:16px;line-height:1.7">Brud Code turns any AI chatbot into an agentic coding tool. Paste the master system prompt once per session, and the model replies with Brud blocks. Paste those into the sidebar, preview the diff, execute. No API keys, no subscription, no account, no cloud. History snapshots live in <span style="color:var(--primary)">.brud/history/</span> with seven-day trash retention, and Git is never required.</p>
+      <div class="label" style="margin-top:14px;color:var(--accent)">62 characters fills ~1.35&times; the width of the same text in Satoshi</div>
+    </div>
+    <div class="card">
+      <div class="label">Satoshi &mdash; 16px / 1.7 &mdash; proposed body font</div>
+      <p class="sa" style="font-size:16px;line-height:1.7">Brud Code turns any AI chatbot into an agentic coding tool. Paste the master system prompt once per session, and the model replies with Brud blocks. Paste those into the sidebar, preview the diff, execute. No API keys, no subscription, no account, no cloud. History snapshots live in <span class="cm" style="color:var(--primary)">.brud/history/</span> with seven-day trash retention, and Git is never required.</p>
+      <div class="label" style="margin-top:14px;color:var(--success)">Shorter lines, tighter rag, mono still available for paths and code</div>
+    </div>
+  </div>
+
+  <div class="note">Monospace at paragraph length reads as terminal output, which is right for a diff block and wrong for an FAQ answer. Keeping Commit Mono for code, install commands, benchmark tables and inline paths preserves the engineering texture without taxing every sentence.</div>
+
+  <table style="margin-top:28px">
+    <tr><th>Font</th><th>Role after change</th><th>Sizes</th><th>Licence</th></tr>
+    <tr><td class="ys" style="font-size:15px">Newsreader</td><td>Display only &mdash; h1, h2, h3</td><td>24px and up</td><td>OFL &mdash; safe</td></tr>
+    <tr><td class="sa">Satoshi</td><td>Body, buttons, nav, FAQ, labels</td><td>14&ndash;20px</td><td>Fontshare FFL &mdash; safe</td></tr>
+    <tr><td class="cm">Commit Mono</td><td>Code, paths, commands, tables</td><td>13&ndash;16px</td><td>OFL &mdash; safe</td></tr>
+    <tr><td class="ar">Array / Bubbledot</td><td>Instrumentation only</td><td>11&ndash;13px, one hero stat</td><td>see Proposal 03</td></tr>
+  </table>
+</section>
+
+<!-- ============ PROPOSAL 2: PALETTE ============ -->
+<section>
+  <p class="eyebrow">Proposal 02</p>
+  <h2>Four palette fixes, measured</h2>
+  <p>The four locked colours stay exactly as they are. The changes are additive, and each one solves a measured failure rather than a taste preference.</p>
+
+  <div class="grid" style="margin-top:32px">
+    <div class="sw"><span class="chip" style="background:#0D0E10;border-bottom:1px solid var(--border-strong)"></span><div class="meta"><div class="name">background</div><div class="hex">#0D0E10</div><div class="ratio">locked</div></div></div>
+    <div class="sw"><span class="chip" style="background:#FFFFFF"></span><div class="meta"><div class="name">primary</div><div class="hex">#FFFFFF</div><div class="ratio pass">19.0:1 AAA</div></div></div>
+    <div class="sw"><span class="chip" style="background:#E5E5EA"></span><div class="meta"><div class="name">text</div><div class="hex">#E5E5EA</div><div class="ratio pass">15.2:1 AAA</div></div></div>
+    <div class="sw"><span class="chip" style="background:#FF3B30"></span><div class="meta"><div class="name">accent</div><div class="hex">#FF3B30</div><div class="ratio pass">5.4:1 AA</div></div></div>
+    <div class="sw"><span class="chip" style="background:#8E8E93"></span><div class="meta"><div class="name">text-muted</div><div class="hex">#8E8E93</div><div class="ratio pass">5.8:1 AA</div></div></div>
+    <div class="sw"><span class="chip" style="background:#16171A"></span><div class="meta"><div class="name">surface &mdash; old</div><div class="hex">#16171A</div><div class="ratio fail">1.05:1 invisible</div></div></div>
+    <div class="sw"><span class="chip" style="background:#1A1B1F"></span><div class="meta"><div class="name">surface &mdash; new</div><div class="hex">#1A1B1F</div><div class="ratio warn">1.15:1 + border</div></div></div>
+    <div class="sw"><span class="chip" style="background:#212226"></span><div class="meta"><div class="name">surface-2 &mdash; new</div><div class="hex">#212226</div><div class="ratio warn">1.35:1 nested</div></div></div>
+    <div class="sw"><span class="chip" style="background:#2C2C2E"></span><div class="meta"><div class="name">border</div><div class="hex">#2C2C2E</div><div class="ratio warn">1.37:1 hairline</div></div></div>
+    <div class="sw"><span class="chip" style="background:#3A3A3C"></span><div class="meta"><div class="name">border-strong &mdash; new</div><div class="hex">#3A3A3C</div><div class="ratio warn">1.67:1 structure</div></div></div>
+    <div class="sw"><span class="chip" style="background:#30D158"></span><div class="meta"><div class="name">success</div><div class="hex">#30D158</div><div class="ratio pass">9.4:1 AAA</div></div></div>
+    <div class="sw"><span class="chip" style="background:#FFB020"></span><div class="meta"><div class="name">warning</div><div class="hex">#FFB020</div><div class="ratio pass">10.4:1 AAA</div></div></div>
+  </div>
+
+  <h3 style="margin-top:56px">Fix 1 &mdash; surface was invisible</h3>
+  <p><code>#16171A</code> sits at <strong>1.05:1</strong> against the background. On most laptop screens a card painted with it is indistinguishable from the page, so every card was relying entirely on its border. Compare:</p>
+  <div class="two" style="margin-top:20px">
+    <div class="card-old">
+      <div class="label">surface #16171A + border #2C2C2E</div>
+      <p style="margin:0" class="small">No API keys. No subscription. No account.</p>
+    </div>
+    <div class="card">
+      <div class="label">surface #1A1B1F + border #3A3A3C</div>
+      <p style="margin:0" class="small">No API keys. No subscription. No account.</p>
+    </div>
+  </div>
+
+  <h3 style="margin-top:56px">Fix 2 &mdash; the red button fails contrast</h3>
+  <p>White text on <code>#FF3B30</code> measures <strong>3.5:1</strong>, below the 4.5:1 minimum for body-size text. Three candidates, judge them directly:</p>
+  <div class="btn-row" style="margin-top:22px">
+    <a class="btn btn-accent-white" href="#">Install the extension</a>
+    <span class="ratio fail">3.5:1 fails AA</span>
+  </div>
+  <div class="btn-row">
+    <a class="btn btn-accent-black" href="#">Install the extension</a>
+    <span class="ratio pass">5.4:1 passes AA</span>
+  </div>
+  <div class="btn-row">
+    <a class="btn btn-primary" href="#">Install the extension</a>
+    <a class="btn btn-ghost" href="#"><span class="ast">&#9733;</span> Star on GitHub &mdash; 1,284</a>
+    <span class="ratio pass">19.0:1 &mdash; recommended</span>
+  </div>
+  <div class="note">Recommendation: white fill with near-black text as the primary call to action, ghost button beside it for the star. Accent red is then reserved for the asterisk mark, links, hover states and the focus ring &mdash; which keeps it rare enough to stay loud, and matches the existing rule that red never signals destruction in a product whose promise is safe undo.</div>
+
+  <h3 style="margin-top:56px">Fix 3 &mdash; a visible focus ring</h3>
+  <p>Red on near-black is nearly invisible as a 1px outline. A 2px ring with an offset and a dim halo is keyboard-usable:</p>
+  <div class="btn-row" style="margin-top:18px">
+    <a class="btn btn-ghost" href="#" style="outline:2px solid var(--accent);outline-offset:3px;box-shadow:0 0 0 6px var(--accent-dim)">Focused state</a>
+    <span class="small muted">--color-focus: 2px #FF3B30, offset 3px, halo rgba(255,59,48,.12)</span>
+  </div>
+
+  <h3 style="margin-top:56px">Fix 4 &mdash; the logo gradient has no tokens</h3>
+  <p>The orange&rarr;pink asterisk is the only gradient in the system and currently exists nowhere in the palette, which means it will get re-guessed every time someone builds a component. It should be two named tokens sampled from <code>icon.png</code> rather than invented. Placeholder swatch only:</p>
+  <div style="margin-top:18px;height:80px;border-radius:10px;border:1px solid var(--border-strong);background:linear-gradient(100deg,#FF7A1A,#FF3B81)"></div>
+  <p class="small muted" style="margin-top:12px">Gradient restricted to the logo mark and the 3D hero render. Never on buttons, borders or text.</p>
+</section>
+
+<!-- ============ PROPOSAL 3: INSTRUMENTATION FONT ============ -->
+<section>
+  <p class="eyebrow">Proposal 03</p>
+  <h2>Bubbledot has a licence problem</h2>
+  <p>The copy in <code>F:\Fonts</code> came from OnlineWebFonts, whose bundled licence says the collection &ldquo;may be trial versions of full versions and may not allow embedding unless a commercial license is purchased&rdquo;, while separately claiming CC BY 4.0. The <code>W01</code> in the filename is Monotype web-package naming, which suggests the original is commercial. Shipping it on a public open-source site is a real risk.</p>
+  <p>Array, from Fontshare, occupies the same dot-matrix-adjacent instrumentation niche, ships a proper licence file, and is already in your library. Compare all three in the actual role:</p>
+
+  <div class="row" style="margin-top:28px">
+    <div class="label">Bubbledot Fine &mdash; eyebrow at 12px</div>
+    <div class="bd" style="font-size:12px">Scales to 384K lines &mdash; section 05</div>
+  </div>
+  <div class="row">
+    <div class="label">Array Regular &mdash; eyebrow at 12px</div>
+    <div class="ar" style="font-size:12px">Scales to 384K lines &mdash; section 05</div>
+  </div>
+  <div class="row">
+    <div class="label">Array Wide &mdash; eyebrow at 12px</div>
+    <div class="arw" style="font-size:12px">Scales to 384K lines &mdash; section 05</div>
+  </div>
+
+  <div class="two" style="margin-top:36px">
+    <div class="card">
+      <div class="label">Hero stat &mdash; Bubbledot Fine</div>
+      <div class="stat">384K</div>
+      <div class="label" style="margin-top:8px">lines of code, 100% success</div>
+    </div>
+    <div class="card">
+      <div class="label">Hero stat &mdash; Array Wide</div>
+      <div class="arw" style="font-size:clamp(56px,11vw,132px);line-height:1;letter-spacing:.02em">384K</div>
+      <div class="label" style="margin-top:8px">lines of code, 100% success</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ TYPE SCALE ============ -->
+<section>
+  <p class="eyebrow">Specimen</p>
+  <h2>The scale at production sizes</h2>
+
+  <div class="row">
+    <div class="label">Newsreader &mdash; 84px &mdash; hero, one use per page</div>
+    <div class="ys" style="font-size:clamp(44px,7vw,84px);line-height:1.02">Stop copy-pasting AI code.</div>
+  </div>
+  <div class="row">
+    <div class="label">Newsreader &mdash; 46px &mdash; section heading</div>
+    <div class="ys" style="font-size:clamp(30px,4vw,46px);line-height:1.1">Undo actually works</div>
+  </div>
+  <div class="row">
+    <div class="label">Newsreader &mdash; 24px &mdash; subsection</div>
+    <div class="ys" style="font-size:24px">Any model, any editor, any machine</div>
+  </div>
+  <div class="row">
+    <div class="label">Satoshi Medium &mdash; 20px &mdash; lead paragraph</div>
+    <div class="sa" style="font-size:20px;font-weight:500;line-height:1.55;max-width:56ch">One paste in, one copy out. Brud Code reads the blocks your chatbot already knows how to write, shows you the diff, and applies it only when you say so.</div>
+  </div>
+  <div class="row">
+    <div class="label">Satoshi Regular &mdash; 16px &mdash; body</div>
+    <div class="sa" style="max-width:62ch">Twenty-one operation types cover creating, appending, searching, replacing and reverting across a whole workspace. Every run writes a snapshot to <span class="cm">.brud/history/</span> first, so a thousand-file mistake is one revert away. Trash keeps deletions for seven days. None of it needs Git.</div>
+  </div>
+  <div class="row">
+    <div class="label">Satoshi Regular &mdash; 14px &mdash; caption, muted</div>
+    <div class="sa small muted">Benchmarked on a 384,000-line production codebase. 1,000 files created in under one second, zero failures.</div>
+  </div>
+  <div class="row">
+    <div class="label">Commit Mono &mdash; 13.5px &mdash; install block</div>
+    <div class="pre">$ code --install-extension brud-code-1.0.0.vsix
+<span style="color:var(--success)">&#10003;</span> Extension 'brud-code' was successfully installed.</div>
+  </div>
+  <div class="row">
+    <div class="label">Commit Mono &mdash; 13.5px &mdash; a Brud block, the product&rsquo;s signature</div>
+    <div class="pre">&lt;&lt;&lt;&lt;&lt;&lt;&lt; SEARCH
+const timeout = 30000
+=======
+const timeout = 90000
+&gt;&gt;&gt;&gt;&gt;&gt;&gt; REPLACE</div>
+  </div>
+  <div class="row">
+    <div class="label">Commit Mono &mdash; 13px &mdash; benchmark table</div>
+    <table>
+      <tr><th>Operation</th><th>Scale</th><th>Time</th><th>Failures</th></tr>
+      <tr><td>Create files</td><td>1,000</td><td>&lt; 1s</td><td>0</td></tr>
+      <tr><td>Search &amp; replace</td><td>467 files</td><td>milliseconds</td><td>0</td></tr>
+      <tr><td>Revert</td><td>1,000 files</td><td>milliseconds</td><td>0</td></tr>
+      <tr><td>Restore from trash</td><td>1,000 files</td><td>milliseconds</td><td>0</td></tr>
+    </table>
+  </div>
+</section>
+
+<!-- ============ APPLIED ============ -->
+<section style="border-bottom:0">
+  <p class="eyebrow">Applied</p>
+  <h2>All four fonts in one view</h2>
+  <div class="card" style="margin-top:28px;padding:48px 40px">
+    <p class="eyebrow" style="margin-bottom:24px">01 &mdash; The problem</p>
+    <div class="ys" style="font-size:clamp(32px,4.4vw,52px);line-height:1.06;margin-bottom:22px">Your AI writes the code.<br>You do the typing.</div>
+    <p class="sa" style="font-size:17px;max-width:58ch">Ask any chatbot to refactor twelve files and it will happily produce twelve blocks of code. Then you paste them one by one, hunt for the right line, and hope nothing drifted. Brud Code removes that step and nothing else.</p>
+    <div class="btn-row" style="margin-top:32px">
+      <a class="btn btn-primary" href="#">Install in 2 minutes</a>
+      <a class="btn btn-ghost" href="#"><span class="ast">&#9733;</span> Star on GitHub &mdash; 1,284</a>
+    </div>
+    <p class="small muted" style="margin-top:28px;font-family:var(--mono)">Free &middot; MIT &middot; no account &middot; no cloud &middot; works with ChatGPT, Claude, Gemini, DeepSeek, Grok, Llama</p>
+  </div>
+
+  <p class="small muted" style="margin-top:48px">Specimen generated for review. Newsreader is loaded straight from Google Fonts (OFL, variable, opsz 6&ndash;72 / wght 200&ndash;800). Satoshi, Array and Commit Mono load from the local library. Commit Mono is loaded here as OTF and should be converted to WOFF2 before production.</p>
+</section>
+
+</div>
+</body>
+</html>

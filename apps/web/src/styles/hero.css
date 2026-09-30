@@ -1,0 +1,366 @@
+/* ==========================================================================
+   HERO
+   One three-row grid: nav, stage, meta. Nothing is placed with a magic
+   percentage, so the mark lands optically centred inside the content band at
+   every viewport, and the strip at the bottom closes the frame.
+   ========================================================================== */
+.hero {
+  position: relative;
+  min-height: 100svh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--color-background);
+  isolation: isolate;
+  /* Lifts the fixed header above every section that follows the hero. */
+  z-index: 50;
+}
+
+/* --------------------------------------------------------------------------
+   Art layer. Shares row two with the stage, so the mark centres on the copy
+   band rather than on the viewport.
+   -------------------------------------------------------------------------- */
+/* Above the journey's reveal, so the mark's rim light still frames the hole
+   the reveal opens through. */
+.hero__art {
+  grid-area: 2 / 1;
+  position: relative;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  pointer-events: none;
+}
+
+/* The halo is decoration: taken out of flow so its size can never stretch the
+   row and push the copy below the fold. The hero's overflow clips it. */
+.hero__halo {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--halo-size);
+  aspect-ratio: 1 / 1;
+  transform: translate(-50%, -50%);
+  background: var(--halo-glow);
+}
+
+.hero__mark {
+  position: relative;
+  width: var(--mark-size);
+  aspect-ratio: 1 / 1;
+}
+
+.hero__mark > div {
+  width: 100%;
+  height: 100%;
+}
+
+/* --------------------------------------------------------------------------
+   The mark's travelling rim light.
+
+   Two canvases, one either side of the body, painted by useRimLight: the
+   light is filled as a gradient and cut to the band shapes built by
+   tools/buildMarkMasks.mjs. Nothing here is masked or clipped, because the
+   journey scales this mark up to about twelve times its size and a masked
+   layer is re-rasterised every time its scale changes.
+   -------------------------------------------------------------------------- */
+.glyph {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  /* the glow never leaves this box, so scope invalidation to it */
+  contain: paint;
+}
+
+.glyph__glow {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.glyph__body {
+  position: absolute;
+  inset: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Scrim. Full bleed, above the art, below the copy.
+
+   One wrapper holds all three layers so the journey can fade them out
+   together as the reveal opens: they sit above it, and left at full strength
+   they would tint the section showing through the mark and then snap away at
+   the handover.
+   -------------------------------------------------------------------------- */
+.hero__scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+
+.hero__vignette,
+.hero__grain {
+  position: absolute;
+  inset: 0;
+}
+
+.hero__vignette {
+  background: var(--vignette);
+}
+
+/* No blend mode: `overlay` forced the whole hero through an unaccelerated
+   compositing path for a texture that is barely visible on a near-black
+   ground. Plain opacity looks the same and costs nothing. */
+.hero__grain {
+  opacity: 0.045;
+  background-image: var(--grain);
+}
+
+/* The vignette is radial, so it only reaches black at the corners and leaves
+   the middle of the bottom edge lighter than the section below. This is a
+   flat linear fade across the full width, which makes the whole boundary one
+   colour. It sits under the meta strip's z-index so the facts stay legible. */
+.hero__floor {
+  position: absolute;
+  inset: auto 0 0;
+  height: clamp(170px, 28vh, 340px);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.72) 58%, #000 100%);
+}
+
+/* --------------------------------------------------------------------------
+   Stage. Headline left, mark down the middle, points right. The middle track
+   is an empty spacer sized off the mark, so nothing can ever collide with it.
+   -------------------------------------------------------------------------- */
+.hero__stage {
+  grid-area: 2 / 1;
+  position: relative;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) var(--stage-core) minmax(0, 0.85fr);
+  align-items: center;
+  gap: var(--stage-gap);
+  padding-inline: var(--edge);
+  pointer-events: none;
+}
+
+.hero__stage > * {
+  pointer-events: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Headline
+   -------------------------------------------------------------------------- */
+.headline {
+  grid-column: 1;
+}
+
+.headline__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-variation-settings: "opsz" 72;
+  font-size: var(--text-hero);
+  line-height: var(--lh-hero);
+  letter-spacing: var(--track-hero);
+  white-space: nowrap;
+}
+
+/* Both phrases share one grid cell, so the headline keeps a fixed size and
+   nothing under it shifts while the words change. The threshold filter runs
+   over the pair, which is what melts the two blurred layers into each other. */
+.headline__morph {
+  display: grid;
+  align-items: start;
+  filter: url(#brud-goo) blur(0.35px);
+}
+
+.headline__phrase {
+  grid-area: 1 / 1;
+  display: block;
+  will-change: opacity;
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* Only the phrase that is currently dissolving needs a filter layer. */
+.headline__phrase--live {
+  will-change: opacity, filter;
+}
+
+.headline__phrase span {
+  display: block;
+}
+
+/* The headline as plain text, for search engines and screen readers. */
+.headline__plain {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.headline__filter {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+
+.headline__lede {
+  margin: clamp(16px, 2.4vh, 26px) 0 0;
+  max-width: 34ch;
+  font-size: var(--text-body);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-body);
+  color: var(--color-text-muted);
+}
+
+.headline__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 13px;
+  margin-top: clamp(24px, 4vh, 46px);
+}
+
+/* --------------------------------------------------------------------------
+   Points
+   -------------------------------------------------------------------------- */
+.points {
+  grid-column: 3;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: clamp(15px, 2.6vh, 28px);
+  max-width: 38ch;
+}
+
+/* One line tall at rest. The tail still occupies layout inside, so hovering
+   only needs to set the row height to the inner span's natural height. */
+.points__row {
+  font-size: var(--text-point);
+  line-height: 1.35;
+  letter-spacing: var(--track-tight);
+  height: 1.35em;
+  overflow: hidden;
+  cursor: default;
+  transition: height 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.points__row:focus-visible {
+  outline: 1px solid var(--color-border);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+.points__text {
+  display: block;
+  text-wrap: pretty;
+}
+
+.points__lead {
+  font-weight: 500;
+  color: #f2f2f5;
+  transition: color 500ms ease-out;
+}
+
+.points__row[data-dim] .points__lead {
+  color: #82828c;
+}
+
+.points__tail {
+  font-weight: 400;
+  color: #9a9aa4;
+  opacity: 0;
+  transition: opacity 300ms ease-out;
+}
+
+.points__row[data-open] .points__tail {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .points__row,
+  .points__lead,
+  .points__tail {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Meta. The fact strip that closes the composition at the bottom.
+   -------------------------------------------------------------------------- */
+.hero__meta {
+  grid-area: 3 / 1;
+  position: relative;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  padding: var(--meta-pad-y) var(--edge);
+}
+
+.hero__meta::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: var(--edge);
+  right: var(--edge);
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--color-border) 20%,
+    var(--color-border) 80%,
+    transparent 100%
+  );
+}
+
+.meta__list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: var(--text-table);
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.meta__list li {
+  display: inline-flex;
+  align-items: center;
+}
+
+.meta__list li::after {
+  content: "·";
+  margin: 0 clamp(10px, 1.1vw, 20px);
+  color: var(--color-border-strong);
+}
+
+.meta__list li:last-child::after {
+  content: none;
+}
+
+/* --------------------------------------------------------------------------
+   Responsive
+
+   Everything above is the desktop composition and applies from 1081px up.
+   Tablets and phones are deliberately absent from this file: each has its own
+   stylesheet, so no breakpoint has to be read through another device's rules.
+
+     src/styles/hero.tablet.css   641px - 1080px
+     src/styles/hero.mobile.css   640px and below, plus phones held landscape
+
+   Both are imported after this file in src/app/layout.js, and each restates
+   every value it needs rather than inheriting a half-applied override.
+   -------------------------------------------------------------------------- */

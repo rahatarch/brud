@@ -1,0 +1,222 @@
+/* ==========================================================================
+   HERO - MOBILE
+   640px and below, plus phones held in landscape (wide but very short).
+
+   Self-contained on purpose. It shares nothing with the tablet stylesheet
+   and edits nothing in the desktop composition. Imported last of the three,
+   so where a landscape phone is wide enough to also match a tablet query,
+   these rules are the ones that win.
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  :root {
+    /* Every band has to fit one short screen, so the mark is sized off the
+       viewport height first and the width second. */
+    --mark-size: min(clamp(150px, 50vw, 250px), 24svh);
+    --halo-size: min(640px, 155vw);
+    --stage-gap: clamp(12px, 2.2vh, 24px);
+    --nav-pad-y: clamp(13px, 2.4vh, 20px);
+    --meta-pad-y: clamp(12px, 2.2vh, 22px);
+    --text-hero: clamp(34px, 10.5vw, 50px);
+  }
+
+  /* Four rows: nav, mark, copy, facts. */
+  .hero {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .hero__art {
+    grid-area: 2 / 1;
+    padding-top: clamp(6px, 1.6vh, 20px);
+  }
+
+  .hero__stage {
+    grid-area: 3 / 1;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    padding-bottom: clamp(10px, 2vh, 26px);
+  }
+
+  .headline,
+  .points {
+    grid-column: 1;
+  }
+
+  .hero__meta {
+    grid-area: 4 / 1;
+  }
+
+  /* Notch and home indicator. */
+  .hero__stage,
+  .hero__meta,
+  .nav {
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  /* -- headline --------------------------------------------------------- */
+  .headline__title {
+    white-space: normal;
+  }
+
+  .headline__lede {
+    max-width: 32ch;
+    text-wrap: pretty;
+  }
+
+  .headline__actions {
+    gap: 10px;
+  }
+
+  /* -- beats ------------------------------------------------------------ */
+  /* Left as single lines. There is no hover to open them, and no room to
+     print them in full without pushing the facts off the screen; the whole
+     sentence is on the page again in Features. */
+  .points {
+    gap: 11px;
+  }
+
+  .points__row {
+    cursor: default;
+  }
+
+  .points__row[data-dim] .points__lead {
+    color: #f2f2f5;
+  }
+
+  /* -- facts ------------------------------------------------------------ */
+  .meta__list {
+    font-size: 12px;
+    row-gap: 2px;
+  }
+
+  .meta__list li::after {
+    margin: 0 10px;
+  }
+
+  /* The list of chatbots runs three lines wide on a phone and breaks the
+     strip. It is stated again, in full, in the Features section. */
+  .meta__list li:last-child {
+    display: none;
+  }
+
+  .meta__list li:nth-last-child(2)::after {
+    content: none;
+  }
+
+  /* -- header ----------------------------------------------------------- */
+  /* Four section links, a wordmark and a badge cannot share 360px without
+     colliding. The links go; the two hero buttons already lead to Install
+     and Guide, and the badge stays because it is the call to action. */
+  .nav .switch__item {
+    display: none;
+  }
+
+  .nav .switch {
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    /* Live backdrop blur is the most expensive effect on the page and the
+       one a phone GPU handles worst. With no pill behind it, it has nothing
+       left to blur anyway. */
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .nav .switch__badge {
+    width: 38px;
+    height: 38px;
+    margin-left: 0;
+  }
+
+  /* -- scrim ------------------------------------------------------------ */
+  .hero__floor {
+    height: clamp(110px, 20vh, 200px);
+  }
+
+  /* A tiled noise texture at 4.5% opacity is invisible on a phone screen and
+     still costs a full-viewport layer at three times the density. */
+  .hero__grain {
+    display: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Phones held in landscape. Wide enough to match the tablet range, short
+   enough that the tablet layout would not fit, which is why this block is
+   keyed on height and lives here rather than there.
+   -------------------------------------------------------------------------- */
+@media (max-width: 1080px) and (orientation: landscape) and (max-height: 520px) {
+  :root {
+    --mark-size: min(clamp(110px, 16vw, 180px), 34svh);
+    --halo-size: min(560px, 80vw);
+    --nav-pad-y: clamp(10px, 3vh, 18px);
+    --meta-pad-y: clamp(10px, 2.6vh, 18px);
+    --text-hero: clamp(30px, 5.2vw, 44px);
+    --stage-gap: 12px;
+  }
+
+  .hero {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .hero__art {
+    grid-area: 2 / 1;
+    padding-top: 4px;
+  }
+
+  .hero__stage {
+    grid-area: 3 / 1;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    padding-bottom: 10px;
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  .headline {
+    grid-column: 1;
+  }
+
+  .headline__title {
+    white-space: normal;
+  }
+
+  .headline__lede {
+    max-width: 58ch;
+    margin-top: 8px;
+  }
+
+  .headline__actions {
+    margin-top: 14px;
+  }
+
+  /* Four bands will not fit 380px of height. The beats are the one part of
+     the hero repeated verbatim further down the page, so they are what gives
+     way. They return the moment the phone is turned upright. */
+  .points {
+    display: none;
+  }
+
+  .hero__meta {
+    grid-area: 4 / 1;
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  .meta__list {
+    font-size: 11.5px;
+  }
+
+  .hero__floor {
+    height: clamp(90px, 26vh, 150px);
+  }
+
+  .hero__grain {
+    display: none;
+  }
+
+  .nav .switch__item {
+    padding: 7px 12px;
+  }
+}

@@ -1,0 +1,89 @@
+/* ==========================================================================
+   BUTTONS
+   ========================================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: clamp(44px, 3.9vw, 54px);
+  padding: 0 clamp(20px, 1.9vw, 30px);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-family: var(--font-sans);
+  font-size: var(--text-btn);
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  position: relative;
+  overflow: hidden;
+  transition: background var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease),
+    color var(--dur-base) var(--ease), transform 0.32s var(--ease), box-shadow 0.32s var(--ease);
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* Pressed: sinks and squeezes a touch, then springs back on release. */
+.btn:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: none;
+  transition-duration: 0.1s;
+}
+
+/* Ripple, spawned at the pointer by src/components/PressRipple.jsx. */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.22;
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple 650ms var(--ease) forwards;
+}
+
+@keyframes ripple {
+  to {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn,
+  .btn:hover,
+  .btn:active {
+    transform: none;
+  }
+  .ripple {
+    display: none;
+  }
+}
+
+/* primary: white fill, near-black label. Never white-on-accent, it fails AA. */
+.btn--solid {
+  background: var(--color-primary);
+  color: var(--color-background);
+}
+
+.btn--solid:hover {
+  background: #e4e4ea;
+}
+
+.btn--muted {
+  background: var(--color-surface);
+  border-color: var(--color-border);
+  color: var(--color-text);
+}
+
+.btn--muted:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-border-strong);
+}
+
+@media (max-width: 640px) {
+  .btn {
+    flex: 1 1 auto;
+  }
+}

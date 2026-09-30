@@ -1,0 +1,43 @@
+/* ==========================================================================
+   FOOTER - TABLET
+   641px - 1080px, both orientations. Self-contained, the same split the
+   hero uses: nothing here is shared with the phone stylesheet and nothing in
+   src/styles/footer.css is edited to make it work.
+   ========================================================================== */
+
+@media (min-width: 641px) and (max-width: 1080px) {
+  .footer {
+    min-height: min(100svh, 760px);
+    padding-top: clamp(88px, 14vh, 150px);
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  .footer__title {
+    font-size: clamp(30px, 4.6vw, 44px);
+    max-width: 16ch;
+  }
+
+  .footer__bar {
+    padding-bottom: clamp(22px, 3.6vh, 42px);
+  }
+}
+
+/* Landscape is short: the plate has less height to show its ember band, so
+   the section stops trying to fill the screen and sizes to its content. */
+@media (min-width: 641px) and (max-width: 1080px) and (orientation: landscape) {
+  .footer {
+    min-height: 0;
+    padding-top: clamp(72px, 12vh, 120px);
+  }
+}
+
+/* Parallax: the same layers, travelling a little less on the shorter screen. */
+@media (min-width: 641px) and (max-width: 1080px) {
+  .footer {
+    --par-plate: 10%;
+    --par-cta: 28px;
+    --par-word: 80px;
+    --par-turn: -45deg;
+  }
+}

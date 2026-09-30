@@ -1,0 +1,62 @@
+{
+  "Brud_Logo": {
+    "file": "logo",
+    "unitSize": 2.1,
+    "sizeMetres": [
+      2.1,
+      1.9569,
+      0.8413
+    ],
+    "authoredPosition": [
+      0.0,
+      1.08,
+      -0.0
+    ],
+    "trisFull": 112232,
+    "tris": {
+      "high": 112232,
+      "med": 40000,
+      "low": 14000
+    }
+  },
+  "Brud_Bracket": {
+    "file": "bracket",
+    "unitSize": 1.05,
+    "sizeMetres": [
+      1.05,
+      0.7531,
+      0.2266
+    ],
+    "authoredPosition": [
+      -2.5506,
+      1.0511,
+      -0.1495
+    ],
+    "trisFull": 32324,
+    "tris": {
+      "high": 32324,
+      "med": 32324,
+      "low": 14000
+    }
+  },
+  "Brud_VSCode": {
+    "file": "vscode",
+    "unitSize": 1.1,
+    "sizeMetres": [
+      1.1,
+      1.0167,
+      0.4309
+    ],
+    "authoredPosition": [
+      2.5401,
+      1.0414,
+      -0.1491
+    ],
+    "trisFull": 30224,
+    "tris": {
+      "high": 30224,
+      "med": 30224,
+      "low": 14000
+    }
+  }
+}

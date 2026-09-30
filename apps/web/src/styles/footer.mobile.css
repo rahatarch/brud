@@ -1,0 +1,122 @@
+/* ==========================================================================
+   FOOTER - MOBILE
+   640px and below, plus phones held in landscape. Self-contained, imported
+   last of the three so it wins where a landscape phone is also tablet-wide.
+   ========================================================================== */
+
+@media (max-width: 640px) {
+  .footer {
+    min-height: min(100svh, 640px);
+    padding-top: clamp(72px, 12vh, 120px);
+    padding-bottom: max(clamp(18px, 2.6vh, 28px), env(safe-area-inset-bottom));
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  .footer__cta {
+    gap: 22px;
+  }
+
+  .footer__title {
+    font-size: clamp(27px, 8.4vw, 38px);
+    max-width: 15ch;
+  }
+
+  /* Two pills will not sit side by side at this width without one of them
+     wrapping its label; they stack and fill instead. */
+  .footer__actions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .copypill {
+    justify-content: center;
+    padding: 0 16px;
+  }
+
+  /* -- link bar --------------------------------------------------------- */
+  .footer__bar {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+    padding-bottom: clamp(22px, 4vh, 40px);
+  }
+
+  .footer__links {
+    justify-content: center;
+    gap: 18px;
+  }
+
+  .footer__legal {
+    font-size: 11.5px;
+  }
+
+  /* -- wordmark --------------------------------------------------------- */
+  /* The bloom is a full-width blurred layer for a texture that is barely
+     visible on a phone screen. The dots hold up on their own. */
+  .footer__word {
+    text-shadow: none;
+  }
+
+  .footer__glyph {
+    filter: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Phones held in landscape: wide enough to match the tablet range, short
+   enough that filling the screen would push the wordmark off it.
+   -------------------------------------------------------------------------- */
+@media (max-width: 1080px) and (orientation: landscape) and (max-height: 520px) {
+  .footer {
+    min-height: 0;
+    padding-top: clamp(56px, 16vh, 96px);
+    padding-bottom: max(14px, env(safe-area-inset-bottom));
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+
+  .footer__title {
+    font-size: clamp(26px, 4.4vw, 36px);
+  }
+
+  .footer__actions {
+    width: auto;
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .footer__bar {
+    flex-direction: row;
+    text-align: left;
+    padding-bottom: clamp(16px, 5vh, 30px);
+  }
+
+  .footer__word {
+    text-shadow: none;
+  }
+
+  .footer__glyph {
+    filter: none;
+  }
+}
+
+/* Parallax on phones: kept small. Big travel on a narrow screen reads as
+   lag, not depth, and the wordmark is a fraction of the height here. */
+@media (max-width: 640px), (max-width: 1080px) and (orientation: landscape) and (max-height: 520px) {
+  .footer {
+    --par-plate: 7%;
+    --par-cta: 18px;
+    --par-word: 36px;
+    --par-turn: -35deg;
+  }
+}
+
+@media (max-width: 640px) {
+  .footer__legal {
+    text-wrap: balance;
+  }
+}

@@ -1,26 +1,30 @@
 {
-  "name": "web",
+  "name": "brud-code-site",
   "version": "0.1.0",
   "private": true,
+  "description": "Marketing website for Brud Code, the free open-source VS Code extension that turns any AI chatbot into an agentic coding tool.",
+  "homepage": "https://miftahul-islam-efaz.github.io/Brud-code/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Miftahul-Islam-Efaz/Brud-code.git"
+  },
+  "license": "MIT",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "next lint",
+    "build:mark": "node tools/buildMarkMasks.mjs"
   },
   "dependencies": {
-    "next": "16.3.4",
-    "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "lenis": "^1.3.26",
+    "next": "15.1.6",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.3.4",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@tailwindcss/postcss": "^4.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^4.0.0"
   }
 }

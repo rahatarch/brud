@@ -1,0 +1,124 @@
+/* ==========================================================================
+   HERO - TABLET
+   641px - 1080px, both orientations.
+
+   Self-contained on purpose. Nothing here is shared with the phone
+   stylesheet, and nothing in the desktop composition (src/styles/hero.css)
+   is edited to make this work: the desktop file simply stops applying above
+   this range. Every value the tablet needs is restated below.
+
+   Shape of the layout: the three-column stage cannot hold a headline, a mark
+   and a list of beats side by side at this width, so the mark is lifted out
+   into a band of its own and the copy stacks under it.
+   ========================================================================== */
+
+@media (min-width: 641px) and (max-width: 1080px) {
+  :root {
+    /* Height-aware, because the four bands (nav, mark, copy, facts) all have
+       to land on the first screen. */
+    --mark-size: min(clamp(200px, 34vw, 340px), 30svh);
+    --halo-size: min(820px, 108vw);
+    --stage-gap: clamp(16px, 2.8vh, 32px);
+    --nav-pad-y: clamp(16px, 3.2vh, 32px);
+    --meta-pad-y: clamp(14px, 2.6vh, 28px);
+    --text-hero: clamp(44px, 7vw, 68px);
+  }
+
+  /* Four rows: nav, mark, copy, facts. */
+  .hero {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .hero__art {
+    grid-area: 2 / 1;
+    padding-top: clamp(8px, 2vh, 28px);
+  }
+
+  .hero__stage {
+    grid-area: 3 / 1;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: end;
+    padding-bottom: clamp(16px, 3vh, 36px);
+  }
+
+  .headline,
+  .points {
+    grid-column: 1;
+  }
+
+  /* The headline no longer shares its row, so it is free to wrap rather than
+     force the type size down. */
+  .headline__title {
+    white-space: normal;
+  }
+
+  .headline__lede {
+    max-width: 52ch;
+  }
+
+  .points {
+    max-width: none;
+  }
+
+  .hero__meta {
+    grid-area: 4 / 1;
+  }
+
+  /* Notched tablets in landscape: never let the frame sit under the inset. */
+  .hero__stage,
+  .hero__meta {
+    padding-left: max(var(--edge), env(safe-area-inset-left));
+    padding-right: max(var(--edge), env(safe-area-inset-right));
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Portrait: plenty of width, so the mark can be the size it wants to be.
+   -------------------------------------------------------------------------- */
+@media (min-width: 641px) and (max-width: 1080px) and (orientation: portrait) {
+  :root {
+    --mark-size: min(clamp(240px, 44vw, 400px), 30svh);
+  }
+
+  .points {
+    gap: clamp(16px, 2.2vh, 26px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Landscape: short. The mark gives up height and the three beats lay out in
+   a row, so the stacked stage still finishes on the first screen.
+   -------------------------------------------------------------------------- */
+@media (min-width: 641px) and (max-width: 1080px) and (orientation: landscape) {
+  :root {
+    --mark-size: min(clamp(150px, 22vw, 260px), 32svh);
+    --text-hero: clamp(40px, 5.6vw, 58px);
+  }
+
+  .points {
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: clamp(14px, 2.4vw, 30px);
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Touch. A finger cannot hover, so the beats would never open and half of
+   each sentence would be unreachable. On a tablet there is room to simply
+   print them in full.
+   -------------------------------------------------------------------------- */
+@media (min-width: 641px) and (max-width: 1080px) and (hover: none) {
+  .points__row {
+    height: auto;
+    overflow: visible;
+  }
+
+  .points__tail {
+    opacity: 1;
+  }
+
+  /* Nothing is the one being read, so nothing is dimmed. */
+  .points__row[data-dim] .points__lead {
+    color: #f2f2f5;
+  }
+}

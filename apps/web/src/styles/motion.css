@@ -1,0 +1,217 @@
+/* ==========================================================================
+   MOTION
+   The site-wide layer: scroll reveals and the hover states that are shared
+   across sections. Section files keep their own component states; this file
+   only adds movement on top.
+
+   Everything here moves transform, translate, scale or opacity, so none of it
+   triggers layout or repaints text. Hovers are gated to real pointers, so a
+   tap on a phone never leaves a row stuck in its hover state. Reduced motion
+   switches all of it off at the end of the file.
+   ========================================================================== */
+
+:root {
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* long, soft landing */
+  --reveal-rise: 28px;
+}
+
+/* While Lenis is gliding the page, the cursor sits still and the page moves
+   under it: every frame the browser re-hit-tests and flips hover states on
+   whatever passes beneath (FAQ rows, benchmark bars, cards), and each flip is
+   a repaint. Hit-testing is switched off for just that glide; Lenis drops
+   the class the moment the page settles, so hovers come straight back. */
+html.lenis-scrolling body,
+html.lenis-scrolling body * {
+  pointer-events: none !important;
+}
+
+/* --------------------------------------------------------------------------
+   Scroll reveals. ScrollReveal.jsx sets data-reveal only on elements that
+   start below the fold, then adds .is-in as each one scrolls into view.
+   -------------------------------------------------------------------------- */
+[data-reveal] {
+  opacity: 0;
+  transform: translate3d(0, var(--reveal-rise), 0);
+}
+
+[data-reveal="frame"] {
+  transform: translate3d(0, calc(var(--reveal-rise) * 1.6), 0) scale(0.965);
+}
+
+[data-reveal].is-in {
+  /* Own GPU layer for the length of the reveal only; ScrollReveal removes
+     the attribute when it ends, and the layer goes with it. */
+  will-change: opacity, transform;
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 0.9s var(--ease-out) var(--reveal-delay, 0ms),
+    transform 1.1s var(--ease-out) var(--reveal-delay, 0ms);
+}
+
+[data-reveal="frame"].is-in {
+  transition:
+    opacity 1s var(--ease-out) var(--reveal-delay, 0ms),
+    transform 1.3s var(--ease-out) var(--reveal-delay, 0ms);
+}
+
+/* --------------------------------------------------------------------------
+   Hovers. Mouse and trackpad only.
+   -------------------------------------------------------------------------- */
+@media (hover: hover) and (pointer: fine) {
+  /* Hairline rows (install steps, pains, guide, FAQ): the number lights up
+     and the line of text leans in a few pixels. */
+  .install__num,
+  .features__num,
+  .guide__num {
+    transition: color var(--dur-slow) var(--ease);
+  }
+
+  .install__label,
+  .features__quote,
+  .guide__label,
+  .faq__q-text {
+    transition: color var(--dur-base) var(--ease), translate 0.5s var(--ease-out);
+  }
+
+  .install__step:hover .install__num,
+  .features__pain:hover .features__num,
+  .guide__step:hover .guide__num {
+    color: var(--color-accent);
+  }
+
+  .install__step:hover .install__label,
+  .features__pain:hover .features__quote,
+  .guide__step:hover .guide__label,
+  .faq__q:hover .faq__q-text {
+    translate: 6px 0;
+    color: #fff;
+  }
+
+  .features__fix {
+    transition: color var(--dur-slow) var(--ease);
+  }
+
+  .features__pain:hover .features__fix {
+    color: #b4b4bc;
+  }
+
+  /* FAQ sign: turns a quarter and warms up. */
+  .faq__sign {
+    transition: rotate 0.5s var(--ease-out);
+  }
+
+  .faq__sign::before,
+  .faq__sign::after {
+    transition:
+      transform var(--dur-base) var(--ease),
+      opacity var(--dur-base) var(--ease),
+      background var(--dur-base) var(--ease);
+  }
+
+  .faq__q:hover .faq__sign {
+    rotate: 90deg;
+  }
+
+  .faq__q:hover .faq__sign::before,
+  .faq__q:hover .faq__sign::after {
+    background: var(--color-accent);
+  }
+
+  /* The marketplace screenshot lifts off the page. */
+  .install__frame {
+    transition: translate 0.7s var(--ease-out), scale 0.7s var(--ease-out);
+  }
+
+  .install__frame:hover {
+    translate: 0 -6px;
+    scale: 1.008;
+  }
+
+  /* Stats: the number rises and the label picks up the accent. */
+  .features__stat-value {
+    transition: translate 0.5s var(--ease-out), color var(--dur-slow) var(--ease);
+  }
+
+  .features__stat:hover .features__stat-value {
+    translate: 0 -4px;
+    color: #fff;
+  }
+
+  .features__stat-label {
+    transition: color var(--dur-slow) var(--ease);
+  }
+
+  .features__stat:hover .features__stat-label {
+    color: var(--color-accent);
+  }
+
+  /* Footer links: an underline that draws in from the left. */
+  .footer__link {
+    background: linear-gradient(currentColor, currentColor) 0 100% / 0 1px no-repeat;
+    transition: color var(--dur-base) var(--ease), background-size 0.45s var(--ease-out);
+  }
+
+  .footer__link:hover {
+    background-size: 100% 1px;
+  }
+
+  /* Install's command row and its copy button. */
+  .install__cmd {
+    transition: border-color var(--dur-slow) var(--ease);
+  }
+
+  .install__cmd:hover {
+    border-color: var(--color-border-strong);
+  }
+
+  .install__copy {
+    transition:
+      background var(--dur-base) var(--ease),
+      border-color var(--dur-base) var(--ease),
+      scale 0.3s var(--ease-out);
+  }
+
+  .install__copy:hover {
+    scale: 1.04;
+  }
+
+  .install__copy:active {
+    scale: 0.96;
+  }
+
+  /* The nav wordmark's flower gives a small turn. */
+  .wordmark svg {
+    transition: rotate 0.8s var(--ease-out);
+  }
+
+  .wordmark:hover svg {
+    rotate: 72deg;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion: no reveals, no travel on hover (colour changes stay).
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal],
+  [data-reveal].is-in {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .install__label,
+  .features__quote,
+  .guide__label,
+  .faq__q-text,
+  .faq__sign,
+  .install__frame,
+  .features__stat-value,
+  .install__copy,
+  .wordmark svg {
+    translate: none !important;
+    scale: none !important;
+    rotate: none !important;
+  }
+}

@@ -1,0 +1,131 @@
+/* ==========================================================================
+   DESIGN TOKENS
+   Single source of truth, mirroring PROJECT.md section 11 and design-preview.
+   Rule: components reference tokens. Never hard-code a value in a component.
+   ========================================================================== */
+:root {
+  /* -- colour · ground and surfaces ------------------------------------- */
+  --color-background: #08090b;
+  --color-surface: #1a1b1f;
+  --color-surface-2: #212226;
+
+  /* -- colour · type ----------------------------------------------------- */
+  --color-primary: #ffffff;
+  --color-text: #e5e5ea;
+  --color-text-muted: #8e8e93;
+
+  /* -- colour · accent (brand orange) ------------------------------------ */
+  --color-accent: #ff7a1a;
+  --color-accent-hov: #ff8f3d;
+  --color-accent-dim: rgba(255, 122, 26, 0.12);
+
+  /* -- colour · the mark gradient, the only gradient in the system ------- */
+  --grad-mark-from: #ff7a1a;
+  --grad-mark-to: #ff3b81;
+
+  /* -- colour · lines ---------------------------------------------------- */
+  --color-border: #2c2c2e;
+  --color-border-strong: #3a3a3c;
+
+  /* -- colour · state ---------------------------------------------------- */
+  --color-success: #30d158;
+  --color-warning: #ffb020;
+
+  /* -- typeface ---------------------------------------------------------- */
+  --font-display: var(--font-newsreader), Georgia, "Times New Roman", serif;
+  --font-sans: "Satoshi", system-ui, sans-serif;
+  --font-mono: "Commit Mono", ui-monospace, monospace;
+  --font-inst: "Bubbledot Fine", "Array", monospace;
+  /* The wordmark. Array's squared-off, rounded forms echo the petal mark and
+     hold up far better than the serif at nav size. */
+  --font-wordmark: "Array", "Bubbledot Fine", var(--font-display);
+
+  /* -- type scale · documented steps ------------------------------------- */
+  --text-hero: clamp(44px, 5.6vw, 88px);
+  --text-h2: clamp(32px, 4vw, 52px);
+  --text-h3: clamp(22px, 2.2vw, 30px);
+  --text-stat: clamp(56px, 11vw, 132px);
+  --text-body-lg: 20px;
+  --text-body: 16px;
+  --text-body-sm: 14px;
+  --text-code: 13.5px;
+  --text-table: 13px;
+  --text-eyebrow: 12px;
+
+  /* -- type scale · fluid steps for the fixed hero chrome ---------------- */
+  /* Array runs optically larger than the serif did, so the step is smaller. */
+  --text-wordmark: clamp(20px, 1.85vw, 30px);
+  --text-nav: clamp(11.5px, 0.82vw, 13px);
+  --text-nav-item: clamp(12px, 0.85vw, 13.5px);
+  --text-point: clamp(14px, 1.12vw, 20px);
+  --text-btn: clamp(13.5px, 0.95vw, 16px);
+
+  /* -- line height ------------------------------------------------------- */
+  --lh-hero: 0.97;
+  --lh-display: 1.15;
+  --lh-tight: 1.3;
+  --lh-body: 1.7;
+  --lh-code: 1.55;
+
+  /* -- letter spacing ---------------------------------------------------- */
+  --track-hero: -0.032em;
+  --track-display: -0.02em;
+  --track-tight: -0.012em;
+  --track-body: -0.01em;
+  --track-eyebrow: 0.15em;
+
+  /* -- radius ------------------------------------------------------------ */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+
+  /* -- motion ------------------------------------------------------------ */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 0.18s;
+  --dur-base: 0.2s;
+  --dur-slow: 0.4s;
+
+  /* -- glass chrome (nav pills) ------------------------------------------ */
+  --glass-bg: rgba(16, 17, 20, 0.5);
+  --glass-blur: blur(14px);
+
+  /* -- layout · the hero frame ------------------------------------------- */
+  --edge: 8.75%;
+  --nav-pad-y: clamp(18px, 4.4vh, 42px);
+  --meta-pad-y: clamp(18px, 3.4vh, 38px);
+  --stage-gap: clamp(26px, 4.2vw, 76px);
+
+  /* -- layout · the centre mark ------------------------------------------ */
+  /* height-aware, so short laptop screens still fit nav, stage and meta */
+  --mark-size: min(clamp(250px, 24vw, 400px), 46svh);
+  --stage-core: calc(var(--mark-size) + clamp(12px, 2.2vw, 44px));
+  --halo-size: min(900px, 76vw);
+
+  /* -- decoration -------------------------------------------------------- */
+  --grad-title: linear-gradient(177deg, #ffffff 16%, #ced0d7 97%);
+  --halo-glow: radial-gradient(
+    circle at 50% 50%,
+    rgba(255, 138, 48, 0.09) 0%,
+    rgba(255, 90, 80, 0.04) 26%,
+    transparent 60%
+  );
+  /* Pulled in tighter and pushed darker so the lit mark is the only bright
+     thing on screen, and so the hero's bottom edge reaches true black and can
+     hand off to the next section without a seam. */
+  --vignette: radial-gradient(118% 96% at 50% 50%, transparent 30%, rgba(2, 2, 3, 0.72) 72%, #000 100%),
+    linear-gradient(180deg, rgba(2, 2, 3, 0.66) 0%, transparent 20%);
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Token-only overrides. Layout changes live with the components they own.
+
+   Only tokens the whole page shares belong here. The hero's own tokens
+   (--mark-size, --halo-size, --stage-gap, --meta-pad-y, --text-hero) are set
+   per device in src/styles/hero.tablet.css and src/styles/hero.mobile.css,
+   so one section's breakpoint cannot quietly resize another's. */
+@media (max-width: 1080px) {
+  :root {
+    --edge: 6%;
+  }
+}

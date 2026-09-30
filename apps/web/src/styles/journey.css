@@ -1,0 +1,133 @@
+/* ==========================================================================
+   JOURNEY
+   The hero pins while you scroll; the mark flies at the screen and the next
+   section is revealed through it. Driven by src/components/journey/Journey.jsx.
+   ========================================================================== */
+.journey {
+  position: relative;
+  /* Refined in px by Journey once the hero has been measured. */
+  height: calc(100svh + 230svh);
+}
+
+.journey .hero {
+  position: sticky;
+  top: 0;
+}
+
+/* The real Install section starts one screen early, so its first screen is
+   exactly what is on show when the journey ends. It stays out of sight until
+   then; the copy inside the portal is what you see on the way in. */
+.journey + .install {
+  margin-top: -100svh;
+}
+
+.journey:not([data-done]) + .install {
+  visibility: hidden;
+}
+
+/* Every moving part gets its own compositor layer up front, so scroll frames
+   are pure transform/opacity updates: no paint, no layout, no restyle. */
+.journey .hero__mark {
+  will-change: transform;
+}
+
+.journey[data-live] .hero__halo,
+.journey[data-live] .headline,
+.journey[data-live] .points,
+.journey[data-live] .hero__meta {
+  will-change: transform, opacity;
+}
+
+.journey[data-live] .hero__vignette,
+.journey[data-live] .hero__grain,
+.journey[data-live] .hero__floor,
+.journey[data-live] .glyph__body {
+  will-change: opacity;
+}
+
+/* Faded copy stops taking clicks and is dropped from drawing. */
+.journey[data-copy-gone] .headline,
+.journey[data-copy-gone] .points,
+.journey[data-copy-gone] .hero__meta {
+  visibility: hidden;
+}
+
+/* The section that follows, lying still at the bottom of the hero's stack.
+   It only ever fades up; the cover above it is what opens. */
+.portal {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  contain: layout paint;
+  will-change: opacity;
+}
+
+.journey:not([data-live]) .portal,
+.journey:not([data-live]) .shroud {
+  visibility: hidden;
+}
+
+.portal__content {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: var(--color-background);
+  will-change: transform;
+}
+
+/* The cover that hides it: one canvas the size of the hero, filled with the
+   hero's background colour and punched through with the mark's shape at its
+   current place, turn and size. One element, one layer, no mask and no clip,
+   so a scroll frame costs the compositor a single textured quad. */
+.shroud {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* Handed over: the real section is on screen, so the hero steps aside but
+   leaves the header exactly where it was. */
+.journey[data-done] .hero {
+  background: transparent;
+  pointer-events: none;
+}
+
+.journey[data-done] .hero > :not(.nav) {
+  visibility: hidden;
+}
+
+.journey[data-done] .nav--fixed {
+  pointer-events: auto;
+}
+
+/* In flight the header uses a flat fill instead of a live backdrop blur. */
+.journey[data-flying] .switch {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(22, 23, 27, 0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .journey {
+    height: auto;
+  }
+  .journey .hero {
+    position: relative;
+  }
+  .journey + .install {
+    margin-top: 0;
+  }
+  .journey:not([data-done]) + .install {
+    visibility: visible;
+  }
+  .portal,
+  .shroud {
+    display: none;
+  }
+}

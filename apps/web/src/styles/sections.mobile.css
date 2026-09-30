@@ -1,0 +1,174 @@
+/* ==========================================================================
+   SECTIONS - MOBILE (640px and below)
+   Install, Features, Guide and FAQ on phones. Desktop lives in each
+   section's own file and tablets in sections.tablet.css.
+   ========================================================================== */
+@media (max-width: 640px) {
+  /* -- rhythm ----------------------------------------------------------- */
+  .install {
+    padding: clamp(64px, 10vh, 96px) var(--edge) clamp(48px, 7vh, 72px);
+  }
+
+  .features {
+    padding: clamp(48px, 7vh, 72px) var(--edge);
+  }
+
+  .guide {
+    padding: clamp(48px, 7vh, 72px) var(--edge) clamp(64px, 9vh, 96px);
+  }
+
+  .faq {
+    padding: clamp(64px, 10vh, 96px) var(--edge) clamp(56px, 8vh, 88px);
+  }
+
+  .install__head,
+  .guide__head,
+  .faq__head {
+    margin-bottom: 28px;
+  }
+
+  .features__head {
+    margin-bottom: 40px;
+  }
+
+  .features__block {
+    margin-top: 72px;
+  }
+
+  .features__stats {
+    margin-top: 64px;
+  }
+
+  .install__manual {
+    margin-top: 48px;
+  }
+
+  /* -- type ------------------------------------------------------------- */
+  .install__title,
+  .features__title,
+  .guide__title,
+  .faq__title {
+    font-size: clamp(30px, 8.6vw, 40px);
+    text-wrap: balance;
+  }
+
+  .install__lede,
+  .features__lede,
+  .guide__lede,
+  .faq__lede {
+    text-wrap: pretty;
+  }
+
+  .features__quote {
+    font-size: clamp(19px, 5.4vw, 22px);
+  }
+
+  .features__fix {
+    font-size: 14.5px;
+  }
+
+  .install__label,
+  .guide__label,
+  .faq__q-text {
+    font-size: 15.5px;
+  }
+
+  /* -- rows -------------------------------------------------------------- */
+  .features__pain {
+    padding: 24px 2px;
+    row-gap: 10px;
+  }
+
+  .install__step,
+  .guide__step {
+    padding: 16px 2px;
+  }
+
+  .faq__q {
+    min-height: 56px;
+    padding: 16px 2px;
+  }
+
+  .faq__a {
+    padding: 0 2px 20px;
+  }
+
+  .features__stat {
+    padding: 28px 4px;
+  }
+
+  /* -- objects ----------------------------------------------------------- */
+  /* The screenshot runs edge to edge minus the gutter; its big desktop
+     shadow is a large blur for a phone to paint, so it gets a lighter one. */
+  .install__frame {
+    margin-bottom: 28px;
+    border-radius: 10px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--color-border-strong);
+  }
+
+  .install__shot {
+    border-radius: 10px;
+  }
+
+  .install__cmd {
+    padding-left: 14px;
+  }
+
+  .install__code {
+    font-size: 12.5px;
+  }
+
+  .install__copy {
+    height: 40px;
+  }
+
+  .lightbox {
+    padding: 12px;
+  }
+
+  .lightbox__shot {
+    max-height: 70svh;
+  }
+
+  /* Reveals travel less on a small screen. */
+  :root {
+    --reveal-rise: 18px;
+  }
+}
+
+/* Very small phones (iPhone SE, 360px Androids). */
+@media (max-width: 380px) {
+  .features__stats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .features__stat + .features__stat,
+  .features__stat:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .install__num,
+  .guide__num,
+  .features__num {
+    font-size: 11px;
+  }
+}
+
+/* Phones held sideways: short, so heads and gaps shrink further. */
+@media (max-width: 1080px) and (orientation: landscape) and (max-height: 520px) {
+  .install,
+  .faq {
+    padding-top: 56px;
+  }
+
+  .install__frame {
+    max-width: min(100%, 120vh);
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .lightbox__shot {
+    max-height: 76svh;
+  }
+}

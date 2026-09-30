@@ -1,0 +1,88 @@
+/* ==========================================================================
+   SECTIONS - TABLET (641px - 1080px)
+   Install, Features, Guide and FAQ on tablets. The same split as the hero
+   and footer: desktop lives in each section's own file, phones in
+   sections.mobile.css, and nothing here applies outside this range.
+   ========================================================================== */
+@media (min-width: 641px) and (max-width: 1080px) {
+  /* Vertical rhythm: desktop's vh-based padding is generous on a tall
+     portrait tablet; cap it so each section still starts near the fold. */
+  .install {
+    padding-top: clamp(80px, 11vh, 140px);
+    padding-bottom: clamp(56px, 8vh, 96px);
+  }
+
+  .features {
+    padding-top: clamp(56px, 8vh, 100px);
+    padding-bottom: clamp(56px, 8vh, 100px);
+  }
+
+  .features__block {
+    margin-top: clamp(88px, 12vh, 150px);
+  }
+
+  .features__stats {
+    margin-top: clamp(72px, 10vh, 130px);
+  }
+
+  .guide {
+    padding-bottom: clamp(72px, 10vh, 130px);
+  }
+
+  .faq {
+    padding-top: clamp(80px, 11vh, 140px);
+  }
+
+  /* The lists sit a touch wider than desktop's reading measure, so rows
+     keep one line on a 768px portrait screen. */
+  .install__steps,
+  .guide__list {
+    max-width: 680px;
+  }
+
+  .faq__list {
+    max-width: 760px;
+  }
+
+  /* Pain rows: the three-column row is cramped below ~900px; answer drops
+     under the quote, as it does on phones, but keeps the larger type. */
+  .features__pain {
+    grid-template-columns: auto minmax(0, 1fr);
+    row-gap: 12px;
+  }
+
+  .features__fix {
+    grid-column: 2;
+    max-width: 56ch;
+  }
+
+  .install__frame {
+    max-width: 100%;
+  }
+}
+
+/* Landscape tablets are short: pull the section heads closer to their
+   content so the screenshot and the list both fit on one screen. */
+@media (min-width: 641px) and (max-width: 1080px) and (orientation: landscape) {
+  .install__head,
+  .guide__head,
+  .faq__head {
+    margin-bottom: clamp(28px, 5vh, 48px);
+  }
+
+  .features__head {
+    margin-bottom: clamp(40px, 7vh, 72px);
+  }
+
+  .install__frame {
+    max-width: min(100%, 118vh);
+  }
+}
+
+/* Touch tablets: rows get finger-sized targets. */
+@media (min-width: 641px) and (max-width: 1080px) and (hover: none) {
+  .guide__step,
+  .faq__q {
+    min-height: 56px;
+  }
+}

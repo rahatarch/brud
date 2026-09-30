@@ -1,0 +1,428 @@
+/* ==========================================================================
+   FOOTER
+   The closing section: one ember plate carrying three bands - the last call
+   to action, a thin row of links, and the wordmark set in the dot face.
+
+   Desktop composition only, 1081px and up. Tablets and phones each have
+   their own stylesheet, the same split the hero uses:
+     src/styles/footer.tablet.css   641px - 1080px
+     src/styles/footer.mobile.css   640px and below, plus landscape phones
+   ========================================================================== */
+.footer {
+  position: relative;
+  isolation: isolate;
+  /* The plate is bled to the edges and the wordmark is set to the millimetre;
+     neither is allowed to hand the page a horizontal scrollbar. */
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  min-height: min(100svh, 900px);
+  padding: clamp(110px, 18vh, 210px) var(--edge) clamp(22px, 3.4vh, 40px);
+  background: var(--color-background);
+}
+
+/* --------------------------------------------------------------------------
+   The plate. A looping clip over its own first frame. The still (served
+   through next/image) paints straight away; the clip only downloads once the
+   footer is near the viewport, fades in over the still when it can play, and
+   pauses whenever the footer is off screen.
+   -------------------------------------------------------------------------- */
+.footer__plate {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.footer__image,
+.footer__video {
+  object-fit: cover;
+  /* Anchored to the bottom, so the bright ember band always lands behind the
+     wordmark however tall the section ends up. */
+  object-position: 50% 100%;
+}
+
+.footer__video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+
+.footer__video.is-playing {
+  opacity: 1;
+}
+
+/* The plate's own top is dark but not black, which would show as a seam
+   against the FAQ above it. This fades it the rest of the way. */
+.footer__fade {
+  position: absolute;
+  inset: 0;
+  z-index: -1; /* after the plate in the markup, so it paints over it */
+  pointer-events: none;
+  /* Solid page ground at the very top, then an eased falloff: many stops so
+     the ramp has no visible band where the video starts. */
+  background: linear-gradient(
+    180deg,
+    #08090b 0%,
+    #08090b 6%,
+    rgba(8, 9, 11, 0.94) 14%,
+    rgba(8, 9, 11, 0.82) 22%,
+    rgba(8, 9, 11, 0.64) 31%,
+    rgba(8, 9, 11, 0.44) 40%,
+    rgba(8, 9, 11, 0.26) 49%,
+    rgba(8, 9, 11, 0.12) 58%,
+    rgba(8, 9, 11, 0.04) 66%,
+    rgba(8, 9, 11, 0) 74%
+  );
+}
+
+/* --------------------------------------------------------------------------
+   Call to action
+   -------------------------------------------------------------------------- */
+.footer__cta {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: clamp(22px, 3.4vh, 40px);
+  text-align: center;
+}
+
+.footer__title {
+  margin: 0;
+  max-width: 24ch;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  font-size: var(--text-h2);
+  line-height: 1.06;
+  letter-spacing: var(--track-display);
+  color: var(--color-primary);
+  text-wrap: balance;
+}
+
+.footer__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+}
+
+/* --------------------------------------------------------------------------
+   The copy pill. Three faces, a label, and the copy itself.
+   -------------------------------------------------------------------------- */
+.copypill {
+  display: inline-flex;
+  align-items: center;
+  gap: 11px;
+  height: clamp(44px, 3.9vw, 54px);
+  padding: 0 18px 0 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: var(--radius-pill);
+  /* A flat tint, not a live blur: behind this pill is a playing video that
+     is also moving with the parallax, so a backdrop blur would be redrawn
+     every single frame. Over the soft ember plate the two look the same. */
+  background: rgba(10, 11, 13, 0.7);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  font-size: var(--text-btn);
+  font-weight: 500;
+  letter-spacing: -0.008em;
+  white-space: nowrap;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: background var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease),
+    transform 0.32s var(--ease), box-shadow 0.32s var(--ease);
+}
+
+.copypill:hover {
+  background: rgba(24, 25, 29, 0.72);
+  border-color: rgba(255, 255, 255, 0.24);
+  transform: translateY(-2px);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+}
+
+.copypill:active {
+  transform: translateY(0) scale(0.96);
+  box-shadow: none;
+  transition-duration: 0.1s;
+}
+
+.copypill[data-copied] {
+  border-color: rgba(48, 209, 88, 0.45);
+  color: var(--color-primary);
+}
+
+.copypill__faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+.copypill__face {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: #0d0e10;
+  color: var(--color-primary);
+}
+
+/* Overlapped, so they read as a stack of accounts rather than three buttons. */
+.copypill__face + .copypill__face {
+  margin-left: -9px;
+}
+
+.copypill__face svg {
+  width: 15px;
+  height: 15px;
+}
+
+.copypill__copy {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  color: var(--color-text-muted);
+  transition: color var(--dur-base) var(--ease);
+}
+
+.copypill:hover .copypill__copy {
+  color: var(--color-text);
+}
+
+.copypill[data-copied] .copypill__copy {
+  color: var(--color-success);
+}
+
+.copypill__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* --------------------------------------------------------------------------
+   Link bar
+   -------------------------------------------------------------------------- */
+.footer__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px clamp(20px, 3vw, 48px);
+  padding-bottom: clamp(26px, 4.4vh, 54px);
+}
+
+.footer__links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: clamp(16px, 2vw, 30px);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer__link {
+  font-size: var(--text-body-sm);
+  color: var(--color-text);
+  transition: color var(--dur-base) var(--ease);
+}
+
+.footer__link:hover {
+  color: var(--color-accent-hov);
+}
+
+.footer__legal {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-table);
+  color: var(--color-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   Wordmark. Set in Array and sized by measurement, not by a guessed
+   vw step: FooterSection lays the line out once and scales it to the box.
+   The value below is only the fallback used before that runs.
+   -------------------------------------------------------------------------- */
+.footer__wordmark {
+  width: 100%;
+  line-height: 0;
+}
+
+.footer__word {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1em;
+  white-space: nowrap;
+  font-family: "Array", var(--font-display);
+  font-size: 15.5vw;
+  line-height: 0.9;
+  color: var(--color-primary);
+  /* A faint bloom keeps the letters reading as emitted light against the
+     lit ground rather than as shapes cut out of the image. */
+  text-shadow: 0 0 24px rgba(255, 150, 70, 0.3);
+}
+
+.footer__glyph {
+  width: 0.88em;
+  height: 0.88em;
+  flex: none;
+  color: var(--color-primary);
+  filter: drop-shadow(0 0 20px rgba(255, 150, 70, 0.3));
+}
+
+.footer__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+/* --------------------------------------------------------------------------
+   Parallax. FooterSection writes --fp (0 as the footer enters, 1 at the end
+   of the page); each layer trails the scroll by its own amount, so the plate
+   drifts slowest, the call to action a little faster and the wordmark rises
+   into place last, its flower turning as it settles. Everything lands at
+   exactly its resting position at the end of the page.
+
+   The plate only ever moves upwards, and only while the footer's bottom edge
+   is still below the viewport, so its edge is never on show.
+   -------------------------------------------------------------------------- */
+.footer {
+  --fp: 1;
+  --par-plate: 14%;
+  --par-cta: 36px;
+  --par-word: 110px;
+  --par-turn: -60deg;
+}
+
+.footer__plate {
+  translate: 0 calc((1 - var(--fp)) * var(--par-plate) * -1);
+  will-change: translate;
+}
+
+.footer__cta {
+  translate: 0 calc((1 - var(--fp)) * var(--par-cta));
+  will-change: translate;
+}
+
+.footer__wordmark {
+  translate: 0 calc((1 - var(--fp)) * var(--par-word));
+  will-change: translate;
+}
+
+/* Its own layer: the dotted flower is ~1,500 pattern dots under a
+   drop-shadow, far too costly to repaint on every frame it turns. */
+.footer__glyph {
+  rotate: calc((1 - var(--fp)) * var(--par-turn));
+  will-change: rotate;
+}
+
+/* Where the browser supports scroll-driven animations (Chrome, Edge, Safari
+   26+), the same motion runs on the compositor off the main thread: no
+   script, no per-frame style work, in step with the scroll itself. The
+   range, entry 0% to entry 100%, is exactly the --fp range above. Other
+   browsers keep the --fp fallback. */
+@supports (animation-timeline: view()) {
+  .footer {
+    view-timeline: --footer block;
+  }
+
+  .footer__plate,
+  .footer__cta,
+  .footer__wordmark,
+  .footer__glyph {
+    translate: none;
+    rotate: none;
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --footer;
+    animation-range: entry 0% entry 100%;
+  }
+
+  .footer__plate {
+    animation-name: footer-plate;
+  }
+
+  .footer__cta {
+    animation-name: footer-cta;
+  }
+
+  .footer__wordmark {
+    animation-name: footer-word;
+  }
+
+  .footer__glyph {
+    animation-name: footer-turn;
+  }
+}
+
+@keyframes footer-plate {
+  from {
+    translate: 0 calc(var(--par-plate) * -1);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes footer-cta {
+  from {
+    translate: 0 var(--par-cta);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes footer-word {
+  from {
+    translate: 0 var(--par-word);
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@keyframes footer-turn {
+  from {
+    rotate: var(--par-turn);
+  }
+  to {
+    rotate: 0deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .footer__plate,
+  .footer__cta,
+  .footer__wordmark,
+  .footer__glyph {
+    translate: none;
+    rotate: none;
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .copypill,
+  .copypill:hover,
+  .copypill:active {
+    transform: none;
+  }
+}
+
+/* Weak machines: the pill's live blur is the one costly effect down here. */
+[data-power="low"] .copypill {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: rgba(14, 15, 18, 0.9);
+}

@@ -1,0 +1,239 @@
+/* ==========================================================================
+   INSTALL
+   Same grammar as the guide: centred head, hairline list, muted mono numbers.
+   The marketplace screenshot is the one large object; everything else is quiet.
+   ========================================================================== */
+.install {
+  position: relative;
+  padding: clamp(92px, 16vh, 190px) var(--edge) clamp(64px, 10vh, 120px);
+  background: var(--color-background);
+}
+
+/* The hero's vignette bottoms out at black. This picks that black up and
+   walks it back to the page ground, so the two sections share one field. */
+.install::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: clamp(160px, 30vh, 380px);
+  background: linear-gradient(180deg, #000 0%, rgba(0, 0, 0, 0) 100%);
+  pointer-events: none;
+}
+
+.install > * {
+  position: relative;
+}
+
+/* -- head ----------------------------------------------------------------- */
+.install__head {
+  max-width: 34ch;
+  margin: 0 auto clamp(36px, 5.5vh, 64px);
+  text-align: center;
+}
+
+.install__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: 400;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.install__lede {
+  margin: clamp(10px, 1.6vh, 18px) 0 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+}
+
+/* -- screenshot ------------------------------------------------------------ */
+.install__frame {
+  max-width: 980px;
+  margin: 0 auto clamp(36px, 5.5vh, 64px);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px var(--color-border-strong);
+}
+
+.install__shot {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius-lg);
+}
+
+/* -- steps ----------------------------------------------------------------- */
+.install__steps {
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--color-border);
+}
+
+.install__step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: clamp(14px, 1.6vw, 24px);
+  padding: clamp(16px, 2.2vh, 24px) clamp(4px, 1.2vw, 18px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.install__num {
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.install__label {
+  font-size: var(--text-point);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  color: #f2f2f5;
+  text-wrap: pretty;
+}
+
+.install__aside {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.install__key {
+  padding: 2px 7px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  font: inherit;
+  color: var(--color-text);
+}
+
+/* -- actions --------------------------------------------------------------- */
+.install__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  margin-top: clamp(28px, 4.4vh, 48px);
+}
+
+/* -- manual route ---------------------------------------------------------- */
+.install__manual {
+  max-width: 620px;
+  margin: clamp(56px, 9vh, 100px) auto 0;
+  text-align: center;
+}
+
+.install__manual-title {
+  margin: 0;
+  font-size: var(--text-point);
+  font-weight: 500;
+  letter-spacing: var(--track-tight);
+  color: #f2f2f5;
+}
+
+.install__manual-body {
+  margin: 8px 0 clamp(16px, 2.4vh, 24px);
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+}
+
+.install__link {
+  color: var(--color-text);
+  text-decoration: underline;
+  text-decoration-color: var(--color-border-strong);
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--dur-base) var(--ease);
+}
+
+.install__link:hover {
+  text-decoration-color: var(--color-accent);
+}
+
+.install__cmd {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px clamp(14px, 1.6vw, 20px);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  text-align: left;
+}
+
+.install__code {
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--lh-code);
+  color: var(--color-text);
+  scrollbar-width: none;
+}
+
+.install__code::-webkit-scrollbar {
+  display: none;
+}
+
+.install__prompt {
+  margin-right: 0.9em;
+  color: var(--color-accent);
+}
+
+.install__copy {
+  flex: none;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: 0.06em;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background var(--dur-base) var(--ease), border-color var(--dur-base) var(--ease);
+}
+
+.install__copy:hover {
+  border-color: var(--color-border-strong);
+  background: #2a2b30;
+}
+
+.install__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
+
+@media (max-width: 640px) {
+  .install__step {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .install__aside {
+    grid-column: 2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .install__link,
+  .install__copy {
+    transition: none;
+  }
+}

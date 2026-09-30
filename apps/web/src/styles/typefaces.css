@@ -1,0 +1,35 @@
+/* ==========================================================================
+   TYPEFACES
+   Only the four faces the design system chose. Newsreader arrives from Google
+   Fonts via the @import in app/globals.css; the rest are self-hosted.
+   ========================================================================== */
+@font-face {
+  font-family: "Satoshi";
+  src: url("../assets/fonts/Satoshi-Variable.woff2") format("woff2-variations");
+  font-weight: 300 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Commit Mono";
+  src: url("../assets/fonts/CommitMono-400-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Commit Mono";
+  src: url("../assets/fonts/CommitMono-700-Regular.otf") format("opentype");
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Bubbledot Fine";
+  src: url("../assets/fonts/Bubbledot-Fine.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Array";
+  src: url("../assets/fonts/Array-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
