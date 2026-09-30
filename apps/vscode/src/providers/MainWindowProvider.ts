@@ -496,7 +496,7 @@ export class BrudMainWindowManager {
     });
 
     const logoUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'brand', 'brud_logo_code.svg')
+      vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'brand', 'brud_logo_code_white.svg')
     );
     html = html.replace('<div id="root">', `<div id="root" data-view-mode="main-window" data-image-uri="${logoUri.toString()}">`);
 

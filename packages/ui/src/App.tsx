@@ -131,7 +131,7 @@ function StructuredReport({ sections }: { sections: ReportSection[] }) {
 function App() {
   const root = document.getElementById('root');
   const viewMode = root?.getAttribute('data-view-mode') || 'sidebar';
-  const imageUri = root?.getAttribute('data-image-uri') || 'brand/brud_logo_code.svg';
+  const imageUri = root?.getAttribute('data-image-uri') || 'brand/brud_logo_code_white.svg';
 
   if (viewMode === 'main-window') {
     return <MainWindowShell />;

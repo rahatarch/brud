@@ -8,3 +8,4 @@ node_modules
 .kilo/
 BRUD_TEST_LOG.md
 temporary
+.env
