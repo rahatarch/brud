@@ -1,69 +1,50 @@
-name: Web App — Build & Deploy
+name: Deploy Web to Production
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
       - apps/web/**
-      - package.json
-      - package-lock.json
       - .github/workflows/web.yml
-  pull_request:
-    branches: [main]
-    paths:
-      - apps/web/**
-      - package.json
-      - package-lock.json
-      - .github/workflows/web.yml
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: web-${{ github.ref }}
+  group: deploy-production-web
   cancel-in-progress: true
 
 jobs:
-  lint:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - run: npm run lint:web
 
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
       - run: npm ci
-      - name: Build static site
+
+      - name: Build web static export
         run: npm run build:web
         env:
           GITHUB_PAGES: "true"
-          NEXT_PUBLIC_BASE_PATH: /Brud-code
-      - run: touch apps/web/out/.nojekyll
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: apps/web/out
+          NEXT_PUBLIC_BASE_PATH: ""
 
-  deploy:
-    if: github.ref == 'refs/heads/main'
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Verify build artifacts
+        run: test -d apps/web/out && ls -la apps/web/out/
+
+      - name: Deploy static artifacts to VPS
+        shell: bash
+        run: |
+          mkdir -p ~/.ssh
+          eval "$(ssh-agent -s)"
+          echo "${{ secrets.VPS_SSH_KEY }}" | ssh-add -
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+          rsync -avz --delete apps/web/out/ \
+            ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ secrets.VPS_TARGET_DIR }}/
+
+      - name: Post-deployment verification
+        run: |
+          curl -sSf -o /dev/null -w "HTTP Status: %{http_code}\n" \
+            https://brud.akkharlabs.com
