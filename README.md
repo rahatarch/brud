@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/icons/brud_icon_rounded.svg" width="120" alt="Brud Code Logo" />
+  <img src="assets/icons/brud_icon_rounded.png" width="120" alt="Brud Code Logo" />
 </p>
 
 <h1 align="center">Stop hand-copying AI code changes into your files.</h1>

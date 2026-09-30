@@ -50,7 +50,7 @@
     "cursor free",
     "unlimited ai"
   ],
-  "icon": "assets/images/brud_icon.png",
+  "icon": "assets/icons/brud_icon_rounded.png",
   "activationEvents": [],
   "main": "./dist/extension.js",
   "contributes": {
