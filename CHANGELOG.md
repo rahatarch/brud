@@ -4,6 +4,15 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [0.1.3] - 2026-10-01
+
+### Added
+- New 512×512 retina squircle extension badge for high-DPI displays.
+- High-contrast inverted white squircle badge for the dark sidebar webview header.
+
+### Changed
+- Optimized asset hierarchy reducing extension distribution size to a lightweight 3.19 MB.
+
 ## [0.1.2] - 2026-09-21
 
 ### Added
