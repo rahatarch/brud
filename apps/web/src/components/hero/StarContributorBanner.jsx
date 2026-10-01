@@ -13,27 +13,30 @@ export default function StarContributorBanner() {
   }, []);
 
   useEffect(() => {
+    if (dismissed) return;
+
     const el = bannerRef.current;
     if (!el) return;
 
-    const update = () => {
-      const height = el.offsetHeight || 0;
-      document.documentElement.style.setProperty("--banner-height", `${height}px`);
+    const setHeight = () => {
+      document.documentElement.style.setProperty("--banner-height", `${el.offsetHeight}px`);
     };
 
-    update();
-    const ro = new ResizeObserver(update);
+    setHeight();
+
+    const ro = new ResizeObserver(setHeight);
     ro.observe(el);
+
     return () => {
       ro.disconnect();
       document.documentElement.style.setProperty("--banner-height", "0px");
     };
   }, [dismissed]);
 
-  const dismiss = () => {
-    document.documentElement.style.setProperty("--banner-height", "0px");
+  const handleDismiss = () => {
     sessionStorage.setItem(STORAGE_KEY, "true");
     setDismissed(true);
+    document.documentElement.style.setProperty("--banner-height", "0px");
   };
 
   if (dismissed) return null;
@@ -49,7 +52,7 @@ export default function StarContributorBanner() {
       </a>
       <button
         className="star-banner__dismiss"
-        onClick={dismiss}
+        onClick={handleDismiss}
         aria-label="Dismiss"
         type="button"
       >

@@ -4,11 +4,9 @@
    (z-index 60 vs nav's 50) so it always runs the full viewport width.
    ========================================================================== */
 .star-banner {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 60;
+  position: relative;
+  width: 100%;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -80,9 +78,16 @@
 @media (max-width: 640px) {
   .star-banner {
     gap: 8px;
-    padding: 6px 10px;
+    padding: 8px 12px;
     font-size: 12px;
     flex-wrap: wrap;
+  }
+
+  .star-banner__text {
+    white-space: normal;
+    text-align: center;
+    line-height: 1.35;
+    font-size: 12px;
   }
 
   .star-banner__action {

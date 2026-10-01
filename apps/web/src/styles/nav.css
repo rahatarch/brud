@@ -18,8 +18,6 @@
 .nav--spacer {
   visibility: hidden;
   pointer-events: none;
-  margin-top: var(--banner-height, 0px);
-  transition: margin-top 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav--fixed {
@@ -31,12 +29,11 @@
   z-index: 50;
   grid-area: auto;
   background: transparent;
-  transition: top 0.2s cubic-bezier(0.16, 1, 0.3, 1), padding var(--dur-slow) var(--ease);
+  transition: top 0.25s cubic-bezier(0.16, 1, 0.3, 1), padding var(--dur-slow) var(--ease);
 }
 
 .nav--fixed[data-stuck] {
-  padding-top: 14px;
-  padding-bottom: 14px;
+  top: 0;
 }
 
 .wordmark {
@@ -132,12 +129,6 @@
    read the same, and scrolling stops paying for the blur. */
 .switch {
   transition: background-color 0.4s var(--ease);
-}
-
-.nav--fixed[data-stuck] .switch {
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
-  background: rgba(17, 18, 22, 0.9);
 }
 
 /* Backdrop blur is the last live effect that costs real GPU time here. On a

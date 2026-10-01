@@ -73,7 +73,8 @@ export default function HeroNav() {
       frame = requestAnimationFrame(() => {
         frame = 0;
         const y = window.scrollY;
-        setStuck(y > 24);
+        const bannerH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--banner-height")) || 0;
+        setStuck(y > (bannerH > 0 ? bannerH - 4 : 24));
         // The last section whose top has passed 40% of the viewport is current.
         const line = y + window.innerHeight * 0.4;
         let current = null;
