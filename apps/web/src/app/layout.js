@@ -26,6 +26,7 @@ import "../styles/footer.css";
 /* The footer's device layers, narrowest last, same split as the hero. */
 import "../styles/footer.tablet.css";
 import "../styles/footer.mobile.css";
+import "../styles/announcements.css";
 import "../styles/buttons.css";
 import "../styles/motion.css";
 import "../styles/intro.css";

@@ -25,6 +25,7 @@ export const FOOTER = {
     },
     { label: "Guide", href: "#guide" },
     { label: "FAQ", href: "#faq" },
+    { label: "Announcements", href: "/announcements" },
   ],
 
   legal: "MIT licensed. Free forever. No account, no cloud.",
