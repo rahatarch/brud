@@ -27,6 +27,8 @@ import "../styles/footer.css";
 import "../styles/footer.tablet.css";
 import "../styles/footer.mobile.css";
 import "../styles/announcements.css";
+import "../styles/banner.css";
+import "../styles/contributors.css";
 import "../styles/buttons.css";
 import "../styles/motion.css";
 import "../styles/intro.css";

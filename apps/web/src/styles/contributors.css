@@ -1,0 +1,322 @@
+.contributors {
+  padding: min(100px, 12vh) var(--edge) clamp(80px, 12vh, 140px);
+  background: var(--color-background);
+}
+
+.contributors__head {
+  max-width: 48ch;
+  margin: 0 auto clamp(48px, 7vh, 80px);
+  text-align: center;
+}
+
+.contributors__eyebrow {
+  margin: 0 0 clamp(12px, 1.8vh, 18px);
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  letter-spacing: var(--track-eyebrow);
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.contributors__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-h2);
+  font-weight: 400;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.contributors__lede {
+  margin: clamp(10px, 1.6vh, 18px) 0 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+  text-wrap: pretty;
+}
+
+.monument-stage {
+  position: relative;
+  z-index: 10;
+  max-width: 820px;
+  margin: 0 auto clamp(56px, 8vh, 96px);
+  padding: 0;
+}
+
+.monument-aura {
+  position: absolute;
+  top: -20%;
+  left: -10%;
+  width: 120%;
+  height: 140%;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(255, 122, 26, 0.12) 0%,
+    rgba(255, 59, 129, 0.04) 50%,
+    transparent 75%
+  );
+}
+
+.monument-plaque {
+  position: relative;
+  z-index: 1;
+  padding: clamp(36px, 4vw, 56px) clamp(28px, 3.6vw, 48px);
+  background: #121316;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.crosshair {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 18px;
+  line-height: 1;
+  color: rgba(255, 122, 26, 0.6);
+  user-select: none;
+  pointer-events: none;
+}
+
+.crosshair--tl {
+  top: 10px;
+  left: 14px;
+}
+
+.crosshair--tr {
+  top: 10px;
+  right: 14px;
+}
+
+.crosshair--bl {
+  bottom: 10px;
+  left: 14px;
+}
+
+.crosshair--br {
+  bottom: 10px;
+  right: 14px;
+}
+
+.registry-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: clamp(20px, 3vh, 32px);
+  padding-bottom: clamp(14px, 2vh, 22px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.registry-bar__text {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.registry-bar__beacon {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 8px rgba(48, 209, 88, 0.5);
+  animation: beacon-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes beacon-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(48, 209, 88, 0.5); }
+  50% { opacity: 0.45; box-shadow: 0 0 2px rgba(48, 209, 88, 0.15); }
+}
+
+.monument-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 14px;
+  margin-bottom: clamp(16px, 2.4vh, 24px);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  line-height: 1.3;
+  color: var(--color-accent);
+  background: rgba(255, 122, 26, 0.1);
+  box-shadow: 0 0 12px rgba(255, 122, 26, 0.15);
+}
+
+.monument-name {
+  margin: 0 0 clamp(4px, 0.6vh, 8px);
+  font-family: var(--font-sans);
+  font-size: clamp(32px, 5vw, 64px);
+  font-weight: 700;
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  text-transform: uppercase;
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.monument-handle {
+  display: block;
+  margin-bottom: clamp(6px, 0.8vh, 10px);
+  font-family: var(--font-mono);
+  font-size: var(--text-body-sm);
+  color: var(--color-text-muted);
+}
+
+.monument-role {
+  display: block;
+  margin-bottom: clamp(14px, 2vh, 22px);
+  font-family: var(--font-sans);
+  font-size: clamp(15px, 1.4vw, 18px);
+  font-weight: 500;
+  line-height: var(--lh-tight);
+  color: var(--color-text);
+}
+
+.craft-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: clamp(20px, 3vh, 32px);
+}
+
+.craft-chip {
+  display: inline-flex;
+  padding: 5px 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(4px);
+}
+
+.monument-citation {
+  margin-bottom: clamp(24px, 3.6vh, 40px);
+}
+
+.monument-citation__lead {
+  margin: 0 0 clamp(14px, 2vh, 22px);
+  font-family: Newsreader, Georgia, "Times New Roman", serif;
+  font-style: italic;
+  font-size: clamp(18px, 1.8vw, 24px);
+  line-height: var(--lh-body);
+  color: var(--color-primary);
+  text-wrap: pretty;
+}
+
+.monument-citation__body {
+  margin: 0 0 clamp(14px, 2vh, 22px);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+  max-width: 64ch;
+  text-wrap: pretty;
+}
+
+.monument-citation__signed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  color: var(--color-text-muted);
+}
+
+.monument-citation__seal {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  color: var(--color-accent);
+  opacity: 0.7;
+}
+
+.dossier-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 28px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  color: #000000;
+  background: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  text-decoration: none;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dossier-link:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.dossier-link__arrow {
+  display: inline-flex;
+  color: #000000;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dossier-link:hover .dossier-link__arrow {
+  transform: translateX(4px);
+}
+
+.contributors__community {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: clamp(28px, 3.6vw, 48px) clamp(24px, 3.2vw, 44px);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  transition: transform var(--dur-slow) var(--ease),
+    box-shadow var(--dur-slow) var(--ease),
+    border-color var(--dur-slow) var(--ease);
+}
+
+.contributors__community:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  border-color: var(--color-border-strong);
+}
+
+.contributors__community-title {
+  margin: 0 0 clamp(8px, 1.2vh, 14px);
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.4vw, 30px);
+  font-weight: 400;
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-display);
+  background: var(--grad-title);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-wrap: pretty;
+}
+
+.contributors__community-desc {
+  margin: 0 0 clamp(20px, 3vh, 32px);
+  font-size: var(--text-body);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+
+.contributors__community-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(10px, 1.4vw, 18px);
+}

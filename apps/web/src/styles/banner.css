@@ -1,0 +1,92 @@
+/* ==========================================================================
+   STAR BANNER
+   Fixed top bar for time-sensitive announcements. Sits above the nav
+   (z-index 60 vs nav's 50) so it always runs the full viewport width.
+   ========================================================================== */
+.star-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: linear-gradient(
+    135deg,
+    var(--grad-mark-from, #ff7a1a) 0%,
+    var(--grad-mark-to, #ff3b81) 100%
+  );
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.star-banner__text {
+  white-space: nowrap;
+}
+
+.star-banner__text strong {
+  font-weight: 600;
+}
+
+.star-banner__action {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 14px;
+  background: #000000;
+  color: #ffffff;
+  border: none;
+  border-radius: 9999px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.star-banner__action:hover {
+  opacity: 0.85;
+  transform: scale(1.02);
+}
+
+.star-banner__dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.star-banner__dismiss:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+@media (max-width: 640px) {
+  .star-banner {
+    gap: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    flex-wrap: wrap;
+  }
+
+  .star-banner__action {
+    padding: 3px 10px;
+    font-size: 11px;
+  }
+}

@@ -18,15 +18,20 @@
 .nav--spacer {
   visibility: hidden;
   pointer-events: none;
+  margin-top: var(--banner-height, 0px);
+  transition: margin-top 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .nav--fixed {
   position: fixed;
-  inset: 0 0 auto 0;
+  top: var(--banner-height, 0px);
+  left: 0;
+  right: 0;
+  bottom: auto;
   z-index: 50;
   grid-area: auto;
   background: transparent;
-  transition: padding var(--dur-slow) var(--ease);
+  transition: top 0.2s cubic-bezier(0.16, 1, 0.3, 1), padding var(--dur-slow) var(--ease);
 }
 
 .nav--fixed[data-stuck] {

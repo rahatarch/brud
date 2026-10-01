@@ -154,12 +154,91 @@
   text-wrap: pretty;
 }
 
+/* -- quote block ---------------------------------------------------------- */
+.announcements__quote {
+  position: relative;
+  margin: clamp(16px, 2.4vh, 28px) 0;
+  padding: clamp(18px, 2.4vw, 28px) clamp(20px, 2.8vw, 36px);
+  background: var(--color-surface-2);
+  border-left: 3px solid var(--color-accent);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  font-family: var(--font-display);
+  font-size: clamp(15px, 1.4vw, 18px);
+  font-weight: 400;
+  line-height: var(--lh-body);
+  font-style: italic;
+  color: var(--color-text);
+  text-wrap: pretty;
+}
+
+.announcements__quote::before {
+  content: "\201C";
+  position: absolute;
+  top: -4px;
+  left: 10px;
+  font-family: var(--font-display);
+  font-size: 48px;
+  line-height: 1;
+  color: var(--color-accent);
+  opacity: 0.3;
+  pointer-events: none;
+}
+
 .announcements__summary {
   margin: 0 0 clamp(16px, 2.4vh, 28px);
   font-size: var(--text-body);
   line-height: var(--lh-body);
   color: var(--color-text-muted);
   max-width: 62ch;
+  text-wrap: pretty;
+}
+
+/* -- pillars -------------------------------------------------------------- */
+.announcements__pillars {
+  display: grid;
+  gap: clamp(12px, 1.6vh, 20px);
+  margin-top: clamp(12px, 1.6vh, 20px);
+}
+
+.announcements__pillar {
+  display: flex;
+  gap: clamp(12px, 1.4vw, 20px);
+  padding: clamp(14px, 1.6vw, 22px) clamp(16px, 2vw, 26px);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  transition: border-color var(--dur-slow) var(--ease);
+}
+
+.announcements__pillar:hover {
+  border-color: var(--color-border-strong);
+}
+
+.announcements__pillar-marker {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-top: 10px;
+  border-radius: 1px;
+  background: var(--color-accent);
+  transform: rotate(45deg);
+}
+
+.announcements__pillar-title {
+  margin: 0 0 4px;
+  font-family: var(--font-mono);
+  font-size: var(--text-eyebrow);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+}
+
+.announcements__pillar-desc {
+  margin: 0;
+  font-size: var(--text-body-sm);
+  line-height: var(--lh-body);
+  color: var(--color-text-muted);
   text-wrap: pretty;
 }
 

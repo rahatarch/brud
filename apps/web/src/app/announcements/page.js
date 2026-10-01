@@ -41,6 +41,22 @@ function AnnouncementsBar() {
   );
 }
 
+function PillarsBlock({ pillars }) {
+  return (
+    <div className="announcements__pillars">
+      {pillars.map((pillar, i) => (
+        <div key={i} className="announcements__pillar">
+          <span className="announcements__pillar-marker" />
+          <div>
+            <h4 className="announcements__pillar-title">{pillar.title}</h4>
+            <p className="announcements__pillar-desc">{pillar.description}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function AnnouncementCard({ item }) {
   const badgeClass =
     item.badgeStyle === "warning"
@@ -59,19 +75,28 @@ function AnnouncementCard({ item }) {
           <span className="announcements__status-dot" />
           {item.status}
         </span>
-        <span>{item.date}</span>
+        {item.date && <span>{item.date}</span>}
       </div>
 
       <h3 className="announcements__card-title">{item.title}</h3>
+
+      {item.quote && (
+        <blockquote className="announcements__quote">{item.quote}</blockquote>
+      )}
+
       <p className="announcements__summary">{item.summary}</p>
 
-      <ul className="announcements__details">
-        {item.details.map((detail, i) => (
-          <li key={i} className="announcements__detail">
-            {detail}
-          </li>
-        ))}
-      </ul>
+      {item.pillars && <PillarsBlock pillars={item.pillars} />}
+
+      {item.details && (
+        <ul className="announcements__details">
+          {item.details.map((detail, i) => (
+            <li key={i} className="announcements__detail">
+              {detail}
+            </li>
+          ))}
+        </ul>
+      )}
     </article>
   );
 }
