@@ -52,6 +52,6 @@ export const FEATURES = {
     { value: "21", label: "operation types" },
     { value: "384K", label: "lines tested" },
     { value: "7 days", label: "to recover deleted sessions" },
-    { value: "12+", label: "test suites, no I/O mocking" },
+    { value: "20+", label: "test suites, no I/O mocking" },
   ],
 };

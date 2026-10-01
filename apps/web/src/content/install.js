@@ -21,7 +21,7 @@ export const INSTALL = {
       note: "Akkhar-Labs",
     },
     {
-      title: "Click Install, then open the Prompt Library",
+      title: "Click Install, then click Get Started to open the Guide",
     },
   ],
   actions: [
