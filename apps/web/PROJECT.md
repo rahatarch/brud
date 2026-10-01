@@ -1,3 +1,5 @@
+> **Note**: This document is an initial design specification and project brief for the Brud Code marketing site. For the implemented architecture, refer to apps/web/README.md and ARCHITECTURE.md.
+
 # Brud Code — Website Project Brief
 
 > Single-page marketing site for **Brud Code**.

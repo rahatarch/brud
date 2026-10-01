@@ -1,80 +1,58 @@
-<div align="center">
-
-<img src="src/app/icon.svg" width="88" alt="Brud Code logo" />
+<p align="center">
+  <img src="../../assets/icons/brud_icon_rounded.png" width="96" alt="Brud Code Logo" />
+</p>
 
 # Brud Code — Website
 
-**Unlimited AI coding. One paste in, one copy out.**
+The official marketing and documentation site for Brud Code.
 
-The marketing site for [Brud Code](https://github.com/rahatarch/brud), the free, open-source VS Code extension that turns any AI chatbot into an agentic coding tool.
+<p align="center">
+  <a href="https://github.com/rahatarch/brud"><img src="https://img.shields.io/github/stars/rahatarch/brud?style=social" alt="GitHub stars" /></a>
+  <a href="../../LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="License" /></a>
+  <a href="https://brud.akkharlabs.com"><img src="https://img.shields.io/badge/live%20site-brud.akkharlabs.com-000" alt="Live site" /></a>
+</p>
 
-[**Live site**](https://miftahul-islam-efaz.github.io/Brud-code/) · [Extension repo](https://github.com/rahatarch/brud) · [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=akkhar-labs.brud)
+## Purpose
 
-</div>
+`apps/web` is the marketing and documentation frontend for Brud Code. It showcases live benchmarks, 3D interactive graphics, interactive onboarding guides, and documentation — all in a single-page, statically exported Next.js site designed to convert visitors into users and contributors.
 
----
-
-## About
-
-Brud Code lets you use the AI chatbot you already have — ChatGPT, Claude, Gemini, or any other — as a coding agent inside VS Code. You paste one master prompt into the chat, copy the chatbot's `brud` block back into the editor, and Brud runs it across your project. This repository is the landing page that explains and promotes it.
-
-## Tech stack
+## Tech Stack
 
 | | |
 |---|---|
 | Framework | [Next.js 15](https://nextjs.org/) (App Router) + React 19 |
+| Styling | [Tailwind CSS v4](https://tailwindcss.com/) |
 | Smooth scroll | [Lenis](https://github.com/darkroomengineering/lenis) |
-| Styling | Plain CSS in `src/styles`, split per device (desktop / tablet / mobile) |
-| Hosting | GitHub Pages (static export via GitHub Actions) |
 
-## Project structure
-
-```
-src/
-  app/            layout, page, favicon (icon.svg)
-  components/     hero, journey, install, features, guide, faq, footer, brand, motion
-  content/        copy and media for each section
-  hooks/          animation hooks (rim light, etc.)
-  lib/            helpers (asset paths for the Pages base path)
-  styles/         CSS layers + tablet/mobile overrides
-  assets/fonts/   self-hosted typefaces
-public/           images, videos, logo glow masks
-tools/            buildMarkMasks.mjs (regenerates public/mark)
-media-source/     source media and the archived 3D hero prototype
-```
-
-## Getting started
+## Getting Started
 
 Requires Node.js 20+.
 
 ```bash
-npm install
-npm run dev      # http://localhost:3000
+# From the monorepo root
+npm run dev:web
+
+# Or from inside apps/web/
+npm run dev
 ```
 
 Production build:
 
 ```bash
-npm run build
-npm start
+# From the monorepo root
+npm run build:web
 ```
 
-## Deployment
+## Build & Export
 
-Every push to `main` builds a static export and publishes it to GitHub Pages via [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml).
+The project uses Next.js `output: "export"` to generate a fully static website. All artifacts are written to `out/` as plain HTML, CSS, and JavaScript files that can be deployed to any standard web server or edge CDN without a Node.js runtime.
 
-The Pages build sets `GITHUB_PAGES=true` and `NEXT_PUBLIC_BASE_PATH=/Brud-code`, which switches `next.config.mjs` to `output: "export"` under the repo sub-path. Use the `asset()` helper from `src/lib/asset.js` for any file referenced from `public/` so it resolves on both localhost and Pages.
+## Deeper Documentation
 
-To deploy on a custom domain or Vercel instead, just run a normal `npm run build` — no base path is needed.
-
-## Performance notes
-
-- Lenis-driven smooth scrolling; pointer events pause while scrolling.
-- The hero entrance waits for fonts and a few calm frames before playing, so it never stutters.
-- The hero logo's glow is painted on canvas instead of CSS masks (far cheaper while it scales).
-- Images and videos are pre-compressed (WebP / WebM + MP4 fallback).
+- [Root README](../../README.md) — Monorepo overview
+- [ARCHITECTURE.md](../../ARCHITECTURE.md) — System architecture
+- [docs/](../../docs/) — Engineering documentation
 
 ## License
 
-Code is released under the [MIT License](LICENSE).
-The fonts in `src/assets/fonts` (Satoshi, Array, Bubbledot from Fontshare / ITF, and Commit Mono under the OFL) keep their own licenses and are not covered by MIT.
+Code is released under the [MIT License](../../LICENSE).

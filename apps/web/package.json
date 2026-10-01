@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "description": "Marketing website for Brud Code, the free open-source VS Code extension that turns any AI chatbot into an agentic coding tool.",
-  "homepage": "https://miftahul-islam-efaz.github.io/Brud-code/",
+  "homepage": "https://brud.akkharlabs.com",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Miftahul-Islam-Efaz/Brud-code.git"
+    "url": "https://github.com/rahatarch/brud.git",
+    "directory": "apps/web"
   },
   "license": "MIT",
   "scripts": {

@@ -14,10 +14,15 @@ packages/
 ├── adapters/
 │   └── vscode/     — VS Code specific FileSystem and terminal executors
 apps/
-├── vscode/         — VS Code extension entry point
+├── vscode/         # VS Code extension entry point
+├── web/            # Marketing and documentation website (Next.js static export)
 tests/
 ├── integration/    — Full workflow integration tests
 ```
+
+### `apps/web` — Marketing and Documentation Website
+
+`apps/web` is a statically exported Next.js 15 site that serves as the marketing frontend and documentation hub for Brud Code. It is fully self-contained with zero runtime dependencies on the monorepo's packages or any private infrastructure. The site showcases live benchmarks, 3D interactive graphics, onboarding guides, and technical documentation. It uses `output: "export"` in Next.js to produce plain HTML/CSS/JS artifacts deployable to any standard web server or edge CDN.
 
 ## Core Engine
 
