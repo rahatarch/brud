@@ -1,54 +1,51 @@
 export const ANNOUNCEMENTS = {
-  eyebrow: "AKKHAR-LABS DISPATCH — Q4 2026 ROADMAP",
-  title: "Announcements & Advance Notices",
-  lede: "Official bulletins, upcoming architectural shifts, and advance notices from the Brud Code Department at Akkhar-Labs.",
-  items: [
+  eyebrow: "NEW PRODUCT LAUNCH // AKKHAR-LABS ECOSYSTEM",
+  product: "BRUD PRIME",
+  tagline: "The Permanent Senior Engineer.",
+  subtitle:
+    "An autonomous multi-agent engineering layer that lets AI models drive the battle-tested Brud engine under structural harness enforcement.",
+  thesis:
+    "Brud is not a tool you invoke. Brud is a character — a permanent senior engineer assigned to this codebase who never forgets, always knows how the project actually works, and maintains the operational record continuously.",
+  divide: {
+    openSource: {
+      name: "Brud Code",
+      role: "Manual Engine",
+      model: "Open Source / MIT",
+      desc: "Surgical paste-and-apply diffs with zero API keys and 100% reversible history. The free foundation.",
+    },
+    flagship: {
+      name: "Brud Prime",
+      role: "Autonomous Flagship",
+      model: "Commercial Tier",
+      desc: "The permanent senior engineer. Multi-agent consensus loops, living map synchronization, and closed-source autonomy.",
+    },
+  },
+  chapters: [
     {
-      type: "Upcoming Major Release (v0.2.0)",
-      tag: "ADVANCE VISION & ROADMAP",
-      status: "Targeted for Q4 2026",
-      badgeStyle: "accent",
-      title: "Brud Code Auto — The Permanent Senior Engineer",
-      quote: "Brud is not a tool you invoke. Brud is a character — a permanent senior engineer assigned to this codebase who never forgets, always knows how the project actually works, and maintains the operational record continuously.",
-      summary:
-        "Introducing the automation layer for Brud Code that lets AI models drive the same engine that manual users drive, without changing the engine, the history, or the safety model.",
-      pillars: [
-        {
-          title: "One Product, One Engine",
-          description:
-            "Manual mode and Auto mode share the exact same execution engine, history, and safety gates. The automation layer is a lid that can be removed at any time with zero disruption.",
-        },
-        {
-          title: "The Living Map",
-          description:
-            "A maintained knowledge directory holding the project's operational truth and hard-won scars, allowing stateless models to act like tenured engineers.",
-        },
-        {
-          title: "The Session Archive",
-          description:
-            "Preserving the 'Why' behind every architectural decision, critique, and rejected alternative in permanent, traceable records that outlive finite context windows and changing models.",
-        },
-        {
-          title: "The Harness Guarantee",
-          description:
-            "Prompts are suggestions; the harness is the guarantee. Role boundaries, map updates, and safety checks are structurally enforced by the system, not requested in prompts.",
-        },
-        {
-          title: "The Human Architect Invariant",
-          description:
-            "The human owner is always the Architect. The automation proposes, debates, and implements—it never automates away final human decision-making.",
-        },
-      ],
+      num: "01",
+      name: "The Living Map",
+      tag: "DURABLE MEMORY",
+      desc: "A maintained knowledge directory holding the project's operational truth and architectural scars. A stateless model reads the map and instantly acts with the wisdom of a year on this codebase.",
     },
     {
-      type: "Protocol Specification",
-      tag: "RFC PREVIEW",
-      status: "Under Architecture Review",
-      date: "Target: Q4 2026",
-      badgeStyle: "warning",
-      title: "RFC: Document-Driven Agent Protocol & Structured State Exchanges",
-      summary:
-        "Drafting the formal numbered document exchange protocol between Discusser, Architect, and Executor roles to replace unstructured chat with auditable consensus chains.",
+      num: "02",
+      name: "The Session Archive",
+      tag: "PRESERVING THE WHY",
+      desc: "Preserves every brief, critique, counter-proposal, and rejected alternative in permanent, numbered document ledgers. Code is the what; the archive is the why.",
+    },
+    {
+      num: "03",
+      name: "The Harness Guarantee",
+      tag: "STRUCTURAL CONTROL",
+      desc: "Prompts are suggestions; the harness is the guarantee. Role boundaries (Discusser, Architect, Executor) and safety gates are enforced by the system, not requested in prompts.",
+    },
+    {
+      num: "04",
+      name: "The Airgapped Dual-Engine",
+      tag: "ENTERPRISE PRIVACY",
+      desc: "The autonomous layer is a decoupled lid that mounts on the core engine. Public engine improvements flow downstream while commercial code remains completely airgapped.",
     },
   ],
+  manifesto:
+    "Other tools bet that models will get smart enough to trust. Brud Prime bets that models will never be trustworthy enough to not need a harness. The process is the product. The model is interchangeable.",
 };
