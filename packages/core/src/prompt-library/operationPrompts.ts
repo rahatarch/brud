@@ -125,6 +125,8 @@ Depth: [number or 0 for unlimited]
 - Depth 0 means unlimited traversal of the entire directory tree
 - Depth N means N levels deep (e.g., Depth: 2 extracts the directory and its immediate children)
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
+- Files in the output tree automatically display their line count (e.g. "file.ts (142 lines)") or "[binary]"
+- Use these line counts to specify Start Line and End Line when reading large files
 - Multiple EXTRACT_STRUCTURE blocks can be used in a single prompt to extract several directories at once. Each block should have a unique index number.
 
 Example of multiple directories:
@@ -201,6 +203,8 @@ Describe the file to read below:
 
 <<<<<<< READ_FILE [1]
 File Path: [path]
+Start Line: [optional number]
+End Line: [optional number]
 isImportRead: [true or false]
 MaxDepth: [number, default 5]
 importSyntax: [optional custom regex]
@@ -208,6 +212,8 @@ Exclude: [patterns to skip, optional]
 >>>>>>> END READ_FILE [1]
 
 - File Path: the file to read
+- Start Line: 1-based starting line number (optional, defaults to 1)
+- End Line: 1-based ending line number (optional, defaults to EOF, auto-clamps)
 - isImportRead: true to also read imported files recursively
 - MaxDepth: how deep to follow imports (default 5, 0 for unlimited)
 - importSyntax: custom import pattern regex for non-standard languages (optional)

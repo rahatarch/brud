@@ -249,7 +249,7 @@ To: packages/ui/components
   globalToolRegistry.registerTool({
     kind: 'extract_structure',
     name: 'Extract Directory Structure',
-    description: 'Generate a token-efficient JSON map of directory contents with depth control',
+    description: 'Generate a token-efficient JSON map of directory contents with automatic file line counts and depth control',
     marker: 'EXTRACT_STRUCTURE',
     parameters: [
       { name: 'directoryPath', type: 'string', required: true, description: 'Directory path to extract' },
@@ -263,6 +263,8 @@ Depth: [number or 0 for unlimited]
       'Depth 0 means unlimited traversal',
       'Hidden files and build directories are excluded automatically',
       'Multiple EXTRACT_STRUCTURE blocks can be used in one prompt',
+      'Text files in the output tree automatically include their line count (e.g. "engine.cc (3410 lines)"), while binary files are marked "[binary]"',
+      'Use the line counts from EXTRACT_STRUCTURE to select precision Start Line and End Line ranges when calling READ_FILE',
     ],
   });
 
@@ -315,9 +317,13 @@ MaxResults: 500
       { name: 'maxDepth', type: 'number', required: false, description: 'How deep to follow imports. 0 for unlimited.', default: '0' },
       { name: 'importSyntax', type: 'string', required: false, description: 'Custom import pattern regex' },
       { name: 'exclude', type: 'string', required: false, description: 'Patterns to skip when following imports' },
+      { name: 'startLine', type: 'number', required: false, description: '1-based starting line number (defaults to 1)' },
+      { name: 'endLine', type: 'number', required: false, description: '1-based ending line number (inclusive; auto-clamps to EOF if beyond file length)' },
     ],
     example: `<<<<<<< READ_FILE [1]
 File Path: [path]
+Start Line: [optional number, e.g. 1]
+End Line: [optional number, e.g. 50]
 isImportRead: [true or false]
 MaxDepth: [number, default 5]
 importSyntax: [optional custom regex]
@@ -327,6 +333,8 @@ Exclude: [patterns to skip, optional]
       'isImportRead: true to also read imported files recursively',
       'MaxDepth: default 0 (unlimited). Specify a number to limit depth.',
       'importSyntax: custom import pattern regex for non-standard languages',
+      'For large files, specify Start Line and End Line to slice only the needed lines and avoid context exhaustion.',
+      'End Line automatically clamps to end-of-file if greater than total lines; Start Line must be within file bounds.',
     ],
   });
 
