@@ -17,6 +17,12 @@ async function createTestStructure(baseDir: string, nodeFs: NodeFileSystem): Pro
   await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'utils', 'helper.ts'), '');
   await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'utils', 'constants.ts'), '');
   await nodeFs.writeFile(pathModule.join(baseDir, 'src', '.hidden', 'secret.ts'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'components', 'Header.tsx'), 'export function Header() {\n  return <header>Hello</header>;\n}\n');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'utils', 'calc.ts'), 'export function add(a: number, b: number): number {\n  return a + b;\n}');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'components', 'Layout.tsx'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'empty.txt'), '');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'single.txt'), 'just one line');
+  await nodeFs.writeFile(pathModule.join(baseDir, 'src', 'image.png'), '\u0089PNG\r\n\u001a\n');
 }
 
 describe('extractDirectoryStructure', () => {
@@ -42,19 +48,24 @@ describe('extractDirectoryStructure', () => {
     const childNames = children.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
     assert.ok(childNames.includes('components'));
     assert.ok(childNames.includes('utils'));
-    assert.ok(childNames.includes('index.ts'));
+    assert.ok(childNames.includes('index.ts (0 lines)'));
+    assert.ok(childNames.includes('empty.txt (0 lines)'));
+    assert.ok(childNames.includes('single.txt (1 line)'));
+    assert.ok(childNames.includes('image.png [binary]'));
     assert.ok(!childNames.includes('node_modules'));
     assert.ok(!childNames.includes('.hidden'));
     const componentsObj = children.find((c: any) => typeof c === 'object' && c.components);
     assert.ok(componentsObj);
     const compChildren = componentsObj.components;
     const compNames = compChildren.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
-    assert.ok(compNames.includes('Button.tsx'));
-    assert.ok(compNames.includes('Input.tsx'));
+    assert.ok(compNames.includes('Button.tsx (0 lines)'));
+    assert.ok(compNames.includes('Input.tsx (0 lines)'));
+    assert.ok(compNames.includes('Layout.tsx (0 lines)'));
+    assert.ok(compNames.includes('Header.tsx (3 lines)'));
     assert.ok(compNames.includes('forms'));
     const formsObj = compChildren.find((c: any) => typeof c === 'object' && c.forms);
     assert.ok(formsObj);
-    assert.ok(formsObj.forms.includes('LoginForm.tsx'));
+    assert.ok(formsObj.forms.includes('LoginForm.tsx (0 lines)'));
   });
 
   it('Test 2: Depth 1 - only immediate children of src/ returned, subdirectories at boundary skipped', async () => {
@@ -65,13 +76,13 @@ describe('extractDirectoryStructure', () => {
     const childNames = children.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
     assert.ok(childNames.includes('components'));
     assert.ok(childNames.includes('utils'));
-    assert.ok(childNames.includes('index.ts'));
+    assert.ok(childNames.includes('index.ts (0 lines)'));
     const componentsList = children.find((c: any) => typeof c === 'object' && c.components);
     assert.ok(componentsList);
     const compChildren = componentsList.components;
     const compNames = compChildren.map((c: any) => typeof c === 'string' ? c : Object.keys(c)[0]);
-    assert.ok(compNames.includes('Button.tsx'));
-    assert.ok(compNames.includes('Input.tsx'));
+    assert.ok(compNames.includes('Button.tsx (0 lines)'));
+    assert.ok(compNames.includes('Input.tsx (0 lines)'));
     assert.ok(!compNames.includes('forms'), 'forms directory should not appear at depth 1');
   });
 
@@ -100,5 +111,21 @@ describe('extractDirectoryStructure', () => {
   it('Test 5: Output is valid JSON', async () => {
     const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
     assert.doesNotThrow(() => JSON.parse(result));
+  });
+
+  it('Test 6: Non-empty text file reports line count', async () => {
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
+    assert.ok(result.includes('Header.tsx (3 lines)'));
+    assert.ok(result.includes('single.txt (1 line)'));
+  });
+
+  it('Test 7: Empty text file reports (0 lines)', async () => {
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
+    assert.ok(result.includes('empty.txt (0 lines)'));
+  });
+
+  it('Test 8: Binary file reports [binary] tag', async () => {
+    const result = await extractDirectoryStructure(nodeFs, pathModule.join(tempDir, 'src'), 0);
+    assert.ok(result.includes('image.png [binary]'));
   });
 });

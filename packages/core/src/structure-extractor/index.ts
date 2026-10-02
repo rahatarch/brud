@@ -1,11 +1,37 @@
 import path from 'path';
 import { FileSystem } from '../types/filesystem';
 
+export const BINARY_EXTENSIONS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.ico', '.pdf',
+  '.zip', '.tar', '.gz', '.7z', '.wasm', '.glb', '.gltf',
+  '.bin', '.exe', '.dll', '.so', '.dylib', '.node',
+  '.woff', '.woff2', '.ttf', '.eot',
+  '.mp4', '.webm', '.mp3', '.wav', '.ogg',
+]);
+
 const IGNORED_DIRECTORIES = new Set([
   'node_modules', 'dist', 'target', 'build', 'out', 'coverage',
   '.next', '.nuxt', '.cache', 'vendor', 'bower_components',
   '__pycache__', '.venv', 'venv',
 ]);
+
+async function formatFileEntry(fs: FileSystem, fullPath: string, fileName: string): Promise<string> {
+  const ext = fileName.includes('.') ? ('.' + fileName.split('.').pop()!).toLowerCase() : '';
+  if (BINARY_EXTENSIONS.has(ext)) {
+    return `${fileName} [binary]`;
+  }
+  try {
+    const content = await fs.readFile(fullPath);
+    if (!content || content.length === 0) {
+      return `${fileName} (0 lines)`;
+    }
+    const trimmed = content.endsWith('\n') ? content.slice(0, -1) : content;
+    const lines = trimmed.length === 0 ? 0 : (trimmed.match(/\n/g) || []).length + 1;
+    return lines === 1 ? `${fileName} (1 line)` : `${fileName} (${lines} lines)`;
+  } catch {
+    return fileName;
+  }
+}
 
 interface StructureNode {
   [key: string]: (string | StructureNode)[];
@@ -42,7 +68,8 @@ async function buildStructure(
         children.push({ [entry.name]: [] });
       }
     } else {
-      children.push(entry.name);
+      const formatted = await formatFileEntry(fs, path.join(dirPath, entry.name), entry.name);
+      children.push(formatted);
     }
   }
 
