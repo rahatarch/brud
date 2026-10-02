@@ -9,3 +9,4 @@ node_modules
 BRUD_TEST_LOG.md
 temporary
 .env
+*.tsbuildinfo

@@ -1427,12 +1427,13 @@ message: invalidCwdError(termOp.cwd || '').details,
           if (!toolOp.toolKind) {
             const allTools = globalToolRegistry.getAllTools();
             const toolList = allTools.map(t => `${t.kind} - ${t.name}: ${t.description}`).join('\n');
+            const mandate = '\n\n**CRITICAL MANDATE:**\nDo NOT attempt to invoke, execute, or guess the syntax of any tool above based on its name or description alone. You have NOT been provided with their parameter schemas or block syntax. You MUST call `GET_TOOL_INFO` with `Tool: <kind>` (e.g. `Tool: [tool_name]`) to retrieve the exact required fields, behavioral rules, and copy-paste template BEFORE generating any execution instructions.';
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'get_tool_info',
               status: 'success',
-              message: `Available tools:\n${toolList}`,
+              message: `Available tools:\n${toolList}${mandate}`,
               path: '',
             });
           } else {

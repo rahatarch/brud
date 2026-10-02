@@ -305,7 +305,7 @@ List all tools:
 
 Get specific tool documentation:
 <<<<<<< GET_TOOL_INFO [1]
-Tool: create_file
+Tool: [tool_name]
 >>>>>>> END GET_TOOL_INFO [1]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
