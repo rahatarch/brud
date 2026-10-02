@@ -116,7 +116,7 @@ export async function executeFileOperations(
   let sessionId: string | undefined;
   let preSnapshot: SnapshotData | undefined;
   const preResolvedMultiFiles: Map<number, string[]> = new Map();
-  const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
+  const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; startLine: number; endLine: number; totalLines: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
   let metadataResult: string | undefined;
   const searchResults: Map<number, string> = new Map();
   let existingSessionData: { filesAffected: string[]; preSnapshot: SnapshotData; postSnapshot: SnapshotData; operationResults: OperationResult[] } | undefined;
@@ -1228,6 +1228,8 @@ operationResults.push({
             operation.maxDepth,
             operation.excludePatterns,
             operation.importSyntax,
+            operation.start_line,
+            operation.end_line,
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1298,6 +1300,8 @@ operationResults.push({
             operation.maxDepth,
             operation.excludePatterns,
             operation.importSyntax,
+            operation.start_line,
+            operation.end_line,
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1340,6 +1344,8 @@ operationResults.push({
             operation.maxDepth,
             operation.excludePatterns,
             operation.importSyntax,
+            operation.start_line,
+            operation.end_line,
           );
           readResults.set(i, resultData);
           operationResults.push({

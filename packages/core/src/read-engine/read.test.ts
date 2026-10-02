@@ -7,6 +7,7 @@ import { readFiles } from './index.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
 import { parseOperations } from '../parser/index.js';
 import { executeFileOperations } from '../file-operations/index.js';
+import { BrudError, BrudAPI } from '../api/index.js';
 
 describe('readFiles integration tests', () => {
   let tempDir: string;
@@ -215,5 +216,133 @@ MaxDepth: 3
     const paths = parsed.readResults[0].files.map((f: { path: string }) => f.path);
     assert.ok(paths.includes(fileA));
     assert.ok(paths.includes(fileB));
+  });
+
+  it('TEST 12: parseOperations (legacy format) with line range executes and slices content', async () => {
+    const testFilePath = pathModule.join(tempDir, 'legacy-range-test-1.txt');
+    await nodeFs.writeFile(testFilePath, 'line 1\nline 2\nline 3\nline 4\nline 5\n');
+
+    const ops = parseOperations(`<<<<<<< READ_FILE [legacy-range-test-1]
+File Path: ${testFilePath}
+Start Line: 2
+End Line: 4
+>>>>>>> END READ_FILE [legacy-range-test-1]`);
+
+    assert.strictEqual(ops.length, 1);
+    assert.strictEqual(ops[0].kind, 'read_file');
+    if (ops[0].kind === 'read_file') {
+      assert.strictEqual(ops[0].start_line, 2);
+      assert.strictEqual(ops[0].end_line, 4);
+    }
+
+    const result = await executeFileOperations(ops, nodeFs, [tempDir]);
+    assert.strictEqual(result.success, true);
+    const parsed = JSON.parse(result.message);
+    assert.ok(parsed.readResults, 'expected readResults in message');
+    assert.ok(Array.isArray(parsed.readResults));
+    assert.strictEqual(parsed.readResults.length, 1);
+    assert.strictEqual(parsed.readResults[0].files.length, 1);
+    const fileEntry = parsed.readResults[0].files[0];
+    assert.strictEqual(fileEntry.content, 'line 2\nline 3\nline 4\n');
+    assert.strictEqual(fileEntry.startLine, 2);
+    assert.strictEqual(fileEntry.endLine, 4);
+    assert.strictEqual(fileEntry.totalLines, 5);
+  });
+
+  describe('line range slicing', () => {
+    const fiveLineContent = 'line1\nline2\nline3\nline4\nline5\n';
+
+    it('TEST L1: slicing with both bounds (lines 2-4 of a 5-line file)', async () => {
+      const fp = pathModule.join(tempDir, 'l1.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      const result = await readFiles(nodeFs, [fp], false, 0, undefined, undefined, 2, 4);
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0].content, 'line2\nline3\nline4\n');
+      assert.strictEqual(result.files[0].startLine, 2);
+      assert.strictEqual(result.files[0].endLine, 4);
+      assert.strictEqual(result.files[0].totalLines, 5);
+    });
+
+    it('TEST L2: default start_line=1 when only end_line is specified', async () => {
+      const fp = pathModule.join(tempDir, 'l2.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      const result = await readFiles(nodeFs, [fp], false, 0, undefined, undefined, undefined, 3);
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0].content, 'line1\nline2\nline3\n');
+      assert.strictEqual(result.files[0].startLine, 1);
+      assert.strictEqual(result.files[0].endLine, 3);
+    });
+
+    it('TEST L3: default end_line=totalLines when only start_line is specified', async () => {
+      const fp = pathModule.join(tempDir, 'l3.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      const result = await readFiles(nodeFs, [fp], false, 0, undefined, undefined, 3);
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0].content, 'line3\nline4\nline5\n');
+      assert.strictEqual(result.files[0].startLine, 3);
+      assert.strictEqual(result.files[0].endLine, 5);
+    });
+
+    it('TEST L4: auto-clamping — end_line > totalLines clamps to EOF', async () => {
+      const fp = pathModule.join(tempDir, 'l4.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      const result = await readFiles(nodeFs, [fp], false, 0, undefined, undefined, 3, 999);
+      assert.strictEqual(result.files.length, 1);
+      assert.strictEqual(result.files[0].content, 'line3\nline4\nline5\n');
+      assert.strictEqual(result.files[0].startLine, 3);
+      assert.strictEqual(result.files[0].endLine, 5);
+    });
+
+    it('TEST L5: validation failure — start_line < 1 throws INVALID_LINE_RANGE', async () => {
+      const fp = pathModule.join(tempDir, 'l5.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      await assert.rejects(
+        () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 0),
+        (err: any) => err.code === 'INVALID_LINE_RANGE',
+      );
+    });
+
+    it('TEST L6: validation failure — start_line > totalLines throws INVALID_LINE_RANGE', async () => {
+      const fp = pathModule.join(tempDir, 'l6.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      await assert.rejects(
+        () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 10),
+        (err: any) => err.code === 'INVALID_LINE_RANGE',
+      );
+    });
+
+    it('TEST L7: validation failure — start_line > end_line throws INVALID_LINE_RANGE', async () => {
+      const fp = pathModule.join(tempDir, 'l7.txt');
+      await nodeFs.writeFile(fp, fiveLineContent);
+      await assert.rejects(
+        () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 4, 2),
+        (err: any) => err.code === 'INVALID_LINE_RANGE',
+      );
+    });
+
+    it('TEST L8: import read — root file is sliced, dependency remains complete', async () => {
+      const rootA = pathModule.join(tempDir, 'root_a.ts');
+      const depB = pathModule.join(tempDir, 'dep_b.ts');
+      await nodeFs.writeFile(rootA, `import { fn } from './dep_b';\nline2\nline3\nline4\nline5\n`);
+      await nodeFs.writeFile(depB, 'lineX\nlineY\nlineZ\n');
+
+      const result = await readFiles(nodeFs, [rootA], true, 3, undefined, undefined, 2, 4);
+
+      assert.strictEqual(result.files.length, 2);
+      const rootEntry = result.files.find(f => f.path === rootA)!;
+      const depEntry = result.files.find(f => f.path === depB)!;
+
+      assert.strictEqual(rootEntry.content, 'line2\nline3\nline4\n');
+      assert.strictEqual(rootEntry.startLine, 2);
+      assert.strictEqual(rootEntry.endLine, 4);
+      assert.strictEqual(rootEntry.totalLines, 5);
+      assert.strictEqual(rootEntry.isImported, undefined);
+
+      assert.strictEqual(depEntry.content, 'lineX\nlineY\nlineZ\n');
+      assert.strictEqual(depEntry.startLine, 1);
+      assert.strictEqual(depEntry.endLine, 3);
+      assert.strictEqual(depEntry.totalLines, 3);
+      assert.strictEqual(depEntry.isImported, true);
+    });
   });
 });

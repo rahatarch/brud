@@ -170,6 +170,8 @@ export interface ReadFileOperation {
   maxDepth: number;
   excludePatterns?: string[];
   importSyntax?: string[];
+  start_line?: number;
+  end_line?: number;
   index: string;
   title?: string;
   description?: string;
@@ -185,6 +187,8 @@ export interface ReadFilesOperation {
   isImportRead: boolean;
   maxDepth: number;
   importSyntax?: string[];
+  start_line?: number;
+  end_line?: number;
   index: string;
   title?: string;
   description?: string;
@@ -198,6 +202,8 @@ export interface ReadDirectoryOperation {
   isImportRead: boolean;
   maxDepth: number;
   importSyntax?: string[];
+  start_line?: number;
+  end_line?: number;
   index: string;
   title?: string;
   description?: string;

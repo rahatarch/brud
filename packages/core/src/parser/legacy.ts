@@ -31,6 +31,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
   let currentReadMaxDepth = 0;
   let currentReadExclude: string[] = [];
   let currentReadImportSyntax: string[] = [];
+  let currentReadStartLine: number | undefined = undefined;
+  let currentReadEndLine: number | undefined = undefined;
   let currentTerminalCommand = '';
   let currentTerminalAnswers: string[] = [];
   let currentTerminalTimeout = 120;
@@ -242,6 +244,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         maxDepth: currentReadMaxDepth,
         excludePatterns: currentReadExclude.length > 0 ? [...currentReadExclude] : undefined,
         importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        start_line: currentReadStartLine,
+        end_line: currentReadEndLine,
         index: currentIndex,
       });
     }
@@ -250,6 +254,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentReadMaxDepth = 5;
     currentReadExclude = [];
     currentReadImportSyntax = [];
+    currentReadStartLine = undefined;
+    currentReadEndLine = undefined;
   }
 
   function flushReadFiles() {
@@ -264,6 +270,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         isImportRead: currentReadIsImportRead,
         maxDepth: currentReadMaxDepth,
         importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        start_line: currentReadStartLine,
+        end_line: currentReadEndLine,
         index: currentIndex,
       });
     }
@@ -274,6 +282,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentReadIsImportRead = false;
     currentReadMaxDepth = 5;
     currentReadImportSyntax = [];
+    currentReadStartLine = undefined;
+    currentReadEndLine = undefined;
   }
 
   function flushReadDirectory() {
@@ -286,6 +296,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         isImportRead: currentReadIsImportRead,
         maxDepth: currentReadMaxDepth,
         importSyntax: currentReadImportSyntax.length > 0 ? [...currentReadImportSyntax] : undefined,
+        start_line: currentReadStartLine,
+        end_line: currentReadEndLine,
         index: currentIndex,
       });
     }
@@ -294,6 +306,8 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
     currentReadMaxDepth = 5;
     currentReadExclude = [];
     currentReadImportSyntax = [];
+    currentReadStartLine = undefined;
+    currentReadEndLine = undefined;
   }
 
   function flushTerminalInteractive() {
@@ -426,6 +440,8 @@ throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, 
     currentReadMaxDepth = 5;
     currentReadExclude = [];
     currentReadImportSyntax = [];
+    currentReadStartLine = undefined;
+    currentReadEndLine = undefined;
     currentTerminalEnvLines = [];
     currentTerminalRaw = false;
   }
@@ -627,6 +643,8 @@ if (searchFilesMatch) {
         currentReadIsImportRead = false;
         currentReadMaxDepth = 5;
         currentReadExclude = [];
+        currentReadStartLine = undefined;
+        currentReadEndLine = undefined;
         continue;
       }
       if (line.match(/^<<<<<<< READ_FILES \[([\w\d.-]+)\]/)) {
@@ -638,6 +656,8 @@ if (searchFilesMatch) {
         currentSearchMaxResults = 500;
         currentReadIsImportRead = false;
         currentReadMaxDepth = 5;
+        currentReadStartLine = undefined;
+        currentReadEndLine = undefined;
         continue;
       }
       if (line.match(/^<<<<<<< READ_DIRECTORY \[([\w\d.-]+)\]/)) {
@@ -647,6 +667,8 @@ if (searchFilesMatch) {
         currentReadIsImportRead = false;
         currentReadMaxDepth = 5;
         currentReadExclude = [];
+        currentReadStartLine = undefined;
+        currentReadEndLine = undefined;
         continue;
       }
       if (terminalInteractiveMatch) {
@@ -1105,6 +1127,16 @@ currentTerminalEnvLines = [];
         currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
         continue;
       }
+      const readFileStartLineMatch = line.match(/^(?:Start Line|start_line|StartLine):\s*(\d+)/i);
+      if (readFileStartLineMatch) {
+        currentReadStartLine = parseInt(readFileStartLineMatch[1], 10);
+        continue;
+      }
+      const readFileEndLineMatch = line.match(/^(?:End Line|end_line|EndLine):\s*(\d+)/i);
+      if (readFileEndLineMatch) {
+        currentReadEndLine = parseInt(readFileEndLineMatch[1], 10);
+        continue;
+      }
       continue;
     }
 
@@ -1144,6 +1176,16 @@ currentTerminalEnvLines = [];
         currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
         continue;
       }
+      const readFilesStartLineMatch = line.match(/^(?:Start Line|start_line|StartLine):\s*(\d+)/i);
+      if (readFilesStartLineMatch) {
+        currentReadStartLine = parseInt(readFilesStartLineMatch[1], 10);
+        continue;
+      }
+      const readFilesEndLineMatch = line.match(/^(?:End Line|end_line|EndLine):\s*(\d+)/i);
+      if (readFilesEndLineMatch) {
+        currentReadEndLine = parseInt(readFilesEndLineMatch[1], 10);
+        continue;
+      }
       continue;
     }
 
@@ -1179,6 +1221,16 @@ currentTerminalEnvLines = [];
       }
       if (importSyntaxMatch) {
         currentReadImportSyntax = importSyntaxMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        continue;
+      }
+      const readDirStartLineMatch = line.match(/^(?:Start Line|start_line|StartLine):\s*(\d+)/i);
+      if (readDirStartLineMatch) {
+        currentReadStartLine = parseInt(readDirStartLineMatch[1], 10);
+        continue;
+      }
+      const readDirEndLineMatch = line.match(/^(?:End Line|end_line|EndLine):\s*(\d+)/i);
+      if (readDirEndLineMatch) {
+        currentReadEndLine = parseInt(readDirEndLineMatch[1], 10);
         continue;
       }
       continue;

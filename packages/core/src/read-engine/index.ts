@@ -3,11 +3,15 @@ import { FileSystem } from '../types/filesystem.js';
 import { readFileWithImports } from '../import-resolver/index.js';
 import { searchFiles } from '../search/fileSearch.js';
 import type { FileSearchQuery } from '../search/types.js';
+import { BrudAPI, BrudError } from '../api/index.js';
 
 export interface ReadFileEntry {
   path: string;
   content: string;
   size: number;
+  startLine: number;
+  endLine: number;
+  totalLines: number;
   isImported?: boolean;
   importedFrom?: string;
 }
@@ -18,6 +22,63 @@ export interface ReadResult {
   totalSize: number;
 }
 
+function calculateTotalLines(content: string): number {
+  const trimmed = content.endsWith('\n') ? content.slice(0, -1) : content;
+  return trimmed.length === 0 ? 0 : (trimmed.match(/\n/g) || []).length + 1;
+}
+
+function sliceContent(content: string, startLine: number, endLine: number): string {
+  const lines = content.split('\n');
+  const slicedLines = lines.slice(startLine - 1, endLine);
+  return slicedLines.join('\n') + (content.endsWith('\n') ? '\n' : '');
+}
+
+function buildEntry(
+  filePath: string,
+  content: string,
+  startLine?: number,
+  endLine?: number,
+  isImported?: boolean,
+  importedFrom?: string,
+): ReadFileEntry {
+  const totalLines = calculateTotalLines(content);
+
+  if (startLine !== undefined || endLine !== undefined) {
+    const vr = BrudAPI.validate.lineRange(startLine, endLine, totalLines);
+    if (!vr.success) {
+      throw new BrudError({
+        code: vr.code!,
+        friendly: vr.friendly!,
+        details: vr.details!,
+        path: filePath,
+      });
+    }
+    const range = vr.data as { startLine: number; endLine: number; totalLines: number };
+    const sliced = sliceContent(content, range.startLine, range.endLine);
+    return {
+      path: filePath,
+      content: sliced,
+      size: Buffer.byteLength(sliced, 'utf8'),
+      startLine: range.startLine,
+      endLine: range.endLine,
+      totalLines: range.totalLines,
+      isImported,
+      importedFrom,
+    };
+  }
+
+  return {
+    path: filePath,
+    content,
+    size: Buffer.byteLength(content, 'utf8'),
+    startLine: 1,
+    endLine: totalLines,
+    totalLines,
+    isImported,
+    importedFrom,
+  };
+}
+
 export async function readFiles(
   fs: FileSystem,
   filePaths: string[],
@@ -25,6 +86,8 @@ export async function readFiles(
   maxDepth: number,
   excludePatterns?: string[],
   importSyntax?: string[],
+  startLine?: number,
+  endLine?: number,
 ): Promise<ReadResult> {
   const entries: ReadFileEntry[] = [];
   let totalSize = 0;
@@ -36,26 +99,23 @@ export async function readFiles(
         const { files: fileMap } = await readFileWithImports(fs, filePath, effectiveDepth, excludePatterns, importSyntax);
         let isFirst = true;
         for (const [p, content] of fileMap) {
-          const size = Buffer.byteLength(content, 'utf8');
-          totalSize += size;
-          entries.push({
-            path: p,
-            content,
-            size,
-            isImported: !isFirst,
-            importedFrom: isFirst ? undefined : filePath,
-          });
+          const entry = isFirst
+            ? buildEntry(p, content, startLine, endLine)
+            : buildEntry(p, content, undefined, undefined, true, filePath);
+          totalSize += entry.size;
+          entries.push(entry);
           isFirst = false;
         }
       } else {
         const content = await fs.readFile(filePath);
-        const size = Buffer.byteLength(content, 'utf8');
-        totalSize += size;
-        entries.push({ path: filePath, content, size });
+        const entry = buildEntry(filePath, content, startLine, endLine);
+        totalSize += entry.size;
+        entries.push(entry);
       }
-    } catch {
-      // skip unreadable files
-    }
+} catch (err) {
+        if (err instanceof BrudError) throw err;
+        // skip unreadable files
+      }
   }
 
   return { files: entries, totalFiles: entries.length, totalSize };

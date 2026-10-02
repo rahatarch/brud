@@ -230,6 +230,9 @@ export interface ReadFileEntry {
   size: number;
   isImported?: boolean;
   importedFrom?: string;
+  startLine?: number;
+  endLine?: number;
+  totalLines?: number;
 }
 
 export interface ReadResultData {

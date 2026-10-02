@@ -324,6 +324,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const maxDepth = parsed.maxDepth as number | undefined;
         const excludePatterns = parsed.excludePatterns as string[] | undefined;
         const importSyntax = parsed.importSyntax as string[] | undefined;
+        const start_line = (parsed.start_line ?? parsed.startLine) as number | undefined;
+        const end_line = (parsed.end_line ?? parsed.endLine) as number | undefined;
         operations.push({
           kind: 'read_file',
           path,
@@ -331,6 +333,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           maxDepth: maxDepth ?? 0,
           excludePatterns: excludePatterns && Array.isArray(excludePatterns) ? excludePatterns : undefined,
           importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          start_line: start_line !== undefined ? Number(start_line) : undefined,
+          end_line: end_line !== undefined ? Number(end_line) : undefined,
           index: String(index),
         });
         break;
@@ -347,6 +351,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
         const importSyntax = parsed.importSyntax as string[] | undefined;
+        const start_line = (parsed.start_line ?? parsed.startLine) as number | undefined;
+        const end_line = (parsed.end_line ?? parsed.endLine) as number | undefined;
         operations.push({
           kind: 'read_files',
           patterns,
@@ -357,6 +363,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           isImportRead: isImportRead ?? false,
           maxDepth: maxDepth ?? 0,
           importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          start_line: start_line !== undefined ? Number(start_line) : undefined,
+          end_line: end_line !== undefined ? Number(end_line) : undefined,
           index: String(index),
         });
         break;
@@ -371,6 +379,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         const isImportRead = parsed.isImportRead as boolean | undefined;
         const maxDepth = parsed.maxDepth as number | undefined;
         const importSyntax = parsed.importSyntax as string[] | undefined;
+        const start_line = (parsed.start_line ?? parsed.startLine) as number | undefined;
+        const end_line = (parsed.end_line ?? parsed.endLine) as number | undefined;
         operations.push({
           kind: 'read_directory',
           directoryPath,
@@ -379,6 +389,8 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           isImportRead: isImportRead ?? false,
           maxDepth: maxDepth ?? 0,
           importSyntax: importSyntax && Array.isArray(importSyntax) ? importSyntax : undefined,
+          start_line: start_line !== undefined ? Number(start_line) : undefined,
+          end_line: end_line !== undefined ? Number(end_line) : undefined,
           index: String(index),
         });
         break;

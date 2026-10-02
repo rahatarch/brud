@@ -349,3 +349,15 @@ export function promptInvalidFieldError(field: string): BrudError {
     details: `The field "${field}" is not valid in this context.`,
   };
 }
+
+export function invalidLineRangeError(
+  startLine?: number,
+  endLine?: number,
+  totalLines?: number,
+): BrudError {
+  return {
+    code: 'INVALID_LINE_RANGE',
+    friendly: 'Invalid line range specified for file read.',
+    details: `Requested line range ${startLine ?? '?'}-${endLine ?? '?'} is invalid for file with ${totalLines ?? '?'} lines (1-indexed).`,
+  };
+}

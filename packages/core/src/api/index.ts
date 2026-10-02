@@ -40,6 +40,7 @@ import {
   unterminatedMetadataError,
   promptNotFoundError,
   promptInvalidFieldError,
+  invalidLineRangeError,
 } from './errors';
 
 export {
@@ -79,6 +80,7 @@ export {
   unterminatedMetadataError,
   promptNotFoundError,
   promptInvalidFieldError,
+  invalidLineRangeError,
 };
 
 export type { ValidationResult } from './types';
@@ -538,6 +540,32 @@ export const BrudAPI = {
         return fail(invalidRevertRequestError());
       }
       return success({ sessionId, targetState });
+    },
+
+    lineRange(
+      startLine: number | undefined,
+      endLine: number | undefined,
+      totalLines: number,
+      operation?: string,
+    ): ValidationResult {
+      const start = startLine ?? 1;
+      const end = endLine ?? totalLines;
+
+      if (start < 1 || start > totalLines) {
+        return fail(invalidLineRangeError(startLine, endLine, totalLines));
+      }
+
+      const clampedEnd = Math.min(end, totalLines);
+
+      if (start > clampedEnd) {
+        return fail(invalidLineRangeError(startLine, endLine, totalLines));
+      }
+
+      return success({
+        startLine: start,
+        endLine: clampedEnd,
+        totalLines,
+      });
     },
   },
 };
