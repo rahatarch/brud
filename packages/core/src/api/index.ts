@@ -271,12 +271,12 @@ export const BrudAPI = {
       return success({ resolvedPath, path, root, operationKind: options?.operationKind });
     },
 
-    command(command: string, cwd?: string, workspaceFolders?: string[]): ValidationResult {
+    command(command: string, cwd?: string, workspaceFolders?: string[], options?: { workspaceBoundaryEnabled?: boolean }): ValidationResult {
       if (DANGEROUS_PATTERNS.some((pattern) => pattern.test(command))) {
         return fail(dangerousCommandError(command));
       }
 
-      if (workspaceFolders && workspaceFolders.length > 0) {
+      if (workspaceFolders && workspaceFolders.length > 0 && options?.workspaceBoundaryEnabled !== false) {
         const cdResult = validateCdInCommand(command, cwd, workspaceFolders);
         if (!cdResult.success) {
           return cdResult;

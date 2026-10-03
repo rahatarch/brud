@@ -10,8 +10,9 @@ export function validateTerminalCommand(
   command: string,
   cwd: string | undefined,
   workspaceFolders: string[],
+  workspaceBoundaryEnabled?: boolean,
 ): ValidationResult {
-  return BrudAPI.validate.command(command, cwd, workspaceFolders);
+  return BrudAPI.validate.command(command, cwd, workspaceFolders, { workspaceBoundaryEnabled });
 }
 
 export function validateTerminalCwd(
