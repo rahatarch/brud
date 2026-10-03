@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings, VSCodePromptStore, CascadingPromptStore, getGlobalPromptsDir, ensureBrudHomeDir } from '@brud/vscode-adapter';
-import { mergeSettings, globalToolRegistry } from '@brud/core';
+import { mergeSettings, globalToolRegistry, extractCodebaseMetadata } from '@brud/core';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError, type UserPrompt, type UserPromptVersion } from '@brud/core';
 
@@ -140,6 +140,9 @@ export class BrudMainWindowManager {
           break;
         case 'revertPrompt':
           await this._handleRevertPrompt(data);
+          break;
+        case 'copyPrompt':
+          await this._handleCopyPrompt(data);
           break;
       }
     });
@@ -479,6 +482,48 @@ export class BrudMainWindowManager {
     prompt.updatedAt = newVersion.timestamp;
     await this._promptStore.save(prompt);
     this._panel?.webview.postMessage({ command: 'promptReverted', savedPromptId: prompt.id } satisfies ExtensionMessage);
+  }
+
+  private async _handleCopyPrompt(data: WebviewMessage): Promise<void> {
+    const content = data.text || '';
+    const promptId = data.promptId;
+
+    if (promptId === 'master-system') {
+      const folders = getWorkspaceFolders();
+      if (folders.length > 0) {
+        try {
+          const fs = new VSCodeFileSystem();
+          const workspaceRoot = folders[0];
+          const metadata = await extractCodebaseMetadata(fs, workspaceRoot);
+
+          const metadataBlock = `
+---
+# WORKSPACE CONTEXT (AUTO-DETECTED)
+- Project Root: ${metadata.root}
+- Total Files: ${metadata.totalFiles}
+- Total Folders: ${metadata.totalFolders}
+- Most Dense Directory: ${metadata.mostDenseFolder} (${metadata.mostDenseCount} files)
+---
+`;
+
+          const finalContent = content + metadataBlock;
+          await vscode.env.clipboard.writeText(finalContent);
+          this._panel?.webview.postMessage({
+            command: 'success',
+            message: 'Master System Prompt copied with live workspace metadata!',
+          } satisfies ExtensionMessage);
+          return;
+        } catch (err) {
+          console.error('[MainWindowProvider] Failed to inject metadata for master-system prompt:', err);
+        }
+      }
+    }
+
+    await vscode.env.clipboard.writeText(content);
+    this._panel?.webview.postMessage({
+      command: 'success',
+      message: 'Prompt copied to clipboard.',
+    } satisfies ExtensionMessage);
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

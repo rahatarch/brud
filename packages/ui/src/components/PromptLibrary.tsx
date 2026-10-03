@@ -1,6 +1,7 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { getAllPrompts, getPromptById } from '@brud/core';
 import { Copy, Check, ArrowLeft, BookOpen, ChevronLeft, ChevronRight } from 'lucide-react';
+import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 
 function PromptLibrary() {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
@@ -27,6 +28,11 @@ function PromptLibrary() {
   };
 
   const handleCopy = async (id: string, content: string) => {
+    if (id === 'master-system') {
+      sendToExtension({ command: 'copyPrompt', promptId: id, text: content });
+      return;
+    }
+
     try {
       await navigator.clipboard.writeText(content);
       setCopiedPromptId(id);
@@ -35,6 +41,16 @@ function PromptLibrary() {
       // Clipboard write failed
     }
   };
+
+  useEffect(() => {
+    const unsub = onExtensionMessage((message) => {
+      if (message.command === 'success' && message.message) {
+        setCopiedPromptId(selectedPromptId);
+        setTimeout(() => setCopiedPromptId(null), 2000);
+      }
+    });
+    return unsub;
+  }, [selectedPromptId]);
 
   if (selectedPromptId) {
     const prompt = getPromptById(selectedPromptId);

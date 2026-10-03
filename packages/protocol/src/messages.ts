@@ -39,7 +39,8 @@ export type WebviewCommand =
   | 'deletePrompt'
   | 'getPromptVersions'
   | 'revertPrompt'
-  | 'killProcess';
+  | 'killProcess'
+  | 'copyPrompt';
 
 export type ExtensionCommand =
   | 'success'
