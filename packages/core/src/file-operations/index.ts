@@ -249,7 +249,8 @@ export async function executeFileOperations(
 
           const filePath = result.resolvedPath;
 
-          const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, operation.search);
+          const cleanSearch = operation.search.replace(/^\s*\d+\s*\|\s?/gm, '');
+          const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, cleanSearch);
           if (!matchResult.success) {
             if (matchResult.code === 'SEARCH_NOT_FOUND') {
               errors.push(searchNotFoundError(operation.path, operation.search));
@@ -277,8 +278,8 @@ export async function executeFileOperations(
 
           const content = await fs.readFile(filePath);
 
-          const matchIndex = content.indexOf(operation.search);
-          const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
+          const matchIndex = content.indexOf(cleanSearch);
+          const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + cleanSearch.length);
           await fs.writeFile(filePath, updatedContent);
           operationResults.push({
             operationIndex: i,
@@ -1151,14 +1152,15 @@ operationResults.push({
             try {
               const content = await fs.readFile(filePath);
 
-              const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, operation.search);
+              const cleanSearch = operation.search.replace(/^\s*\d+\s*\|\s?/gm, '');
+              const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, cleanSearch);
               if (!matchResult.success) {
                 skippedFiles.push(filePath);
                 continue;
               }
 
-              const matchIndex = content.indexOf(operation.search);
-              const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + operation.search.length);
+              const matchIndex = content.indexOf(cleanSearch);
+              const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + cleanSearch.length);
               await fs.writeFile(filePath, updatedContent);
               modifiedFiles.push(filePath);
             } catch {

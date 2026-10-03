@@ -6,6 +6,9 @@ interface ReadFileEntry {
   path: string;
   content: string;
   size: number;
+  startLine?: number;
+  endLine?: number;
+  totalLines?: number;
   isImported?: boolean;
   importedFrom?: string;
 }
@@ -25,6 +28,17 @@ function formatSize(bytes: number): string {
   return formatted + ' ' + sizes[i];
 }
 
+function formatWithGutters(file: ReadFileEntry): string {
+  const rawLines = file.content.split('\n');
+  const lines = file.content.endsWith('\n') && rawLines[rawLines.length - 1] === '' ? rawLines.slice(0, -1) : rawLines;
+  const startLine = file.startLine ?? 1;
+  const totalLines = file.totalLines ?? (startLine + lines.length - 1);
+  const width = Math.max(String(startLine + lines.length - 1).length, String(totalLines).length);
+  const header = `File: ${file.path} (lines ${startLine}-${startLine + lines.length - 1} of ${totalLines})\n[NOTE: Line numbers (e.g. "  1 | ") are visual reference gutters only. Do NOT include line numbers or prefixes in SEARCH/REPLACE blocks.]`;
+  const formatted = lines.map((line, i) => `${String(startLine + i).padStart(width, ' ')} | ${line}`).join('\n');
+  return `${header}\n${formatted}`;
+}
+
 function ReadFileList({ data }: { data: ReadResultData }) {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
@@ -39,7 +53,7 @@ function ReadFileList({ data }: { data: ReadResultData }) {
   }, []);
 
   const handleCopyFile = useCallback((file: ReadFileEntry) => {
-    const text = `File: ${file.path}\nSize: ${formatSize(file.size)}\n---\n${file.content}`;
+    const text = `Size: ${formatSize(file.size)}\n---\n${formatWithGutters(file)}`;
     navigator.clipboard.writeText(text);
     setCopiedFile(file.path);
     setTimeout(() => setCopiedFile(null), 2000);
@@ -75,7 +89,7 @@ function ReadFileList({ data }: { data: ReadResultData }) {
           {expandedFiles.has(file.path) && (
             <div className="px-6 pb-3">
               <pre className="text-xs text-text-secondary font-mono whitespace-pre leading-relaxed bg-surface-2 border border-border rounded p-4 overflow-x-auto max-h-150 overflow-y-auto">
-                {file.content}
+                {formatWithGutters(file)}
               </pre>
             </div>
           )}
@@ -107,7 +121,7 @@ export const readRenderer: ToolResultRenderer = {
     const readData = data as ReadResultData;
     if (!readData || !readData.files) return '';
     return readData.files.map(f => {
-      return `File: ${f.path}\nSize: ${formatSize(f.size)}\n---\n${f.content}`;
+      return `Size: ${formatSize(f.size)}\n---\n${formatWithGutters(f)}`;
     }).join('\n\n');
   },
   summaryFormatter: (data: any) => {
