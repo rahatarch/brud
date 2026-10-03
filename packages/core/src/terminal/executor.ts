@@ -1,5 +1,6 @@
 import { spawn, ChildProcess } from 'child_process';
-import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup } from './types';
+import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup, ChunkCallback } from './types';
+import { registerProcess, killProcess } from './streamer';
 
 function stripAnsiCodes(str: string): string {
   return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
@@ -44,6 +45,8 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   cwd?: string,
   timeout: number = 120000,
   env?: Record<string, string>,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<TerminalResult> => {
   const startTime = Date.now();
   const child = spawn(command, [], {
@@ -57,6 +60,26 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   let stdout = '';
   let stderr = '';
   let timedOut = false;
+  let interrupted = false;
+  let chunkIndex = 0;
+
+  const { processId, abortController } = registerProcess(child, onChunk);
+
+  if (signal) {
+    if (signal.aborted) {
+      killProcess(processId);
+      interrupted = true;
+    } else {
+      const onAbort = () => {
+        interrupted = true;
+        killProcess(processId);
+      };
+      signal.addEventListener('abort', onAbort, { once: true });
+      child.on('close', () => {
+        try { signal.removeEventListener('abort', onAbort); } catch {}
+      });
+    }
+  }
 
   const timeoutHandle = setTimeout(() => {
     timedOut = true;
@@ -76,11 +99,19 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   }, timeout);
 
   child.stdout?.on('data', (data: Buffer) => {
-    stdout += data.toString();
+    const chunk = data.toString();
+    stdout += chunk;
+    if (onChunk && !interrupted) {
+      onChunk(chunk, chunkIndex++);
+    }
   });
 
   child.stderr?.on('data', (data: Buffer) => {
-    stderr += data.toString();
+    const chunk = data.toString();
+    stderr += chunk;
+    if (onChunk && !interrupted) {
+      onChunk(chunk, chunkIndex++);
+    }
   });
 
   let resolved = false;
@@ -94,10 +125,13 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
       clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
       const combinedOutput = stripAnsiCodes(stdout + stderr);
-      if (timedOut) {
-        resolve({ success: false, output: combinedOutput, exitCode: null, duration });
+      if (interrupted) {
+        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'interrupted' });
+      } else if (timedOut) {
+        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
       } else {
-        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration });
+        const status = exitCode === 0 ? 'success' : 'failed';
+        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration, status });
       }
     });
 
@@ -107,18 +141,20 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
       clearTimeout(timeoutHandle);
       clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
-      resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration });
+      const combinedOutput = stripAnsiCodes(stdout + stderr);
+      resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
     });
   });
 
-  safetyTimeout = setTimeout(() => {
-    if (!resolved) {
-      timedOut = true;
-      forceKillProcess(child);
-    }
-  }, timeout + 10000);
-
-  safetyTimeout.unref();
+  if (!resolved) {
+    safetyTimeout = setTimeout(() => {
+      if (!resolved) {
+        timedOut = true;
+        forceKillProcess(child);
+      }
+    }, timeout + 10000);
+    safetyTimeout.unref();
+  }
 
   return result;
 };
@@ -177,9 +213,10 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
       const duration = Date.now() - startTime;
       const combinedOutput = stripAnsiCodes(stdout + stderr);
       if (timedOut) {
-        resolve({ success: false, output: combinedOutput, exitCode: null, duration });
+        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
       } else {
-        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration });
+        const status = exitCode === 0 ? 'success' : 'failed';
+        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration, status });
       }
     });
 
@@ -189,7 +226,7 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
       clearTimeout(timeoutHandle);
       clearTimeout(safetyTimeout);
       const duration = Date.now() - startTime;
-      resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration });
+      resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration, status: 'failed' });
     });
   });
 
@@ -226,18 +263,22 @@ export const executeSequential: TerminalExecutor['executeSequential'] = async (
   timeout: number = 120000,
   env?: Record<string, string>,
   stopOnFailure?: boolean,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<GroupResult> => {
   const results: ExecutedCommand[] = [];
   let overallSuccess = true;
 
   for (const command of commands) {
-    const result = await executeCommand(command, cwd, timeout, env);
+    if (signal?.aborted) break;
+    const result = await executeCommand(command, cwd, timeout, env, onChunk, signal);
     results.push({
       command,
       success: result.success,
       output: result.output,
       exitCode: result.exitCode,
       duration: result.duration,
+      status: result.status,
     });
 
     if (!result.success && stopOnFailure) {
@@ -257,16 +298,19 @@ export const executeParallel: TerminalExecutor['executeParallel'] = async (
   cwd?: string,
   timeout: number = 120000,
   env?: Record<string, string>,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<GroupResult> => {
   const results = await Promise.all(
     commands.map(async (command) => {
-      const result = await executeCommand(command, cwd, timeout, env);
+      const result = await executeCommand(command, cwd, timeout, env, onChunk, signal);
       return {
         command,
         success: result.success,
         output: result.output,
         exitCode: result.exitCode,
         duration: result.duration,
+        status: result.status,
       };
     }),
   );
@@ -282,6 +326,8 @@ export async function executeCommandGroup(
   cwd?: string,
   timeout?: number,
   env?: Record<string, string>,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<GroupResult> {
   const stringCommands: string[] = [];
   const subGroups: { group: CommandGroup; index: number }[] = [];
@@ -301,9 +347,9 @@ export async function executeCommandGroup(
   if (stringCommands.length > 0) {
     let groupResult: GroupResult;
     if (group.type === 'parallel') {
-      groupResult = await executeParallel(stringCommands, cwd, timeout, env);
+      groupResult = await executeParallel(stringCommands, cwd, timeout, env, onChunk, signal);
     } else {
-      groupResult = await executeSequential(stringCommands, cwd, timeout, env, group.stopOnFailure);
+      groupResult = await executeSequential(stringCommands, cwd, timeout, env, group.stopOnFailure, onChunk, signal);
     }
     groupResult.results.forEach((r, idx) => {
       allResults.push({ index: idx, result: r });
@@ -314,7 +360,7 @@ export async function executeCommandGroup(
   }
 
   for (const sg of subGroups) {
-    const subResult = await executeCommandGroup(sg.group, cwd, timeout, env);
+    const subResult = await executeCommandGroup(sg.group, cwd, timeout, env, onChunk, signal);
     subResult.results.forEach((r) => {
       allResults.push({ index: sg.index, result: r });
     });
@@ -336,8 +382,10 @@ export const executeConditional: TerminalExecutor['executeConditional'] = async 
   cwd?: string,
   timeout: number = 120000,
   env?: Record<string, string>,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<GroupResult> => {
-  const primaryResult = await executeCommand(conditional.command, cwd, timeout, env);
+  const primaryResult = await executeCommand(conditional.command, cwd, timeout, env, onChunk, signal);
   const allResults: ExecutedCommand[] = [
     {
       command: conditional.command,
@@ -345,16 +393,17 @@ export const executeConditional: TerminalExecutor['executeConditional'] = async 
       output: primaryResult.output,
       exitCode: primaryResult.exitCode,
       duration: primaryResult.duration,
+      status: primaryResult.status,
     },
   ];
 
   let conditionalResults: ExecutedCommand[] = [];
 
   if (primaryResult.success && conditional.onSuccess) {
-    const gr = await executeCommandGroup(conditional.onSuccess, cwd, timeout, env);
+    const gr = await executeCommandGroup(conditional.onSuccess, cwd, timeout, env, onChunk, signal);
     conditionalResults = gr.results;
   } else if (!primaryResult.success && conditional.onFailure) {
-    const gr = await executeCommandGroup(conditional.onFailure, cwd, timeout, env);
+    const gr = await executeCommandGroup(conditional.onFailure, cwd, timeout, env, onChunk, signal);
     conditionalResults = gr.results;
   }
 

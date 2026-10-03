@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from '@brud/core';
 import { getEffectiveSettings } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
+import { BrudTerminalPanelManager } from './TerminalStreamPanelProvider';
 import { WorkspaceResolver } from './services/WorkspaceResolver';
 import { ExecutionCoordinator } from './services/ExecutionCoordinator';
 import { ErrorReporter } from './services/ErrorReporter';
@@ -92,6 +93,7 @@ export class SurgicalViewDependencies {
     private readonly _readPanelManager: any,
     private readonly _diffPreviewPanelManager: BrudDiffPreviewPanelManager,
     private readonly _unifiedResultsPanelManager: any,
+    private readonly _terminalPanelManager: BrudTerminalPanelManager,
     // State accessors — provided by the owner (SurgicalViewProvider)
     private readonly _getFileList: () => string[],
     private readonly _getCurrentFileIndex: () => number,
@@ -128,9 +130,26 @@ export class SurgicalViewDependencies {
       this._mainWindowProvider,
       this._structurePanelManager,
       this._readPanelManager,
+      this._terminalPanelManager,
     );
 
     this.services = { workspaceResolver, executionCoordinator, errorReporter, panelManager };
+
+    if (this._unifiedResultsPanelManager) {
+      this._unifiedResultsPanelManager.setKillProcessHandler(
+        (processId: string) => executionCoordinator.killActiveProcess(processId),
+      );
+      this._unifiedResultsPanelManager.setActiveProcessIdsGetter(
+        () => executionCoordinator.getActiveProcessIds(),
+      );
+    }
+
+    this._terminalPanelManager.setKillProcessHandler(
+      (processId: string) => executionCoordinator.killActiveProcess(processId),
+    );
+    this._terminalPanelManager.setActiveProcessIdsGetter(
+      () => executionCoordinator.getActiveProcessIds(),
+    );
 
     // Handlers
     const applyPatchHandler = new ApplyPatchHandler(

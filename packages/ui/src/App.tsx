@@ -8,6 +8,7 @@ import ReadResultsPanel from './components/ReadResultsPanel';
 import DiffPreviewPanel from './components/DiffPreviewPanel';
 import UnifiedResultsPanel from './components/UnifiedResultsPanel';
 import GetStartedPanel from './components/GetStartedPanel';
+import TerminalStreamPanel from './components/TerminalStreamPanel';
 import { initResultRegistry } from './result-registry/init';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 import type { ReportSection } from '@brud/protocol';
@@ -155,6 +156,10 @@ function App() {
 
   if (viewMode === 'get-started') {
     return <GetStartedPanel />;
+  }
+
+  if (viewMode === 'terminal-stream') {
+    return <TerminalStreamPanel />;
   }
 
   const [inputText, setInputText] = useState('');

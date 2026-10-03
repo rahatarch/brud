@@ -57,6 +57,11 @@ export class SurgicalViewRouter {
           'No changes found. The search text was not found in any of the files.',
         );
         break;
+      case 'killProcess':
+        if (data.processId) {
+          this.deps.services.executionCoordinator.killActiveProcess(data.processId);
+        }
+        break;
     }
   }
 }

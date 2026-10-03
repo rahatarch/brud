@@ -1,4 +1,5 @@
 import { BrudDiffPreviewPanelManager } from '../DiffPreviewPanelProvider';
+import { BrudTerminalPanelManager } from '../TerminalStreamPanelProvider';
 import type { DiffPreviewData } from '@brud/protocol';
 
 export class PanelManager {
@@ -8,6 +9,7 @@ export class PanelManager {
     public readonly mainWindowProvider: any,
     public readonly structurePanelManager: any,
     public readonly readPanelManager: any,
+    public readonly terminalPanelManager: BrudTerminalPanelManager,
   ) {}
 
   showUnifiedResults(results: Record<string, any>): void {
@@ -40,5 +42,21 @@ export class PanelManager {
 
   showRead(data: any): void {
     this.readPanelManager?.openReadPanel(data);
+  }
+
+  showTerminalStream(): void {
+    this.terminalPanelManager.openTerminalStreamPanel();
+  }
+
+  closeTerminalStreamPanel(): void {
+    this.terminalPanelManager.closePanel();
+  }
+
+  postTerminalChunk(chunk: string, chunkIndex: number, processId: string): void {
+    this.terminalPanelManager.postChunk(chunk, chunkIndex, processId);
+  }
+
+  postStreamDone(processId: string, status: 'success' | 'failed' | 'interrupted'): void {
+    this.terminalPanelManager.postStreamDone(processId, status);
   }
 }

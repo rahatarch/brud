@@ -59,7 +59,7 @@ export interface OperationResult {
   operationId: string;
   operationIndex: number;
   kind: string;
-  status: 'success' | 'aborted' | 'failed';
+  status: 'success' | 'aborted' | 'failed' | 'interrupted';
   message: string;
   path: string;
   from?: string;
@@ -1414,7 +1414,7 @@ message: invalidCwdError(termOp.cwd || '').details,
             operationIndex: i,
             operationId: generateOperationId(),
             kind: 'terminal_interactive',
-            status: termResult.success ? 'success' : 'failed',
+            status: termResult.status === 'interrupted' ? 'interrupted' : (termResult.success ? 'success' : 'failed'),
             message: termResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termResult.output}`
               : `Terminal command failed (exit code: ${termResult.exitCode})\nOutput:\n${termResult.output}`,
@@ -1538,7 +1538,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_command',
-              status: groupResult.success ? 'success' : 'failed',
+              status: groupResult.results.some(r => r.status === 'interrupted') ? 'interrupted' : (groupResult.success ? 'success' : 'failed'),
               message: `Executed ${groupResult.results.length} commands. ${succeeded} succeeded, ${failed} failed.`,
               path: '',
               data: groupResult.results.map(r => ({
@@ -1599,7 +1599,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_command',
-              status: groupResult.success ? 'success' : 'failed',
+              status: groupResult.results.some(r => r.status === 'interrupted') ? 'interrupted' : (groupResult.success ? 'success' : 'failed'),
               message: `Executed conditional command. ${succeeded} succeeded, ${failed} failed.`,
               path: '',
               data: groupResult.results.map(r => ({
@@ -1617,7 +1617,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             operationIndex: i,
             operationId: generateOperationId(),
             kind: 'terminal_command',
-            status: termCmdResult.success ? 'success' : 'failed',
+            status: termCmdResult.status === 'interrupted' ? 'interrupted' : (termCmdResult.success ? 'success' : 'failed'),
             message: termCmdResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termCmdResult.output}`
               : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
@@ -1719,9 +1719,14 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
       const successCount = operationResults.filter(r => r.status === 'success').length;
       const abortedCount = operationResults.filter(r => r.status === 'aborted').length;
       const failedCount = operationResults.filter(r => r.status === 'failed').length;
+      const interruptedCount = operationResults.filter(r => r.status === 'interrupted').length;
 
       let prefix: string;
-      if (failedCount === 0 && abortedCount === 0) {
+      if (interruptedCount > 0 && successCount === 0 && failedCount === 0 && abortedCount === 0) {
+        prefix = 'All operations were interrupted.';
+      } else if (interruptedCount > 0) {
+        prefix = 'Some operations were interrupted.';
+      } else if (failedCount === 0 && abortedCount === 0) {
         prefix = 'All operations completed successfully.';
       } else if (failedCount === 0 && abortedCount > 0 && successCount === 0) {
         prefix = 'All operations aborted safely.';

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata, ChunkCallback } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
@@ -35,12 +35,37 @@ export class ExecuteAllFilesHandler {
       allOperations.push(...ops);
     }
 
+    let lastProcessId: string | undefined;
+
+    const onChunk: ChunkCallback = (chunk: string, chunkIndex: number) => {
+      const processIds = this.executor.getActiveProcessIds();
+      const processId = processIds.length > 0 ? processIds[processIds.length - 1] : 'default';
+      lastProcessId = processId;
+      const msg: ExtensionMessage = {
+        command: 'terminalChunk',
+        chunk,
+        chunkIndex,
+        processId,
+      };
+      this.getWebview()?.postMessage(msg);
+      this.panelManager.postTerminalChunk(chunk, chunkIndex, processId);
+    };
+
+    this.panelManager.showTerminalStream();
+
     const result: FileOperationResult = await this.executor.execute(
       allOperations,
       this.getOriginalPrompt(),
       this.getDiffPreviewSessionId(),
       this.getSessionMetadata(),
+      onChunk,
     );
+
+    if (lastProcessId) {
+      const streamStatus = result.success ? 'success' : 'failed';
+      this.panelManager.postStreamDone(lastProcessId, streamStatus);
+    }
+
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 
     const terminalOps = transformTerminalOperationData(result.operationResults, allOperations);
@@ -75,6 +100,7 @@ export class ExecuteAllFilesHandler {
 
     if (unifiedOps.length > 0) {
       this.panelManager.showUnifiedResults({ operations: unifiedOps });
+      this.panelManager.closeTerminalStreamPanel();
     }
 
     if (result.success) {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, Check } from 'lucide-react';
 import { sendToExtension } from '../bridge/vscodeBridge';
 import { globalRegistry } from '../result-registry/registry';
@@ -14,6 +14,13 @@ export interface UnifiedSessionResults {
   operations: UnifiedOperationResult[];
 }
 
+interface ChunkState {
+  [processId: string]: {
+    buffer: string;
+    isRunning: boolean;
+  };
+}
+
 const BRUD_PROTOCOL_INVARIANTS = `BRUD PROTOCOL INVARIANTS (MANDATORY FOR NEXT INSTRUCTION)
 1. ZERO INFERENCE RULE:
    Never infer, guess, or synthesize tool syntax from memory or tool names. If you do not have the verified schema for your intended action in active context, you MUST invoke \`GET_TOOL_INFO Tool: <kind>\` before emitting instructions.
@@ -26,6 +33,13 @@ function UnifiedResultsPanel() {
   const [results, setResults] = useState<UnifiedSessionResults | null>(null);
   const [summaryCopied, setSummaryCopied] = useState(false);
   const [fullCopied, setFullCopied] = useState(false);
+  const [chunks, setChunks] = useState<ChunkState>({});
+  const [isRunning, setIsRunning] = useState(false);
+  const [activeProcessId, setActiveProcessId] = useState<string | undefined>(undefined);
+
+  const chunksRef = useRef<ChunkState>({});
+  const isRunningRef = useRef(false);
+  const activeProcessIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     sendToExtension({ command: 'ready' });
@@ -36,6 +50,34 @@ function UnifiedResultsPanel() {
       const message = event.data;
       if (message.command === 'unifiedResults' && message.results) {
         setResults(message.results);
+        setIsRunning(false);
+        isRunningRef.current = false;
+        setChunks({});
+        chunksRef.current = {};
+      }
+      if (message.command === 'terminalChunk') {
+        const { chunk, chunkIndex, processId, streamDone, streamStatus } = message;
+        const pid = processId || 'default';
+
+        if (!chunksRef.current[pid]) {
+          chunksRef.current[pid] = { buffer: '', isRunning: true };
+        }
+
+        if (streamDone) {
+          chunksRef.current[pid].isRunning = false;
+          isRunningRef.current = false;
+          setIsRunning(false);
+          setActiveProcessId(undefined);
+          activeProcessIdRef.current = undefined;
+        } else if (chunk) {
+          chunksRef.current[pid].buffer += chunk;
+          isRunningRef.current = true;
+          setIsRunning(true);
+          setActiveProcessId(pid);
+          activeProcessIdRef.current = pid;
+        }
+
+        setChunks({ ...chunksRef.current });
       }
     }
 
@@ -69,6 +111,7 @@ function UnifiedResultsPanel() {
   }, [results]);
 
   const handleCopySummary = useCallback(() => {
+    if (isRunningRef.current) return;
     const parts = buildSummaryParts();
     if (parts.length > 0) {
       navigator.clipboard.writeText(parts.join('\n') + '\n\n' + BRUD_PROTOCOL_INVARIANTS);
@@ -78,7 +121,7 @@ function UnifiedResultsPanel() {
   }, [buildSummaryParts]);
 
   const handleCopyFull = useCallback(() => {
-    if (!results) return;
+    if (isRunningRef.current || !results) return;
     const summaryParts = buildSummaryParts();
     const detailParts: string[] = [];
     for (const op of results.operations) {
@@ -117,10 +160,17 @@ function UnifiedResultsPanel() {
     );
   }
 
-  const sections = results.operations.map(op => {
+  const augmentedSections = results.operations.map(op => {
     const matched = globalRegistry.getRenderer(op.toolKind);
-    const renderer = (matched && matched.canRender(op.data)) ? matched : operationResultRenderer;
-    return { renderer, data: op.data };
+    let data = op.data;
+    if (op.toolKind === 'terminal_command' && activeProcessId && isRunning) {
+      const chunkBuffer = chunks[activeProcessId]?.buffer;
+      if (chunkBuffer) {
+        data = { ...data, output: chunkBuffer, isRunning: true, processId: activeProcessId };
+      }
+    }
+    const renderer = (matched && matched.canRender(data)) ? matched : operationResultRenderer;
+    return { renderer, data };
   });
 
   return (
@@ -130,14 +180,24 @@ function UnifiedResultsPanel() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleCopySummary}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
+            disabled={isRunning}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border transition-colors cursor-pointer ${
+              isRunning
+                ? 'bg-surface-1 text-text-muted cursor-not-allowed opacity-50'
+                : 'bg-surface hover:bg-surface-2 text-text-secondary hover:text-text'
+            }`}
           >
             {summaryCopied ? <Check size={14} /> : <Copy size={14} />}
             {summaryCopied ? 'Copied!' : 'Copy Summary'}
           </button>
           <button
             onClick={handleCopyFull}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border bg-surface hover:bg-surface-2 text-text-secondary hover:text-text transition-colors cursor-pointer"
+            disabled={isRunning}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded border border-border transition-colors cursor-pointer ${
+              isRunning
+                ? 'bg-surface-1 text-text-muted cursor-not-allowed opacity-50'
+                : 'bg-surface hover:bg-surface-2 text-text-secondary hover:text-text'
+            }`}
           >
             {fullCopied ? <Check size={14} /> : <Copy size={14} />}
             {fullCopied ? 'Copied!' : 'Copy Full'}
@@ -146,7 +206,7 @@ function UnifiedResultsPanel() {
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {sections.map(({ renderer, data }, index) => (
+        {augmentedSections.map(({ renderer, data }, index) => (
           <div key={index}>
             <div className="sticky top-0 z-10 bg-surface-3 border-b border-border px-6 py-2">
               <h2 className="text-sm font-semibold text-text">{renderer.title}</h2>

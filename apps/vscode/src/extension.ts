@@ -5,6 +5,7 @@ import { BrudMainWindowManager } from './providers/MainWindowProvider';
 import { BrudStructurePanelManager } from './providers/StructurePanelProvider';
 import { BrudReadPanelManager } from './providers/ReadPanelProvider';
 import { BrudDiffPreviewPanelManager } from './providers/DiffPreviewPanelProvider';
+import { BrudTerminalPanelManager } from './providers/TerminalStreamPanelProvider';
 import { BrudUnifiedResultsPanelManager } from './providers/UnifiedResultsPanelProvider';
 import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
@@ -40,6 +41,10 @@ export function activate(context: vscode.ExtensionContext) {
     context.extensionUri,
   );
 
+  const terminalPanelManager = new BrudTerminalPanelManager(
+    context.extensionUri,
+  );
+
   const unifiedResultsPanelManager = new BrudUnifiedResultsPanelManager(
     context.extensionUri,
   );
@@ -57,6 +62,7 @@ export function activate(context: vscode.ExtensionContext) {
     readPanelManager,
     diffPreviewPanelManager,
     unifiedResultsPanelManager,
+    terminalPanelManager,
   );
 
   // Wire settings reload: after MainWindow saves settings, reload sidebar immediately

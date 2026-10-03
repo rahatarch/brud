@@ -38,7 +38,8 @@ export type WebviewCommand =
   | 'savePrompt'
   | 'deletePrompt'
   | 'getPromptVersions'
-  | 'revertPrompt';
+  | 'revertPrompt'
+  | 'killProcess';
 
 export type ExtensionCommand =
   | 'success'
@@ -70,7 +71,8 @@ export type ExtensionCommand =
   | 'promptSaved'
   | 'promptDeleted'
   | 'promptVersionsResult'
-  | 'promptReverted';
+  | 'promptReverted'
+  | 'terminalChunk';
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -86,13 +88,14 @@ export interface WebviewMessage {
   promptData?: any;
   promptScope?: 'global' | 'workspace';
   version?: number;
+  processId?: string;
 }
 
 export interface ReportSection {
   type: 'summary' | 'table' | 'details' | 'button' | 'copyButton' | 'text';
   title?: string;
   content?: string;
-  items?: Array<{ label: string; value: string; status?: 'success' | 'failed' | 'aborted' }>;
+  items?: Array<{ label: string; value: string; status?: 'success' | 'failed' | 'aborted' | 'interrupted' }>;
   buttonText?: string;
   buttonAction?: string;
   copyText?: string;
@@ -128,13 +131,18 @@ export interface ExtensionMessage {
   versions?: any[];
   savedPromptId?: string;
   errorMessage?: string;
+  processId?: string;
+  chunk?: string;
+  chunkIndex?: number;
+  streamDone?: boolean;
+  streamStatus?: 'success' | 'failed' | 'interrupted';
 }
 
 export interface HistorySessionResult {
   sessionId: string;
   timestamp: string;
   originalPrompt: string;
-  status: 'success' | 'failure';
+  status: 'success' | 'failure' | 'interrupted';
   operationCount: number;
   operationTypes: string[];
   operations: OperationResult[];
@@ -170,7 +178,7 @@ export interface OperationResult {
   operationId: string;
   operationIndex: number;
   kind: string;
-  status: 'success' | 'aborted' | 'failed';
+  status: 'success' | 'aborted' | 'failed' | 'interrupted';
   message: string;
   path: string;
   title?: string;

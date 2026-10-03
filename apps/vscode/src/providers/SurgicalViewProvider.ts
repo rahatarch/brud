@@ -4,6 +4,7 @@ import { findMatches, reconstructContent } from '@brud/core';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
+import { BrudTerminalPanelManager } from './TerminalStreamPanelProvider';
 import { BrudAPI } from '@brud/core';
 import { fileOpenError, previewNotAvailableError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
@@ -22,6 +23,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _readPanelManager: any;
   private _unifiedResultsPanelManager: any;
   private _diffPreviewPanelManager: BrudDiffPreviewPanelManager;
+  private _terminalPanelManager: BrudTerminalPanelManager;
   private _originalPrompt: string = '';
   private _diffPreviewSessionId: string | undefined = undefined;
   private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
@@ -38,12 +40,14 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     readPanelManager?: any,
     diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
     unifiedResultsPanelManager?: any,
+    terminalPanelManager?: BrudTerminalPanelManager,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
     this._readPanelManager = readPanelManager;
     this._unifiedResultsPanelManager = unifiedResultsPanelManager;
     this._diffPreviewPanelManager = diffPreviewPanelManager || new BrudDiffPreviewPanelManager(_extensionUri);
+    this._terminalPanelManager = terminalPanelManager || new BrudTerminalPanelManager(_extensionUri);
 
     this._deps = new SurgicalViewDependencies(
       _extensionUri,
@@ -54,6 +58,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       readPanelManager,
       this._diffPreviewPanelManager,
       unifiedResultsPanelManager,
+      this._terminalPanelManager,
       () => this._fileList,
       () => this._currentFileIndex,
       (idx) => { this._currentFileIndex = idx; },

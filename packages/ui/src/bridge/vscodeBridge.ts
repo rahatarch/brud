@@ -12,6 +12,10 @@ export function sendToExtension(message: WebviewMessage): void {
   vscodeApi.postMessage(message);
 }
 
+export function sendKillProcess(processId: string): void {
+  vscodeApi.postMessage({ command: 'killProcess', processId });
+}
+
 export function onExtensionMessage(
   callback: (message: ExtensionMessage) => void
 ): () => void {

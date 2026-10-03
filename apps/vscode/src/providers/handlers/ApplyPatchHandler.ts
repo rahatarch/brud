@@ -56,7 +56,25 @@ export class ApplyPatchHandler {
 
     const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
 
-    const executionResult = await this.executionCoordinator.execute(operations, text, undefined, sessionMetadata);
+    let lastProcessId: string | undefined;
+
+    const onChunk = (chunk: string, chunkIndex: number) => {
+      const processIds = this.executionCoordinator.getActiveProcessIds();
+      const processId = processIds.length > 0 ? processIds[processIds.length - 1] : 'default';
+      lastProcessId = processId;
+      const chunkMsg: ExtensionMessage = { command: 'terminalChunk', chunk, chunkIndex, processId };
+      this.getWebview()?.postMessage(chunkMsg);
+      this.panelManager.postTerminalChunk(chunk, chunkIndex, processId);
+    };
+
+    this.panelManager.showTerminalStream();
+
+    const executionResult = await this.executionCoordinator.execute(operations, text, undefined, sessionMetadata, onChunk);
+
+    if (lastProcessId) {
+      const streamStatus = executionResult.success ? 'success' : 'failed';
+      this.panelManager.postStreamDone(lastProcessId, streamStatus);
+    }
     this.outputChannel.appendLine('DEBUG: After executionCoordinator.execute - success: ' + executionResult.success + ' - errors: ' + executionResult.errors.length);
 
     for (const err of executionResult.errors) {
@@ -147,6 +165,9 @@ export class ApplyPatchHandler {
     if (unifiedResults.operations.length > 0) {
       this.lastExecutionResult = unifiedResults;
       this.panelManager.showUnifiedResults(unifiedResults);
+      this.panelManager.closeTerminalStreamPanel();
+    } else {
+      this.panelManager.closeTerminalStreamPanel();
     }
 
     const pointerMsg = getChatStatusMessage({ success: executionResult.success, operationResults: executionResult.operationResults, errors: executionResult.errors });

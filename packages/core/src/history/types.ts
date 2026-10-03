@@ -32,7 +32,7 @@ export interface OperationResult {
   operationId: string;
   operationIndex: number;
   kind: string;
-  status: 'success' | 'aborted' | 'failed';
+  status: 'success' | 'aborted' | 'failed' | 'interrupted';
   message: string;
   path: string;
   from?: string;

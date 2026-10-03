@@ -1,6 +1,6 @@
 import { executeOperationsFromVSCode, getWorkspaceFolders, WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings } from '@brud/core';
-import { DEFAULT_SETTINGS } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings, ChunkCallback } from '@brud/core';
+import { DEFAULT_SETTINGS, killProcess, getActiveProcessIds } from '@brud/core';
 
 export class ExecutionCoordinator {
   constructor(
@@ -13,6 +13,7 @@ export class ExecutionCoordinator {
     sourceText?: string,
     sessionIdOverride?: string,
     sessionMetadata?: SessionMetadata,
+    onChunk?: ChunkCallback,
   ): Promise<FileOperationResult> {
     if (operations.length === 0) {
       return {
@@ -29,6 +30,14 @@ export class ExecutionCoordinator {
       ? new WorkspaceHistoryStore(folders[0], new VSCodeFileSystem())
       : undefined;
 
-    return executeOperationsFromVSCode(operations, historyStore, sourceText, sessionIdOverride, sessionMetadata, this.getSettings());
+    return executeOperationsFromVSCode(operations, historyStore, sourceText, sessionIdOverride, sessionMetadata, this.getSettings(), onChunk);
+  }
+
+  killActiveProcess(processId: string): boolean {
+    return killProcess(processId);
+  }
+
+  getActiveProcessIds(): string[] {
+    return getActiveProcessIds();
   }
 }

@@ -1,5 +1,6 @@
-import { Terminal } from 'lucide-react';
+import { Terminal, XCircle, Loader } from 'lucide-react';
 import { ToolResultRenderer } from '../types';
+import { sendKillProcess } from '../../bridge/vscodeBridge';
 
 interface TerminalResultData {
   command: string;
@@ -17,12 +18,18 @@ interface GroupResultData {
   failed: number;
 }
 
+declare global {
+  interface Window {
+    __terminalChunks?: Map<string, { chunks: string[]; isRunning: boolean; processId?: string }>;
+  }
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms.toFixed(0)}ms`;
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function renderSingleCommand(termData: TerminalResultData) {
+function renderSingleCommand(termData: TerminalResultData, isRunning: boolean, processId?: string) {
   if (!termData || !termData.command) return null;
 
   return (
@@ -30,18 +37,35 @@ function renderSingleCommand(termData: TerminalResultData) {
       <div className="px-6 py-2 border-b border-border bg-surface-2 text-xs text-text-secondary flex items-center gap-2">
         <Terminal size={14} className="text-text-tertiary" />
         <span className="font-mono truncate flex-1">{termData.command}</span>
-        <span className={`inline-flex items-center gap-1 font-medium ${termData.success ? 'text-green-500' : 'text-red-500'}`}>
-          {termData.success ? (
-            <><span className="text-green-500">&#10003;</span> Success</>
-          ) : (
-            <><span className="text-red-500">&#10007;</span> Failed</>
-          )}
-        </span>
+        {isRunning ? (
+          <span className="inline-flex items-center gap-1 font-medium text-yellow-500">
+            <Loader size={14} className="animate-spin" />
+            Running...
+          </span>
+        ) : (
+          <span className={`inline-flex items-center gap-1 font-medium ${termData.success ? 'text-green-500' : 'text-red-500'}`}>
+            {termData.success ? (
+              <><span className="text-green-500">&#10003;</span> Success</>
+            ) : (
+              <><span className="text-red-500">&#10007;</span> Failed</>
+            )}
+          </span>
+        )}
+        {isRunning && processId && (
+          <button
+            onClick={() => sendKillProcess(processId)}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 transition-colors cursor-pointer"
+            title="Kill process"
+          >
+            <XCircle size={12} />
+            Kill
+          </button>
+        )}
       </div>
       <div className="px-6 py-3 space-y-2">
         <div className="flex gap-4 text-xs text-text-secondary">
-          <span>Duration: <span className="font-mono text-text tabular-nums">{formatDuration(termData.duration)}</span></span>
-          <span>Exit Code: <span className="font-mono text-text tabular-nums">{termData.exitCode !== null ? termData.exitCode : 'N/A'}</span></span>
+          <span>Duration: <span className="font-mono text-text tabular-nums">{isRunning ? 'running...' : formatDuration(termData.duration)}</span></span>
+          <span>Exit Code: <span className="font-mono text-text tabular-nums">{termData.exitCode !== null ? termData.exitCode : isRunning ? '...' : 'N/A'}</span></span>
         </div>
         {termData.output && (
           <pre className="text-xs text-text-secondary font-mono whitespace-pre leading-relaxed bg-surface-2 border border-border rounded p-4 overflow-x-auto max-h-150 overflow-y-auto">
@@ -68,7 +92,7 @@ function isGroupResultData(data: any): data is GroupResultData {
   return data && typeof data === 'object' && 'mode' in data && 'results' in data;
 }
 
-function renderGroupCommand(groupData: GroupResultData) {
+function renderGroupCommand(groupData: GroupResultData, isRunning: boolean, processId?: string) {
   const modeLabel = groupData.mode.charAt(0).toUpperCase() + groupData.mode.slice(1);
   return (
     <div>
@@ -77,15 +101,25 @@ function renderGroupCommand(groupData: GroupResultData) {
           <Terminal size={14} className="text-text-tertiary" />
           <span className="text-sm font-medium text-text">{modeLabel} Group</span>
           <span className="text-xs text-text-secondary">{groupData.results.length} command{groupData.results.length !== 1 ? 's' : ''}</span>
-          <span className="text-xs text-green-500 ml-auto">{groupData.succeeded} succeeded</span>
-          {groupData.failed > 0 && <span className="text-xs text-red-500">{groupData.failed} failed</span>}
-          <span className="text-xs text-text-secondary">Total: {formatDuration(groupData.totalDuration)}</span>
+          {!isRunning && <span className="text-xs text-green-500 ml-auto">{groupData.succeeded} succeeded</span>}
+          {!isRunning && groupData.failed > 0 && <span className="text-xs text-red-500">{groupData.failed} failed</span>}
+          {isRunning && <span className="text-xs text-yellow-500 ml-auto">Running...</span>}
+          {isRunning && processId && (
+            <button
+              onClick={() => sendKillProcess(processId)}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-red-500/10 text-red-500 border border-red-500/30 hover:bg-red-500/20 transition-colors cursor-pointer"
+              title="Kill process"
+            >
+              <XCircle size={12} />
+              Kill
+            </button>
+          )}
         </div>
       </div>
       {groupData.results.map((item, index) => (
         <div key={index}>
           {index > 0 && <hr className="my-2 border-border" />}
-          {renderSingleCommand(item)}
+          {renderSingleCommand(item, false)}
         </div>
       ))}
     </div>
@@ -99,8 +133,11 @@ export const terminalRenderer: ToolResultRenderer = {
     return data && (isGroupResultData(data) || Array.isArray(data) || typeof data.command === 'string');
   },
   renderSection: (data: any) => {
+    const isRunning = data?.isRunning === true;
+    const processId = data?.processId;
+
     if (isGroupResultData(data)) {
-      return renderGroupCommand(data);
+      return renderGroupCommand(data, isRunning, processId);
     }
     if (Array.isArray(data)) {
       return (
@@ -108,13 +145,13 @@ export const terminalRenderer: ToolResultRenderer = {
           {data.map((item, index) => (
             <div key={index}>
               {index > 0 && <hr className="my-2 border-border" />}
-              {renderSingleCommand(item)}
+              {renderSingleCommand(item, false)}
             </div>
           ))}
         </div>
       );
     }
-    return renderSingleCommand(data);
+    return renderSingleCommand(data, isRunning, processId);
   },
   copyFormatter: (data: any) => {
     if (isGroupResultData(data)) {

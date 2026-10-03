@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import type { FileOperation, FileOperationResult, SessionMetadata, ChunkCallback } from '@brud/core';
+import type { ExtensionMessage } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
@@ -37,12 +38,38 @@ export class ExecuteCurrentFileHandler {
     const filePath = fileList[idx];
     this.outputChannel.appendLine(`[DEBUG] _handleExecuteCurrentFile: selected filePath="${filePath}" at idx=${idx}`);
     const operations = this.getOperationsByFile().get(filePath) || [];
+
+    let lastProcessId: string | undefined;
+
+    const onChunk: ChunkCallback = (chunk: string, chunkIndex: number) => {
+      const processIds = this.executor.getActiveProcessIds();
+      const processId = processIds.length > 0 ? processIds[processIds.length - 1] : 'default';
+      lastProcessId = processId;
+      const msg: ExtensionMessage = {
+        command: 'terminalChunk',
+        chunk,
+        chunkIndex,
+        processId,
+      };
+      this.getWebview()?.postMessage(msg);
+      this.panelManager.postTerminalChunk(chunk, chunkIndex, processId);
+    };
+
+    this.panelManager.showTerminalStream();
+
     const result: FileOperationResult = await this.executor.execute(
       operations,
       this.getOriginalPrompt(),
       this.getDiffPreviewSessionId(),
       this.getSessionMetadata(),
+      onChunk,
     );
+
+    if (lastProcessId) {
+      const streamStatus = result.success ? 'success' : 'failed';
+      this.panelManager.postStreamDone(lastProcessId, streamStatus);
+    }
+
     const readData = reportExecutionResult(this.outputChannel, this.getWebview, result);
 
     const terminalOps = transformTerminalOperationData(result.operationResults, operations);
@@ -85,6 +112,8 @@ export class ExecuteCurrentFileHandler {
         this.setLastExecutionResult({ operations: unifiedOps });
       }
     }
+
+    this.panelManager.closeTerminalStreamPanel();
 
     if (result.success) {
       if (result.sessionId) {

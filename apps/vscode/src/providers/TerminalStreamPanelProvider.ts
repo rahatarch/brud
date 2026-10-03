@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 
-export class BrudUnifiedResultsPanelManager {
+export class BrudTerminalPanelManager {
   private _panel: vscode.WebviewPanel | undefined;
   private _pendingMessage: any = null;
   private _onKillProcess: ((processId: string) => void) | null = null;
@@ -45,18 +45,15 @@ export class BrudUnifiedResultsPanelManager {
     });
   }
 
-  public openUnifiedResultsPanel(results: Record<string, any>) {
-    const message = { command: 'unifiedResults', results };
-
+  public openTerminalStreamPanel() {
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
-      this._panel.webview.postMessage(message);
       return;
     }
 
     this._panel = vscode.window.createWebviewPanel(
-      'brud-unified-results-panel',
-      'Brud Session Results',
+      'brud-terminal-stream',
+      'Brud Terminal Stream',
       vscode.ViewColumn.One,
       {
         enableScripts: true,
@@ -69,16 +66,17 @@ export class BrudUnifiedResultsPanelManager {
 
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
-    this._pendingMessage = message;
-
     this._panel.onDidDispose(() => {
       this._panel = undefined;
     });
 
     this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready' && this._pendingMessage) {
-        this._panel?.webview.postMessage(this._pendingMessage);
-        this._pendingMessage = null;
+      if (message.command === 'ready') {
+        if (this._pendingMessage) {
+          this._panel?.webview.postMessage(this._pendingMessage);
+          this._pendingMessage = null;
+        }
+        return;
       }
       if (message.command === 'killProcess' && message.processId && this._onKillProcess) {
         this._onKillProcess(message.processId);
@@ -88,6 +86,13 @@ export class BrudUnifiedResultsPanelManager {
         this._panel?.webview.postMessage({ command: 'activeProcessIds', processIds: ids });
       }
     });
+  }
+
+  public closePanel() {
+    if (this._panel) {
+      this._panel.dispose();
+      this._panel = undefined;
+    }
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {
@@ -107,7 +112,7 @@ export class BrudUnifiedResultsPanelManager {
     const logoUri = webview.asWebviewUri(
       vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', 'icons', 'brud_icon_rounded_white.svg')
     );
-    html = html.replace('<div id="root">', `<div id="root" data-view-mode="unified-results" data-image-uri="${logoUri.toString()}">`);
+    html = html.replace('<div id="root">', `<div id="root" data-view-mode="terminal-stream" data-image-uri="${logoUri.toString()}">`);
 
     return html;
   }
