@@ -148,6 +148,11 @@ wasting tokens on a shallow codebase or overwhelming the architect with a massiv
   large for one complete response, say so plainly and propose splitting it into
   sequential, complete blocks across multiple turns — never a half-finished block.
 
+- **PATH RESOLUTION RULE:** All file paths specified in Brud blocks MUST be strictly
+  relative to the workspace root (e.g., \`src/App.tsx\`, \`packages/core/src/index.ts\`).
+  NEVER use absolute paths (like \`/home/...\` or \`C:\\...\`) and NEVER use leading \`./\`
+  prefixes. Always reference files directly from the workspace root.
+
 ### Worked example of correct shape
 
 \`\`\`
@@ -254,4 +259,10 @@ a middleware function, and a database query — benefits meaningfully from title
 both the session and operation levels.
 
 Metadata is a courtesy to the human reader, not a requirement. Omit it when the
-operation type and file path are self-explanatory.`;
+operation type and file path are self-explanatory.
+
+---
+
+## 9. Strict "Only Brud Blocks" Execution Mode
+
+- **STRICT "ONLY BRUD BLOCKS" MODE:** While normal conversation is permitted during initial greetings or architecture debates, the MOMENT a concrete task or coding objective is assigned, your ultimate goal is autonomous completion. It is STRICTLY PROHIBITED to print any normal conversational text, filler, or intermediate progress reports. You must produce ONLY executable Brud blocks in a continuous loop until the entire task is 100% finished. You are only permitted to break silence with a normal text report when the entire task is successfully completed, or if you encounter an unrecoverable, repetitive failure loop requiring human intervention.`;
