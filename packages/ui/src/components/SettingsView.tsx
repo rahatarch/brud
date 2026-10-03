@@ -12,6 +12,7 @@ type ViewState = 'main' | 'tools';
 function SettingsView() {
   const [view, setView] = useState<ViewState>('main');
   const [workspaceBoundaryEnabled, setWorkspaceBoundaryEnabled] = useState(true);
+  const [commandValidationEnabled, setCommandValidationEnabled] = useState(true);
   const [toolAllowList, setToolAllowList] = useState<Record<string, boolean>>({});
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [source, setSource] = useState<string>('default');
@@ -25,6 +26,7 @@ function SettingsView() {
     return onExtensionMessage((message) => {
       if (message.command === 'settingsResult' && message.settings) {
         setWorkspaceBoundaryEnabled(message.settings.workspaceBoundaryEnabled !== false);
+        setCommandValidationEnabled(message.settings.commandValidationEnabled !== false);
         setToolAllowList(message.settings.toolAllowList || {});
         setSource(message.source || 'default');
         setWarnings(message.warnings || []);
@@ -40,9 +42,17 @@ function SettingsView() {
     const next = !workspaceBoundaryEnabled;
     setWorkspaceBoundaryEnabled(next);
     setSaving(true);
-    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled: next, toolAllowList } });
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled: next, commandValidationEnabled, toolAllowList } });
     setTimeout(() => setSaving(false), 300);
-  }, [workspaceBoundaryEnabled, toolAllowList]);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
+
+  const handleValidationToggle = useCallback(() => {
+    const next = !commandValidationEnabled;
+    setCommandValidationEnabled(next);
+    setSaving(true);
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled: next, toolAllowList } });
+    setTimeout(() => setSaving(false), 300);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
 
   const handleToolToggle = useCallback((toolKind: string) => {
     const current = toolAllowList[toolKind];
@@ -55,9 +65,9 @@ function SettingsView() {
     }
     setToolAllowList(newList);
     setSaving(true);
-    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, toolAllowList: newList } });
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList: newList } });
     setTimeout(() => setSaving(false), 300);
-  }, [workspaceBoundaryEnabled, toolAllowList]);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
 
   const disabledCount = tools.filter(t => toolAllowList[t.kind] === false).length;
   const enabledCount = tools.length - disabledCount;
@@ -182,6 +192,38 @@ function SettingsView() {
                 : 'bg-yellow-500/10 text-yellow-400'
             }`}>
               {workspaceBoundaryEnabled ? 'Enabled' : 'Disabled'}
+            </span>
+          </div>
+        </div>
+
+        <div className="bg-surface-2 border border-border rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-medium text-text">Command Validation Enforcement</h3>
+              <p className="text-xs text-text-secondary mt-1">
+                When disabled, security checks blocking dangerous terminal commands (e.g. sudo, rm -rf) are bypassed.
+              </p>
+            </div>
+            <button
+              onClick={handleValidationToggle}
+              className={`relative w-11 h-6 rounded-full transition-colors cursor-pointer ${
+                commandValidationEnabled ? 'bg-primary' : 'bg-surface-3'
+              }`}
+            >
+              <span
+                className={`block w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
+                  commandValidationEnabled ? 'translate-x-[22px]' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </div>
+          <div className="mt-2">
+            <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+              commandValidationEnabled
+                ? 'bg-green-500/10 text-green-400'
+                : 'bg-yellow-500/10 text-yellow-400'
+            }`}>
+              {commandValidationEnabled ? 'Enabled' : 'Disabled'}
             </span>
           </div>
         </div>

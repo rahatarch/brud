@@ -312,10 +312,6 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
 
   function flushTerminalInteractive() {
     if (currentIndex && currentTerminalCommand) {
-      const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
-      if (!cmdResult.success) {
-        throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-      }
       const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
       if (!cwdResult.success) {
         throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
@@ -343,20 +339,6 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
 
   function flushTerminalCommand() {
     if (currentIndex && (currentTerminalCommand || currentTerminalCommands.length > 0)) {
-      if (currentTerminalCommand) {
-        const cmdResult = BrudAPI.validate.command(currentTerminalCommand);
-        if (!cmdResult.success) {
-throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-        }
-      }
-      if (currentTerminalCommands.length > 0) {
-        for (const cmd of currentTerminalCommands) {
-          const cmdResult = BrudAPI.validate.command(cmd);
-          if (!cmdResult.success) {
-            throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-          }
-        }
-      }
       const cwdResult = BrudAPI.validate.cwd(currentTerminalCwd || undefined, workspaceFolders);
       if (!cwdResult.success) {
         throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });

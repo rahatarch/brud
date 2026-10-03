@@ -33,7 +33,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: { create_file: false } },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: { create_file: false } },
     );
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.errors.length, 1);
@@ -47,7 +47,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: { create_file: true } },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: { create_file: true } },
     );
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.operationResults[0].status, 'success');
@@ -61,7 +61,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: {} },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: {} },
     );
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.operationResults[0].status, 'success');
@@ -75,7 +75,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: false, toolAllowList: {} },
+      { workspaceBoundaryEnabled: false, commandValidationEnabled: true, toolAllowList: {} },
     );
     assert.strictEqual(result.operationResults[0].status !== 'failed', true);
     assert.ok(result.errors.length === 0 || result.errors.every(e => e.code !== 'PATH_OUTSIDE_WORKSPACE'));
@@ -88,7 +88,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: {} },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: {} },
     );
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.operationResults[0].status, 'failed');
@@ -102,7 +102,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: { extract_structure: false } },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: { extract_structure: false } },
     );
     assert.strictEqual(result.success, false);
     assert.strictEqual(result.errors.length, 1);
@@ -116,7 +116,7 @@ describe('Settings enforcement during execution', () => {
     ];
     const result = await executeFileOperations(
       ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
-      { workspaceBoundaryEnabled: true, toolAllowList: { extract_structure: true } },
+      { workspaceBoundaryEnabled: true, commandValidationEnabled: true, toolAllowList: { extract_structure: true } },
     );
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.operationResults[0].status, 'success');

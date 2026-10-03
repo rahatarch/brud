@@ -99,14 +99,23 @@ export function activate(context: vscode.ExtensionContext) {
     logger.appendLine(`[brud] Failed to load settings: ${err}`);
   });
 
-  // Watch .brud/settings.json for changes
+  // Watch .brud/settings.json for changes with debounce to prevent race conditions
   const settingsWatcher = vscode.workspace.createFileSystemWatcher('**/.brud/settings.json');
-  settingsWatcher.onDidChange(async () => {
-    await provider.loadSettings();
-  });
-  settingsWatcher.onDidCreate(async () => {
-    await provider.loadSettings();
-  });
+  let reloadTimer: NodeJS.Timeout | undefined;
+  const debouncedReload = () => {
+    if (reloadTimer) clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(async () => {
+      try {
+        await provider.loadSettings();
+        logger.appendLine('[brud] Settings reloaded successfully from disk.');
+      } catch (err) {
+        logger.appendLine(`[brud] Failed to reload settings on change: ${err}`);
+      }
+    }, 150);
+  };
+
+  settingsWatcher.onDidChange(debouncedReload);
+  settingsWatcher.onDidCreate(debouncedReload);
   context.subscriptions.push(settingsWatcher);
 
   // Run retention cleanup on activation

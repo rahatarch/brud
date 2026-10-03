@@ -1,10 +1,12 @@
 export interface BrudSettings {
   workspaceBoundaryEnabled: boolean;
+  commandValidationEnabled: boolean;
   toolAllowList: Record<string, boolean>;
 }
 
 export const DEFAULT_SETTINGS: BrudSettings = {
   workspaceBoundaryEnabled: true,
+  commandValidationEnabled: true,
   toolAllowList: {},
 };
 

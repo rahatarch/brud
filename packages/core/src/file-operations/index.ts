@@ -1376,7 +1376,7 @@ operationResults.push({
           }
 
           const termOp = operation as TerminalInteractiveOperation;
-          const cmdValidation = validateTerminalCommand(termOp.command, termOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled);
+          const cmdValidation = validateTerminalCommand(termOp.command, termOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled, settings.commandValidationEnabled);
           if (!cmdValidation.success) {
             const code = cmdValidation.code;
             const target = typeof cmdValidation.data === 'string' ? cmdValidation.data : termOp.command;
@@ -1487,7 +1487,7 @@ message: invalidCwdError(termOp.cwd || '').details,
           if (termCmdOp.commands && termCmdOp.commands.length > 0) {
             let hasDangerous = false;
             for (const cmd of termCmdOp.commands) {
-              const cmdValidation = validateTerminalCommand(cmd, termCmdOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled);
+              const cmdValidation = validateTerminalCommand(cmd, termCmdOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled, settings.commandValidationEnabled);
               if (!cmdValidation.success) {
                 const code = cmdValidation.code;
                 const target = typeof cmdValidation.data === 'string' ? cmdValidation.data : cmd;
@@ -1552,7 +1552,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             break;
           }
 
-          const singleCmdValidation = validateTerminalCommand(termCmdOp.command, termCmdOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled);
+          const singleCmdValidation = validateTerminalCommand(termCmdOp.command, termCmdOp.cwd, workspaceFolders, settings.workspaceBoundaryEnabled, settings.commandValidationEnabled);
           if (!singleCmdValidation.success) {
             const code = singleCmdValidation.code;
             const target = typeof singleCmdValidation.data === 'string' ? singleCmdValidation.data : termCmdOp.command;

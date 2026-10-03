@@ -41,9 +41,9 @@ The Master Prompt has been purged of all implicit agent instructions and replace
 
 Automatically appends the three core protocol invariants (**Zero Inference**, **Minimal Blast Radius / Surgical Proportionality**, and **Empirical Grounding**) to the end of every copied clipboard result. This leverages LLM recency bias to prevent multi-turn attention decay, tool fixation, and full-file rewrite drift during long coding sessions.
 
-### Configurable Terminal Safety Toggle (`workspaceBoundaryEnabled` / Terminal Validation) (`4caadcc`)
+### Configurable Terminal Safety Toggle (`brud.commandValidationEnabled`)
 
-A new workspace configuration flag `brud.workspaceBoundaryEnabled` (boolean, default `true`) governs whether terminal commands are validated against the workspace boundary before execution. Users who operate in fully trusted environments can disable validation for zero-overhead execution, while the default preserves the existing security posture.
+Added a user setting in the Management Panel and configuration schema allowing advanced power users to toggle off dangerous command security checks (`sudo`, `rm -rf`, etc.) when running trusted system provisioning scripts. Terminal validation is now properly deferred to the execution engine.
 
 ### Read Output Line-Number Gutters (` 35 | code`) & Auto-Sanitizer Defense (`bca0545`)
 

@@ -62,6 +62,11 @@
           "default": true,
           "description": "Enforce workspace boundary on all operations. When disabled, operations can target files outside the workspace."
         },
+        "brud.commandValidationEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable security validation blocking dangerous terminal commands (e.g., rm -rf, sudo, mkfs). WARNING: Disabling this allows execution of destructive system commands."
+        },
         "brud.toolAllowList": {
           "type": "object",
           "default": {},

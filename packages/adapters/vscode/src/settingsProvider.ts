@@ -10,11 +10,15 @@ export async function getEffectiveSettings(workspaceRoot: string): Promise<Setti
   const globalSettings: Partial<BrudSettings> = {};
   const globalBoundary = globalConfig.inspect<boolean>('workspaceBoundaryEnabled');
   const globalAllowList = globalConfig.inspect<Record<string, boolean>>('toolAllowList');
+  const commandValidationGlobal = globalConfig.inspect<boolean>('commandValidationEnabled');
   if (globalBoundary?.globalValue !== undefined) {
     globalSettings.workspaceBoundaryEnabled = globalBoundary.globalValue;
   }
   if (globalAllowList?.globalValue !== undefined) {
     globalSettings.toolAllowList = globalAllowList.globalValue;
+  }
+  if (commandValidationGlobal?.globalValue !== undefined) {
+    globalSettings.commandValidationEnabled = commandValidationGlobal.globalValue;
   }
 
   let workspaceSettings: Partial<BrudSettings> = {};
@@ -23,11 +27,15 @@ export async function getEffectiveSettings(workspaceRoot: string): Promise<Setti
     const workspaceConfig = vscode.workspace.getConfiguration('brud', workspaceFolderUri);
     const wsBoundary = workspaceConfig.inspect<boolean>('workspaceBoundaryEnabled');
     const wsAllowList = workspaceConfig.inspect<Record<string, boolean>>('toolAllowList');
+    const commandValidationWorkspace = workspaceConfig.inspect<boolean>('commandValidationEnabled');
     if (wsBoundary?.workspaceValue !== undefined) {
       workspaceSettings.workspaceBoundaryEnabled = wsBoundary.workspaceValue;
     }
     if (wsAllowList?.workspaceValue !== undefined) {
       workspaceSettings.toolAllowList = wsAllowList.workspaceValue;
+    }
+    if (commandValidationWorkspace?.workspaceValue !== undefined) {
+      workspaceSettings.commandValidationEnabled = commandValidationWorkspace.workspaceValue;
     }
   }
 

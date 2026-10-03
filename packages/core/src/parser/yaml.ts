@@ -401,10 +401,6 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           throw new BrudError(missingFieldError('command', 'terminal_interactive operation'));
         }
         const raw = parsed.raw as boolean | undefined;
-        const cmdResult = BrudAPI.validate.command(command);
-        if (!cmdResult.success) {
-          throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-        }
         const answers = parsed.answers as string[] | undefined;
         if (!answers || !Array.isArray(answers)) {
           throw new BrudError(missingFieldError('answers', 'terminal_interactive operation'));
@@ -437,20 +433,6 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           throw new BrudError(missingFieldError('command or commands', 'terminal_command operation'));
         }
         const raw = parsed.raw as boolean | undefined;
-        if (command) {
-          const cmdResult = BrudAPI.validate.command(command);
-          if (!cmdResult.success) {
-throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-          }
-        }
-        if (commands && Array.isArray(commands)) {
-          for (const cmd of commands) {
-            const cmdResult = BrudAPI.validate.command(cmd);
-            if (!cmdResult.success) {
-              throw new BrudError({ code: 'DANGEROUS_COMMAND', friendly: cmdResult.friendly!, details: cmdResult.details! });
-            }
-          }
-        }
         const timeout = parsed.timeout as number | undefined;
         const cwd = parsed.cwd as string | undefined;
         const env = parsed.env as Record<string, string> | undefined;
