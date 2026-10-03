@@ -36,6 +36,7 @@ The Master Prompt has been purged of all implicit agent instructions and replace
 - Version skew when the tool surface evolves independently of prompt snapshots
 - **Master Prompt Path Resolution Rule**: Added explicit instructions to the Master System Prompt enforcing that all file paths must be strictly relative to the workspace root (e.g. `src/App.tsx`), prohibiting absolute paths and leading `./` prefixes
 - **Strict "Only Brud Blocks" Execution Mode**: Added explicit enforcement to the Master Prompt prohibiting conversational chatter or intermediate pleasantries once a task is assigned. The AI must produce exclusively executable Brud blocks in an autonomous loop until completion.
+- **Anti-Stale-Training Override Warning**: Injected a mandatory warning into every tool usage prompt and tool registry documentation entry instructing AI models to prioritize Brud's rules over stale internal training knowledge and to follow the exact Example block format without deviation.
 
 ### Platform-Scale Clipboard Invariants (`UnifiedResultsPanel.tsx` Protocol Anchor) (`1ab2e98`)
 

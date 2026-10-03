@@ -8,7 +8,9 @@ File Path: path/to/new/file.ext
 // file contents here
 >>>>>>> END CREATE_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const searchReplacePrompt = `Use SEARCH/REPLACE to find and replace existing content in a file.
 
@@ -21,7 +23,9 @@ exact text to find
 new text to insert
 >>>>>>> REPLACE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const deleteFilePrompt = `Use DELETE_FILE to remove a file from the filesystem.
 
@@ -31,7 +35,9 @@ Describe the file you want to delete below:
 File Path: path/to/file.ext
 >>>>>>> END DELETE_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const renameFilePrompt = `Use RENAME_FILE to rename a file from one name to another.
 
@@ -42,7 +48,9 @@ From: path/to/old-name.ext
 To: path/to/new-name.ext
 >>>>>>> END RENAME_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const moveFilePrompt = `Use MOVE_FILE to move a file from one location to another.
 
@@ -53,7 +61,9 @@ From: path/to/source.ext
 To: path/to/destination.ext
 >>>>>>> END MOVE_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const copyFilePrompt = `Use COPY_FILE to copy a file from one location to another.
 
@@ -64,7 +74,9 @@ From: path/to/source.ext
 To: path/to/destination.ext
 >>>>>>> END COPY_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const appendFilePrompt = `Use APPEND_FILE to append content to the end of an existing file.
 
@@ -77,7 +89,9 @@ Position: end
 content to append
 >>>>>>> END APPEND_FILE [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const createDirectoryPrompt = `Use CREATE_DIRECTORY to create a new directory with optional empty files.
 
@@ -90,7 +104,9 @@ Files:
   - index.ts
 >>>>>>> END CREATE_DIRECTORY [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const deleteDirectoryPrompt = `Use DELETE_DIRECTORY to remove a directory and all its contents.
 
@@ -100,7 +116,9 @@ Describe the directory to delete below:
 Directory Path: src/old
 >>>>>>> END DELETE_DIRECTORY [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const moveDirectoryPrompt = `Use MOVE_DIRECTORY to move a directory from one location to another.
 
@@ -111,7 +129,9 @@ From: src/components
 To: packages/ui/components
 >>>>>>> END MOVE_DIRECTORY [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const extractStructurePrompt = `Use EXTRACT_STRUCTURE to extract a token-efficient JSON map of directory contents with depth control.
 
@@ -141,7 +161,9 @@ Directory Path: src/modules/driver
 Depth: 2
 >>>>>>> END EXTRACT_STRUCTURE [2]
 
-Output ONLY the Brud blocks above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud blocks above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const searchFilesPrompt = `Use SEARCH_FILES to find files by name, pattern, or extension.
 
@@ -159,7 +181,9 @@ Scope: src
 - MaxResults: maximum files to return (optional, default unlimited)
 - Returns file paths, names, extensions, and sizes
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const codebaseMetadataPrompt = `Use CODEBASE_METADATA to get a quick summary of the codebase scale.
 
@@ -168,7 +192,9 @@ This returns the total file count, folder count, and the most dense folder (the 
 <<<<<<< CODEBASE_METADATA [1]
 >>>>>>> END CODEBASE_METADATA [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const appendFileMultiPrompt = `Use APPEND_FILE_MULTI to append content to multiple files at once.
 
@@ -182,7 +208,9 @@ Position: end
 content to append
 >>>>>>> END APPEND_FILE_MULTI [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const searchReplaceMultiPrompt = `Use SEARCH_REPLACE_MULTI to find and replace text across multiple files.
 
@@ -195,7 +223,9 @@ Search: old text
 Replace: new text
 >>>>>>> END SEARCH_REPLACE_MULTI [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const readFilePrompt = `Use READ_FILE to read a file with optional import following.
 
@@ -219,7 +249,9 @@ Exclude: [patterns to skip, optional]
 - importSyntax: custom import pattern regex for non-standard languages (optional)
 - Exclude: glob patterns to skip when following imports (optional)
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const readFilesPrompt = `Use READ_FILES to read multiple files matching a pattern.
 
@@ -237,7 +269,9 @@ isImportRead: false
 - MaxResults: maximum files to return (optional, default unlimited)
 - isImportRead: true to also read imported files (optional, default false)
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const readDirectoryPrompt = `Use READ_DIRECTORY to read all files in a directory.
 
@@ -253,7 +287,9 @@ Exclude: *.test.ts
 - Recursive: true to read files in subdirectories (optional, default false)
 - Exclude: glob patterns to skip (optional)
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const terminalInteractivePrompt = `Use TERMINAL_INTERACTIVE to run terminal commands that require interactive prompt responses.
 
@@ -290,7 +326,9 @@ Raw mode: Use <command>...</command> tags inside the block for complex commands 
   echo done
   </command>
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const getToolInfoPrompt = `Use GET_TOOL_INFO to discover available tools and their documentation.
 
@@ -308,7 +346,9 @@ Get specific tool documentation:
 Tool: [tool_name]
 >>>>>>> END GET_TOOL_INFO [1]
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;
 
 export const terminalCommandPrompt = `Use TERMINAL_COMMAND to run terminal commands — single, sequential, parallel, or conditional.
 
@@ -358,4 +398,6 @@ Raw mode: Use <command>...</command> tags inside the block for complex commands 
 
 Revert commands are NOT currently available. The Brud Code team has deliberately chosen not to implement them because running a saved revert command months later can be dangerous — the command might not work, might corrupt data, or might have unintended consequences. Brud Code does not know what a revert command actually does and cannot guarantee it will safely undo changes.
 
-Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.`;
+Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
+
+[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]`;

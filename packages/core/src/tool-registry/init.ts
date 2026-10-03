@@ -21,6 +21,7 @@ new text to insert
       'Search text must match exactly, including whitespace',
       'Only one match per SEARCH/REPLACE block is allowed',
       'If multiple matches exist, provide more context to make the search unique',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -41,6 +42,7 @@ File Path: path/to/new/file.ext
     rules: [
       'File must not already exist',
       'Parent directories are created automatically',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -58,6 +60,7 @@ File Path: path/to/file.ext
     rules: [
       'File must exist to delete',
       'Deletion is permanent and cannot be undone',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -77,6 +80,7 @@ To: path/to/new-name.ext
     rules: [
       'Source file must exist',
       'Destination must not already exist',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -97,6 +101,7 @@ To: path/to/destination.ext
       'Source file must exist',
       'Destination must not already exist',
       'Parent directories at destination are created automatically',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -116,6 +121,7 @@ To: path/to/destination.ext
     rules: [
       'Source file must exist',
       'Destination must not already exist',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -138,6 +144,7 @@ content to append
     rules: [
       'File must already exist',
       'Position can be "start" or "end" (default: end)',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -162,6 +169,7 @@ content to append
     rules: [
       'Pattern is a glob pattern',
       'Only existing files are modified',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -186,6 +194,7 @@ Replace: new text
       'Search text must match exactly in each file',
       'Only one match per file is replaced',
       'Files with zero or multiple matches are skipped',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -207,6 +216,7 @@ Files:
     rules: [
       'Directory is created if it does not exist',
       'Files listed under Files: are created as empty files',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -224,6 +234,7 @@ Directory Path: src/old
     rules: [
       'Directory and all contents are permanently deleted',
       'No-op if directory does not exist',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -243,6 +254,7 @@ To: packages/ui/components
     rules: [
       'Source directory must exist',
       'Destination must not already exist',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -265,6 +277,7 @@ Depth: [number or 0 for unlimited]
       'Multiple EXTRACT_STRUCTURE blocks can be used in one prompt',
       'Text files in the output tree automatically include their line count (e.g. "engine.cc (3410 lines)"), while binary files are marked "[binary]"',
       'Use the line counts from EXTRACT_STRUCTURE to select precision Start Line and End Line ranges when calling READ_FILE',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -280,6 +293,7 @@ Depth: [number or 0 for unlimited]
       'Returns total file count, folder count, and most dense folder',
       'Must be called FIRST before EXTRACT_STRUCTURE',
       'Cannot be combined with EXTRACT_STRUCTURE in the same block',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -303,6 +317,7 @@ MaxResults: 500
     rules: [
       'Returns file paths, names, extensions, and sizes',
       'No limit by default. Specify maxResults to cap results.',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -335,6 +350,7 @@ Exclude: [patterns to skip, optional]
       'importSyntax: custom import pattern regex for non-standard languages',
       'For large files, specify Start Line and End Line to slice only the needed lines and avoid context exhaustion.',
       'End Line automatically clamps to end-of-file if greater than total lines; Start Line must be within file bounds.',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -358,6 +374,7 @@ isImportRead: false
     rules: [
       'Pattern is a glob pattern',
       'No limit by default. Specify maxResults to cap results.',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -379,6 +396,7 @@ Exclude: *.test.ts
     rules: [
       'Recursive: true to read files in subdirectories',
       'Exclude: glob patterns to skip',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -411,6 +429,7 @@ Timeout: 120
       'Answers are fed sequentially to interactive prompts IN ORDER',
       'Empty answer means accept default',
       'Timeout: default 120 seconds',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 
@@ -437,6 +456,7 @@ Timeout: 120
       'Sequential/parallel mode uses "Commands" array',
       'Conditional mode uses OnSuccess/OnFailure',
       'Dangerous commands are blocked',
+      '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
 }
