@@ -21,13 +21,21 @@ interface ChunkState {
   };
 }
 
-const BRUD_PROTOCOL_INVARIANTS = `BRUD PROTOCOL INVARIANTS (MANDATORY FOR NEXT INSTRUCTION)
+const BRUD_PROTOCOL_INVARIANTS = `══════════════════════════════════════════════════════════════════════════════
+BRUD PROTOCOL INVARIANTS (MANDATORY FOR NEXT INSTRUCTION)
 1. ZERO INFERENCE RULE:
    Never infer, guess, or synthesize tool syntax from memory or tool names. If you do not have the verified schema for your intended action in active context, you MUST invoke \`GET_TOOL_INFO Tool: <kind>\` before emitting instructions.
 2. MINIMAL BLAST RADIUS (SURGICAL PROPORTIONALITY):
    Always select the tool with the absolute narrowest operational scope. Restrict changes strictly to the target lines, entities, or commands. Never use destructive or broad-scope operations when an atomic, localized alternative exists.
 3. EMPIRICAL GROUNDING:
-   Base your next step solely on the concrete execution data reported above. Never assume state changes, file paths, or side-effects that are not explicitly confirmed in the execution report.`;
+   Base your next step solely on the concrete execution data reported above. Never assume state changes, file paths, or side-effects that are not explicitly confirmed in the execution report.
+
+TOOL DISCOVERY SYNTAX REMINDER:
+To list all available tools from the registry, use this exact empty block format:
+<<<<<<< GET_TOOL_INFO [1]
+>>>>>>> END GET_TOOL_INFO [1]
+To retrieve a specific tool's schema, add \`Tool: <kind>\` inside the block.
+══════════════════════════════════════════════════════════════════════════════`;
 
 function UnifiedResultsPanel() {
   const [results, setResults] = useState<UnifiedSessionResults | null>(null);

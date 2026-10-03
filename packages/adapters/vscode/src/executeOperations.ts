@@ -1,5 +1,5 @@
 import { executeFileOperations, FileOperation, executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional, noWorkspaceError } from '@brud/core';
-import type { HistoryStore, FileOperationResult, SessionMetadata, BrudSettings } from '@brud/core';
+import type { HistoryStore, FileOperationResult, SessionMetadata, BrudSettings, ChunkCallback } from '@brud/core';
 import { DEFAULT_SETTINGS } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
@@ -11,6 +11,7 @@ export async function executeOperationsFromVSCode(
   sessionIdOverride?: string,
   sessionMetadata?: SessionMetadata,
   settings: BrudSettings = DEFAULT_SETTINGS,
+  onChunk?: ChunkCallback,
 ): Promise<FileOperationResult> {
   const fs = new VSCodeFileSystem();
   const workspaceFolders = getWorkspaceFolders();
@@ -24,6 +25,18 @@ export async function executeOperationsFromVSCode(
       operationResults: [],
     };
   }
+
+  const terminalExecutor = {
+    execute: executeTerminalCommand,
+    executeCommand: (command: string, cwd?: string, timeout?: number, env?: Record<string, string>) =>
+      executeCommand(command, cwd, timeout, env, onChunk),
+    executeSequential: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, stopOnFailure?: boolean) =>
+      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk),
+    executeParallel: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>) =>
+      executeParallel(commands, cwd, timeout, env, onChunk),
+    executeConditional: (conditional: any, cwd?: string, timeout?: number, env?: Record<string, string>) =>
+      executeConditional(conditional, cwd, timeout, env, onChunk),
+  };
   
-  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, { execute: executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional }, sessionIdOverride, sessionMetadata, settings);
+  return executeFileOperations(operations, fs, workspaceFolders, historyStore, originalPrompt, terminalExecutor, sessionIdOverride, sessionMetadata, settings);
 }

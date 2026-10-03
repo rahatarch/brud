@@ -37,6 +37,7 @@ The Master Prompt has been purged of all implicit agent instructions and replace
 - **Master Prompt Path Resolution Rule**: Added explicit instructions to the Master System Prompt enforcing that all file paths must be strictly relative to the workspace root (e.g. `src/App.tsx`), prohibiting absolute paths and leading `./` prefixes
 - **Strict "Only Brud Blocks" Execution Mode**: Added explicit enforcement to the Master Prompt prohibiting conversational chatter or intermediate pleasantries once a task is assigned. The AI must produce exclusively executable Brud blocks in an autonomous loop until completion.
 - **Anti-Stale-Training Override Warning**: Injected a mandatory warning into every tool usage prompt and tool registry documentation entry instructing AI models to prioritize Brud's rules over stale internal training knowledge and to follow the exact Example block format without deviation.
+- **Clipboard Protocol Anchor Enhancement**: Added an explicit `GET_TOOL_INFO` empty-block example (`<<<<<<< GET_TOOL_INFO [1]`) to the clipboard copy protocol anchor, ensuring AI models never make syntax mistakes when discovering tools after long conversation turns.
 
 ### Platform-Scale Clipboard Invariants (`UnifiedResultsPanel.tsx` Protocol Anchor) (`1ab2e98`)
 
@@ -49,6 +50,10 @@ Added a user setting in the Management Panel and configuration schema allowing a
 ### Read Output Line-Number Gutters (` 35 | code`) & Auto-Sanitizer Defense (`bca0545`)
 
 File read outputs now display dynamic-width line-number gutters in the format ` 35 | code`, aligning each line with its absolute file offset for precise AI referencing. Paired with an **Auto-Sanitizer Defense** in `search_replace` and `search_replace_multi`, which automatically strips accidental line-number prefixes (`/^\s*\d+\s*\|\s?/gm`) from AI-pasted `SEARCH` blocks while preserving exact indentation, preventing false `SEARCH_NOT_FOUND` errors.
+
+### Real-Time Terminal Output Streaming & Process Interruptor
+
+Added a dedicated live terminal streaming panel (`Brud Terminal Stream`) that opens automatically before execution, rendering stdout/stderr chunks in real time. Includes an active "Kill Process" switch to abort runaway or hanging shell processes, dynamic clipboard button locking during flight, and automatic panel cleanup upon completion.
 
 ---
 
