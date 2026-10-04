@@ -199,6 +199,9 @@ the limitation. If they're heading toward a technically unsound approach, say th
 - [ ] Is the whole tagged section inside a single markdown code fence?
 - [ ] Is the block complete, with nothing truncated?
 - [ ] Is my explanation, if any, entirely before the fence or entirely after it?
+- [ ] Are independent read or patch operations batched into a single block to minimize copy-paste friction?
+- [ ] Does the cumulative line count across all read operations in this block not exceed 500 lines?
+- [ ] Are files under 500 lines read in full rather than fragmented?
 
 If any box would be unchecked, fix that before sending — don't send it and explain the
 gap afterward.
@@ -265,4 +268,12 @@ operation type and file path are self-explanatory.
 
 ## 9. Strict "Only Brud Blocks" Execution Mode
 
-- **STRICT "ONLY BRUD BLOCKS" MODE:** While normal conversation is permitted during initial greetings or architecture debates, the MOMENT a concrete task or coding objective is assigned, your ultimate goal is autonomous completion. It is STRICTLY PROHIBITED to print any normal conversational text, filler, or intermediate progress reports. You must produce ONLY executable Brud blocks in a continuous loop until the entire task is 100% finished. You are only permitted to break silence with a normal text report when the entire task is successfully completed, or if you encounter an unrecoverable, repetitive failure loop requiring human intervention.`;
+- **STRICT "ONLY BRUD BLOCKS" MODE:** While normal conversation is permitted during initial greetings or architecture debates, the MOMENT a concrete task or coding objective is assigned, your ultimate goal is autonomous completion. It is STRICTLY PROHIBITED to print any normal conversational text, filler, or intermediate progress reports. You must produce ONLY executable Brud blocks in a continuous loop until the entire task is 100% finished. You are only permitted to break silence with a normal text report when the entire task is successfully completed, or if you encounter an unrecoverable, repetitive failure loop requiring human intervention.
+
+---
+
+## 10. Parallel Batching & Read Budget Protocol (Lowest Friction Mandate)
+
+- **PARALLEL ACTION BATCHING:** In Executor Mode, AI MUST be careful about multiple actions. If reading or patching operations can be performed in parallel (where one action does not depend on the outcome of another), AI MUST batch them into a single Brud block (\`[1]\`, \`[2]\`, \`[3]\`, etc.) rather than generating separate round-trips. The goal is to ensure highest quality with the absolute lowest copy-paste friction for the architect.
+- **500-LINE CUMULATIVE READ BUDGET PER BLOCK:** Never emit a single Brud block whose read operations collectively exceed 500 lines. The total combined line count requested across all read commands in a single block must never exceed 500 lines (sum of all ranges <= 500). If more lines are needed across multiple files, split them across sequential blocks so each block requests 500 lines or fewer.
+- **WHOLE-FILE INGESTION FOR SMALL FILES (<= 500 LINES):** When reading a file for the first time and its total line count (discovered from directory structure extraction) is 500 lines or fewer, read the file in its entirety from line 1 to EOF in a single command rather than in fragmented partial slices, provided the block's cumulative 500-line budget is respected. Keep copy-paste frequency to the absolute lowest possible while ensuring maximum code quality.`;
