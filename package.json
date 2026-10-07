@@ -127,11 +127,12 @@
     "build:core": "npm run build --workspace @brud/core",
     "build:ui": "npm run build --workspace @brud/ui",
     "build:protocol": "npm run build --workspace @brud/protocol",
+    "build:kernel": "npm run build --workspace @brud/kernel",
     "build:adapter": "npm run build --workspace @brud/vscode-adapter",
     "build:web": "npm run build --workspace brud-code-site",
     "dev:web": "npm run dev --workspace brud-code-site",
     "lint:web": "npm run lint --workspace brud-code-site",
-    "build:all": "npm run build:protocol && npm run build:core && npm run build:adapter && npm run build:ui",
+    "build:all": "npm run build:protocol && npm run build:kernel && npm run build:core && npm run build:adapter && npm run build:ui",
     "ci": "npm run build:all && npm run test:integration && npm run lint",
     "ci:quick": "npm run build:core && npm run test:integration"
   },

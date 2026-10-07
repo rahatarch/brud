@@ -18,6 +18,8 @@ export * from './cleaner';
 export * from './api';
 export * from './settings';
 export * from './prompts';
+export * from './bridge/index.js';
+export * from './services/index.js';
 export { globalToolRegistry } from './tool-registry/registry';
 export { initializeToolRegistry } from './tool-registry/init';
 export type { ToolDoc } from './tool-registry/types';
