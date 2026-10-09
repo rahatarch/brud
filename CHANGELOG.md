@@ -4,6 +4,22 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [0.1.4] - 2026-10-09
+
+### Added
+- Microkernel execution engine (`@brud/kernel`) providing deterministic workspace sandboxing, sub-second project navigation, and fault-tolerant panic error boundaries.
+- Real-time terminal output streaming panel (`Brud Terminal Stream`) with live process interruptor (`killProcess`).
+- Line-range reading support (`start_line`/`end_line`) with automated boundary clamping in both YAML and legacy parsers.
+- Live workspace metadata injection (root, file counts, folder tally, density) appended on Master System Prompt copy.
+- Exact lines-of-code counts and binary classification tagging in structure extraction JSON.
+- Dynamic-width line-number gutters (` 35 | code`) with automated prefix stripping in search/replace blocks.
+- Configurable terminal safety setting (`brud.commandValidationEnabled`).
+- Parallel action batching protocol and cumulative 500-line read budget in Master System Prompt.
+
+### Changed
+- Redesigned Master System Prompt around the `GET_TOOL_INFO` zero-inference discovery mandate.
+- Core operations dispatch through the unified microkernel registry.
+
 ## [0.1.3] - 2026-10-01
 
 ### Added

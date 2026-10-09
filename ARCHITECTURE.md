@@ -8,6 +8,7 @@ Brud Code is a monorepo with clear separation between the platform-agnostic core
 
 ```
 packages/
+├── kernel/         — Standalone zero-dependency microkernel orchestrator (ServiceContainer, ExecutionPipeline)
 ├── core/           — Pure TypeScript engine, zero platform dependencies
 ├── protocol/       — Message contracts between layers
 ├── ui/             — React application with design system
@@ -25,6 +26,12 @@ tests/
 `apps/web` is a statically exported Next.js 15 site that serves as the marketing frontend and documentation hub for Brud Code. It is fully self-contained with zero runtime dependencies on the monorepo's packages or any private infrastructure. The site showcases live benchmarks, 3D interactive graphics, onboarding guides, and technical documentation. It uses `output: "export"` in Next.js to produce plain HTML/CSS/JS artifacts deployable to any standard web server or edge CDN.
 
 ## Core Engine
+
+### `@brud/kernel` — Microkernel Orchestrator
+
+`kernel/` is a standalone, zero-dependency TypeScript package that provides the `ServiceContainer` and `ExecutionPipeline` — the unified dispatch layer for all userspace operations. It enforces deterministic workspace sandboxing, wraps execution lifecycles in fault-tolerant panic boundaries, and routes all tool invocations through the microkernel registry.
+
+### `@brud/core` — Platform-Agnostic Engine
 
 The core engine is platform-agnostic TypeScript. It contains:
 
@@ -48,6 +55,8 @@ The core engine is platform-agnostic TypeScript. It contains:
 4. **Adapter Pattern** — Platform-specific code isolated in `packages/adapters/vscode/`. The `FileSystem` interface abstracts file I/O; `TerminalExecutor` abstracts terminal execution.
 5. **Snapshot System** — Hybrid full pre-snapshot + diff post-snapshot for efficient revert. Trash-based soft-delete with 7-day protection.
 6. **Workspace Validation** — Every file path is validated against workspace boundaries before any operation executes.
+7. **Microkernel Dispatch** — All 21 operations route through the `@brud/kernel` `ExecutionPipeline`, providing deterministic sandboxing, panic boundaries, and a unified capability registry.
+8. **Dependency Flow** — Packages follow a strict dependency chain: `@brud/protocol` → `@brud/kernel` → `@brud/core` → `@brud/vscode-adapter` → `apps/vscode`.
 
 ## Build System
 

@@ -1,79 +1,80 @@
 # Release Notes — v0.1.4
 
-**Release Date:** 2026-10-03
+**Release Date:** 2026-10-09
 
 ## Overview
 
-v0.1.4 introduces structural intelligence for large-scale codebase navigation, a zero-inference protocol governance layer, platform clipboard invariants, and ergonomic terminal safety controls. This release shifts Brud from a capable editor assistant toward a production-grade AI tool interface that respects workspace boundaries without sacrificing power.
+v0.1.4 introduces a hardened microkernel execution architecture, structural intelligence for large-scale codebase navigation, zero-inference protocol governance, platform clipboard invariants, and real-time terminal streaming controls. This release establishes Brud as a high-performance, fault-tolerant execution engine that enforces strict workspace containment and delivers sub-second project navigation for demanding development workflows.
 
 ---
 
 ## Features
 
-### Live Workspace Metadata Injection on Master Prompt Copy (`a57f56e`)
+### Core Engine Hardening & Accelerated Execution Pipeline
 
-When the "Master System Prompt" (`master-system`) is copied from the Prompt Library with an open workspace, Brud now automatically extracts codebase metadata via the core metadata extractor and appends a structured Markdown block to the clipboard content. The injected block includes:
+All 21 userspace operations now dispatch through a decoupled microkernel execution pipeline (`@brud/kernel`), providing major performance, reliability, and security advancements:
 
-- **Project Root** — basename of the workspace directory
-- **Total Files** — aggregate non-text-binary file count
-- **Total Folders** — aggregate directory count (excluding ignored directories like `node_modules`, `.next`, etc.)
-- **Most Dense Directory** — the subdirectory with the highest file count and its tally
-
-If no workspace is open or metadata extraction fails, the raw prompt content is copied without metadata. A success toast confirms when the augmented copy succeeds. This bridges the gap between static prompt templates and the live project context needed for accurate AI-driven code operations.
-
-### Structure Extraction LOC & Binary Tagging (`37d4276`)
-
-The project-structure JSON output now annotates every file entry with its **line-of-code count** and a **binary/text classification flag**. AI callers receive token-efficient structural maps enriched with:
-
-- `loc` — total non-empty lines for quick size estimation
-- `binary` — boolean indicator so tools can skip non-text files automatically
-
-This eliminates the need for secondary stat calls during prompt construction and makes structure extraction a single-source-of-truth for codebase topology.
-
-### Line-Range Reading (`start_line`/`end_line`, YAML + Legacy Parsers, Validator Auto-Clamping) (`47db8b4`)
-
-Both the YAML‑based and legacy plain‑text parsers now support precise **line-range extraction** via `start_line`/`end_line` parameters. Range requests that exceed available content are silently clamped to the file bounds rather than rejected, enabling AI tools to request generous windows without error handling overhead.
-
-- YAML parser: range-aware read delegation with bound clamping
-- Legacy parser: equivalent range support for non-YAML configurations
-- Universal validator: auto-clamps out-of-bounds ranges before any parser is invoked
-
-### Zero-Inference Protocol Governance (`masterPrompt.ts`, `GET_TOOL_INFO` Mandate) (`bffdb24`)
-
-The Master Prompt has been purged of all implicit agent instructions and replaced with the **`GET_TOOL_INFO`** mandate. Every AI caller must explicitly discover tool capabilities through the tool-info endpoint rather than relying on baked-in prompt heuristics. This eliminates:
-
-- Prompt drift between distributed agent configurations
-- Hidden assumptions about tool behaviour embedded in natural-language instructions
-- Version skew when the tool surface evolves independently of prompt snapshots
-- **Master Prompt Path Resolution Rule**: Added explicit instructions to the Master System Prompt enforcing that all file paths must be strictly relative to the workspace root (e.g. `src/App.tsx`), prohibiting absolute paths and leading `./` prefixes
-- **Strict "Only Brud Blocks" Execution Mode**: Added explicit enforcement to the Master Prompt prohibiting conversational chatter or intermediate pleasantries once a task is assigned. The AI must produce exclusively executable Brud blocks in an autonomous loop until completion.
-- **Anti-Stale-Training Override Warning**: Injected a mandatory warning into every tool usage prompt and tool registry documentation entry instructing AI models to prioritize Brud's rules over stale internal training knowledge and to follow the exact Example block format without deviation.
-- **Clipboard Protocol Anchor Enhancement**: Added an explicit `GET_TOOL_INFO` empty-block example (`<<<<<<< GET_TOOL_INFO [1]`) to the clipboard copy protocol anchor, ensuring AI models never make syntax mistakes when discovering tools after long conversation turns.
-
-### Platform-Scale Clipboard Invariants (`UnifiedResultsPanel.tsx` Protocol Anchor) (`1ab2e98`)
-
-Automatically appends the three core protocol invariants (**Zero Inference**, **Minimal Blast Radius / Surgical Proportionality**, and **Empirical Grounding**) to the end of every copied clipboard result. This leverages LLM recency bias to prevent multi-turn attention decay, tool fixation, and full-file rewrite drift during long coding sessions.
-
-### Configurable Terminal Safety Toggle (`brud.commandValidationEnabled`)
-
-Added a user setting in the Management Panel and configuration schema allowing advanced power users to toggle off dangerous command security checks (`sudo`, `rm -rf`, etc.) when running trusted system provisioning scripts. Terminal validation is now properly deferred to the execution engine.
-
-### Read Output Line-Number Gutters (` 35 | code`) & Auto-Sanitizer Defense (`bca0545`)
-
-File read outputs now display dynamic-width line-number gutters in the format ` 35 | code`, aligning each line with its absolute file offset for precise AI referencing. Paired with an **Auto-Sanitizer Defense** in `search_replace` and `search_replace_multi`, which automatically strips accidental line-number prefixes (`/^\s*\d+\s*\|\s?/gm`) from AI-pasted `SEARCH` blocks while preserving exact indentation, preventing false `SEARCH_NOT_FOUND` errors.
+- **Inescapable Workspace Sandboxing:** File operations enforce deterministic root containment, mathematically isolating operations to the active project workspace and preventing accidental file mutations outside project boundaries.
+- **Sub-Second Project Traversal:** Read-only inspection tools (`codebase_metadata`, `extract_structure`, `read_file`) bypass redundant session scaffolding and leverage optimized directory pruning (`.turbo`, `.vscode`, `.git`, `temp`), accelerating codebase navigation from multi-second scans down to sub-300ms responsiveness.
+- **Fault-Tolerant Panic Boundaries:** Execution lifecycles are wrapped in an isolated error boundary, capturing unhandled process exceptions and converting them into structured diagnostics without risking extension host crashes or UI freezes.
+- **Dynamic Extensibility:** Tool dispatching operates through an open capability registry, laying the operational foundation for forthcoming Model Context Protocol (MCP) and third-party plugin integrations.
 
 ### Real-Time Terminal Output Streaming & Process Interruptor
 
-Added a dedicated live terminal streaming panel (`Brud Terminal Stream`) that opens automatically before execution, rendering stdout/stderr chunks in real time. Includes an active "Kill Process" switch to abort runaway or hanging shell processes, dynamic clipboard button locking during flight, and automatic panel cleanup upon completion.
+Added a dedicated live terminal streaming panel (`Brud Terminal Stream`) that activates automatically upon command execution, rendering stdout and stderr streams in real time. Includes an active "Kill Process" interrupt switch to abort hanging or runaway shell tasks, dynamic action locking during execution, and automatic cleanup upon process completion.
 
-### Parallel Batching Protocol & Cumulative 500-Line Read Budget (`masterPrompt.ts`)
+### Live Workspace Metadata Injection on Master Prompt Copy (`a57f56e`)
 
-Added Section 10 to the Master System Prompt establishing strict batching ergonomics and a cumulative line-budget ceiling to minimize user copy-paste friction while ensuring high-quality operations:
+When the "Master System Prompt" (`master-system`) is copied from the Prompt Library with an open workspace, Brud automatically extracts live project topology and appends a structured Markdown block directly to the clipboard:
 
-- **Parallel Action Batching (Lowest Friction Mandate)**: In Executor Mode, the AI is required to bundle all independent read or patch operations into a single consolidated Brud block (`[1]`, `[2]`, `[3]`, etc.) rather than generating multi-turn back-and-forth round trips.
-- **Cumulative 500-Line Read Budget per Block**: Imposed a hard limit where the total combined line count requested across all read operations in a single Brud block must not exceed 500 lines ($\sum \text{ranges} \le 500$), preventing context exhaustion and parser overhead.
-- **Whole-File Ingestion for Small Files ($\le$ 500 lines)**: Directed the AI to read files with 500 lines or fewer completely in full (Line 1 to EOF) on initial inspection rather than taking fragmented partial slices, ensuring complete architectural context up front.
-- **Summary Checklist Synchronization**: Updated Section 7 (Pre-Flight Summary Checklist) to mandate verification of batching, the 500-line read ceiling, and full-file reading for small files before emitting any instructions.
+- **Project Root:** Canonical identifier of the active project directory
+- **Total Files:** Aggregate non-binary file count
+- **Total Folders:** Total directory tally (excluding ignored build artifacts)
+- **Most Dense Directory:** Subdirectory containing the highest file count and density metric
+
+This bridges the gap between static prompt templates and live repository topology, providing AI models with accurate structural context up front.
+
+### Structure Extraction LOC & Binary Tagging (`37d4276`)
+
+Project-structure outputs now annotate every file entry with an exact **lines-of-code tally** and a **binary/text classification flag**. AI callers receive token-efficient structural maps enriched with:
+
+- `loc` — Total non-empty lines for instant file scale estimation
+- `binary` — Boolean indicator enabling tools to skip non-text assets automatically
+
+This establishes structural extraction as an efficient, single-source-of-truth representation of repository topology.
+
+### Line-Range Reading & Automatic Boundary Clamping (`47db8b4`)
+
+Both the YAML-based and legacy plain-text parsers now support surgical **line-range extraction** via `start_line` and `end_line` parameters. Range requests exceeding physical file bounds are automatically clamped to valid line boundaries without rejecting execution, enabling AI tools to request broad reading windows safely.
+
+### Zero-Inference Protocol Governance (`masterPrompt.ts`, `GET_TOOL_INFO` Mandate) (`bffdb24`)
+
+The Master Prompt has been redesigned around an explicit tool discovery protocol, mandating the use of the **`GET_TOOL_INFO`** capability prior to execution:
+
+- **Elimination of Implicit Assumptions:** AI callers must dynamically query tool capabilities and syntax contracts rather than relying on brittle in-prompt heuristics.
+- **Strict Relative Path Resolution:** The Master Prompt enforces strictly relative file paths (e.g. `src/App.tsx`), prohibiting absolute filesystem paths and leading `./` prefixes.
+- **Autonomous Execution Loop:** Directs AI assistants to output exclusively executable instructions once a task is assigned, eliminating conversational filler.
+- **Clipboard Protocol Anchoring:** Standardized discovery examples are appended to clipboard copies to ensure consistent parameter syntax across multi-turn interactions.
+
+### Platform-Scale Clipboard Invariants (`1ab2e98`)
+
+Appends core execution invariants (**Zero Inference**, **Minimal Blast Radius / Surgical Proportionality**, and **Empirical Grounding**) to the footer of every copied clipboard output, mitigating multi-turn context degradation and preventing unprompted full-file rewrites during long coding sessions.
+
+### Configurable Terminal Safety Toggle (`brud.commandValidationEnabled`)
+
+Added a configuration setting in the Management Panel and settings schema allowing developers to toggle off dangerous command validation filters (`sudo`, `rm -rf`, etc.) when executing trusted system provisioning scripts.
+
+### Read Output Line-Number Gutters & Auto-Sanitizer Defense (`bca0545`)
+
+File read outputs now render aligned line-number gutters (` 35 | code`) for precise code referencing. Paired with an **Auto-Sanitizer Defense** in search/replace handlers that automatically strips accidental line-number prefixes (`/^\s*\d+\s*\|\s?/gm`) from pasted replacement blocks while preserving exact indentation.
+
+### Parallel Action Batching & Cumulative 500-Line Read Budget
+
+Establishes strict batching ergonomics to minimize copy-paste roundtrips while enforcing context efficiency:
+
+- **Parallel Action Batching:** Directs assistants to consolidate independent file modifications or read operations into a single structured instruction block (`[1]`, `[2]`, `[3]`, etc.).
+- **Cumulative 500-Line Read Budget:** Enforces a 500-line cumulative ceiling per instruction block to prevent token exhaustion.
+- **Whole-File Ingestion for Small Files:** Files containing 500 lines or fewer are ingested completely on initial read rather than through fragmented partial slices.
 
 ---
 
