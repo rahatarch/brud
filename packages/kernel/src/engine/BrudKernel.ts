@@ -11,6 +11,7 @@ export interface KernelExecuteOptions {
   signal?: AbortSignal;
   metadata?: Record<string, unknown>;
   maxCallDepth?: number;
+  workspaceRoot?: string;
 }
 
 export interface PromptManifestEntry {
@@ -57,7 +58,10 @@ export class BrudKernel {
     const kernel = this;
     const effectiveMaxDepth = options?.maxCallDepth ?? this.maxCallDepth;
     const sessionId = crypto.randomUUID();
-    const workspaceRoot = process.cwd();
+    const workspaceRoot =
+      options?.workspaceRoot ??
+      (typeof options?.metadata?.workspaceRoot === 'string' ? options.metadata.workspaceRoot : undefined) ??
+      process.cwd();
 
     async function invokeImpl<TInput, TOutput>(
       this: ExecutionContext,

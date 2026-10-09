@@ -98,4 +98,57 @@ describe('Bridge Kernel Integration', () => {
     assert.strictEqual(result.status, 'failed');
     assert.ok(result.error, 'should report an error for path outside workspace');
   });
+
+  it('executes codebase_metadata through kernel with status success and JSON message', async () => {
+    const kernel = await bootCoreKernel({ fs: nodeFs });
+
+    const result = await kernel.execute('codebase_metadata', {
+      path: '.',
+    });
+
+    assert.strictEqual(result.status, 'success');
+    assert.ok(result.message, 'message should be non-empty');
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.message);
+    } catch {
+      assert.fail('result.message should be valid JSON');
+    }
+    assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed));
+    const obj = parsed as Record<string, unknown>;
+    assert.ok('codebase_metadata' in obj, 'message should contain codebase_metadata key');
+    const meta = obj.codebase_metadata as Record<string, unknown>;
+    assert.ok(typeof meta.totalFiles === 'number', 'codebase_metadata.totalFiles should be a number');
+  });
+
+  it('executes codebase_metadata with history undefined without throwing', async () => {
+    const kernel = await bootCoreKernel({ fs: nodeFs });
+
+    await assert.doesNotReject(
+      async () => kernel.execute('codebase_metadata', { path: '.' }),
+    );
+  });
+
+  it('executes read_file through kernel and bypasses history scaffolding', async () => {
+    const filePath = 'read-test-bypass.txt';
+    const resolvedPath = pathModule.join(tempDir, filePath);
+    await nodeFs.writeFile(resolvedPath, 'read bypass test content');
+
+    const kernel = await bootCoreKernel({ fs: nodeFs });
+
+    const result = await kernel.execute('read_file', {
+      path: filePath,
+    });
+
+    assert.strictEqual(result.status, 'success');
+    assert.ok(result.message, 'message should be non-empty');
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(result.message);
+    } catch {
+      assert.fail('result.message for read_file should be valid JSON');
+    }
+    const obj = parsed as Record<string, unknown>;
+    assert.ok(obj, 'should have parsed content');
+  });
 });

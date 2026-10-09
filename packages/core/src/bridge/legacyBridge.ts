@@ -38,11 +38,22 @@ export function createLegacyOperationHandler(kind: string): OperationHandler {
       const operation = { kind, index: "0", ...(input as Record<string, unknown>) } as FileOperation;
       const workspaceRoot = context.workspaceRoot;
 
+      const READ_ONLY_KINDS = new Set([
+        'codebase_metadata',
+        'extract_structure',
+        'read_file',
+        'read_files',
+        'read_directory',
+        'search_files',
+        'get_tool_info',
+      ]);
+      const historyArg = READ_ONLY_KINDS.has(kind) ? undefined : history;
+
       const legacyResult = await executeFileOperations(
         [operation],
         fs,
         [workspaceRoot],
-        history,
+        historyArg,
         undefined,
         terminal,
         undefined,

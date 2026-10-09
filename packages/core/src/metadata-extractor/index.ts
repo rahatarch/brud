@@ -3,7 +3,8 @@ import { FileSystem } from '../types/filesystem';
 
 const IGNORED_DIRECTORIES = new Set([
   'node_modules', 'dist', 'target', 'build', 'out', 'coverage',
-  '.next', '.nuxt', '.cache', 'vendor', 'bower_components',
+  '.next', '.nuxt', '.cache', '.turbo', '.vscode', '.git',
+  'vendor', 'bower_components', 'temp', 'tmp',
   '__pycache__', '.venv', 'venv',
 ]);
 

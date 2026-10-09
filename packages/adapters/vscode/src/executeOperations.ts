@@ -70,6 +70,24 @@ export async function executeOperationsFromVSCode(
   }> = [];
   const errors: Array<{ code: string; friendly: string; details: string; path?: string; command?: string }> = [];
   let lastSessionId: string | undefined;
+  const combinedPayload: Record<string, unknown> = {};
+
+  function tryMergeMessage(message: string): void {
+    if (!message) return;
+    try {
+      const parsed = JSON.parse(message);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const STRUCTURED_KEYS = new Set(['codebase_metadata', 'extractionResults', 'readResults', 'search_results']);
+        for (const key of STRUCTURED_KEYS) {
+          if (key in parsed && parsed[key] !== undefined) {
+            combinedPayload[key] = parsed[key];
+          }
+        }
+      }
+    } catch {
+      /* not JSON, skip */
+    }
+  }
 
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
@@ -78,6 +96,7 @@ export async function executeOperationsFromVSCode(
         operation.kind,
         operation,
         {
+          workspaceRoot,
           metadata: {
             workspaceRoot,
             sessionId: sessionIdOverride,
@@ -90,7 +109,11 @@ export async function executeOperationsFromVSCode(
 
       const legacyResult = result.data as FileOperationResult | undefined;
       if (legacyResult) {
+        tryMergeMessage(legacyResult.message);
         if (legacyResult.operationResults) {
+          for (const opRes of legacyResult.operationResults) {
+            tryMergeMessage(opRes.message);
+          }
           operationResults.push(...legacyResult.operationResults);
         }
         if (legacyResult.errors) {
@@ -127,11 +150,14 @@ export async function executeOperationsFromVSCode(
   }
 
   const anySuccess = operationResults.some(r => r.status === 'success');
+  const summaryMessage = anySuccess
+    ? `Completed ${operationResults.filter(r => r.status === 'success').length} of ${operations.length} operations.`
+    : 'All operations failed.';
   return {
     success: anySuccess,
-    message: anySuccess
-      ? `Completed ${operationResults.filter(r => r.status === 'success').length} of ${operations.length} operations.`
-      : 'All operations failed.',
+    message: Object.keys(combinedPayload).length > 0
+      ? JSON.stringify(combinedPayload)
+      : summaryMessage,
     errors,
     operationResults,
     sessionId: lastSessionId,

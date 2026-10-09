@@ -318,6 +318,55 @@ describe('BrudKernel recursion & invoke', () => {
   });
 });
 
+// ── Workspace Root Propagation Tests ────────────────────────────
+
+describe('BrudKernel workspaceRoot', () => {
+  let kernel: BrudKernel;
+
+  beforeEach(() => {
+    kernel = new BrudKernel();
+  });
+
+  it('passes workspaceRoot from options to context', async () => {
+    const customRoot = '/custom/workspace/path';
+    const handler: OperationHandler<void, string> = {
+      kind: 'test_workspace',
+      execute: async (ctx) => {
+        return { status: 'success', data: ctx.workspaceRoot };
+      },
+    };
+    kernel.operations.register(handler);
+    const result = await kernel.execute<void, string>('test_workspace', undefined, { workspaceRoot: customRoot });
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(result.data, customRoot);
+  });
+
+  it('child context inherits workspaceRoot from parent via invoke', async () => {
+    const customRoot = '/custom/workspace/path';
+    const inner: OperationHandler<void, string> = {
+      kind: 'inner_workspace',
+      execute: async (ctx) => {
+        return { status: 'success', data: ctx.workspaceRoot };
+      },
+    };
+    const outer: OperationHandler<void, string> = {
+      kind: 'outer_workspace',
+      execute: async (ctx) => {
+        const innerRes = await ctx.invoke<void, string>('inner_workspace', undefined);
+        if (innerRes.status === 'success') {
+          return { status: 'success', data: innerRes.data };
+        }
+        return innerRes as OperationResult<string>;
+      },
+    };
+    kernel.operations.register(inner);
+    kernel.operations.register(outer);
+    const result = await kernel.execute<void, string>('outer_workspace', undefined, { workspaceRoot: customRoot });
+    assert.strictEqual(result.status, 'success');
+    assert.strictEqual(result.data, customRoot);
+  });
+});
+
 // ── Dynamic Prompt Tests ────────────────────────────────────────
 
 describe('BrudKernel prompt manifest', () => {
