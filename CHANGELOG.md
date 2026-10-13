@@ -4,6 +4,16 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [0.1.5] - 2026-10-13
+
+### Fixed
+- **Reading Multiple Files at Once (#11):** Fixed an issue where asking Brud Code to read multiple files in a single request only showed the last file in the report. All requested files are now displayed together in the results view.
+- **Searching with Specific Folder Paths (#11):** Improved file search so entering specific file paths with folders (such as `app/components/header.ts`) correctly finds and opens the file.
+
+### Added
+- **Choose Specific Files with Braces (`{...}`) (#11):** You can now target multiple specific files in a single search using curly brackets, such as `src/{header,footer}.ts`, without having to match unrelated files.
+- **Comma-Separated File Lists (#11):** You can now list multiple specific files separated by commas (such as `src/app.ts, src/utils.ts`) to select only the exact files you need.
+
 ## [0.1.4] - 2026-10-09
 
 ### Added

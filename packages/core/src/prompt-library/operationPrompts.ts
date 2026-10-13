@@ -248,6 +248,7 @@ Exclude: [patterns to skip, optional]
 - MaxDepth: how deep to follow imports (default 5, 0 for unlimited)
 - importSyntax: custom import pattern regex for non-standard languages (optional)
 - Exclude: glob patterns to skip when following imports (optional)
+- Multiple READ_FILE blocks ([1], [2], etc.) may be batched together in one request to read multiple distinct files across different directories in a single turn.
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -258,13 +259,13 @@ export const readFilesPrompt = `Use READ_FILES to read multiple files matching a
 Describe the files to read below:
 
 <<<<<<< READ_FILES [1]
-Pattern: **/*.ts
-Scope: src
+Pattern: src/{header,footer}.tsx
+Scope: .
 MaxResults: 10
 isImportRead: false
 >>>>>>> END READ_FILES [1]
 
-- Pattern: glob pattern to match files
+- Pattern: glob pattern to match files. Supports brace expansion (e.g. 'src/{header,footer}.tsx' or 'src/{auth,session}.ts') and comma-separated path lists (e.g. 'src/app.ts, src/utils.ts') to select specific files without matching unrelated files.
 - Scope: directory to search (optional, default workspace root)
 - MaxResults: maximum files to return (optional, default unlimited)
 - isImportRead: true to also read imported files (optional, default false)

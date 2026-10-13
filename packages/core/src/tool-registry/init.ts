@@ -309,13 +309,13 @@ Depth: [number or 0 for unlimited]
       { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return. Not set returns all results.', default: 'unlimited' },
     ],
     example: `<<<<<<< SEARCH_FILES [1]
-Pattern: **/*.ts
-Exclude: *.test.ts
-Scope: src
+Pattern: src/{header,footer}.tsx
+Scope: .
 MaxResults: 500
 >>>>>>> END SEARCH_FILES [1]`,
     rules: [
       'Returns file paths, names, extensions, and sizes',
+      'Pattern supports brace expansion (e.g. \'{header,footer}.ts\' or \'src/{auth,session}.ts\') and comma-separated path lists to select specific files without matching unrelated files through wildcards.',
       'No limit by default. Specify maxResults to cap results.',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
@@ -350,6 +350,7 @@ Exclude: [patterns to skip, optional]
       'importSyntax: custom import pattern regex for non-standard languages',
       'For large files, specify Start Line and End Line to slice only the needed lines and avoid context exhaustion.',
       'End Line automatically clamps to end-of-file if greater than total lines; Start Line must be within file bounds.',
+      'Multiple READ_FILE blocks ([1], [2], etc.) may be batched together in a single request to read multiple distinct files across different directories in a single turn.',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -366,13 +367,13 @@ Exclude: [patterns to skip, optional]
       { name: 'isImportRead', type: 'boolean', required: false, description: 'Follow imports', default: 'false' },
     ],
     example: `<<<<<<< READ_FILES [1]
-Pattern: **/*.ts
-Scope: src
-MaxResults: 10
+Pattern: src/{header,footer}.tsx
+Scope: .
 isImportRead: false
 >>>>>>> END READ_FILES [1]`,
     rules: [
       'Pattern is a glob pattern',
+      'Pattern supports brace expansion (e.g. \'{header,footer}.ts\' or \'src/{auth,session}.ts\') and comma-separated path lists to select specific files without matching unrelated files through wildcards.',
       'No limit by default. Specify maxResults to cap results.',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
