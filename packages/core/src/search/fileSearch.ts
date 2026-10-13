@@ -42,6 +42,13 @@ function matchesPatterns(filePath: string, patterns: string[], baseDir: string):
       if (basename.toLowerCase().includes(pattern.toLowerCase()) || nameWithoutExt.toLowerCase().includes(pattern.toLowerCase())) {
         return true;
       }
+      if (pattern.includes('/') || pattern.includes('\\')) {
+        const normalizedRel = relativePath.replace(/\\/g, '/');
+        const normalizedPat = pattern.replace(/\\/g, '/');
+        if (normalizedRel === normalizedPat || normalizedRel.endsWith(normalizedPat) || normalizedRel.toLowerCase().includes(normalizedPat.toLowerCase())) {
+          return true;
+        }
+      }
     }
   }
   return false;

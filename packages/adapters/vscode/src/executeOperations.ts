@@ -80,7 +80,12 @@ export async function executeOperationsFromVSCode(
         const STRUCTURED_KEYS = new Set(['codebase_metadata', 'extractionResults', 'readResults', 'search_results']);
         for (const key of STRUCTURED_KEYS) {
           if (key in parsed && parsed[key] !== undefined) {
-            combinedPayload[key] = parsed[key];
+            if (Array.isArray(parsed[key])) {
+              const existing = Array.isArray(combinedPayload[key]) ? (combinedPayload[key] as any[]) : [];
+              combinedPayload[key] = [...existing, ...(parsed[key] as any[])];
+            } else {
+              combinedPayload[key] = parsed[key];
+            }
           }
         }
       }

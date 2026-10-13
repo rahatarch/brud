@@ -35,7 +35,11 @@ export function createLegacyOperationHandler(kind: string): OperationHandler {
       let settings: BrudSettings = DEFAULT_SETTINGS;
       try { settings = context.resolve<BrudSettings>(CoreTokens.Settings); } catch { }
 
-      const operation = { kind, index: "0", ...(input as Record<string, unknown>) } as FileOperation;
+      const operation = {
+        kind,
+        index: (input as any)?.index ?? "0",
+        ...(input as Record<string, unknown>)
+      } as FileOperation;
       const workspaceRoot = context.workspaceRoot;
 
       const READ_ONLY_KINDS = new Set([

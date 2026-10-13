@@ -3,6 +3,29 @@ import { BrudAPI, BrudError, missingFieldError, missingIndexError } from '../api
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'TERMINAL_COMMAND_RAW' | 'TERMINAL_INTERACTIVE_RAW' | 'GET_TOOL_INFO';
 
+function splitRespectingBraces(input: string): string[] {
+  const result: string[] = [];
+  let current = '';
+  let braceDepth = 0;
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    if (char === '{') {
+      braceDepth++;
+      current += char;
+    } else if (char === '}') {
+      braceDepth = Math.max(0, braceDepth - 1);
+      current += char;
+    } else if (char === ',' && braceDepth === 0) {
+      if (current.trim()) result.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+  if (current.trim()) result.push(current.trim());
+  return result;
+}
+
 export function parseLegacyFormat(input: string, workspaceFolders: string[] = []): FileOperation[] {
   const operations: FileOperation[] = [];
   const lines = input.split(/\r?\n/);
@@ -993,7 +1016,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (patternMatch) {
-        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        currentSearchPatterns = splitRespectingBraces(patternMatch[1]);
         continue;
       }
       if (excludeMatch) {
@@ -1023,7 +1046,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (patternMatch) {
-        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        currentSearchPatterns = splitRespectingBraces(patternMatch[1]);
         continue;
       }
       if (excludeMatch) {
@@ -1055,7 +1078,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (patternMatch) {
-        currentSearchPatterns = patternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        currentSearchPatterns = splitRespectingBraces(patternMatch[1]);
         continue;
       }
       if (excludeMatch) {
@@ -1131,7 +1154,7 @@ currentTerminalEnvLines = [];
         continue;
       }
       if (readPatternMatch) {
-        currentSearchPatterns = readPatternMatch[1].split(',').map(s => s.trim()).filter(s => s.length > 0);
+        currentSearchPatterns = splitRespectingBraces(readPatternMatch[1]);
         continue;
       }
       if (readExcludeMatch) {
