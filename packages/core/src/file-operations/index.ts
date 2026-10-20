@@ -1,7 +1,7 @@
 import path from 'path';
 import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
-import { validateWorkspacePath } from '../utils/workspacePath';
+import { isWithinWorkspaceFolder, validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
 import { BrudAPI } from '../api/index';
 import type { BrudError } from '../api/types';
@@ -161,7 +161,7 @@ export async function executeFileOperations(
           const searchDirectory = operation.directory
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
-          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
             break;
           }
           const query: FileSearchQuery = {
@@ -967,7 +967,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1025,7 +1025,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1120,7 +1120,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,
@@ -1268,7 +1268,7 @@ operationResults.push({
             ? path.resolve(workspaceRoot, operation.directory)
             : path.resolve(workspaceRoot);
 
-          if (settings.workspaceBoundaryEnabled && !searchDirectory.startsWith(path.resolve(workspaceRoot))) {
+          if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
             errors.push(pathOutsideWorkspaceError(operation.directory || ''));
             operationResults.push({
               operationIndex: i,

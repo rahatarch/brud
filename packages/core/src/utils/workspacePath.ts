@@ -1,3 +1,4 @@
+import * as fs from 'fs';
 import * as path from 'path';
 import type { ValidationResult } from '../api/types';
 import { BrudAPI } from '../api/index';
@@ -6,9 +7,33 @@ export type WorkspacePathResult =
   | { valid: true; resolvedPath: string }
   | { valid: false; error: string };
 
-function isWithinWorkspaceFolder(inputPath: string, workspaceFolder: string): boolean {
-  const relative = path.relative(workspaceFolder, inputPath);
-  return !relative.startsWith('..') && !path.isAbsolute(relative);
+function nearestRealPath(target: string): string {
+  const resolved = path.resolve(target);
+  const missing: string[] = [];
+  let current = resolved;
+
+  for (;;) {
+    try {
+      const real = fs.realpathSync.native(current);
+      return missing.length === 0 ? real : path.join(real, ...missing.reverse());
+    } catch {
+      const parent = path.dirname(current);
+      if (parent === current) {
+        return resolved;
+      }
+      missing.push(path.basename(current));
+      current = parent;
+    }
+  }
+}
+
+export function canonicalizeWorkspacePath(target: string): string {
+  return nearestRealPath(target);
+}
+
+export function isWithinWorkspaceFolder(inputPath: string, workspaceFolder: string): boolean {
+  const relative = path.relative(nearestRealPath(workspaceFolder), nearestRealPath(inputPath));
+  return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
 export function getWorkspaceRootForPath(targetPath: string, workspaceFolders: string[]): string | null {
