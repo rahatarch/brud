@@ -3,7 +3,7 @@
 ## Document Control
 
 - **Classification:** Internal architectural specification
-- **Status:** Approved blueprint for implementation
+- **Status:** Approved target contract. The shipped behaviour of every subsection is tracked in **§9 Implementation Status Register**; a subsection whose behaviour differs from its text carries an `Implementation status` note at its head. This document is deliberately not rewritten to match the code, so the approved intent and the current reality stay separately readable.
 - **Audience:** Platform engineers, security reviewers, packaging maintainers, integration test authors
 - **Relation to Baseline:** Extends the Microkernel Architecture Specification (docs/architecture/microkernel-architecture-spec.md) with a defined machine-to-machine transport subsystem. This document introduces no exceptions to the Inversion Invariant; it formalizes how the existing pure orchestrator may be reached by external AI clients.
 
@@ -29,6 +29,8 @@ In all three cases the architectural contract is identical: the external client 
 
 ## 2. The Inversion Invariant & Architectural Boundaries
 
+> **Implementation status:** Deviated (D1). The package depends on `@brud/core` as well as the kernel and protocol contracts, by Architect direction. The one-way rule against any dependency on `apps/vscode`, `packages/ui`, or an editor adapter is enforced at build time. See §9.
+
 The Inversion Invariant, as established by the Microkernel Architecture Specification, states that `@brud/core` is a pure, zero-dependency orchestrator that never imports Node.js file system primitives, process management primitives, or editor host APIs. The MCP subsystem extends this invariant with a strictly symmetric boundary: the core MCP engine is an autonomous, platform-agnostic package named `packages/mcp`, and it is not a subsystem embedded inside `apps/vscode`.
 
 This separation of concerns guarantees the following architectural properties:
@@ -47,6 +49,8 @@ The dependency direction is rigid and one-way. The MCP package depends on the ke
 
 ### 3.1 The Standalone Protocol Engine
 
+> **Implementation status:** Partially enforced (D2, D3). The catalog is synthesized on demand, but from the shared tool registry rather than a kernel `promptDescriptor`; lifecycle states are tracked by the host service, not by a state machine inside the engine. See §9.
+
 The standalone protocol engine is the singleton runtime core of the subsystem. It owns the complete life of a server instance across four responsibilities.
 
 **Protocol lifecycle management.** The engine tracks the server state machine through distinct phases: initializing, listening, serving, draining, and stopped. Each phase transition is broadcast to attached observers so that host sensors and management panels can render accurate status without polling the transport.
@@ -59,6 +63,8 @@ The standalone protocol engine is the singleton runtime core of the subsystem. I
 
 ### 3.2 The Active Workspace Anchor
 
+> **Implementation status:** Deviated (D4). The workspace is supplied and canonicalized at start-up; there is no anchor channel, and switching projects restarts the server through the host. See §9.
+
 The server is deliberately stateless with respect to workspace identity at startup: it does not assume the current working directory at launch time is the intended project boundary. Instead, it ingests the active workspace filesystem path dynamically through a workspace anchor channel.
 
 The anchor is set through two equivalent routes. In an editor-hosted session, the VS Code extension observes the current workspace folder and pushes it to the server whenever the user opens a project or switches to another folder. In a headless session, the launcher supplies the workspace path through a startup configuration. In both routes the anchor takes effect only when explicitly delivered; a server that has received no anchor refuses to serve operations.
@@ -66,6 +72,8 @@ The anchor is set through two equivalent routes. In an editor-hosted session, th
 Upon delivery, the anchor is canonicalized: symbolic links are resolved, case folding is applied per platform rules, and the result is retained as the single enforcement root for the life of the server, or until a later anchor replaces it. Every subsequent request is validated against this root. A workspace switch therefore changes the perimeter of enforcement atomically; no operation begun under the previous anchor is allowed to complete outside the new boundary, and no new operation is admitted with the stale boundary.
 
 ### 3.3 The Inescapable Gatekeeper Shield
+
+> **Implementation status:** Deviated (D5). Every call passes the shared kernel validation layer and the checks run in the stated order, but path containment and command safety are gated by project settings and can be switched off. The MCP layer adds no gate of its own. See §9.
 
 Every incoming tool invocation, from every transport, passes through the Gatekeeper before the kernel sees it. The Gatekeeper is not an MCP-specific reimplementation of security logic; it is the same microkernel validation layer used by all internal callers. The MCP engine contributes only the discipline of routing: there is no bypass path, no administrative alias, and no trusted-client shortcut.
 
@@ -80,6 +88,8 @@ The practical effect is that external AI callers are physically barred from read
 
 ### 3.4 The Reversibility Layer
 
+> **Implementation status:** Partially enforced (D6). Snapshots and single-action undo hold for machine-invoked writes; the link back to the originating invocation does not exist, so history cannot distinguish AI-originated changes. See §9.
+
 The subsystem guarantees that actions executed by external AI models remain reversible under the same contract as interactive sessions. Before the kernel executes an admitted operation, the reversibility layer engages the history engine of the core to capture a pre-execution snapshot of every file the operation is about to affect. After execution completes, a post-execution diff snapshot is recorded. The two snapshots are linked to the originating invocation so that each machine-driven action is addressable as a discrete, reversible unit.
 
 This yields a single-action undo guarantee for the human user. Regardless of whether an edit was authored by a human prompt or by an AI model over the MCP transport, the user may roll the affected files back to their pre-invocation state with one action in the History interface. The transport adds no exception to the snapshot policy: a machine-invoked write is as reversible as an interactive one, and no operation can be excluded from snapshot capture.
@@ -92,6 +102,8 @@ The subsystem ships with a dual-transport architecture, each transport selected 
 
 ### 4.1 Server-Sent Events and HTTP Transport
 
+> **Implementation status:** Deviated (D7) and enforced (D8). The HTTP transport is stateless with JSON responses: no SSE stream, no provisional handles, no lifecycle events, no keep-alive. Deadline expiry and client-disconnect cancellation are enforced end to end from 2026-10-20 onward. See §9.
+
 The streaming transport is designed for long-running editor integration and for clients that benefit from incremental result delivery. It couples an HTTP endpoint for client-to-server requests with a Server-Sent Events stream for server-to-client notifications and responses.
 
 Request lifecycle follows a straightforward pattern. A client posts a structured request to the request endpoint. The server acknowledges it immediately with a provisional handle, queues it into the execution path, and later emits the completed outcome on the notification stream keyed to that handle. This decoupling allows the server to accept new requests while earlier invocations are still executing, and it allows the client to observe progress segments and terminal results in real time.
@@ -102,11 +114,15 @@ Connection management policy is explicit. The server applies an idle keep-alive 
 
 ### 4.2 Stdio Transport
 
+> **Implementation status:** Partially enforced (D9). Framing, byte-clean diagnostics and the deadline are enforced; end-of-stream draining is left to the transport library. See §9.
+
 The standard input/output transport targets direct process-pipe communication, which is the canonical wiring used by Claude Desktop and by command-line agent launchers. In this transport, the server is spawned as a child process by the external client, reads framed requests from its standard input stream, and writes framed responses to its standard output stream. Diagnostic and logging output are redirected exclusively to the standard error stream so that the protocol channel remains byte-clean.
 
 Stdio provides a degenerate but reliable lifecycle: the transport runs exactly as long as the owning process keeps the pipe open. When standard input reaches end-of-stream, the server treats it as a termination request and enters the draining phase, allowing in-flight operations to reach a safe checkpoint before the process exits. This makes the transport ideal for short-lived agent bursts in which the client owns the lifetime.
 
 ### 4.3 Loopback Binding, Port Allocation, and Socket Lifecycle
+
+> **Implementation status:** Mostly enforced (D10). Loopback-only binding, fail-closed fixed ports, ephemeral allocation and unconditional release are enforced; the peer-server identity probe at launch is not implemented. See §9.
 
 The HTTP-facing transport binds exclusively to the loopback interface by default. This policy ensures the server is reachable only from the local machine and is never published on a routable network interface without an explicit, deliberate override by a system administrator.
 
@@ -117,6 +133,8 @@ The socket lifecycle mirrors the server state machine. In the listening phase th
 ---
 
 ## 5. User Experience & Management Panel Integration
+
+> **Implementation status:** Partially enforced (D11, D12). Status, Start/Stop, and Auto-On are enforced; Auto-On is stored in `.brud/settings.json` rather than editor workspace configuration, and the exported configuration is a single URL block with no consumer selection or authorization preamble. See §9.
 
 The VS Code Management Panel hosts a dedicated MCP Server section that presents the subsystem as a first-class, observable service rather than a hidden background process. The section provides four capabilities.
 
@@ -135,6 +153,8 @@ The Management Panel is purely a remote control. It renders state and issues lif
 ## 6. Schema Conversion & Parameter Normalization Logic
 
 ### 6.1 Catalog Synthesis and Tool Enumeration
+
+> **Implementation status:** Deviated (D2) and enforced with a caveat (D13). Enumeration comes from the shared tool registry; twenty documented operations become twenty tools, and `get_tool_info` is intentionally not exposed to clients. The tool list is generated, but the parameter map is a second hand-maintained table guarded by tests. See §9.
 
 The translation between Brud's internal tool documentation and the standard object schemas expected by protocol clients is a pure, deterministic conversion function. Each registered operation in the kernel carries a prompt descriptor which declares the operation's purpose, its input fields, the type and arithmetic constraints of each field, and the shape of its result. The converter walks that descriptor and emits a standard tool schema for each operation, mapping descriptive metadata to summary and detail fields, input fields to typed parameters, and result declarations to output schemas.
 
@@ -169,6 +189,8 @@ The subsystem's central assumption, restated from the microkernel specification,
 **Privileged transport access.** A remote host might be tempted to treat the loopback-bound server as reachable network infrastructure. The defense is the loopback-only default binding, the port verification at launch, and the requirement that a routable interface be authorized only by explicit administrative override.
 
 ### 7.2 Fail-Closed Error Envelopes
+
+> **Implementation status:** Planned (D14). No four-field envelope exists yet. Current failures return sanitized prose with a coarse code; a reference identifier is issued only for internal faults, and per-call diagnostics are not written to the server log. Stack traces and workspace paths are stripped, which is the part of this section that is enforced. See §9.
 
 Every failure of the subsystem exits through a structured error envelope, and the envelope is fail-closed: a failure that cannot be classified receives the same non-specific diagnostic as a suspected attack, never a copious disclosure.
 
@@ -210,6 +232,8 @@ Exit criteria: opening a project with Auto-On enabled boots a visible, anchored,
 
 ### 8.3 Phase 3: Automated Integration Test Harness
 
+> **Implementation status:** Superseded (D15). On 2026-10-20 the Architect narrowed Phase 3 to a bridge contract suite rather than a duplicate of the kernel rejection matrix. What shipped is recorded in §9. The exit criteria below remain the original, unmet wording.
+
 This phase nails the subsystem's contract under continuous verification.
 
 - Build an integration harness that boots the engine in a controlled process, launches real transports, and asserts tool listing over each transport.
@@ -223,12 +247,66 @@ Exit criteria: the integration suite runs green in CI across the streaming trans
 
 ## Conformance Checklist
 
-The following invariants bind every phase and every future change to this subsystem.
+The following invariants bind every phase and every future change to this subsystem. Where
+the shipped system satisfies an invariant only partially, the bullet says so and points at
+§9; the invariant itself is not weakened.
 
 - No protocol code exists inside the editor host; the host is a sensor and a remote control only.
 - Every external invocation traverses the kernel validation layer; there is no bypass path.
-- Every executed operation is snapshot-captured and reversible regardless of caller identity.
-- Every failure returns a fail-closed structured envelope with no stack or path disclosure.
-- The tool catalog is synthesized from the operation registry on demand and is never duplicated by hand.
+- Every executed operation is snapshot-captured and reversible regardless of caller identity. — enforced; invocation provenance does not yet exist (D6).
+- Every failure returns a fail-closed structured envelope with no stack or path disclosure. — planned (D14); path and stack sanitization is enforced today.
+- The tool catalog is synthesized on demand and is never duplicated by hand. — enforced for the tool list; the parameter map is a guarded second table (D13).
 - Default bindings are loopback-only, and port conflicts fail closed at launch.
 - The MCP package imports no editor or application layer, enforced at build time.
+
+## 9. Implementation Status Register
+
+This register is the single source of truth for what the subsystem actually does. The body of
+this document states the target contract; this section states which parts of it are real.
+
+Vocabulary:
+
+- **Enforced** — the text matches behaviour, and a named test or module proves it.
+- **Deviated** — behaviour differs by an accepted architectural choice.
+- **Planned** — promised by this document, not built; no code path exists.
+- **Superseded** — replaced by a later Architect decision.
+
+### 9.1 Divergence Register
+
+| ID | Section | Requirement | Status | Evidence |
+|---|---|---|---|---|
+| D1 | §2 | MCP depends only on kernel and protocol contracts | Deviated | The package also depends on `@brud/core` (`packages/mcp/src/bootstrap.ts`). The ban on editor and UI imports is enforced by `scripts/check-boundaries.mjs` in CI. |
+| D2 | §3.1 | Catalog synthesized from kernel prompt descriptors | Deviated | Synthesis reads the shared tool registry (`packages/mcp/src/catalog.ts`); the kernel does not yet expose the descriptors this section assumes. |
+| D3 | §3.1 | Engine owns a five-phase lifecycle state machine | Deviated | Lifecycle is tracked by the host service with four states (`apps/vscode/src/mcp/McpServerService.ts`); the engine itself has no state machine. |
+| D4 | §3.2 | Anchor delivered through a channel; unanchored server refuses work | Deviated | The workspace is required and canonicalized at start-up (`packages/mcp/src/cli.ts`, `packages/mcp/src/bootstrap.ts`); switching projects restarts the server and assigns a new port. |
+| D5 | §3.3 | Containment and command safety are unconditional | Deviated | Both are gated by project settings (`packages/core/src/settings/types.ts`); the MCP layer adds no gate. With containment disabled, the perimeter is advisory. |
+| D6 | §3.4 | Each machine action is linked to its originating invocation | Planned | History records an empty prompt and no origin marker (`packages/core/src/bridge/legacyBridge.ts`), so AI-originated changes are not distinguishable. |
+| D7 | §4.1 | SSE stream, provisional handles, lifecycle events, keep-alive | Deviated | The HTTP transport is stateless with JSON responses (`packages/mcp/src/http.ts`); there is no event stream. |
+| D8 | §4.1 | Deadline terminates the invocation; client abort cancels it | Enforced | Deadline race plus signal propagation (`packages/mcp/src/limits.ts`, `packages/core/src/file-operations/index.ts`), proven by `packages/mcp/src/__tests__/http.test.ts`, `packages/mcp/src/__tests__/server.test.ts` and `packages/core/src/file-operations/abort.test.ts`. |
+| D9 | §4.2 | End-of-stream enters a draining phase | Planned | Framing, clean diagnostics and the deadline are enforced (`packages/mcp/src/server.ts`, `packages/mcp/src/cli.ts`); draining is left to the transport library. |
+| D10 | §4.3 | Launch verifies the port is not a peer Brud server | Planned | Only bind-conflict detection exists (`packages/mcp/src/http.ts`). |
+| D11 | §5 | Auto-On stored in workspace configuration | Superseded | Stored as `mcpAutoOn` in `.brud/settings.json`, Architect decision of 2026-10-20 (`packages/core/src/settings/types.ts`). |
+| D12 | §5 | Export carries transport descriptor, authorization preamble, consumer selection, live anchor | Planned | The export is a single URL block (`apps/vscode/src/mcp/mcpConfig.ts`). |
+| D13 | §6.1 | Every documented operation yields exactly one tool; no hand-maintained mirror | Enforced with a caveat | Twenty documented operations become twenty tools and `get_tool_info` is deliberately not a client tool; the tool list is generated, but the parameter map is a second table guarded by cross-checks (`packages/mcp/src/normalize.ts`, `packages/mcp/src/__tests__/catalog.test.ts`, `packages/mcp/src/__tests__/normalize.test.ts`). |
+| D14 | §7.2 | Four-field fail-closed envelope with category, summary, reference and remediation | Planned | Failures return sanitized prose with coarse codes; a reference identifier is issued only for internal faults (`packages/mcp/src/dispatch.ts`). Path and stack sanitization is enforced. |
+| D15 | §8.3 | Full cross-transport rejection matrix in CI | Superseded | Phase 3 was narrowed by Architect decision of 2026-10-20 to a bridge contract suite plus transport enforcement; both are in CI. The kernel rejection matrix remains covered at the kernel layer. |
+| D16 | Checklist | All seven invariants hold | Mixed | See §9.2. |
+
+### 9.2 Conformance Invariants
+
+| Invariant | Status | Note |
+|---|---|---|
+| No protocol code inside the editor host | Enforced | The editor imports a start function and a status service only. |
+| Every invocation traverses the kernel validation layer | Enforced | One dispatch path; no alias or bypass. |
+| Every executed operation is snapshot-captured and reversible | Enforced, with caveat | Reversibility holds for machine writes; invocation provenance does not exist (D6). |
+| Every failure returns a fail-closed structured envelope | Planned | Sanitization holds; the four-field envelope does not exist (D14). |
+| Catalog synthesized on demand, never duplicated by hand | Enforced, with caveat | Tool list is generated; the parameter map is a guarded second table (D13). |
+| Loopback-only default, port conflicts fail closed | Enforced | Peer-server identity is not checked (D10). |
+| MCP imports no editor or application layer | Enforced | Build-time script in CI. |
+
+### 9.3 Maintenance Rule
+
+A change that ships behaviour differing from this document must add or update a row here in
+the same change, and must cite a code path or a test. A row may not cite an unverifiable
+claim. When a planned row becomes enforced, its status changes rather than its row being
+deleted, so the history of the gap remains visible.

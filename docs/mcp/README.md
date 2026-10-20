@@ -66,6 +66,8 @@ curl -s -X POST http://127.0.0.1:7717/mcp \
   -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
 ```
 
+Append `--timeout <seconds>` to either transport to change the per-call deadline.
+
 ## API Reference
 
 ### `bootMcpWorkspace(workspaceCandidate: string): Promise<McpWorkspace>`
@@ -110,9 +112,9 @@ Removes the workspace prefix (replacing it with a relative marker) and drops sta
 
 Builds a protocol server advertising only the `tools` capability. `options.signal` aborts in-flight execution.
 
-### `startStdioServer(workspaceCandidate, identity?): Promise<StartedStdioServer>`
+### `startStdioServer(workspaceCandidate, identity?, options?): Promise<StartedStdioServer>`
 
-Boots the workspace, builds the server, and connects the stdio transport. Standard output carries protocol frames only.
+Boots the workspace, builds the server, and connects the stdio transport. Standard output carries protocol frames only. `options.executionTimeoutMs` sets the per-call deadline; the CLI supplies 120 seconds unless `--timeout` overrides it.
 
 ### `startHttpServer(workspaceCandidate, options?): Promise<StartedHttpServer>`
 
@@ -144,9 +146,13 @@ From the repository root, `npm run test:mcp` runs the same suite and is part of 
 - **HTTP is stateless.** Each request creates its own server and transport. There are no sessions and no server-initiated notifications.
 - **Loopback only.** Binding any non-loopback host is refused. There is no authentication, so exposing the port is not supported.
 - **Backslashes and platforms.** Path anchoring uses Node's platform rules; results differ on Windows only in separator form.
+- **Deadlines.** Every call has a deadline (120 seconds by default, `--timeout <seconds>` to change it). When it expires the client receives an error result and the running command is stopped, not left running in the background.
+- **Client disconnects.** If an HTTP client drops the connection mid-call, the running command is stopped the same way.
+- **Interactive commands.** `terminal_interactive` cannot be interrupted once it starts; a deadline or disconnect prevents the next operation from starting but does not kill a running interactive session.
+- **Aborted batches.** Operations that finished before an abort stay applied and are recorded in history, so they can be reverted like any other change.
 
 ## Related Docs
 
 - [Package README](../../packages/mcp/README.md) — module map and exports
-- [MCP subsystem design specification](../architecture/mcp-subsystem-design.md) — the approved architecture this implementation follows
+- [MCP subsystem design specification](../architecture/mcp-subsystem-design.md) — the approved architecture this implementation follows, with §9 recording which parts of it are enforced today
 - [Microkernel architecture specification](../architecture/microkernel-architecture-spec.md) — the invariants the wrapper must not weaken
