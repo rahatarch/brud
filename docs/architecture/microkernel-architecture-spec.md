@@ -74,7 +74,7 @@ We do not rely on manual PR code reviews to police security standards. The custo
 
 ## 5. Kernel Subsystems & Runtime Extensibility
 
-- **ServiceContainer:** Typed token-based Inversion of Control (IoC) registry for platform ports (`FileSystem`, `TerminalRunner`, `TelemetryService`, `HistoryStore`).
+- **ServiceContainer:** Typed token-based Inversion of Control (IoC) registry for platform ports (`FileSystem`, `TerminalRunner`, `HistoryStore`).
 - **OperationRegistry:** Self-registering operation handlers implementing the `OperationHandler` contract, eliminating monolithic switch-case dispatch.
-- **ExecutionPipeline:** Composable onion middleware wrapping each operation with boundary checks, automatic snapshot rollback safety, and non-blocking telemetry.
+- **ExecutionPipeline:** Composable onion middleware wrapping each operation with boundary checks and automatic snapshot rollback safety.
 - **Single Point of Truth Gatekeeper:** Centralized `BrudAPI.validate` patches instantly protect all tools and host targets without downstream edits.

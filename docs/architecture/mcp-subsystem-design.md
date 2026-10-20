@@ -13,7 +13,7 @@
 
 The Model Context Protocol (MCP) subsystem is the machine-to-machine transport layer of the Brud Code ecosystem. It exposes the orchestration, validation, and execution capabilities of the Brud microkernel over a standardized remote procedure call protocol, enabling external AI hosts to invoke file system operations, terminal commands, and workspace primitives through the same guarded execution pipeline that human users drive through the interactive interface.
 
-MCP serves as a complement, never a replacement, to the existing human-in-the-loop clipboard workflow. The clipboard workflow is a manual, presence-driven path in which a human operator moves Brud instruction blocks into the environment and reviews the consequences before they are applied. The MCP transport is an autonomous, programmatic path in which an external AI model issues structured tool invocations directly to the running engine. Both paths converge on the identical kernel: the same operation handlers, the same validation gatekeeper, the same snapshot and rollback machinery, and the same telemetry middleware. Nothing in the MCP layer enjoys a privilege that the interactive path does not.
+MCP serves as a complement, never a replacement, to the existing human-in-the-loop clipboard workflow. The clipboard workflow is a manual, presence-driven path in which a human operator moves Brud instruction blocks into the environment and reviews the consequences before they are applied. The MCP transport is an autonomous, programmatic path in which an external AI model issues structured tool invocations directly to the running engine. Both paths converge on the identical kernel: the same operation handlers, the same validation gatekeeper, and the same snapshot and rollback machinery. Nothing in the MCP layer enjoys a privilege that the interactive path does not.
 
 The primary consumer use cases define the strategic value of the subsystem:
 
@@ -83,12 +83,6 @@ The practical effect is that external AI callers are physically barred from read
 The subsystem guarantees that actions executed by external AI models remain reversible under the same contract as interactive sessions. Before the kernel executes an admitted operation, the reversibility layer engages the history engine of the core to capture a pre-execution snapshot of every file the operation is about to affect. After execution completes, a post-execution diff snapshot is recorded. The two snapshots are linked to the originating invocation so that each machine-driven action is addressable as a discrete, reversible unit.
 
 This yields a single-action undo guarantee for the human user. Regardless of whether an edit was authored by a human prompt or by an AI model over the MCP transport, the user may roll the affected files back to their pre-invocation state with one action in the History interface. The transport adds no exception to the snapshot policy: a machine-invoked write is as reversible as an interactive one, and no operation can be excluded from snapshot capture.
-
-### 3.5 The Telemetry Observer
-
-MCP-mediated executions traverse the same execution pipeline as interactive executions, which means they pass through the identical composable middleware chain. The telemetry middleware therefore observes them automatically and without any MCP-specific instrumentation. Duration, operation kind, success or failure status, and session association are recorded through the existing telemetry service.
-
-The architectural consequence is that performance metrics and reliability signals produced by external AI traffic are indistinguishable in the telemetry stream from interactive traffic, enabling accurate capacity planning and drift detection. Adding a new metric or middleware later benefits the MCP transport for free; the transport was never wired into the telemetry path by hand and never needs to be.
 
 ---
 
@@ -197,7 +191,7 @@ This phase establishes the platform-agnostic foundation.
 - Create the `packages/mcp` package with a declared dependency boundary against the kernel and the protocol contracts, and wire the packaging rule that forbids application-layer imports.
 - Implement the schema converter that synthesizes the tool catalog from the operation registry's prompt descriptors.
 - Implement the parameter normalization bridge with typed coercion and unknown-parameter rejection.
-- Implement the engine core with the lifecycle state machine, the gatekeeper routing discipline, and the reversibility and telemetry wiring against the kernel pipeline.
+- Implement the engine core with the lifecycle state machine, the gatekeeper routing discipline, and the reversibility wiring against the kernel pipeline.
 - Implement both transports: the loopback-bound HTTP and Server-Sent Events transport with ephemeral and fixed port allocation, and the stdio transport with clean-channel framing and end-of-stream termination.
 - Deliver unit coverage for catalog synthesis, normalization, containment rejection, and both transport framing paths.
 
@@ -221,7 +215,6 @@ This phase nails the subsystem's contract under continuous verification.
 - Build an integration harness that boots the engine in a controlled process, launches real transports, and asserts tool listing over each transport.
 - Assert execution round trips over both transports, including successful execution, boundary violation rejection, dangerous-command rejection, anchor-missing rejection, and timeout expiry, each verified against the structured error envelope.
 - Assert reversibility end to end, confirming that a model-invoked file mutation is listable in history and revertible with a single action.
-- Assert telemetry emission, confirming that MCP-mediated executions appear with the same metrics shape as interactive executions.
 - Wire the harness into the continuous integration pipeline so every commit is verified against the full transport matrix.
 
 Exit criteria: the integration suite runs green in CI across the streaming transport and the stdio transport, with the zero-trust rejection cases and the reversibility guarantee asserted on every run.
