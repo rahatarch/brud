@@ -12,6 +12,7 @@ export interface McpServerHandle {
   readonly url: string;
   readonly port: number;
   readonly workspaceRoot: string;
+  readonly refreshSettings?: () => void;
   close(): Promise<void>;
 }
 
@@ -69,18 +70,32 @@ export class McpServerService {
     });
   }
 
-  reanchor(): Promise<McpServerStatus> {
+  sync(autoStart: boolean): Promise<McpServerStatus> {
     return this.enqueue(async () => {
       const nextRoot = this.options.getWorkspaceRoot();
-      if (this.phase !== 'running' || !this.handle) {
-        return this.getStatus();
+
+      if (this.phase === 'running' && this.handle) {
+        if (nextRoot && nextRoot === this.handle.workspaceRoot) {
+          return this.getStatus();
+        }
+        await this.stopInternal();
+        return this.startInternal();
       }
-      if (nextRoot && nextRoot === this.handle.workspaceRoot) {
-        return this.getStatus();
+
+      if (autoStart && this.phase === 'stopped') {
+        return this.startInternal();
       }
-      await this.stopInternal();
-      return this.startInternal();
+
+      return this.getStatus();
     });
+  }
+
+  reanchor(): Promise<McpServerStatus> {
+    return this.sync(false);
+  }
+
+  refreshSettings(): void {
+    this.handle?.refreshSettings?.();
   }
 
   dispose(): Promise<McpServerStatus> {

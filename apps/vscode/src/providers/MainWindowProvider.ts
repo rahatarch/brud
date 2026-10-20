@@ -5,12 +5,18 @@ import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudS
 import { mergeSettings, globalToolRegistry, extractCodebaseMetadata } from '@brud/core';
 import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError, type UserPrompt, type UserPromptVersion } from '@brud/core';
+import type { McpServerService } from '../mcp/McpServerService';
+import { serializeMcpClientConfig } from '../mcp/mcpConfig';
+import type { McpStatusPayload } from '@brud/protocol';
 
 export class BrudMainWindowManager {
   private _panel: vscode.WebviewPanel | undefined;
   private _historyStore: WorkspaceHistoryStore | undefined;
   private _promptStore: CascadingPromptStore | undefined;
   private _onSettingsSaved?: () => Promise<void>;
+  private _mcpService?: McpServerService;
+  private _mcpAutoOn = true;
+  private _mcpSubscription?: { dispose(): void };
 
   private _promptStoreInit: Promise<void>;
 
@@ -44,6 +50,12 @@ export class BrudMainWindowManager {
 
   public setOnSettingsSaved(callback: () => Promise<void>): void {
     this._onSettingsSaved = callback;
+  }
+
+  public setMcpService(service: McpServerService): void {
+    this._mcpSubscription?.dispose();
+    this._mcpService = service;
+    this._mcpSubscription = service.onDidChange(() => this._pushMcpStatus());
   }
 
   public postMessage(message: any): void {
@@ -143,6 +155,21 @@ export class BrudMainWindowManager {
           break;
         case 'copyPrompt':
           await this._handleCopyPrompt(data);
+          break;
+        case 'getMcpStatus':
+          await this._handleGetMcpStatus();
+          break;
+        case 'startMcpServer':
+          await this._mcpService?.start();
+          break;
+        case 'stopMcpServer':
+          await this._mcpService?.stop();
+          break;
+        case 'setMcpAutoOn':
+          await this._handleSetMcpAutoOn(data.enabled === true);
+          break;
+        case 'copyMcpConfig':
+          await this._handleCopyMcpConfig();
           break;
       }
     });
@@ -352,6 +379,68 @@ export class BrudMainWindowManager {
       command: 'sessionSnapshotsResult',
       snapshotData: { pre: preSnapshot, post: postSnapshot },
     } satisfies ExtensionMessage);
+  }
+
+  private async _refreshMcpAutoOn(): Promise<void> {
+    const folders = getWorkspaceFolders();
+    if (folders.length === 0) {
+      this._mcpAutoOn = true;
+      return;
+    }
+    try {
+      const { settings } = await getEffectiveSettings(folders[0]);
+      this._mcpAutoOn = settings.mcpAutoOn !== false;
+    } catch {
+      this._mcpAutoOn = true;
+    }
+  }
+
+  private _pushMcpStatus(): void {
+    if (!this._mcpService) {
+      return;
+    }
+    const status = this._mcpService.getStatus();
+    const payload: McpStatusPayload = {
+      phase: status.phase,
+      workspaceRoot: status.workspaceRoot,
+      url: status.url,
+      port: status.port,
+      error: status.error,
+      autoOn: this._mcpAutoOn,
+    };
+    this._panel?.webview.postMessage({ command: 'mcpStatus', mcpStatus: payload });
+  }
+
+  private async _handleGetMcpStatus(): Promise<void> {
+    await this._refreshMcpAutoOn();
+    this._pushMcpStatus();
+  }
+
+  private async _handleSetMcpAutoOn(enabled: boolean): Promise<void> {
+    const folders = getWorkspaceFolders();
+    if (folders.length === 0) {
+      return;
+    }
+    const { settings } = await getEffectiveSettings(folders[0]);
+    await saveBrudSettings(folders[0], { ...settings, mcpAutoOn: enabled });
+    this._mcpAutoOn = enabled;
+    if (enabled) {
+      await this._mcpService?.start();
+    } else {
+      await this._mcpService?.stop();
+    }
+    this._pushMcpStatus();
+  }
+
+  private async _handleCopyMcpConfig(): Promise<void> {
+    const status = this._mcpService?.getStatus();
+    if (!status || !status.url) {
+      this._panel?.webview.postMessage({ command: 'mcpConfigCopied', message: 'Start the server first.' });
+      return;
+    }
+    const config = serializeMcpClientConfig(status.url);
+    await vscode.env.clipboard.writeText(config);
+    this._panel?.webview.postMessage({ command: 'mcpConfigCopied', message: config });
   }
 
   private async _handleGetSettings(): Promise<void> {

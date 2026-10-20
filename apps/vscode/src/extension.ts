@@ -10,12 +10,24 @@ import { BrudUnifiedResultsPanelManager } from './providers/UnifiedResultsPanelP
 import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
-import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
+import { WorkspaceHistoryStore, VSCodeFileSystem, getEffectiveSettings } from '@brud/vscode-adapter';
 import { initializeToolRegistry } from '@brud/core';
 import { startHttpServer } from '@brud/mcp';
 import { McpServerService } from './mcp/McpServerService';
 
 let mcpServiceRef: McpServerService | undefined;
+
+async function readMcpAutoOn(root: string | undefined): Promise<boolean> {
+  if (!root) {
+    return false;
+  }
+  try {
+    const { settings } = await getEffectiveSettings(root);
+    return settings.mcpAutoOn !== false;
+  } catch {
+    return true;
+  }
+}
 
 /**
  * Entry point for the Brud extension.
@@ -36,19 +48,24 @@ export function activate(context: vscode.ExtensionContext) {
   });
   mcpServiceRef = mcpService;
 
+  const syncMcpWithWorkspace = async () => {
+    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
+    const autoOn = await readMcpAutoOn(root);
+    await mcpService.sync(autoOn);
+  };
+
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
-      void mcpService.reanchor();
+      void syncMcpWithWorkspace();
     }),
   );
 
-  if (process.env.BRUD_MCP_SPIKE === '1') {
-    void mcpService.start();
-  }
+  void syncMcpWithWorkspace();
 
   const mainWindowManager = new BrudMainWindowManager(
     context.extensionUri,
   );
+  mainWindowManager.setMcpService(mcpService);
 
   const structurePanelManager = new BrudStructurePanelManager(
     context.extensionUri,
@@ -134,6 +151,8 @@ export function activate(context: vscode.ExtensionContext) {
     reloadTimer = setTimeout(async () => {
       try {
         await provider.loadSettings();
+        mcpServiceRef?.refreshSettings();
+        await syncMcpWithWorkspace();
         logger.appendLine('[brud] Settings reloaded successfully from disk.');
       } catch (err) {
         logger.appendLine(`[brud] Failed to reload settings on change: ${err}`);

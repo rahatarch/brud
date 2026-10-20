@@ -40,7 +40,12 @@ export type WebviewCommand =
   | 'getPromptVersions'
   | 'revertPrompt'
   | 'killProcess'
-  | 'copyPrompt';
+  | 'copyPrompt'
+  | 'getMcpStatus'
+  | 'startMcpServer'
+  | 'stopMcpServer'
+  | 'setMcpAutoOn'
+  | 'copyMcpConfig';
 
 export type ExtensionCommand =
   | 'success'
@@ -73,7 +78,20 @@ export type ExtensionCommand =
   | 'promptDeleted'
   | 'promptVersionsResult'
   | 'promptReverted'
-  | 'terminalChunk';
+  | 'terminalChunk'
+  | 'mcpStatus'
+  | 'mcpConfigCopied';
+
+export type McpServerPhase = 'stopped' | 'starting' | 'running' | 'stopping';
+
+export interface McpStatusPayload {
+  phase: McpServerPhase;
+  workspaceRoot?: string;
+  url?: string;
+  port?: number;
+  error?: string;
+  autoOn: boolean;
+}
 
 export interface WebviewMessage {
   command: WebviewCommand;
@@ -90,6 +108,7 @@ export interface WebviewMessage {
   promptScope?: 'global' | 'workspace';
   version?: number;
   processId?: string;
+  enabled?: boolean;
 }
 
 export interface ReportSection {
@@ -104,6 +123,7 @@ export interface ReportSection {
 
 export interface ExtensionMessage {
   command: ExtensionCommand;
+  mcpStatus?: McpStatusPayload;
   message?: string;
   fileName?: string;
   fileIndex?: number;

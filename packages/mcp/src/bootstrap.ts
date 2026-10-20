@@ -20,6 +20,27 @@ export interface McpWorkspace {
   readonly fileSystem: FileSystem;
   readonly historyStore: HistoryStore;
   readonly settings: BrudSettings;
+  refreshSettings(): void;
+}
+
+function createLiveSettings(workspaceRoot: string): { settings: BrudSettings; refresh(): void } {
+  let current: BrudSettings = loadWorkspaceSettings(workspaceRoot);
+  const settings = new Proxy({} as BrudSettings, {
+    get: (_target, property) => current[property as keyof BrudSettings],
+    has: (_target, property) => property in current,
+    ownKeys: () => Reflect.ownKeys(current),
+    getOwnPropertyDescriptor: (_target, property) => ({
+      enumerable: true,
+      configurable: true,
+      value: current[property as keyof BrudSettings],
+    }),
+  });
+  return {
+    settings,
+    refresh: () => {
+      current = loadWorkspaceSettings(workspaceRoot);
+    },
+  };
 }
 
 export function resolveWorkspaceRoot(candidate: string): string {
@@ -71,7 +92,8 @@ export async function bootMcpWorkspace(workspaceCandidate: string): Promise<McpW
   const workspaceRoot = resolveWorkspaceRoot(workspaceCandidate);
   const fileSystem = new NodeFileSystem();
   const historyStore = new NodeHistoryStore(workspaceRoot, fileSystem);
-  const settings = loadWorkspaceSettings(workspaceRoot);
+  const live = createLiveSettings(workspaceRoot);
+  const settings = live.settings;
 
   const kernel = await bootCoreKernel({
     fs: fileSystem,
@@ -80,5 +102,5 @@ export async function bootMcpWorkspace(workspaceCandidate: string): Promise<McpW
     settings,
   });
 
-  return { kernel, workspaceRoot, fileSystem, historyStore, settings };
+  return { kernel, workspaceRoot, fileSystem, historyStore, settings, refreshSettings: live.refresh };
 }

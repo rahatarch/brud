@@ -51,7 +51,9 @@
     "unlimited ai"
   ],
   "icon": "assets/icons/brud_icon_rounded.png",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./dist/extension.js",
   "contributes": {
     "configuration": {
@@ -117,12 +119,12 @@
     "watch:webview": "vite build --config packages/ui/vite.config.ts --watch",
     "watch": "webpack --watch",
     "package": "webpack --mode production --devtool hidden-source-map && npm run build:webview",
+    "package:vsix": "npm run package && npx vsce package --no-dependencies --out brud.vsix",
     "compile-tests": "tsc -p . --outDir out",
     "watch-tests": "tsc -p . -w --outDir out",
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint packages apps tests",
     "test": "vscode-test",
-    
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
     "test:mcp": "npm run test --workspace @brud/mcp",
     "test:extension": "node --import tsx --test apps/vscode/src/*/__tests__/*.test.ts",
@@ -159,6 +161,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^4.0.0",
     "eslint": "^9.39.3",
     "tailwindcss": "^4.3.3",
     "ts-loader": "^9.5.4",

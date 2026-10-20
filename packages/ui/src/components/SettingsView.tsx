@@ -14,6 +14,7 @@ function SettingsView() {
   const [workspaceBoundaryEnabled, setWorkspaceBoundaryEnabled] = useState(true);
   const [commandValidationEnabled, setCommandValidationEnabled] = useState(true);
   const [toolAllowList, setToolAllowList] = useState<Record<string, boolean>>({});
+  const [mcpAutoOn, setMcpAutoOn] = useState(true);
   const [tools, setTools] = useState<ToolInfo[]>([]);
   const [source, setSource] = useState<string>('default');
   const [warnings, setWarnings] = useState<string[]>([]);
@@ -28,6 +29,7 @@ function SettingsView() {
         setWorkspaceBoundaryEnabled(message.settings.workspaceBoundaryEnabled !== false);
         setCommandValidationEnabled(message.settings.commandValidationEnabled !== false);
         setToolAllowList(message.settings.toolAllowList || {});
+        setMcpAutoOn(message.settings.mcpAutoOn !== false);
         setSource(message.source || 'default');
         setWarnings(message.warnings || []);
         setLoaded(true);
@@ -42,17 +44,17 @@ function SettingsView() {
     const next = !workspaceBoundaryEnabled;
     setWorkspaceBoundaryEnabled(next);
     setSaving(true);
-    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled: next, commandValidationEnabled, toolAllowList } });
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled: next, commandValidationEnabled, toolAllowList, mcpAutoOn } });
     setTimeout(() => setSaving(false), 300);
-  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList, mcpAutoOn]);
 
   const handleValidationToggle = useCallback(() => {
     const next = !commandValidationEnabled;
     setCommandValidationEnabled(next);
     setSaving(true);
-    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled: next, toolAllowList } });
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled: next, toolAllowList, mcpAutoOn } });
     setTimeout(() => setSaving(false), 300);
-  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList, mcpAutoOn]);
 
   const handleToolToggle = useCallback((toolKind: string) => {
     const current = toolAllowList[toolKind];
@@ -65,9 +67,9 @@ function SettingsView() {
     }
     setToolAllowList(newList);
     setSaving(true);
-    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList: newList } });
+    sendToExtension({ command: 'saveSettings', settings: { workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList: newList, mcpAutoOn } });
     setTimeout(() => setSaving(false), 300);
-  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList]);
+  }, [workspaceBoundaryEnabled, commandValidationEnabled, toolAllowList, mcpAutoOn]);
 
   const disabledCount = tools.filter(t => toolAllowList[t.kind] === false).length;
   const enabledCount = tools.length - disabledCount;

@@ -18,6 +18,7 @@ export interface StartedHttpServer {
   readonly path: string;
   readonly url: string;
   readonly workspaceRoot: string;
+  refreshSettings(): void;
   close(): Promise<void>;
 }
 
@@ -138,6 +139,7 @@ export async function startHttpServer(
     path: requestPath,
     url: `http://${host}:${address.port}${requestPath}`,
     workspaceRoot: workspace.workspaceRoot,
+    refreshSettings: () => workspace.refreshSettings(),
     close: () =>
       new Promise<void>((resolve, reject) => {
         httpServer.close((error) => {
