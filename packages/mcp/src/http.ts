@@ -2,6 +2,7 @@ import * as http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { bootMcpWorkspace } from './bootstrap';
 import { createBrudMcpServer, DEFAULT_SERVER_IDENTITY } from './server';
+import { createConcurrencyLimiter } from './limits';
 import type { ServerIdentity } from './server';
 
 export interface HttpServerOptions {
@@ -10,6 +11,7 @@ export interface HttpServerOptions {
   readonly path?: string;
   readonly executionTimeoutMs?: number;
   readonly identity?: ServerIdentity;
+  readonly maxConcurrentRequests?: number;
 }
 
 export interface StartedHttpServer {
@@ -25,6 +27,7 @@ export interface StartedHttpServer {
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PATH = '/mcp';
 const DEFAULT_TIMEOUT_MS = 120_000;
+const DEFAULT_MAX_CONCURRENT = 8;
 
 function isLoopback(host: string): boolean {
   return host === '127.0.0.1' || host === '::1' || host === 'localhost';
@@ -60,6 +63,7 @@ export async function startHttpServer(
   const requestPath = options.path ?? DEFAULT_PATH;
   const timeoutMs = options.executionTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const identity = options.identity ?? DEFAULT_SERVER_IDENTITY;
+  const limiter = createConcurrencyLimiter(options.maxConcurrentRequests ?? DEFAULT_MAX_CONCURRENT);
 
   const workspace = await bootMcpWorkspace(workspaceCandidate);
 
@@ -75,6 +79,11 @@ export async function startHttpServer(
     }
     if (req.method !== 'POST' && req.method !== 'GET' && req.method !== 'DELETE') {
       writeJson(res, 405, { error: 'Method not allowed' });
+      return;
+    }
+
+    if (!limiter.tryAcquire()) {
+      writeProtocolError(res, 429, -32000, 'Too many concurrent requests.');
       return;
     }
 
@@ -106,6 +115,7 @@ export async function startHttpServer(
       }
     } finally {
       clearTimeout(timer);
+      limiter.release();
     }
   }
 

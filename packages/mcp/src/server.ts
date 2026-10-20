@@ -4,6 +4,7 @@ import { bootMcpWorkspace } from './bootstrap';
 import type { McpWorkspace } from './bootstrap';
 import { getToolCatalog } from './catalog';
 import { dispatchToolCall } from './dispatch';
+import { withTimeout } from './limits';
 
 export interface ServerIdentity {
   readonly name: string;
@@ -22,6 +23,7 @@ export interface StartedStdioServer {
 
 export interface CreateServerOptions {
   readonly signal?: AbortSignal;
+  readonly executionTimeoutMs?: number;
 }
 
 export async function createBrudMcpServer(
@@ -43,11 +45,16 @@ export async function createBrudMcpServer(
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const result = await dispatchToolCall(
-      workspace.kernel,
-      request.params.name,
-      request.params.arguments ?? {},
-      { workspaceRoot: workspace.workspaceRoot, signal: options.signal },
+    const result = await withTimeout(
+      options.executionTimeoutMs,
+      options.signal,
+      (signal) =>
+        dispatchToolCall(
+          workspace.kernel,
+          request.params.name,
+          request.params.arguments ?? {},
+          { workspaceRoot: workspace.workspaceRoot, signal },
+        ),
     );
     return {
       content: result.content.map((entry) => ({ type: 'text' as const, text: entry.text })),
@@ -61,9 +68,10 @@ export async function createBrudMcpServer(
 export async function startStdioServer(
   workspaceCandidate: string,
   identity: ServerIdentity = DEFAULT_SERVER_IDENTITY,
+  options: CreateServerOptions = {},
 ): Promise<StartedStdioServer> {
   const workspace = await bootMcpWorkspace(workspaceCandidate);
-  const server = await createBrudMcpServer(workspace, identity);
+  const server = await createBrudMcpServer(workspace, identity, options);
   const { StdioServerTransport: TransportCtor } = await import('@modelcontextprotocol/sdk/server/stdio.js');
   const transport = new TransportCtor() as StdioServerTransport;
   await server.connect(transport);
