@@ -88,7 +88,15 @@ export async function startHttpServer(
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let released = false;
+    const releaseOnce = () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      limiter.release();
+    };
+    let finished = false;
 
     let server: Awaited<ReturnType<typeof createBrudMcpServer>> | undefined;
     try {
@@ -99,23 +107,29 @@ export async function startHttpServer(
         sessionIdGenerator: undefined,
         enableJsonResponse: true,
       });
-      server = await createBrudMcpServer(workspace, identity, { signal: controller.signal });
+      server = await createBrudMcpServer(workspace, identity, {
+        signal: controller.signal,
+        executionTimeoutMs: timeoutMs,
+        onExecutionSettled: releaseOnce,
+      });
 
       res.on('close', () => {
-        clearTimeout(timer);
+        if (!finished) {
+          controller.abort();
+        }
         void transport.close().catch(() => undefined);
         void server?.close().catch(() => undefined);
       });
 
       await server.connect(transport);
       await transport.handleRequest(req, res);
+      finished = true;
     } catch {
       if (!res.headersSent) {
         writeProtocolError(res, 500, -32603, 'Internal server error');
       }
     } finally {
-      clearTimeout(timer);
-      limiter.release();
+      releaseOnce();
     }
   }
 

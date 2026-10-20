@@ -77,14 +77,14 @@ export function loadWorkspaceSettings(workspaceRoot: string): BrudSettings {
 function createTerminalExecutor(): TerminalExecutor {
   return {
     execute: executeTerminalCommand,
-    executeCommand: (command, cwd, timeout, env) =>
-      executeCommand(command, cwd, timeout, env),
-    executeSequential: (commands, cwd, timeout, env, stopOnFailure) =>
-      executeSequential(commands, cwd, timeout, env, stopOnFailure),
-    executeParallel: (commands, cwd, timeout, env) =>
-      executeParallel(commands, cwd, timeout, env),
-    executeConditional: (conditional, cwd, timeout, env) =>
-      executeConditional(conditional, cwd, timeout, env),
+    executeCommand: (command, cwd, timeout, env, onChunk, signal) =>
+      executeCommand(command, cwd, timeout, env, onChunk, signal),
+    executeSequential: (commands, cwd, timeout, env, stopOnFailure, onChunk, signal) =>
+      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
+    executeParallel: (commands, cwd, timeout, env, onChunk, signal) =>
+      executeParallel(commands, cwd, timeout, env, onChunk, signal),
+    executeConditional: (conditional, cwd, timeout, env, onChunk, signal) =>
+      executeConditional(conditional, cwd, timeout, env, onChunk, signal),
   } as TerminalExecutor;
 }
 

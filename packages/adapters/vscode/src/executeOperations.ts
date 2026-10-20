@@ -30,14 +30,14 @@ export async function executeOperationsFromVSCode(
 
   const terminalExecutor: TerminalExecutor = {
     execute: executeTerminalCommand,
-    executeCommand: (command: string, cwd?: string, timeout?: number, env?: Record<string, string>) =>
-      executeCommand(command, cwd, timeout, env, onChunk),
-    executeSequential: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, stopOnFailure?: boolean) =>
-      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk),
-    executeParallel: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>) =>
-      executeParallel(commands, cwd, timeout, env, onChunk),
-    executeConditional: (conditional: any, cwd?: string, timeout?: number, env?: Record<string, string>) =>
-      executeConditional(conditional, cwd, timeout, env, onChunk),
+    executeCommand: (command: string, cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+      executeCommand(command, cwd, timeout, env, onChunk, signal),
+    executeSequential: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, stopOnFailure?: boolean, _onChunk?: any, signal?: AbortSignal) =>
+      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
+    executeParallel: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+      executeParallel(commands, cwd, timeout, env, onChunk, signal),
+    executeConditional: (conditional: any, cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+      executeConditional(conditional, cwd, timeout, env, onChunk, signal),
   };
 
   const kernel = await bootCoreKernel({

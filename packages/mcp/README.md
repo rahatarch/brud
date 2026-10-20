@@ -39,9 +39,10 @@ This produces `packages/mcp/dist/cli.js`, the server entry point.
 The `brud-mcp` binary accepts a workspace path plus optional flags:
 
 ```bash
-brud-mcp /path/to/project                          # stdio transport
+brud-mcp /path/to/project                          # stdio transport, 120 s call deadline
 brud-mcp /path/to/project --http --port 7717       # loopback HTTP on a fixed port
 brud-mcp /path/to/project --http                   # loopback HTTP on a free port
+brud-mcp /path/to/project --timeout 30             # change the per-call deadline (seconds)
 ```
 
 The workspace can also be supplied through `BRUD_MCP_WORKSPACE`.

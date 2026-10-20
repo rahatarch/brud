@@ -63,6 +63,7 @@ export function createLegacyOperationHandler(kind: string): OperationHandler {
         undefined,
         undefined,
         settings,
+        context.signal,
       );
 
       return {

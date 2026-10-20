@@ -4,7 +4,7 @@ import { bootMcpWorkspace } from './bootstrap';
 import type { McpWorkspace } from './bootstrap';
 import { getToolCatalog } from './catalog';
 import { dispatchToolCall } from './dispatch';
-import { withTimeout } from './limits';
+import { withTimeout, ExecutionAbortedError } from './limits';
 
 export interface ServerIdentity {
   readonly name: string;
@@ -24,6 +24,7 @@ export interface StartedStdioServer {
 export interface CreateServerOptions {
   readonly signal?: AbortSignal;
   readonly executionTimeoutMs?: number;
+  readonly onExecutionSettled?: () => void;
 }
 
 export async function createBrudMcpServer(
@@ -45,21 +46,33 @@ export async function createBrudMcpServer(
   });
 
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
-    const result = await withTimeout(
-      options.executionTimeoutMs,
-      options.signal,
-      (signal) =>
-        dispatchToolCall(
-          workspace.kernel,
-          request.params.name,
-          request.params.arguments ?? {},
-          { workspaceRoot: workspace.workspaceRoot, signal },
-        ),
-    );
-    return {
-      content: result.content.map((entry) => ({ type: 'text' as const, text: entry.text })),
-      isError: result.isError,
-    };
+    try {
+      const result = await withTimeout(
+        options.executionTimeoutMs,
+        options.signal,
+        (signal) =>
+          dispatchToolCall(
+            workspace.kernel,
+            request.params.name,
+            request.params.arguments ?? {},
+            { workspaceRoot: workspace.workspaceRoot, signal },
+          ),
+        options.onExecutionSettled,
+      );
+      return {
+        content: result.content.map((entry) => ({ type: 'text' as const, text: entry.text })),
+        isError: result.isError,
+      };
+    } catch (error) {
+      const message =
+        error instanceof ExecutionAbortedError
+          ? error.message
+          : 'The operation could not be completed.';
+      return {
+        content: [{ type: 'text' as const, text: message }],
+        isError: true,
+      };
+    }
   });
 
   return server;

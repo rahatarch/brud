@@ -3,6 +3,7 @@ import { startHttpServer } from './http';
 import { startStdioServer } from './server';
 
 const WORKSPACE_ENV = 'BRUD_MCP_WORKSPACE';
+const DEFAULT_EXECUTION_TIMEOUT_MS = 120_000;
 
 function readFlag(args: readonly string[], name: string): string | undefined {
   const index = args.indexOf(name);
@@ -14,8 +15,9 @@ function readFlag(args: readonly string[], name: string): string | undefined {
 
 async function main(): Promise<void> {
   const args = process.argv.slice(2);
+  const flagValues = new Set(['--port', '--path', '--timeout']);
   const positional = args.filter((arg, index) => {
-    if (index > 0 && (args[index - 1] === '--port' || args[index - 1] === '--path')) {
+    if (index > 0 && flagValues.has(args[index - 1])) {
       return false;
     }
     return !arg.startsWith('--');
@@ -28,6 +30,15 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
+  const timeoutFlag = readFlag(args, '--timeout');
+  const timeoutSeconds = timeoutFlag === undefined ? undefined : Number(timeoutFlag);
+  if (timeoutSeconds !== undefined && (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0)) {
+    process.stderr.write(`Brud MCP server: invalid --timeout value: ${timeoutFlag}\n`);
+    process.exit(2);
+  }
+  const executionTimeoutMs =
+    timeoutSeconds === undefined ? DEFAULT_EXECUTION_TIMEOUT_MS : Math.round(timeoutSeconds * 1000);
+
   try {
     if (args.includes('--http')) {
       const portFlag = readFlag(args, '--port');
@@ -39,6 +50,7 @@ async function main(): Promise<void> {
       const server = await startHttpServer(candidate, {
         port,
         path: pathFlag,
+        executionTimeoutMs,
       });
       process.stderr.write(`Brud MCP server listening on ${server.url}\n`);
       const shutdown = () => {
@@ -49,7 +61,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    await startStdioServer(candidate);
+    await startStdioServer(candidate, undefined, { executionTimeoutMs });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     process.stderr.write(`Brud MCP server failed to start: ${message}\n`);

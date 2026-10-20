@@ -96,6 +96,7 @@ export async function executeFileOperations(
   sessionIdOverride?: string,
   sessionMetadata?: SessionMetadata,
   settings: BrudSettings = DEFAULT_SETTINGS,
+  signal?: AbortSignal,
 ): Promise<FileOperationResult> {
   if (operations.length === 0) {
     return { success: false, message: 'No operations to execute.', errors: [noValidOperationsError()], operationResults: [], sessionId: undefined };
@@ -215,6 +216,24 @@ export async function executeFileOperations(
 
   for (let i = 0; i < operations.length; i++) {
     const operation = operations[i];
+
+    if (signal?.aborted) {
+      for (let j = i; j < operations.length; j++) {
+        const pending = operations[j];
+        const pendingPath = 'path' in pending
+          ? (pending as any).path
+          : ('directoryPath' in pending ? (pending as any).directoryPath : '');
+        operationResults.push({
+          operationIndex: j,
+          operationId: generateOperationId(),
+          kind: pending.kind,
+          status: 'interrupted',
+          message: 'Operation was interrupted before it started.',
+          path: pendingPath || '',
+        });
+      }
+      break;
+    }
 
     const toolEnabled = settings.toolAllowList[operation.kind];
     if (toolEnabled === false) {
@@ -1529,9 +1548,9 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
             let groupResult: GroupResult;
             if (termCmdOp.mode === 'parallel') {
-              groupResult = await terminalExecutor.executeParallel(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
+              groupResult = await terminalExecutor.executeParallel(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
             } else {
-              groupResult = await terminalExecutor.executeSequential(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, termCmdOp.stopOnFailure);
+              groupResult = await terminalExecutor.executeSequential(termCmdOp.commands, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, termCmdOp.stopOnFailure, undefined, signal);
             }
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
@@ -1593,7 +1612,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
               onSuccess: termCmdOp.onSuccess,
               onFailure: termCmdOp.onFailure,
             };
-            const groupResult = await terminalExecutor.executeConditional(conditional, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
+            const groupResult = await terminalExecutor.executeConditional(conditional, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
             operationResults.push({
@@ -1613,7 +1632,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             });
             break;
           }
-          const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env);
+          const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
@@ -1739,7 +1758,7 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
         prefix = 'Some operations failed.';
       }
 
-      result = { success: failedCount === 0, message: prefix, errors, operationResults };
+      result = { success: failedCount === 0 && interruptedCount === 0, message: prefix, errors, operationResults };
     }
   }
 
