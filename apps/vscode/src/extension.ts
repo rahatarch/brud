@@ -12,6 +12,10 @@ import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
 import { initializeToolRegistry } from '@brud/core';
+import { startHttpServer } from '@brud/mcp';
+import { McpServerService } from './mcp/McpServerService';
+
+let mcpServiceRef: McpServerService | undefined;
 
 /**
  * Entry point for the Brud extension.
@@ -24,6 +28,23 @@ export function activate(context: vscode.ExtensionContext) {
 
   const logger = BrudLogger.getInstance();
   const previewProvider = new BrudCodePreviewProvider();
+
+  const mcpService = new McpServerService({
+    startServer: (root) => startHttpServer(root),
+    getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
+    log: (message) => logger.appendLine(`[mcp] ${message}`),
+  });
+  mcpServiceRef = mcpService;
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      void mcpService.reanchor();
+    }),
+  );
+
+  if (process.env.BRUD_MCP_SPIKE === '1') {
+    void mcpService.start();
+  }
 
   const mainWindowManager = new BrudMainWindowManager(
     context.extensionUri,
@@ -138,4 +159,10 @@ export function activate(context: vscode.ExtensionContext) {
   }
 }
 
-export function deactivate() {}
+export async function deactivate(): Promise<void> {
+  const service = mcpServiceRef;
+  mcpServiceRef = undefined;
+  if (service) {
+    await service.dispose();
+  }
+}
