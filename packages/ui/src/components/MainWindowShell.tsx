@@ -4,8 +4,9 @@ import PromptLibrary from './PromptLibrary';
 import HistoryView from './HistoryView';
 import SettingsView from './SettingsView';
 import PromptsView from './PromptsView';
+import McpView from './McpView';
 
-type TabId = 'prompt-library' | 'history' | 'prompts' | 'tools' | 'rules' | 'settings';
+type TabId = 'prompt-library' | 'history' | 'prompts' | 'mcp' | 'tools' | 'rules' | 'settings';
 
 interface Tab {
   id: TabId;
@@ -16,6 +17,7 @@ const tabs: Tab[] = [
   { id: 'prompt-library', label: 'Prompt Library' },
   { id: 'history', label: 'History' },
   { id: 'prompts', label: 'My Prompts' },
+  { id: 'mcp', label: 'MCP' },
   { id: 'tools', label: 'Tools' },
   { id: 'rules', label: 'Rules' },
   { id: 'settings', label: 'Settings' },
@@ -25,6 +27,7 @@ const tabContent: Record<TabId, { title: string; description: string }> = {
   'prompt-library': { title: 'Prompt Library', description: 'Browse and manage your saved Brud prompts. Organize frequently used prompts for quick access.' },
   'history': { title: 'History', description: 'View your past Brud sessions, including prompts, patches, and execution results.' },
   'prompts': { title: 'My Prompts', description: 'Create and manage your personal, versioned prompt vault with dynamic field substitution.' },
+  'mcp': { title: 'MCP', description: 'Connect an AI client to Brud and control the local server.' },
   'tools': { title: 'Tools', description: 'Configure and access Brud tools including code analysis, refactoring, and batch operations.' },
   'rules': { title: 'Rules', description: 'Define custom rules and constraints for Brud to follow during code generation and patching.' },
   'settings': { title: 'Settings', description: 'Configure Brud preferences, keybindings, and extension behavior.' },
@@ -43,6 +46,8 @@ function MainWindowShell() {
         return <HistoryView />;
       case 'prompts':
         return <PromptsView />;
+      case 'mcp':
+        return <McpView />;
       case 'settings':
         return <SettingsView />;
       default:
@@ -87,7 +92,9 @@ function MainWindowShell() {
         ))}
       </div>
 
-      {renderTabContent()}
+      <div className="flex-1 flex flex-col min-h-0">
+        {renderTabContent()}
+      </div>
 
       <footer className="shrink-0 px-4 py-3 bg-surface-2 flex items-center justify-center gap-4 text-xs text-text-secondary">
         <span>
