@@ -121,4 +121,17 @@ describe('Settings enforcement during execution', () => {
     assert.strictEqual(result.success, true);
     assert.strictEqual(result.operationResults[0].status, 'success');
   });
+
+  it('h) relative path with boundary disabled resolves against the workspace root, not process cwd', async () => {
+    await writeFile('relative-root.txt', 'rooted');
+    const ops: FileOperation[] = [
+      { kind: 'read_file', path: 'relative-root.txt', isImportRead: false, maxDepth: 0, index: '1' },
+    ];
+    const result = await executeFileOperations(
+      ops, nodeFs, workspaceFolders, undefined, undefined, undefined, undefined, undefined,
+      { workspaceBoundaryEnabled: false, commandValidationEnabled: true, toolAllowList: {} },
+    );
+    assert.strictEqual(result.success, true);
+    assert.strictEqual(result.operationResults[0].status, 'success');
+  });
 });

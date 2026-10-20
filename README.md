@@ -102,6 +102,14 @@ Tested on a real 384K LOC codebase, manually verified end to end:
 
 Every session is automatically snapshotted before and after, stored locally in `.brud/history/` in your own workspace — no account, no cloud, no external service. Revert or restore any session instantly, even months later (deleted sessions get a 7-day recovery window before cleanup). Full technical details are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Use Brud as an MCP server
+
+Brud Code can also run as a [Model Context Protocol](https://modelcontextprotocol.io) server, so an MCP-capable AI client can call the same file, search, and terminal tools without you pasting anything. Calls go through the same workspace boundary and the same history, so they show up in `.brud/history/` and can be reverted like any other session.
+
+The server lives in this repository at `packages/mcp` and runs from source after `npm run build:mcp`. It supports standard input/output for desktop clients and loopback HTTP for local agents.
+
+See [docs/mcp/README.md](docs/mcp/README.md) for client configuration and the full reference.
+
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the snapshot engine, diffing, and history system work internally

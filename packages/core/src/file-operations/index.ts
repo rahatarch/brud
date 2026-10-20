@@ -105,7 +105,8 @@ export async function executeFileOperations(
 
   function validatePath(inputPath: string, folders: string[]): { valid: true; resolvedPath: string } | { valid: false; error: string } {
     if (!settings.workspaceBoundaryEnabled) {
-      return { valid: true, resolvedPath: path.resolve(inputPath) };
+      const base = folders.length > 0 ? path.resolve(folders[0]) : process.cwd();
+      return { valid: true, resolvedPath: path.resolve(base, inputPath) };
     }
     return validateWorkspacePath(inputPath, folders);
   }
