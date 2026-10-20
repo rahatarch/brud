@@ -22,7 +22,19 @@ Every call flows through the same kernel, the same workspace containment, and th
 
 **Transports.** Standard input/output for clients that own a child process, and loopback HTTP (streamable form, JSON responses) for clients that connect to an endpoint.
 
-## How To Use It
+## In The Editor
+
+The Brud Code extension ships this server. Open **Brud Code: Open Brud Code Management** and select the **MCP** tab.
+
+- The tab shows the live state (Stopped, Starting, Running, Stopping), the endpoint, and which project the client is being given access to.
+- **Start** and **Stop** control the listener; both are disabled while a transition is in progress.
+- **Start when a project opens** is stored as `mcpAutoOn` in `.brud/settings.json`. It defaults to enabled; turning it off stops a running server immediately.
+- **Copy connection details** places a single-server client configuration pointing at the live endpoint on the clipboard.
+- Switching projects restarts the server against the new folder, and editing `.brud/settings.json` applies new boundary, command-validation, and tool allow-list rules to the next call without a restart.
+
+The listener binds loopback only. There is no authentication, so any local process can reach the tools while it is running.
+
+## Headless Usage
 
 Build the server:
 

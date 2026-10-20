@@ -110,7 +110,9 @@ You keep the same safety net. Brud only touches the project you opened, every ch
 
 **What you get:** ask your AI for a change, watch it land in your files, and undo it like any other Brud action — no copy-paste in between.
 
-Today this works for anyone comfortable running Brud from its source repository; the [setup guide](docs/mcp/README.md) covers it. A built-in setup — turn it on, press Start, copy the connection details — is coming to the extension.
+Setup lives in the extension. Open **Brud Code: Open Brud Code Management** and use the **MCP** tab: Start, Stop, a switch that decides whether Brud starts with your project, and a button that copies connection details you can paste into your AI tool. Brud starts on its own when you open a project unless you turn that switch off.
+
+For now you install the extension from this repository rather than the marketplace; the [setup guide](docs/mcp/README.md) has the steps.
 
 ## Documentation
 
