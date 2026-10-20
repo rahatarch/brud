@@ -1,7 +1,7 @@
 import typescriptEslint from "typescript-eslint";
 
 export default [{
-    ignores: ["**/.next/**"],
+    ignores: ["**/.next/**", "**/dist/**", "**/out/**", "**/node_modules/**"],
 }, {
     files: ["**/*.ts"],
 }, {
