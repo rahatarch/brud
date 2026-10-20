@@ -102,13 +102,15 @@ Tested on a real 384K LOC codebase, manually verified end to end:
 
 Every session is automatically snapshotted before and after, stored locally in `.brud/history/` in your own workspace — no account, no cloud, no external service. Revert or restore any session instantly, even months later (deleted sessions get a 7-day recovery window before cleanup). Full technical details are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
-## Use Brud as an MCP server
+## Let your AI edit your files directly
 
-Brud Code can also run as a [Model Context Protocol](https://modelcontextprotocol.io) server, so an MCP-capable AI client can call the same file, search, and terminal tools without you pasting anything. Calls go through the same workspace boundary and the same history, so they show up in `.brud/history/` and can be reverted like any other session.
+If your AI tool supports MCP (a standard way for assistants to use outside tools), Brud can plug into it. Instead of copying a change out of the chat and pasting it into your files, you connect Brud once and your assistant sends the change straight to Brud.
 
-The server lives in this repository at `packages/mcp` and runs from source after `npm run build:mcp`. It supports standard input/output for desktop clients and loopback HTTP for local agents.
+You keep the same safety net. Brud only touches the project you opened, every change is saved, and anything can be undone in one click from History.
 
-See [docs/mcp/README.md](docs/mcp/README.md) for client configuration and the full reference.
+**What you get:** ask your AI for a change, watch it land in your files, and undo it like any other Brud action — no copy-paste in between.
+
+Today this works for anyone comfortable running Brud from its source repository; the [setup guide](docs/mcp/README.md) covers it. A built-in setup — turn it on, press Start, copy the connection details — is coming to the extension.
 
 ## Documentation
 
