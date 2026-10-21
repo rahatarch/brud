@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 import { startHttpServer } from './http';
 import { startStdioServer } from './server';
+import { applyPackageVersion } from './version';
+
+applyPackageVersion();
 
 const WORKSPACE_ENV = 'BRUD_MCP_WORKSPACE';
 const DEFAULT_EXECUTION_TIMEOUT_MS = 120_000;
