@@ -4,6 +4,20 @@ All notable changes to **Brud Code** are documented in this file. This project a
 [Semantic Versioning](https://semver.org/) and follows the
 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/) format.
 
+## [0.1.6] - 2026-10-21
+
+### Added
+- **MCP server:** Brud can now be used directly by MCP-capable assistants. A standalone server runs locally over the standard MCP transports, and the MCP tab lets you start or stop it, decide whether it starts with your project, refresh its settings, and copy the connection details into your AI tool.
+- **Stable local MCP endpoint:** the first open window takes local port 8899, so the connection details you copied keep working across reloads. Further windows fall back to a free port and take over 8899 when it becomes available.
+- **Bounded MCP execution:** calls now have a 120-second default deadline, a concurrency limit with a clear "too many requests" response, and are cancelled when their client disconnects instead of running on in the background.
+- **[PRIVACY.md](PRIVACY.md):** a plain description of what Brud sends, what it never sends, and how to verify it yourself.
+
+### Changed
+- **Telemetry records are leaner.** Successful operations no longer include file contents or command output; records keep redacted diagnostics only when something fails, so bugs can still be fixed. Details are in [PRIVACY.md](PRIVACY.md).
+
+### Fixed
+- **Workspace containment resolves symbolic links** before deciding whether a path is inside your project, closing a way to reach files outside it.
+
 ## [0.1.5] - 2026-10-13
 
 ### Fixed
