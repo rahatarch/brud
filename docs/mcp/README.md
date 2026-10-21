@@ -34,6 +34,8 @@ The Brud Code extension ships this server. Open **Brud Code: Open Brud Code Mana
 
 The listener binds loopback only. There is no authentication, so any local process can reach the tools while it is running.
 
+In the editor, one window asks for local port 8899 so the endpoint stays stable across reloads; windows that lose that port fall back to a free one and take it over when it becomes available. The port is local either way — see [PRIVACY.md](../../PRIVACY.md) for what the extension does with network traffic.
+
 ## Headless Usage
 
 Build the server:
