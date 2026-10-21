@@ -75,6 +75,11 @@ function formatFailureMessage(envelope: KernelEnvelope, workspaceRoot: string): 
     parts.push(envelope.message);
   } else if (typeof envelope.error === 'string' && envelope.error.length > 0) {
     parts.push(envelope.error);
+  } else if (typeof envelope.error === 'object' && envelope.error !== null) {
+    const message = (envelope.error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.length > 0) {
+      parts.push(message);
+    }
   }
   const data = envelope.data as { errors?: Array<{ details?: string; friendly?: string }> } | undefined;
   if (data && Array.isArray(data.errors)) {
