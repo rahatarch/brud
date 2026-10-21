@@ -13,8 +13,29 @@ export interface ServerIdentity {
 
 export const DEFAULT_SERVER_IDENTITY: ServerIdentity = {
   name: 'brud-code',
-  version: '0.1.4',
+  version: 'unknown',
 };
+
+/**
+ * Resolves the identity advertised in the MCP handshake.
+ *
+ * Precedence: an explicit identity, then the host-provided client version,
+ * then BRUD_CLIENT_VERSION (set by the CLI from its own manifest), then an
+ * honest sentinel. A stale version number is worse than an obvious one.
+ */
+export function resolveServerIdentity(
+  explicit?: ServerIdentity,
+  clientVersion?: string,
+): ServerIdentity {
+  if (explicit) {
+    return explicit;
+  }
+  const candidate =
+    (typeof clientVersion === 'string' ? clientVersion.trim() : '') ||
+    (process.env.BRUD_CLIENT_VERSION ?? '').trim() ||
+    DEFAULT_SERVER_IDENTITY.version;
+  return { name: DEFAULT_SERVER_IDENTITY.name, version: candidate };
+}
 
 export interface StartedStdioServer {
   readonly server: Server;
@@ -29,14 +50,15 @@ export interface CreateServerOptions {
 
 export async function createBrudMcpServer(
   workspace: McpWorkspace,
-  identity: ServerIdentity = DEFAULT_SERVER_IDENTITY,
+  identity?: ServerIdentity,
   options: CreateServerOptions = {},
 ): Promise<Server> {
+  const resolvedIdentity = resolveServerIdentity(identity);
   const { Server: ServerCtor } = await import('@modelcontextprotocol/sdk/server/index.js');
   const { CallToolRequestSchema, ListToolsRequestSchema } = await import('@modelcontextprotocol/sdk/types.js');
 
   const server = new ServerCtor(
-    { name: identity.name, version: identity.version },
+    { name: resolvedIdentity.name, version: resolvedIdentity.version },
     { capabilities: { tools: {} } },
   );
 
@@ -80,7 +102,7 @@ export async function createBrudMcpServer(
 
 export async function startStdioServer(
   workspaceCandidate: string,
-  identity: ServerIdentity = DEFAULT_SERVER_IDENTITY,
+  identity?: ServerIdentity,
   options: CreateServerOptions = {},
 ): Promise<StartedStdioServer> {
   const workspace = await bootMcpWorkspace(workspaceCandidate);

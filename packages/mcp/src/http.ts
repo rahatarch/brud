@@ -1,7 +1,7 @@
 import * as http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { bootMcpWorkspace } from './bootstrap';
-import { createBrudMcpServer, DEFAULT_SERVER_IDENTITY } from './server';
+import { createBrudMcpServer, resolveServerIdentity } from './server';
 import { createConcurrencyLimiter } from './limits';
 import type { ServerIdentity } from './server';
 
@@ -11,6 +11,7 @@ export interface HttpServerOptions {
   readonly path?: string;
   readonly executionTimeoutMs?: number;
   readonly identity?: ServerIdentity;
+  readonly clientVersion?: string;
   readonly maxConcurrentRequests?: number;
 }
 
@@ -62,7 +63,7 @@ export async function startHttpServer(
 
   const requestPath = options.path ?? DEFAULT_PATH;
   const timeoutMs = options.executionTimeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const identity = options.identity ?? DEFAULT_SERVER_IDENTITY;
+  const identity = resolveServerIdentity(options.identity, options.clientVersion);
   const limiter = createConcurrencyLimiter(options.maxConcurrentRequests ?? DEFAULT_MAX_CONCURRENT);
 
   const workspace = await bootMcpWorkspace(workspaceCandidate);
