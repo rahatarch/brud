@@ -33,7 +33,11 @@ export class ExecutionPipeline implements IExecutionPipeline {
 
     try {
       const composed = this.compose(handler);
-      const result = await composed(context, input);
+      const enhancedContext: ExecutionContext = {
+        ...context,
+        metadata: { ...context.metadata, operationKind: handler.kind },
+      };
+      const result = await composed(enhancedContext, input);
       result.durationMs = performance.now() - start;
       return result;
     } catch (err: unknown) {
