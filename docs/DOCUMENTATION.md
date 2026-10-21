@@ -27,6 +27,7 @@ The standards for each tier are defined in:
 | `README.md` | Standard for deep API docs | Contributors |
 | `packages/*/README.md` | Overview of each package | Contributors |
 | `ARCHITECTURE.md` | Deep architecture internals | Contributors |
+| `PRIVACY.md` | What Brud sends, what it does not, retention and verification | Everyone |
 
 ## Navigation Guide
 

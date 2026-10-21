@@ -117,6 +117,7 @@ For now you install the extension from this repository rather than the marketpla
 ## Documentation
 
 - [ARCHITECTURE.md](ARCHITECTURE.md) — how the snapshot engine, diffing, and history system work internally
+- [PRIVACY.md](PRIVACY.md) — exactly what Brud sends, what it never sends, and how to verify it
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
 - Prompt Library — bundled in the extension sidebar
 
@@ -126,6 +127,12 @@ For now you install the extension from this repository rather than the marketpla
 <summary><strong>Do I need an API key?</strong></summary>
 <br>
 No. Brud Code works with any chatbot's free web UI. Paste the AI's output directly — no keys, tokens, or subscriptions.
+</details>
+
+<details>
+<summary><strong>Does Brud send anything anywhere?</strong></summary>
+<br>
+Your project history and snapshots stay in your workspace. The extension does send anonymous operation records, including redacted diagnostics when something fails, so bugs can be found and fixed. <a href="PRIVACY.md">PRIVACY.md</a> lists the exact fields, the redaction rules and how to inspect the traffic yourself.
 </details>
 
 <details>
