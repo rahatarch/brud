@@ -33,6 +33,8 @@ async function readMcpAutoOn(root: string | undefined): Promise<boolean> {
  * Entry point for the Brud extension.
  * Orchestrates the registration of providers and commands.
  */
+const PREFERRED_MCP_PORT = 8899;
+
 export function activate(context: vscode.ExtensionContext) {
   // Initialize tool registry early so all providers and handlers can query it.
   // This must run before any webview can send a getToolList or GET_TOOL_INFO request.
@@ -42,7 +44,11 @@ export function activate(context: vscode.ExtensionContext) {
   const previewProvider = new BrudCodePreviewProvider();
 
   const mcpService = new McpServerService({
-    startServer: (root) => startHttpServer(root),
+    startServer: (root, options) =>
+      startHttpServer(root, {
+        ...(options?.preferredPort !== undefined ? { port: options.preferredPort } : {}),
+      }),
+    preferredPort: PREFERRED_MCP_PORT,
     getWorkspaceRoot: () => vscode.workspace.workspaceFolders?.[0]?.uri.fsPath,
     log: (message) => logger.appendLine(`[mcp] ${message}`),
   });

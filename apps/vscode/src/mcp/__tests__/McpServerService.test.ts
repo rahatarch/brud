@@ -195,3 +195,103 @@ describe('McpServerService', () => {
     assert.deepStrictEqual(h.closed, ['/project/one']);
   });
 });
+
+function createPortHarness(preferredPort: number) {
+  let available = false;
+  let ephemeral = 5100;
+  const requested: Array<number | undefined> = [];
+  const closed: number[] = [];
+
+  const startServer = async (
+    root: string,
+    options?: { preferredPort?: number },
+  ): Promise<McpServerHandle> => {
+    requested.push(options?.preferredPort);
+    if (options?.preferredPort !== undefined) {
+      if (!available) {
+        const failure = new Error('in use') as NodeJS.ErrnoException;
+        failure.code = 'EADDRINUSE';
+        throw failure;
+      }
+      return handle(preferredPort, root);
+    }
+    ephemeral += 1;
+    return handle(ephemeral, root);
+  };
+
+  function handle(port: number, root: string): McpServerHandle {
+    return {
+      url: `http://127.0.0.1:${port}/mcp`,
+      port,
+      workspaceRoot: root,
+      close: async () => {
+        closed.push(port);
+      },
+    };
+  }
+
+  const service = new McpServerService({
+    startServer,
+    getWorkspaceRoot: () => '/project/one',
+    preferredPort,
+    claimRetryMs: 10,
+    isPortAvailable: async () => available,
+  });
+
+  return {
+    service,
+    requested,
+    closed,
+    releasePreferred: () => {
+      available = true;
+    },
+  };
+}
+
+describe('preferred port', () => {
+  it('binds the preferred port when it is free', async () => {
+    const h = createPortHarness(8899);
+    h.releasePreferred();
+
+    const status = await h.service.start();
+
+    assert.strictEqual(status.port, 8899);
+    assert.deepStrictEqual(h.requested, [8899]);
+  });
+
+  it('falls back to an ephemeral port when another window holds it', async () => {
+    const h = createPortHarness(8899);
+
+    const status = await h.service.start();
+
+    assert.strictEqual(status.phase, 'running');
+    assert.notStrictEqual(status.port, 8899);
+    await h.service.stop();
+  });
+
+  it('claims the preferred port once it becomes free and closes the old one', async () => {
+    const h = createPortHarness(8899);
+    const first = await h.service.start();
+    const ephemeralPort = first.port as number;
+
+    h.releasePreferred();
+    await new Promise((resolve) => setTimeout(resolve, 80));
+
+    const status = h.service.getStatus();
+    assert.strictEqual(status.port, 8899);
+    assert.ok(h.closed.includes(ephemeralPort));
+    await h.service.stop();
+  });
+
+  it('stops claiming after the service stops', async () => {
+    const h = createPortHarness(8899);
+    await h.service.start();
+    await h.service.stop();
+
+    const before = h.requested.length;
+    h.releasePreferred();
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    assert.strictEqual(h.requested.length, before);
+  });
+});
