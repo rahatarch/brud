@@ -137,7 +137,11 @@ export async function startHttpServer(
     const onError = (error: NodeJS.ErrnoException) => {
       httpServer.removeListener('listening', onListening);
       if (error.code === 'EADDRINUSE') {
-        reject(new Error(`Port ${options.port} is already in use.`));
+        const failure = new Error(
+          `Port ${options.port} is already in use.`,
+        ) as NodeJS.ErrnoException;
+        failure.code = 'EADDRINUSE';
+        reject(failure);
         return;
       }
       reject(error);
