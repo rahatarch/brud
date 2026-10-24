@@ -112,8 +112,13 @@ async function walkDirectory(
       if (results.length < (query.maxResults ?? Infinity)) {
         let statSize = 0;
         try {
-          const content = await fs.readFile(fullPath);
-          statSize = Buffer.byteLength(content, 'utf8');
+          if (typeof fs.stat === 'function') {
+            const meta = await fs.stat(fullPath);
+            statSize = meta.size;
+          } else {
+            const content = await fs.readFile(fullPath);
+            statSize = Buffer.byteLength(content, 'utf8');
+          }
         } catch {
           statSize = 0;
         }

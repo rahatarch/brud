@@ -17,6 +17,12 @@ export function getChatStatusMessage(
     }
   }
 
+  const firstError = result.errors && result.errors.length > 0 ? result.errors[0] : undefined;
+  const friendly = typeof firstError === 'string' ? firstError : firstError?.friendly;
+  if (typeof friendly === 'string' && friendly.trim().length > 0) {
+    return `Failed: ${friendly} Check the Report Panel.`;
+  }
+
   return 'Failed. Check the report at the Report Panel.';
 }
 

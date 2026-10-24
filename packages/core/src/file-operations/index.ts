@@ -1,7 +1,7 @@
 import path from 'path';
 import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
-import { isWithinWorkspaceFolder, validateWorkspacePath } from '../utils/workspacePath';
+import { createPathCache, isWithinWorkspaceFolder, validateWorkspacePath } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
 import { BrudAPI } from '../api/index';
 import type { BrudError } from '../api/types';
@@ -25,6 +25,7 @@ import {
   noValidOperationsError,
   validationError,
   toolDisabledError,
+  isBrudError,
 } from '../api/errors';
 import type { BrudSettings } from '../settings/types';
 import { DEFAULT_SETTINGS } from '../settings/types';
@@ -33,6 +34,7 @@ import { extractCodebaseMetadata } from '../metadata-extractor';
 import { searchFiles } from '../search/fileSearch';
 import { isGlobPattern } from '../search/globMatcher.js';
 import { readFiles, readDirectoryFiles } from '../read-engine/index.js';
+import type { ReadResult } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
@@ -61,6 +63,8 @@ export interface OperationResult {
   kind: string;
   status: 'success' | 'aborted' | 'failed' | 'interrupted';
   message: string;
+  code?: string;
+  details?: string;
   path: string;
   from?: string;
   to?: string;
@@ -84,7 +88,27 @@ export interface FileOperationResult {
   sessionId?: string;
 }
 
+function summarizeReadResult(operationIndex: number, data: ReadResult): string {
+  const skipped = data.skips?.length ?? 0;
+  const truncated = data.truncated ? 'yes' : 'no';
+  const limitHit = data.limitHit ? `, limit=${data.limitHit}` : '';
+  return `Read summary [operation ${operationIndex}]: delivered=${data.totalFiles} file(s), bytes=${data.totalSize}, skipped=${skipped}, truncated=${truncated}${limitHit}`;
+}
 
+
+
+function getOperationTargetPath(operation: FileOperation): string {
+  if ('directoryPath' in operation && typeof operation.directoryPath === 'string') {
+    return operation.directoryPath;
+  }
+  if ('path' in operation && typeof operation.path === 'string') {
+    return operation.path;
+  }
+  if ('from' in operation && typeof operation.from === 'string') {
+    return operation.from;
+  }
+  return '';
+}
 
 export async function executeFileOperations(
   operations: FileOperation[],
@@ -103,13 +127,14 @@ export async function executeFileOperations(
   }
 
   const errors: BrudError[] = [];
+  const pathCache = createPathCache();
 
   function validatePath(inputPath: string, folders: string[]): { valid: true; resolvedPath: string } | { valid: false; error: string } {
     if (!settings.workspaceBoundaryEnabled) {
       const base = folders.length > 0 ? path.resolve(folders[0]) : process.cwd();
       return { valid: true, resolvedPath: path.resolve(base, inputPath) };
     }
-    return validateWorkspacePath(inputPath, folders);
+    return validateWorkspacePath(inputPath, folders, pathCache);
   }
   const operationResults: OperationResult[] = [];
   const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
@@ -118,7 +143,7 @@ export async function executeFileOperations(
   let sessionId: string | undefined;
   let preSnapshot: SnapshotData | undefined;
   const preResolvedMultiFiles: Map<number, string[]> = new Map();
-  const readResults: Map<number, { files: Array<{ path: string; content: string; size: number; startLine: number; endLine: number; totalLines: number; isImported?: boolean; importedFrom?: string }>; totalFiles: number; totalSize: number }> = new Map();
+  const readResults: Map<number, ReadResult> = new Map();
   let metadataResult: string | undefined;
   const searchResults: Map<number, string> = new Map();
   let existingSessionData: { filesAffected: string[]; preSnapshot: SnapshotData; postSnapshot: SnapshotData; operationResults: OperationResult[] } | undefined;
@@ -1228,21 +1253,6 @@ operationResults.push({
             continue;
           }
 
-          const filePath = result.resolvedPath;
-          const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
-          if (!fileExistsResult.success) {
-            errors.push(fileNotFoundError(filePath));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'read_file',
-              status: 'failed',
-              message: fileNotFoundError(filePath).details,
-              path: operation.path,
-            });
-            continue;
-          }
-
           const resultData = await readFiles(
             fs,
             [result.resolvedPath],
@@ -1252,6 +1262,7 @@ operationResults.push({
             operation.importSyntax,
             operation.start_line,
             operation.end_line,
+            { settings, pathCache, signal },
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1259,7 +1270,7 @@ operationResults.push({
             operationId: generateOperationId(),
             kind: 'read_file',
             status: 'success',
-            message: JSON.stringify(resultData),
+            message: summarizeReadResult(i, resultData),
             path: operation.path,
           });
           break;
@@ -1324,6 +1335,7 @@ operationResults.push({
             operation.importSyntax,
             operation.start_line,
             operation.end_line,
+            { settings, pathCache, signal },
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1331,7 +1343,7 @@ operationResults.push({
             operationId: generateOperationId(),
             kind: 'read_files',
             status: 'success',
-            message: JSON.stringify(resultData),
+            message: summarizeReadResult(i, resultData),
             path: operation.directory || '',
           });
           break;
@@ -1368,6 +1380,7 @@ operationResults.push({
             operation.importSyntax,
             operation.start_line,
             operation.end_line,
+            { settings, pathCache, signal },
           );
           readResults.set(i, resultData);
           operationResults.push({
@@ -1375,7 +1388,7 @@ operationResults.push({
             operationId: generateOperationId(),
             kind: 'read_directory',
             status: 'success',
-            message: JSON.stringify(resultData),
+            message: summarizeReadResult(i, resultData),
             path: operation.directoryPath,
           });
           break;
@@ -1654,16 +1667,40 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
         }
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const targetPath = getOperationTargetPath(operation);
+
+      if (isBrudError(err)) {
+        errors.push(err);
+        operationResults.push({
+          operationIndex: i,
+          operationId: generateOperationId(),
+          kind: operation.kind,
+          status: 'failed',
+          message: err.friendly || err.message || err.details,
+          ...(err.code ? { code: err.code } : {}),
+          ...(err.details ? { details: err.details } : {}),
+          path: targetPath,
+        });
+        continue;
+      }
+
+      const message = err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null
+          ? JSON.stringify(err)
+          : String(err);
       const stack = err instanceof Error && err.stack ? `\nStack: ${err.stack}` : '';
-      errors.push(unexpectedError(operation.kind, message + (operation.kind === 'extract_structure' ? stack : '')));
+      const unexpected = unexpectedError(operation.kind, message + (operation.kind === 'extract_structure' ? stack : ''));
+      errors.push(unexpected);
       operationResults.push({
         operationIndex: i,
-              operationId: generateOperationId(),
+        operationId: generateOperationId(),
         kind: operation.kind,
         status: 'failed',
         message: `Unexpected error: ${message}`,
-        path: '',
+        ...(unexpected.code ? { code: unexpected.code } : {}),
+        ...(unexpected.details ? { details: unexpected.details } : {}),
+        path: targetPath,
       });
     }
   }
@@ -1699,6 +1736,9 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
       files: data.files,
       totalFiles: data.totalFiles,
       totalSize: data.totalSize,
+      skips: data.skips,
+      truncated: data.truncated,
+      limitHit: data.limitHit,
     }));
   }
 
@@ -1716,10 +1756,10 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
 
   if (Object.keys(combined).length > 0) {
     result = {
-      success: true,
+      success: errors.length === 0,
       message: JSON.stringify(combined),
       operationResults,
-      errors: [],
+      errors,
       sessionId,
     };
   } else {

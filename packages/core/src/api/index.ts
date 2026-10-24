@@ -2,7 +2,8 @@ import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
 import type { FileOperation } from '../types/patch';
 import { getWorkspaceRootForPath } from '../utils/workspacePath';
-import type { BrudError as BrudErrorType, ValidationResult } from './types';
+import type { PathCache } from '../utils/workspacePath';
+import type { ValidationResult } from './types';
 import {
   noWorkspaceError,
   pathOutsideWorkspaceError,
@@ -41,6 +42,9 @@ import {
   promptNotFoundError,
   promptInvalidFieldError,
   invalidLineRangeError,
+  batchLimitExceededError,
+  BrudError,
+  isBrudError,
 } from './errors';
 
 export {
@@ -81,27 +85,12 @@ export {
   promptNotFoundError,
   promptInvalidFieldError,
   invalidLineRangeError,
+  batchLimitExceededError,
+  BrudError,
+  isBrudError,
 };
 
 export type { ValidationResult } from './types';
-
-export class BrudError extends Error {
-  code: string;
-  friendly: string;
-  details: string;
-  path?: string;
-  command?: string;
-
-  constructor(opts: BrudErrorType) {
-    super(opts.details);
-    this.name = 'BrudError';
-    this.code = opts.code;
-    this.friendly = opts.friendly;
-    this.details = opts.details;
-    this.path = opts.path;
-    this.command = opts.command;
-  }
-}
 
 const DANGEROUS_PATTERNS: RegExp[] = [
   /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
@@ -245,6 +234,10 @@ function validateCdTarget(command: string, target: string, currentCwd: string, w
 }
 
 export const BrudAPI = {
+  errors: {
+    batchLimitExceededError,
+  },
+
   validate: {
     workspace(workspaceFolders: string[]): ValidationResult {
       if (!workspaceFolders || workspaceFolders.length === 0) {
@@ -253,13 +246,13 @@ export const BrudAPI = {
       return success(workspaceFolders);
     },
 
-    path(path: string, workspaceFolders: string[], options?: { operationKind?: string }): ValidationResult {
+    path(path: string, workspaceFolders: string[], options?: { operationKind?: string; cache?: PathCache }): ValidationResult {
       const wsResult = this.workspace(workspaceFolders);
       if (!wsResult.success) {
         return wsResult;
       }
 
-      const root = getWorkspaceRootForPath(path, workspaceFolders);
+      const root = getWorkspaceRootForPath(path, workspaceFolders, options?.cache);
       if (!root) {
         return fail(pathOutsideWorkspaceError(path));
       }

@@ -47,3 +47,13 @@ class BrudError extends Error {
 | 27 | `invalidRevertRequestError()` | `INVALID_REVERT_REQUEST` | Invalid revert request. | Cannot revert without sessionId and targetState. | — |
 | 28 | `validationError(errorString)` | `VALIDATION_ERROR` | `${errorString}` | `${errorString}` | — |
 | 29 | `unexpectedError(operationKind, message)` | `UNEXPECTED_ERROR` | An unexpected error occurred. | Unexpected error during `${operationKind}`: `${message}` | — |
+| 30 | `batchLimitExceededError(requested, limit)` | `BATCH_LIMIT_EXCEEDED` | Read batch too large. | `Requested ${requested} files; the limit is ${limit} per batch. Narrow the pattern, add excludePatterns, or split the read into sequential batches of ${limit} or fewer.` | — |
+
+## BATCH_LIMIT_EXCEEDED
+
+- **Code:** `BATCH_LIMIT_EXCEEDED`
+- **Factory:** `batchLimitExceededError(requested, limit)` in `packages/core/src/api/errors.ts`, re-exported from `@brud/core` and reachable as `BrudAPI.errors.batchLimitExceededError`.
+- **Friendly message:** `Read batch too large.`
+- **Trigger:** a direct `read_file` / `read_files` / `read_directory` expansion asks for more files than the resolved batch ceiling. The default ceiling is `MAX_BATCH_FILES` (100). `readMaxBatchFiles` may lower that ceiling but the core clamp keeps it at or below 100, so the refusal also applies when a settings override is configured.
+- **When it fires:** before any file body is read. The refusal is atomic — no file is opened and no partial content is returned. The offending operation is recorded as `failed` with this error in `errors[]`; sibling operations in the same paste block still run.
+- **Recovery:** narrow the pattern, add `excludePatterns`, or split the read into sequential batches of `limit` files or fewer. `details` reports both the requested count and the effective limit.

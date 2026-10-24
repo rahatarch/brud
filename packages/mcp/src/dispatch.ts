@@ -58,15 +58,59 @@ export function sanitizeText(text: string, workspaceRoot: string): string {
   return sanitized.trim();
 }
 
+const SANITIZED_KEYS = new Set([
+  'path',
+  'filePath',
+  'resolvedPath',
+  'directoryPath',
+  'root',
+  'from',
+  'to',
+  'importedFrom',
+  'files',
+  'modified',
+  'skipped',
+  'failed',
+  'message',
+  'error',
+  'details',
+  'friendly',
+]);
+
+function sanitizePayload(value: unknown, workspaceRoot: string, key?: string, seen = new WeakSet<object>()): unknown {
+  if (typeof value === 'string') {
+    return key !== undefined && SANITIZED_KEYS.has(key) ? sanitizeText(value, workspaceRoot) : value;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => sanitizePayload(item, workspaceRoot, key, seen));
+  }
+
+  if (value !== null && typeof value === 'object') {
+    if (seen.has(value)) {
+      return value;
+    }
+    seen.add(value);
+    const sanitized: Record<string, unknown> = {};
+    for (const [childKey, childValue] of Object.entries(value as Record<string, unknown>)) {
+      sanitized[childKey] = sanitizePayload(childValue, workspaceRoot, childKey, seen);
+    }
+    return sanitized;
+  }
+
+  return value;
+}
+
 function formatSuccess(envelope: KernelEnvelope, workspaceRoot: string): string {
+  if (envelope.data !== undefined && envelope.data !== null) {
+    return JSON.stringify(sanitizePayload(envelope.data, workspaceRoot), null, 2);
+  }
+
   if (typeof envelope.message === 'string' && envelope.message.length > 0) {
     return sanitizeText(envelope.message, workspaceRoot);
   }
-  try {
-    return sanitizeText(JSON.stringify(envelope.data ?? null, null, 2), workspaceRoot);
-  } catch {
-    return sanitizeText(String(envelope.data), workspaceRoot);
-  }
+
+  return 'null';
 }
 
 function formatFailureMessage(envelope: KernelEnvelope, workspaceRoot: string): string {
@@ -93,7 +137,7 @@ function formatFailureMessage(envelope: KernelEnvelope, workspaceRoot: string): 
   if (parts.length === 0) {
     parts.push('The operation failed without a detailed message.');
   }
-  return sanitizeText(Array.from(new Set(parts)).join('\n'), workspaceRoot);
+  return Array.from(new Set(parts.map((part) => sanitizeText(part, workspaceRoot)))).join('\n');
 }
 
 function generateReference(): string {

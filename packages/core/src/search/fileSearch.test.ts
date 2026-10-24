@@ -5,6 +5,7 @@ import * as pathModule from 'path';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { searchFiles } from './fileSearch.js';
 import { matchGlob, isGlobPattern } from './globMatcher.js';
+import type { FileSystem } from '../types/filesystem.js';
 
 describe('globMatcher', () => {
   it('matches * as any characters except slash', () => {
@@ -200,5 +201,97 @@ describe('fileSearch', () => {
     assert.ok(typeof result.extension === 'string');
     assert.ok(typeof result.directory === 'string');
     assert.ok(typeof result.size === 'number');
+  });
+});
+function createInstrumentedPort(
+  inner: NodeFileSystem,
+  counters: { stat: number; body: number },
+  options: { withStat: boolean },
+): FileSystem {
+  const overrides: Partial<FileSystem> = {
+    readFile: async (target: string) => {
+      counters.body++;
+      return inner.readFile(target);
+    },
+    readFileBytes: async (target: string) => {
+      counters.body++;
+      return new Uint8Array(await fs.readFile(target));
+    },
+    stat: async (target: string) => {
+      counters.stat++;
+      const meta = await fs.stat(target);
+      return { size: meta.size, isDirectory: meta.isDirectory() };
+    },
+  };
+
+  return new Proxy(inner, {
+    get(target, property, receiver) {
+      if (property === 'stat' && !options.withStat) {
+        return undefined;
+      }
+      if (property in overrides) {
+        return overrides[property as keyof FileSystem];
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as FileSystem;
+}
+
+describe('fileSearch read-once sizing', () => {
+  let tempDir: string;
+  let nodeFs: NodeFileSystem;
+
+  before(async () => {
+    tempDir = await fs.mkdtemp('/tmp/brud-search-size-');
+    nodeFs = new NodeFileSystem();
+    await nodeFs.createDirectory(pathModule.join(tempDir, 'src'));
+    await nodeFs.writeFile(pathModule.join(tempDir, 'src', 'a.ts'), 'export const a = 1;');
+    await nodeFs.writeFile(pathModule.join(tempDir, 'src', 'b.ts'), 'export const b = 2;\n');
+  });
+
+  after(async () => {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it('uses fs.stat and never reads file bodies when stat is available', async () => {
+    const counters = { stat: 0, body: 0 };
+    const port = createInstrumentedPort(nodeFs, counters, { withStat: true });
+
+    const response = await searchFiles(port, {
+      patterns: ['**/*'],
+      extensions: ['.ts'],
+      directory: tempDir,
+      recursive: true,
+    });
+
+    assert.strictEqual(counters.body, 0);
+    assert.ok(counters.stat >= 2);
+
+    const a = response.results.find((entry) => entry.path.endsWith('a.ts'));
+    const b = response.results.find((entry) => entry.path.endsWith('b.ts'));
+    assert.ok(a);
+    assert.ok(b);
+    assert.strictEqual(a!.size, Buffer.byteLength('export const a = 1;', 'utf8'));
+    assert.strictEqual(b!.size, Buffer.byteLength('export const b = 2;\n', 'utf8'));
+  });
+
+  it('falls back to a body read when the port has no stat', async () => {
+    const counters = { stat: 0, body: 0 };
+    const port = createInstrumentedPort(nodeFs, counters, { withStat: false });
+
+    const response = await searchFiles(port, {
+      patterns: ['**/*'],
+      extensions: ['.ts'],
+      directory: tempDir,
+      recursive: true,
+    });
+
+    assert.strictEqual(counters.stat, 0);
+    assert.ok(counters.body >= 2);
+
+    const a = response.results.find((entry) => entry.path.endsWith('a.ts'));
+    assert.ok(a);
+    assert.strictEqual(a!.size, Buffer.byteLength('export const a = 1;', 'utf8'));
   });
 });

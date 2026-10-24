@@ -201,6 +201,8 @@ export interface OperationResult {
   kind: string;
   status: 'success' | 'aborted' | 'failed' | 'interrupted';
   message: string;
+  code?: string;
+  details?: string;
   path: string;
   title?: string;
   description?: string;

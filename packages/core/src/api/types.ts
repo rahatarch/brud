@@ -10,6 +10,7 @@ export interface BrudError {
   code: string;
   friendly: string;
   details: string;
+  message?: string;
   path?: string;
   command?: string;
   operationKind?: string;

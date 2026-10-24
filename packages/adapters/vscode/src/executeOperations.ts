@@ -1,10 +1,21 @@
-import { bootCoreKernel, noWorkspaceError } from '@brud/core';
+import { bootCoreKernel, noWorkspaceError, isBrudError } from '@brud/core';
 import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings, ChunkCallback, HistoryStore } from '@brud/core';
 import { DEFAULT_SETTINGS } from '@brud/core';
 import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
 import type { TerminalExecutor } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
+
+function describeThrownError(err: unknown): { code: string; friendly: string; details: string } {
+  if (isBrudError(err)) {
+    return { code: err.code, friendly: err.friendly, details: err.details };
+  }
+  if (err instanceof Error) {
+    return { code: 'EXECUTION_ERROR', friendly: err.message, details: err.message };
+  }
+  const text = typeof err === 'object' && err !== null ? JSON.stringify(err) : String(err);
+  return { code: 'EXECUTION_ERROR', friendly: text, details: text };
+}
 
 export async function executeOperationsFromVSCode(
   operations: FileOperation[],
@@ -138,17 +149,16 @@ export async function executeOperationsFromVSCode(
         });
       }
     } catch (err) {
-      errors.push({
-        code: 'EXECUTION_ERROR',
-        friendly: String(err),
-        details: String(err),
-      });
+      const described = describeThrownError(err);
+      errors.push(described);
       operationResults.push({
         operationIndex: i,
         operationId: `OP-${Date.now()}-${String(i).padStart(3, '0')}`,
         kind: operation.kind,
         status: 'failed',
-        message: `Unexpected error: ${err instanceof Error ? err.message : String(err)}`,
+        message: `Unexpected error: ${described.friendly}`,
+        ...(described.code ? { code: described.code } : {}),
+        ...(described.details ? { details: described.details } : {}),
         path: 'path' in operation ? (operation as any).path || '' : '',
       });
     }

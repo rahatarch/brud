@@ -8,6 +8,11 @@ export class VSCodeFileSystem implements FileSystem {
     return Buffer.from(data).toString('utf8');
   }
 
+  async readFileBytes(path: string): Promise<Uint8Array> {
+    const uri = vscode.Uri.file(path);
+    return vscode.workspace.fs.readFile(uri);
+  }
+
   async writeFile(path: string, content: string): Promise<void> {
     const uri = vscode.Uri.file(path);
     await vscode.workspace.fs.writeFile(uri, Buffer.from(content, 'utf8'));
@@ -38,6 +43,12 @@ export class VSCodeFileSystem implements FileSystem {
     } catch {
       return false;
     }
+  }
+
+  async stat(path: string): Promise<{ size: number; isDirectory: boolean }> {
+    const uri = vscode.Uri.file(path);
+    const stat = await vscode.workspace.fs.stat(uri);
+    return { size: stat.size, isDirectory: (stat.type & vscode.FileType.Directory) !== 0 };
   }
 
   async createDirectory(path: string): Promise<void> {

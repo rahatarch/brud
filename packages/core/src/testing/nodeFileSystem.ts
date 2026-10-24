@@ -6,6 +6,9 @@ export class NodeFileSystem implements FileSystem {
   async readFile(filePath: string): Promise<string> {
     return fs.readFile(filePath, 'utf8');
   }
+  async readFileBytes(filePath: string): Promise<Uint8Array> {
+    return fs.readFile(filePath);
+  }
   async writeFile(filePath: string, content: string): Promise<void> {
     await fs.mkdir(pathModule.dirname(filePath), { recursive: true });
     return fs.writeFile(filePath, content, 'utf8');
@@ -28,6 +31,10 @@ export class NodeFileSystem implements FileSystem {
     } catch {
       return false;
     }
+  }
+  async stat(filePath: string): Promise<{ size: number; isDirectory: boolean }> {
+    const stats = await fs.stat(filePath);
+    return { size: stats.size, isDirectory: stats.isDirectory() };
   }
   async createDirectory(dirPath: string): Promise<void> {
     await fs.mkdir(dirPath, { recursive: true });
