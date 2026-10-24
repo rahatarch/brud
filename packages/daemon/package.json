@@ -1,0 +1,21 @@
+{
+  "name": "@brud/daemon",
+  "version": "0.0.1",
+  "description": "Brud daemon transport and JSON-RPC dispatch harness",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "brud-daemon": "dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "node --import tsx --test \"src/__tests__/*.test.ts\""
+  },
+  "dependencies": {
+    "@brud/kernel": "^0.1.4",
+    "@brud/protocol": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}
