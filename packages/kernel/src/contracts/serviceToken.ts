@@ -23,10 +23,14 @@ export interface ServiceToken<TService> {
  *
  * @typeParam TService - The public interface exposed by the service.
  * @param id - Stable identifier for the service.
- * @param description - Short explanation of what the service provides.
+ * @param description - Short explanation of what the service provides. When
+ * omitted, a description is derived from the identifier.
  * @returns A phantom-branded token bound to `TService`.
  */
-export function createServiceToken<TService>(id: string, description: string): ServiceToken<TService> {
+export function createServiceToken<TService>(
+  id: string,
+  description: string = `Service "${id}"`,
+): ServiceToken<TService> {
   return {
     id,
     description,
