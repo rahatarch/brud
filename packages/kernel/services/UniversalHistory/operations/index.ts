@@ -9,3 +9,9 @@ export type {
   CaptureBaselineResult,
   InvalidBaselinePathReason,
 } from './capture_baseline/types.js';
+
+export * from './compute_delta/index.js';
+export * from './attach_execution/index.js';
+export * from './commit_session/index.js';
+export * from './plan_reversal/index.js';
+export * from './execute_reversal/index.js';

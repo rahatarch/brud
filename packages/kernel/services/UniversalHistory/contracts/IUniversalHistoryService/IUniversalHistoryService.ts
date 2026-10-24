@@ -1,16 +1,14 @@
-import type { BaselineSnapshot, SessionManifest } from './types.js';
+import type { CommitReceipt } from '../../operations/commit_session/types.js';
+import type { ReversalReceipt } from '../../operations/execute_reversal/types.js';
+import type {
+  PlanReversalOptions,
+  ReversalPlan,
+} from '../../operations/plan_reversal/types.js';
+import type { LedgerQueryFilter, SessionRow } from '../../storage/SqliteLedger/types.js';
+import type { SessionManifest } from './types.js';
 
-/** Options accepted when opening a new history session. */
-export interface BeginSessionOptions {
-  readonly prompt: string;
-  readonly declaredTargets?: readonly string[];
-}
-
-/** Options accepted when listing session manifests. */
-export interface ListManifestsOptions {
-  readonly includeDeleted?: boolean;
-  readonly limit?: number;
-}
+/** Outcome accepted when finalizing a session. */
+export type CommitOutcome = 'completed' | 'aborted';
 
 /**
  * High-integrity transactional history and reversal ledger service.
@@ -20,11 +18,55 @@ export interface ListManifestsOptions {
  * by this service is workspace-relative.
  */
 export interface IUniversalHistoryService {
-  beginSession(options: BeginSessionOptions): Promise<{ sessionId: string }>;
+  /**
+   * Opens a session and captures the pre-mutation baseline of every declared
+   * target.
+   *
+   * @param prompt - Prompt describing the session's intent.
+   * @param declaredTargets - Workspace-relative paths expected to mutate.
+   * @returns The allocated session identifier.
+   */
+  beginSession(prompt: string, declaredTargets?: readonly string[]): Promise<string>;
 
-  captureBaseline(sessionId: string, relativePaths: readonly string[]): Promise<BaselineSnapshot>;
+  /**
+   * Finalizes a session.
+   *
+   * A `'completed'` session persists its forward deltas, including binary CAS
+   * blobs. An `'aborted'` session is closed without persisting file rows.
+   *
+   * @param sessionId - Session to finalize.
+   * @param outcome - Final session outcome.
+   * @returns The commit receipt describing persisted rows and blobs.
+   */
+  commitSession(sessionId: string, outcome: CommitOutcome): Promise<CommitReceipt>;
 
-  getManifest(sessionId: string): Promise<SessionManifest | null>;
+  /**
+   * Builds a deterministic, side-effect-free reversal plan.
+   *
+   * @param sessionId - Session to reverse.
+   * @param options - Target state and planning options.
+   */
+  planReversal(sessionId: string, options?: PlanReversalOptions): Promise<ReversalPlan>;
 
-  listManifests(options?: ListManifestsOptions): Promise<readonly SessionManifest[]>;
+  /**
+   * Applies an executable reversal plan to the workspace.
+   *
+   * @param plan - Plan produced by {@link IUniversalHistoryService.planReversal}.
+   */
+  executeReversal(plan: ReversalPlan): Promise<ReversalReceipt>;
+
+  /**
+   * Resolves a session manifest.
+   *
+   * @param sessionId - Session to inspect.
+   * @returns The manifest, or `null` when the session is unknown.
+   */
+  getSession(sessionId: string): Promise<SessionManifest | null>;
+
+  /**
+   * Lists durable session rows newest-first.
+   *
+   * @param filter - Optional soft-delete, status, time, and pagination filters.
+   */
+  listSessions(filter?: LedgerQueryFilter): Promise<readonly SessionRow[]>;
 }

@@ -9,7 +9,6 @@ export type {
 } from './IUniversalHistoryService/types.js';
 export { SESSION_ID_PATTERN, isSessionId } from './IUniversalHistoryService/types.js';
 export type {
-  BeginSessionOptions,
+  CommitOutcome,
   IUniversalHistoryService,
-  ListManifestsOptions,
 } from './IUniversalHistoryService/IUniversalHistoryService.js';
