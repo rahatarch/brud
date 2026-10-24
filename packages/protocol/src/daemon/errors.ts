@@ -1,0 +1,58 @@
+export const RPC_ERROR_CODES = {
+  PARSE_ERROR: -32700,
+  INVALID_REQUEST: -32600,
+  METHOD_NOT_FOUND: -32601,
+  INVALID_PARAMS: -32602,
+  INTERNAL_ERROR: -32603,
+  AUTH_FAILED: -32001,
+  HANDSHAKE_REQUIRED: -32002,
+  WORKSPACE_MISMATCH: -32003,
+  PROTOCOL_VERSION_MISMATCH: -32004,
+  ALREADY_HANDSHAKEN: -32005,
+  PATH_VIOLATION: -32010,
+  READ_ONLY_VIOLATION: -32011,
+  NOT_IMPLEMENTED: -32012,
+  FILE_NOT_FOUND: -32013,
+  STORAGE_ERROR: -32014,
+  LIFECYCLE_STATE: -32015,
+  ACCESS_DENIED: -32016,
+} as const;
+
+export type RpcErrorCode = (typeof RPC_ERROR_CODES)[keyof typeof RPC_ERROR_CODES];
+
+export const PARSE_ERROR = RPC_ERROR_CODES.PARSE_ERROR;
+export const INVALID_REQUEST = RPC_ERROR_CODES.INVALID_REQUEST;
+export const METHOD_NOT_FOUND = RPC_ERROR_CODES.METHOD_NOT_FOUND;
+export const INVALID_PARAMS = RPC_ERROR_CODES.INVALID_PARAMS;
+export const INTERNAL_ERROR = RPC_ERROR_CODES.INTERNAL_ERROR;
+export const AUTH_FAILED = RPC_ERROR_CODES.AUTH_FAILED;
+export const HANDSHAKE_REQUIRED = RPC_ERROR_CODES.HANDSHAKE_REQUIRED;
+export const WORKSPACE_MISMATCH = RPC_ERROR_CODES.WORKSPACE_MISMATCH;
+export const PROTOCOL_VERSION_MISMATCH = RPC_ERROR_CODES.PROTOCOL_VERSION_MISMATCH;
+export const ALREADY_HANDSHAKEN = RPC_ERROR_CODES.ALREADY_HANDSHAKEN;
+export const PATH_VIOLATION = RPC_ERROR_CODES.PATH_VIOLATION;
+export const READ_ONLY_VIOLATION = RPC_ERROR_CODES.READ_ONLY_VIOLATION;
+export const NOT_IMPLEMENTED = RPC_ERROR_CODES.NOT_IMPLEMENTED;
+export const FILE_NOT_FOUND = RPC_ERROR_CODES.FILE_NOT_FOUND;
+export const STORAGE_ERROR = RPC_ERROR_CODES.STORAGE_ERROR;
+export const LIFECYCLE_STATE = RPC_ERROR_CODES.LIFECYCLE_STATE;
+export const ACCESS_DENIED = RPC_ERROR_CODES.ACCESS_DENIED;
+
+export interface RpcErrorDetails {
+  readonly errorCode?: string;
+  readonly rule?: string;
+  readonly path?: string;
+  readonly root?: string;
+  readonly reason?: string;
+  readonly operation?: string;
+  readonly expected?: string;
+  readonly actual?: string;
+  readonly syscall?: string;
+  readonly method?: string;
+}
+
+export interface RpcErrorData {
+  readonly code: RpcErrorCode;
+  readonly message: string;
+  readonly data?: RpcErrorDetails;
+}
