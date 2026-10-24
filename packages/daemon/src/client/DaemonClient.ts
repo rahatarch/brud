@@ -10,6 +10,16 @@ import type {
   FsListResult,
   FsReadFileResult,
   FsWriteAtomicResult,
+  HistoryBeginSessionResult,
+  HistoryCommitOutcome,
+  HistoryCommitSessionResult,
+  HistoryGetResult,
+  HistoryListParams,
+  HistoryListResult,
+  HistoryReversalTargetState,
+  HistoryRevertResult,
+  HistorySessionManifest,
+  HistorySessionRow,
   JsonRpcId,
   RpcNotification,
   RpcRequest,
@@ -283,6 +293,60 @@ export class DaemonClient {
     const result = await this.request<FsListResult>(Protocol.FS_LIST, { path });
 
     return limit === undefined ? result.entries : result.entries.slice(0, limit);
+  }
+
+  async historyBeginSession(
+    prompt: string,
+    targets?: readonly string[],
+  ): Promise<string> {
+    const result = await this.request<HistoryBeginSessionResult>(
+      Protocol.HISTORY_BEGIN_SESSION,
+      {
+        prompt,
+        ...(targets === undefined ? {} : { targets }),
+      },
+    );
+
+    return result.sessionId;
+  }
+
+  async historyCommitSession(
+    sessionId: string,
+    outcome: HistoryCommitOutcome = 'completed',
+  ): Promise<HistoryCommitSessionResult> {
+    return this.request<HistoryCommitSessionResult>(Protocol.HISTORY_COMMIT_SESSION, {
+      sessionId,
+      outcome,
+    });
+  }
+
+  async historyRevert(
+    sessionId: string,
+    targetState?: HistoryReversalTargetState,
+  ): Promise<HistoryRevertResult> {
+    return this.request<HistoryRevertResult>(Protocol.HISTORY_REVERT, {
+      sessionId,
+      ...(targetState === undefined ? {} : { targetState }),
+    });
+  }
+
+  async historyList(
+    filter?: HistoryListParams,
+  ): Promise<readonly HistorySessionRow[]> {
+    const result = await this.request<HistoryListResult>(
+      Protocol.HISTORY_LIST,
+      filter ?? {},
+    );
+
+    return result.sessions;
+  }
+
+  async historyGet(sessionId: string): Promise<HistorySessionManifest | null> {
+    const result = await this.request<HistoryGetResult>(Protocol.HISTORY_GET, {
+      sessionId,
+    });
+
+    return result.session;
   }
 
   async close(): Promise<void> {

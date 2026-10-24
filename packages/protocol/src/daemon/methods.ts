@@ -11,10 +11,10 @@ export const FS_LIST = 'fs.list';
 export const FS_STAT = 'fs.stat';
 
 export const HISTORY_BEGIN_SESSION = 'history.beginSession';
-export const HISTORY_END_SESSION = 'history.endSession';
-export const HISTORY_GET_SESSION = 'history.getSession';
+export const HISTORY_COMMIT_SESSION = 'history.commitSession';
+export const HISTORY_REVERT = 'history.revert';
 export const HISTORY_LIST = 'history.list';
-export const HISTORY_RECORD_EVENT = 'history.recordEvent';
+export const HISTORY_GET = 'history.get';
 
 export const DAEMON_METHODS = [DAEMON_CONNECT, DAEMON_PING, DAEMON_INFO] as const;
 export type DaemonMethod = (typeof DAEMON_METHODS)[number];
@@ -24,12 +24,22 @@ export type FsMethod = (typeof FS_METHODS)[number];
 
 export const HISTORY_METHODS = [
   HISTORY_BEGIN_SESSION,
-  HISTORY_END_SESSION,
-  HISTORY_GET_SESSION,
+  HISTORY_COMMIT_SESSION,
+  HISTORY_REVERT,
   HISTORY_LIST,
-  HISTORY_RECORD_EVENT,
+  HISTORY_GET,
 ] as const;
 export type HistoryMethod = (typeof HISTORY_METHODS)[number];
+
+/** Capability names advertised by a history-enabled daemon. */
+export const HISTORY_CAPABILITIES = [
+  'beginSession',
+  'commitSession',
+  'revert',
+  'list',
+  'get',
+] as const;
+export type HistoryCapability = (typeof HISTORY_CAPABILITIES)[number];
 
 export const HISTORY_METHOD_PREFIX = 'history.';
 
@@ -62,7 +72,7 @@ export interface DaemonCapabilities {
   readonly protocolVersion: DaemonProtocolVersion;
   readonly workspaceRoot: string;
   readonly fs: readonly FsMethod[];
-  readonly history: readonly HistoryMethod[];
+  readonly history: readonly HistoryCapability[];
 }
 
 export interface DaemonHandshakeResult {
@@ -157,6 +167,137 @@ export interface FsStatResult {
   readonly stat: FsStatEntry | null;
 }
 
+export type HistorySessionStatus = 'active' | 'committed' | 'aborted' | 'reverted';
+
+export type HistoryCommitOutcome = 'completed' | 'aborted';
+
+export type HistoryReversalTargetState = 'pre' | 'post';
+
+export type HistoryReversalActionKind = 'restore' | 'delete';
+
+export type HistoryReversalConflictCode = 'STALE_BASELINE_CONFLICT' | 'BLOB_NOT_FOUND';
+
+/** Durable session row returned by `history.list`. */
+export interface HistorySessionRow {
+  readonly session_id: string;
+  readonly created_at: string;
+  readonly prompt: string;
+  readonly status: HistorySessionStatus;
+  readonly files_affected: string;
+  readonly is_deleted: number;
+  readonly deleted_at: string | null;
+  readonly expires_at: string | null;
+}
+
+/** Digest record embedded in a session manifest. */
+export interface HistoryTargetDigest {
+  readonly relativePath: string;
+  readonly sha256: string;
+  readonly sizeBytes: number;
+  readonly isBinary: boolean;
+  readonly exists: boolean;
+}
+
+/** Session manifest returned by `history.get`. */
+export interface HistorySessionManifest {
+  readonly schemaVersion: 1;
+  readonly sessionId: string;
+  readonly createdAt: string;
+  readonly prompt: string;
+  readonly status: HistorySessionStatus;
+  readonly filesAffected: readonly string[];
+  readonly preDigests: Readonly<Record<string, HistoryTargetDigest>>;
+  readonly postDigests: Readonly<Record<string, HistoryTargetDigest>>;
+  readonly revertRecordIds?: readonly string[];
+  readonly isDeleted?: boolean;
+  readonly deletedAt?: string;
+  readonly expiresAt?: string;
+}
+
+export interface HistoryBeginSessionParams {
+  readonly prompt: string;
+  readonly targets?: readonly string[];
+}
+
+export interface HistoryBeginSessionResult {
+  readonly sessionId: string;
+}
+
+export interface HistoryCommitSessionParams {
+  readonly sessionId: string;
+  readonly outcome?: HistoryCommitOutcome;
+}
+
+export interface HistoryCasBlobWrite {
+  readonly sha256: string;
+  readonly relativePath: string;
+}
+
+export interface HistoryCommitSessionResult {
+  readonly sessionId: string;
+  readonly committedFileCount: number;
+  readonly committedAt: string;
+  readonly blobs: readonly HistoryCasBlobWrite[];
+}
+
+export interface HistoryRevertParams {
+  readonly sessionId: string;
+  readonly targetState?: HistoryReversalTargetState;
+}
+
+export interface HistoryReversalActionSummary {
+  readonly relativePath: string;
+  readonly action: HistoryReversalActionKind;
+  readonly expectedCurrentSha256: string;
+  readonly actualCurrentSha256: string | null;
+}
+
+export interface HistoryReversalConflict {
+  readonly relativePath: string;
+  readonly code: HistoryReversalConflictCode;
+  readonly message: string;
+  readonly expectedSha256: string;
+  readonly actualSha256: string | null;
+}
+
+export interface HistoryReversalReceipt {
+  readonly reversalId: string;
+  readonly sessionId: string;
+  readonly targetState: HistoryReversalTargetState;
+  readonly executedAt: string;
+  readonly filesRestored: number;
+  readonly filesDeleted: number;
+}
+
+export interface HistoryRevertResult {
+  readonly sessionId: string;
+  readonly targetState: HistoryReversalTargetState;
+  readonly isExecutable: boolean;
+  readonly actions: readonly HistoryReversalActionSummary[];
+  readonly conflicts: readonly HistoryReversalConflict[];
+  readonly receipt: HistoryReversalReceipt | null;
+}
+
+export interface HistoryListParams {
+  readonly includeDeleted?: boolean;
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly status?: HistorySessionStatus;
+  readonly since?: string;
+}
+
+export interface HistoryListResult {
+  readonly sessions: readonly HistorySessionRow[];
+}
+
+export interface HistoryGetParams {
+  readonly sessionId: string;
+}
+
+export interface HistoryGetResult {
+  readonly session: HistorySessionManifest | null;
+}
+
 export interface DaemonMethodMap {
   readonly 'daemon.connect': { readonly params: DaemonConnectParams; readonly result: DaemonHandshakeResult };
   readonly 'daemon.ping': { readonly params: DaemonPingParams; readonly result: DaemonPingResult };
@@ -166,6 +307,26 @@ export interface DaemonMethodMap {
   readonly 'fs.exists': { readonly params: FsExistsParams; readonly result: FsExistsResult };
   readonly 'fs.list': { readonly params: FsListParams; readonly result: FsListResult };
   readonly 'fs.stat': { readonly params: FsStatParams; readonly result: FsStatResult };
+  readonly 'history.beginSession': {
+    readonly params: HistoryBeginSessionParams;
+    readonly result: HistoryBeginSessionResult;
+  };
+  readonly 'history.commitSession': {
+    readonly params: HistoryCommitSessionParams;
+    readonly result: HistoryCommitSessionResult;
+  };
+  readonly 'history.revert': {
+    readonly params: HistoryRevertParams;
+    readonly result: HistoryRevertResult;
+  };
+  readonly 'history.list': {
+    readonly params: HistoryListParams;
+    readonly result: HistoryListResult;
+  };
+  readonly 'history.get': {
+    readonly params: HistoryGetParams;
+    readonly result: HistoryGetResult;
+  };
 }
 
 export type DaemonRequestMethod = keyof DaemonMethodMap;

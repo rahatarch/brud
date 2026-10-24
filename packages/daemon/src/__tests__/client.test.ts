@@ -313,6 +313,7 @@ describe('daemon client', () => {
     assert.equal(handshake.server.pid, process.pid);
     assert.equal(handshake.protocolVersion, Protocol.DAEMON_PROTOCOL_VERSION);
     assert.deepEqual(handshake.capabilities.fs, [...Protocol.FS_METHODS]);
+    assert.deepEqual(handshake.capabilities.history, [...Protocol.HISTORY_CAPABILITIES]);
 
     const ping = await client.request<DaemonPingResult>(Protocol.DAEMON_PING, {
       nonce: 'client-ping',
@@ -378,6 +379,46 @@ describe('daemon client', () => {
       await client.fsReadFile('notes/blob.bin', 'base64'),
       Buffer.from(bytes).toString('base64'),
     );
+  });
+
+  it('drives history sessions through the typed client helpers', async (t) => {
+    const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
+
+    t.after(async () => {
+      await client.close();
+    });
+
+    const path = 'history/client-session.txt';
+    await client.fsWriteAtomic(path, 'before\n');
+
+    const sessionId = await client.historyBeginSession('client history session', [path]);
+    assert.match(sessionId, /^BR-\d{8}-\d{3}$/u);
+
+    await client.fsWriteAtomic(path, 'after\n');
+
+    const commit = await client.historyCommitSession(sessionId, 'completed');
+    assert.equal(commit.sessionId, sessionId);
+    assert.equal(commit.committedFileCount, 1);
+
+    const manifest = await client.historyGet(sessionId);
+    assert.ok(manifest !== null);
+    assert.equal(manifest.status, 'committed');
+    assert.deepEqual(manifest.filesAffected, [path]);
+
+    const sessions = await client.historyList({ limit: 10 });
+    assert.ok(sessions.some((row) => row.session_id === sessionId));
+
+    const revert = await client.historyRevert(sessionId);
+    assert.equal(revert.isExecutable, true);
+    assert.deepEqual(revert.conflicts, []);
+    assert.ok(revert.receipt !== null);
+    assert.equal(revert.receipt.filesRestored, 1);
+
+    assert.equal(await client.fsReadFile(path), 'before\n');
+
+    const reverted = await client.historyGet(sessionId);
+    assert.ok(reverted !== null);
+    assert.equal(reverted.status, 'reverted');
   });
 
   it('translates wire errors into typed DaemonRpcError instances', async (t) => {

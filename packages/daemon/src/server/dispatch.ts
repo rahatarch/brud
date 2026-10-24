@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer';
 import type {
   BrudKernel,
   IBrudFileSystem,
+  IUniversalHistoryService,
   ServiceContext,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
@@ -17,6 +18,15 @@ import type {
   FsReadFileResult,
   FsStatResult,
   FsWriteAtomicResult,
+  HistoryCommitOutcome,
+  HistoryCommitSessionResult,
+  HistoryGetResult,
+  HistoryListParams,
+  HistoryListResult,
+  HistoryReversalTargetState,
+  HistoryRevertResult,
+  HistorySessionManifest,
+  HistorySessionStatus,
   JsonRpcId,
   RpcErrorDetails,
   RpcRequest,
@@ -36,6 +46,7 @@ export interface DispatchSession {
 export interface RequestDispatcherOptions {
   readonly kernel: BrudKernel;
   readonly fileSystemToken: ServiceToken<IBrudFileSystem>;
+  readonly historyToken: ServiceToken<IUniversalHistoryService>;
   readonly token: string;
   readonly workspaceRoot: string;
   readonly serverName?: string;
@@ -99,6 +110,134 @@ function optionalString(params: Record<string, unknown>, key: string): string | 
   return value;
 }
 
+function optionalStringArray(
+  params: Record<string, unknown>,
+  key: string,
+): readonly string[] | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be an array of strings`);
+  }
+
+  const items: readonly unknown[] = value;
+  const strings: string[] = [];
+
+  for (const item of items) {
+    if (typeof item !== 'string') {
+      throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be an array of strings`);
+    }
+
+    strings.push(item);
+  }
+
+  return strings;
+}
+
+function optionalBoolean(
+  params: Record<string, unknown>,
+  key: string,
+): boolean | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'boolean') {
+    throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be a boolean`);
+  }
+
+  return value;
+}
+
+function optionalInteger(
+  params: Record<string, unknown>,
+  key: string,
+): number | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'number' || !Number.isInteger(value)) {
+    throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be an integer`);
+  }
+
+  return value;
+}
+
+function optionalHistoryOutcome(
+  params: Record<string, unknown>,
+  key: string,
+): HistoryCommitOutcome | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === 'completed' || value === 'aborted') {
+    return value;
+  }
+
+  throw new MethodError(
+    Protocol.INVALID_PARAMS,
+    `Parameter "${key}" must be "completed" or "aborted"`,
+  );
+}
+
+function optionalReversalTargetState(
+  params: Record<string, unknown>,
+  key: string,
+): HistoryReversalTargetState | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === 'pre' || value === 'post') {
+    return value;
+  }
+
+  throw new MethodError(
+    Protocol.INVALID_PARAMS,
+    `Parameter "${key}" must be "pre" or "post"`,
+  );
+}
+
+const HISTORY_STATUSES: readonly HistorySessionStatus[] = [
+  'active',
+  'committed',
+  'aborted',
+  'reverted',
+];
+
+function optionalHistoryStatus(
+  params: Record<string, unknown>,
+  key: string,
+): HistorySessionStatus | undefined {
+  const value = params[key];
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  for (const status of HISTORY_STATUSES) {
+    if (value === status) {
+      return status;
+    }
+  }
+
+  throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" is not a session status`);
+}
+
 function readEncoding(params: Record<string, unknown>, key: string): FileEncoding {
   const value = params[key];
 
@@ -118,6 +257,8 @@ export class RequestDispatcher {
 
   private readonly fileSystemToken: ServiceToken<IBrudFileSystem>;
 
+  private readonly historyToken: ServiceToken<IUniversalHistoryService>;
+
   private readonly handshake: HandshakeValidator;
 
   private readonly serverName: string;
@@ -129,6 +270,7 @@ export class RequestDispatcher {
   constructor(options: RequestDispatcherOptions) {
     this.kernel = options.kernel;
     this.fileSystemToken = options.fileSystemToken;
+    this.historyToken = options.historyToken;
     this.handshake = new HandshakeValidator({
       token: options.token,
       workspaceRoot: options.workspaceRoot,
@@ -180,15 +322,17 @@ export class RequestDispatcher {
         return success(request.id, await this.list(request.params, session));
       case Protocol.FS_STAT:
         return success(request.id, await this.stat(request.params, session));
+      case Protocol.HISTORY_BEGIN_SESSION:
+        return success(request.id, await this.beginHistorySession(request.params, session));
+      case Protocol.HISTORY_COMMIT_SESSION:
+        return success(request.id, await this.commitHistorySession(request.params, session));
+      case Protocol.HISTORY_REVERT:
+        return success(request.id, await this.revertHistory(request.params, session));
+      case Protocol.HISTORY_LIST:
+        return success(request.id, await this.listHistory(request.params, session));
+      case Protocol.HISTORY_GET:
+        return success(request.id, await this.getHistory(request.params, session));
       default:
-        if (Protocol.isHistoryMethod(request.method)) {
-          throw new MethodError(
-            Protocol.NOT_IMPLEMENTED,
-            `Method "${request.method}" is not implemented`,
-            { method: request.method },
-          );
-        }
-
         throw new MethodError(
           Protocol.METHOD_NOT_FOUND,
           `Unknown method "${request.method}"`,
@@ -214,7 +358,7 @@ export class RequestDispatcher {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         workspaceRoot: this.handshake.workspaceRoot,
         fs: Protocol.FS_METHODS,
-        history: [],
+        history: Protocol.HISTORY_CAPABILITIES,
       },
       server: {
         name: this.serverName,
@@ -256,6 +400,122 @@ export class RequestDispatcher {
     };
 
     return this.kernel.requestAccess(caller, this.fileSystemToken);
+  }
+
+  private history(session: DispatchSession): IUniversalHistoryService {
+    const caller: ServiceContext = {
+      callerId: session.connectionId,
+      tier: 'core',
+      workspaceRoot: this.handshake.workspaceRoot,
+    };
+
+    return this.kernel.requestAccess(caller, this.historyToken);
+  }
+
+  private async beginHistorySession(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<{ readonly sessionId: string }> {
+    const params = asParams(value);
+    const prompt = requireString(params, 'prompt');
+    const targets = optionalStringArray(params, 'targets');
+    const sessionId = await this.history(session).beginSession(prompt, targets);
+
+    return { sessionId };
+  }
+
+  private async commitHistorySession(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<HistoryCommitSessionResult> {
+    const params = asParams(value);
+    const sessionId = requireString(params, 'sessionId');
+    const outcome = optionalHistoryOutcome(params, 'outcome') ?? 'completed';
+
+    return this.history(session).commitSession(sessionId, outcome);
+  }
+
+  private async revertHistory(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<HistoryRevertResult> {
+    const params = asParams(value);
+    const sessionId = requireString(params, 'sessionId');
+    const targetState = optionalReversalTargetState(params, 'targetState');
+    const history = this.history(session);
+    const plan = await history.planReversal(
+      sessionId,
+      targetState === undefined ? undefined : { targetState },
+    );
+    const actions = plan.actions.map((action) => ({
+      relativePath: action.relativePath,
+      action: action.action,
+      expectedCurrentSha256: action.expectedCurrentSha256,
+      actualCurrentSha256: action.actualCurrentSha256,
+    }));
+    const conflicts = plan.conflicts.map((conflict) => ({
+      relativePath: conflict.relativePath,
+      code: conflict.code,
+      message: conflict.message,
+      expectedSha256: conflict.expectedSha256,
+      actualSha256: conflict.actualSha256,
+    }));
+
+    if (!plan.isExecutable) {
+      return {
+        sessionId: plan.sessionId,
+        targetState: plan.targetState,
+        isExecutable: false,
+        actions,
+        conflicts,
+        receipt: null,
+      };
+    }
+
+    const receipt = await history.executeReversal(plan);
+
+    return {
+      sessionId: plan.sessionId,
+      targetState: plan.targetState,
+      isExecutable: true,
+      actions,
+      conflicts,
+      receipt,
+    };
+  }
+
+  private async listHistory(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<HistoryListResult> {
+    const params = asParams(value);
+    const includeDeleted = optionalBoolean(params, 'includeDeleted');
+    const limit = optionalInteger(params, 'limit');
+    const offset = optionalInteger(params, 'offset');
+    const status = optionalHistoryStatus(params, 'status');
+    const since = optionalString(params, 'since');
+    const filter: HistoryListParams = {
+      ...(includeDeleted === undefined ? {} : { includeDeleted }),
+      ...(limit === undefined ? {} : { limit }),
+      ...(offset === undefined ? {} : { offset }),
+      ...(status === undefined ? {} : { status }),
+      ...(since === undefined ? {} : { since }),
+    };
+    const sessions = await this.history(session).listSessions(filter);
+
+    return { sessions };
+  }
+
+  private async getHistory(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<HistoryGetResult> {
+    const params = asParams(value);
+    const sessionId = requireString(params, 'sessionId');
+    const manifest = await this.history(session).getSession(sessionId);
+    const historySession: HistorySessionManifest | null = manifest;
+
+    return { session: historySession };
   }
 
   private async readFile(value: unknown, session: DispatchSession): Promise<FsReadFileResult> {

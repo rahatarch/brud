@@ -217,7 +217,10 @@ describe('DaemonServer dispatch', () => {
     const kernelModule = await import('@brud/kernel');
     const storageDriver = new kernelModule.InMemoryStorageDriver();
 
-    const createdKernel = kernelModule.createStandardKernel({ storageDriver });
+    const createdKernel = kernelModule.createStandardKernel({
+      storageDriver,
+      history: { inMemory: true },
+    });
     await createdKernel.boot({ workspaceRoot: WORKSPACE_ROOT });
     kernel = createdKernel;
     driver = storageDriver;
@@ -293,7 +296,7 @@ describe('DaemonServer dispatch', () => {
     assert.ok(expectString(result, 'connectionId').startsWith('c_'));
 
     const capabilities = expectRecord(result.capabilities);
-    assert.deepEqual(capabilities.history, []);
+    assert.deepEqual(capabilities.history, [...Protocol.HISTORY_CAPABILITIES]);
     assert.deepEqual(capabilities.fs, [...Protocol.FS_METHODS]);
   });
 
@@ -387,18 +390,131 @@ describe('DaemonServer dispatch', () => {
     ]);
   });
 
-  it('returns NOT_IMPLEMENTED for history methods', async (t) => {
+  it('drives a history session end-to-end over the socket', async (t) => {
     const client = await openHandshakenClient();
     t.after(async () => {
       await client.close();
     });
 
-    const response = await client.call(
-      createRequest(Protocol.HISTORY_BEGIN_SESSION, { id: 'session-1' }),
+    const path = 'history/phase4.txt';
+    await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'before\n' }),
     );
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.NOT_IMPLEMENTED);
-    assert.equal(response.error.code, -32012);
+
+    const beginResponse = await client.call(
+      createRequest(Protocol.HISTORY_BEGIN_SESSION, {
+        prompt: 'daemon history lifecycle',
+        targets: [path],
+      }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(beginResponse));
+    const beginResult = expectRecord(beginResponse.result);
+    const sessionId = expectString(beginResult, 'sessionId');
+    assert.match(sessionId, /^BR-\d{8}-\d{3}$/u);
+
+    await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'after\n' }),
+    );
+
+    const commitResponse = await client.call(
+      createRequest(Protocol.HISTORY_COMMIT_SESSION, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(commitResponse));
+    const commitResult = expectRecord(commitResponse.result);
+    assert.equal(commitResult.sessionId, sessionId);
+    assert.equal(commitResult.committedFileCount, 1);
+
+    const getResponse = await client.call(
+      createRequest(Protocol.HISTORY_GET, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(getResponse));
+    const getResult = expectRecord(getResponse.result);
+    const manifest = expectRecord(getResult.session);
+    assert.equal(manifest.sessionId, sessionId);
+    assert.equal(manifest.status, 'committed');
+    assert.deepEqual(manifest.filesAffected, [path]);
+
+    const listResponse = await client.call(
+      createRequest(Protocol.HISTORY_LIST, { limit: 10 }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(listResponse));
+    const listResult = expectRecord(listResponse.result);
+    assert.ok(isUnknownArray(listResult.sessions));
+    const listed = listResult.sessions.map((entry: unknown) => expectRecord(entry));
+    assert.ok(listed.some((row) => row.session_id === sessionId));
+
+    const revertResponse = await client.call(
+      createRequest(Protocol.HISTORY_REVERT, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(revertResponse));
+    const revertResult = expectRecord(revertResponse.result);
+    assert.equal(revertResult.isExecutable, true);
+    assert.deepEqual(revertResult.conflicts, []);
+    const receipt = expectRecord(revertResult.receipt);
+    assert.equal(receipt.sessionId, sessionId);
+    assert.equal(receipt.targetState, 'pre');
+    assert.equal(receipt.filesRestored, 1);
+
+    const readResponse = await client.call(
+      createRequest(Protocol.FS_READ_FILE, { path }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(readResponse));
+    const readResult = expectRecord(readResponse.result);
+    assert.equal(expectString(readResult, 'data'), 'before\n');
+
+    const revertedResponse = await client.call(
+      createRequest(Protocol.HISTORY_GET, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(revertedResponse));
+    const revertedResult = expectRecord(revertedResponse.result);
+    const revertedManifest = expectRecord(revertedResult.session);
+    assert.equal(revertedManifest.status, 'reverted');
+  });
+
+  it('returns non-executable plans with conflicts when a reversal is stale', async (t) => {
+    const client = await openHandshakenClient();
+    t.after(async () => {
+      await client.close();
+    });
+
+    const path = 'history/tampered.txt';
+    await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'before\n' }),
+    );
+
+    const beginResponse = await client.call(
+      createRequest(Protocol.HISTORY_BEGIN_SESSION, {
+        prompt: 'daemon stale reversal',
+        targets: [path],
+      }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(beginResponse));
+    const sessionId = expectString(expectRecord(beginResponse.result), 'sessionId');
+
+    await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'after\n' }),
+    );
+    const commitResponse = await client.call(
+      createRequest(Protocol.HISTORY_COMMIT_SESSION, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(commitResponse));
+
+    await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'tampered\n' }),
+    );
+
+    const revertResponse = await client.call(
+      createRequest(Protocol.HISTORY_REVERT, { sessionId }),
+    );
+    assert.ok(Protocol.isRpcSuccessResponse(revertResponse));
+    const result = expectRecord(revertResponse.result);
+    assert.equal(result.isExecutable, false);
+    assert.equal(result.receipt, null);
+    assert.ok(isUnknownArray(result.conflicts));
+    const conflicts = result.conflicts.map((entry: unknown) => expectRecord(entry));
+    assert.equal(conflicts.length, 1);
+    assert.equal(conflicts[0]?.code, 'STALE_BASELINE_CONFLICT');
+    assert.equal(conflicts[0]?.relativePath, path);
   });
 
   it('translates kernel path violations into JSON-RPC errors', async (t) => {

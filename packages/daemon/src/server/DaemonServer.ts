@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
-import type { BrudKernel, IBrudFileSystem, ServiceToken } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type {
+  BrudKernel,
+  IBrudFileSystem,
+  IUniversalHistoryService,
+  ServiceToken,
+} from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { Connection } from './Connection.js';
 import { RequestDispatcher } from './dispatch.js';
 import { loadKernelModule } from '../kernelRuntime.js';
@@ -43,17 +48,23 @@ export class DaemonServer {
 
   static async create(config: DaemonServerConfig): Promise<DaemonServer> {
     const kernelModule = await loadKernelModule();
-    return new DaemonServer(config, kernelModule.FileSystemToken);
+    return new DaemonServer(
+      config,
+      kernelModule.FileSystemToken,
+      kernelModule.UniversalHistoryToken,
+    );
   }
 
   private constructor(
     config: DaemonServerConfig,
     fileSystemToken: ServiceToken<IBrudFileSystem>,
+    historyToken: ServiceToken<IUniversalHistoryService>,
   ) {
     this.socketPath = config.socketPath;
     this.dispatcher = new RequestDispatcher({
       kernel: config.kernel,
       fileSystemToken,
+      historyToken,
       token: config.token,
       workspaceRoot: config.workspaceRoot,
       serverName: config.serverName ?? DaemonVersion.DAEMON_SERVER_NAME,
