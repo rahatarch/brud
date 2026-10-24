@@ -6,6 +6,16 @@ import type { TerminalExecutor } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
 
+function getOperationTarget(operation: any): string {
+  return operation?.directoryPath
+    || operation?.directory
+    || operation?.path
+    || operation?.from
+    || operation?.command
+    || operation?.toolKind
+    || '';
+}
+
 function describeThrownError(err: unknown): { code: string; friendly: string; details: string } {
   if (isBrudError(err)) {
     return { code: err.code, friendly: err.friendly, details: err.details };
@@ -159,7 +169,8 @@ export async function executeOperationsFromVSCode(
         message: `Unexpected error: ${described.friendly}`,
         ...(described.code ? { code: described.code } : {}),
         ...(described.details ? { details: described.details } : {}),
-        path: 'path' in operation ? (operation as any).path || '' : '',
+        path: getOperationTarget(operation),
+        ...(typeof (operation as any).to === 'string' ? { to: (operation as any).to } : {}),
       });
     }
   }

@@ -1,6 +1,7 @@
 import { Check, X, AlertTriangle, ChevronRight, Copy, CheckIcon } from 'lucide-react';
 import { useState } from 'react';
 import { ToolResultRenderer } from '../types';
+import { appendDiagnosticCopy, DiagnosticDisclosure } from './diagnostics';
 
 interface OperationResultData {
   operationId: string;
@@ -49,17 +50,6 @@ const KIND_LABELS: Record<string, string> = {
 
 function getKindLabel(kind: string): string {
   return KIND_LABELS[kind] || kind.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatDiagnostics(op: OperationResultData): string {
-  const lines: string[] = [];
-  if (op.code) {
-    lines.push(`Code: ${op.code}`);
-  }
-  if (op.details) {
-    lines.push(`Details: ${op.details.split('\n').join('\n  ')}`);
-  }
-  return lines.join('\n');
 }
 
 const STATUS_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string }> = {
@@ -174,15 +164,7 @@ export const operationResultRenderer: ToolResultRenderer = {
         )}
         {op.status !== 'success' && (op.details || op.code) && (
           <div className="px-6 pb-2">
-            <details className="group">
-              <summary className="text-xs font-medium text-red-400 cursor-pointer list-none flex items-center gap-1 hover:text-red-300 select-none py-1">
-                <span className="opacity-60 group-open:opacity-100 transition-opacity">▶</span>
-                Error Details
-              </summary>
-              <pre className="mt-1 ml-3 text-xs text-text-secondary bg-surface-2 border border-border-subtle rounded p-2 whitespace-pre-wrap overflow-x-auto max-h-[200px] overflow-y-auto">
-                {formatDiagnostics(op)}
-              </pre>
-            </details>
+            <DiagnosticDisclosure code={op.code} details={op.details} />
           </div>
         )}
         {op.fileResults && (
@@ -229,11 +211,9 @@ export const operationResultRenderer: ToolResultRenderer = {
           </div>
         )}
         <div className="px-6 pb-3">
-          <CopyButton text={[
+          <CopyButton text={appendDiagnosticCopy([
             `[${op.status}] ${kindLabel}: ${op.path || op.directoryPath || ''} — ${op.message}`,
-            op.code ? `  Code: ${op.code}` : '',
-            op.details ? `  Details: ${op.details.split('\n').join('\n  ')}` : '',
-          ].filter((line) => line.length > 0).join('\n')} />
+          ], op).join('\n')} />
         </div>
       </div>
     );
@@ -244,13 +224,9 @@ export const operationResultRenderer: ToolResultRenderer = {
     const kindLabel = getKindLabel(op.kind);
     const path = op.path || op.directoryPath || '';
     const titlePrefix = op.title ? `${op.title}: ` : '';
-    let result = `[${op.status}] ${titlePrefix}${kindLabel}: ${path} — ${op.message}`;
-    if (op.code) {
-      result += `\n  Code: ${op.code}`;
-    }
-    if (op.details) {
-      result += `\n  Details: ${op.details.split('\n').join('\n  ')}`;
-    }
+    let result = appendDiagnosticCopy([
+      `[${op.status}] ${titlePrefix}${kindLabel}: ${path} — ${op.message}`,
+    ], op).join('\n');
     if (op.fileResults) {
       if (op.fileResults.modified.length > 0) {
         result += `\n  Modified: ${op.fileResults.modified.join(', ')}`;

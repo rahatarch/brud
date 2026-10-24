@@ -1,4 +1,5 @@
 import { ToolResultRenderer } from '../types';
+import { appendDiagnosticCopy, DiagnosticDisclosure } from './diagnostics';
 
 export const toolInfoRenderer: ToolResultRenderer = {
   toolKind: 'tool_info',
@@ -18,18 +19,19 @@ export const toolInfoRenderer: ToolResultRenderer = {
           <pre className="text-xs text-text-secondary font-mono whitespace-pre leading-relaxed bg-surface-2 border border-border rounded p-4 overflow-x-auto max-h-150 overflow-y-auto">
             {data.message}
           </pre>
+          <DiagnosticDisclosure code={data.code} details={data.details} />
         </div>
       </div>
     );
   },
   copyFormatter: (data: any) => {
     if (!data || !data.message) return '';
-    return data.message;
+    return appendDiagnosticCopy([data.message], data).join('\n');
   },
   summaryFormatter: (data: any) => {
     if (!data) return '';
     const status = data.status || 'success';
-    const kind = data.kind || 'tool_info';
+    const kind = data.toolKind || data.kind || 'tool_info';
     return `[${status}] Tool Info: ${kind}`;
   },
 };

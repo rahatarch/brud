@@ -152,7 +152,13 @@ export class ApplyPatchHandler {
       } else if (opResult.kind === 'get_tool_info') {
         unifiedResults.operations.push({
           toolKind: 'tool_info',
-          data: { message: opResult.message, status: opResult.status },
+          data: {
+            message: opResult.message,
+            status: opResult.status,
+            toolKind: (operations[opResult.operationIndex] as any)?.toolKind,
+            ...(opResult.code ? { code: opResult.code } : {}),
+            ...(opResult.details ? { details: opResult.details } : {}),
+          },
         });
       } else if (!(READ_SUCCESS_KINDS.has(opResult.kind) && opResult.status === 'success')) {
         unifiedResults.operations.push({

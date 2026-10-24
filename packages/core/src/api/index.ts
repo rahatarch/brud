@@ -43,6 +43,7 @@ import {
   promptInvalidFieldError,
   invalidLineRangeError,
   batchLimitExceededError,
+  commandFailedError,
   BrudError,
   isBrudError,
 } from './errors';
@@ -86,6 +87,7 @@ export {
   promptInvalidFieldError,
   invalidLineRangeError,
   batchLimitExceededError,
+  commandFailedError,
   BrudError,
   isBrudError,
 };

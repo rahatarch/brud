@@ -268,6 +268,17 @@ export function executionFailedError(message: string): BrudError {
   });
 }
 
+export function commandFailedError(command: string, exitCode: number, output?: string): BrudError {
+  const excerpt = (output ?? '').trim();
+  const summary = excerpt.length > 0 ? `\nOutput:\n${excerpt}` : '';
+  return brudError({
+    code: 'EXECUTION_FAILED',
+    friendly: `Command failed (exit code ${exitCode}).`,
+    details: `The command "${command}" exited with code ${exitCode}.${summary}`,
+    path: command,
+  });
+}
+
 export function revertFailedError(path: string): BrudError {
   return brudError({
     code: 'REVERT_FAILED',

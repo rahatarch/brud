@@ -1,6 +1,7 @@
 import { Terminal, XCircle, Loader } from 'lucide-react';
 import { ToolResultRenderer } from '../types';
 import { sendKillProcess } from '../../bridge/vscodeBridge';
+import { appendDiagnosticCopy, DiagnosticDisclosure } from './diagnostics';
 
 interface TerminalResultData {
   command: string;
@@ -8,6 +9,9 @@ interface TerminalResultData {
   exitCode: number | null;
   duration: number;
   success: boolean;
+  code?: string;
+  details?: string;
+  status?: string;
 }
 
 interface GroupResultData {
@@ -72,20 +76,24 @@ function renderSingleCommand(termData: TerminalResultData, isRunning: boolean, p
             {termData.output}
           </pre>
         )}
+        {!termData.success && (
+          <DiagnosticDisclosure code={termData.code} details={termData.details} />
+        )}
       </div>
     </div>
   );
 }
 
 function formatSingleCopy(termData: TerminalResultData): string {
-  return [
+  const lines = [
     `Command: ${termData.command}`,
     `Status: ${termData.success ? 'success' : 'failure'}`,
     `Duration: ${formatDuration(termData.duration)}`,
     `Exit Code: ${termData.exitCode !== null ? termData.exitCode : 'N/A'}`,
     'Output:',
     termData.output,
-  ].join('\n');
+  ];
+  return appendDiagnosticCopy(lines, termData).join('\n');
 }
 
 function isGroupResultData(data: any): data is GroupResultData {

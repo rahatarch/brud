@@ -1,9 +1,9 @@
 import path from 'path';
 import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
-import { createPathCache, isWithinWorkspaceFolder, validateWorkspacePath } from '../utils/workspacePath';
+import { createPathCache, isWithinWorkspaceFolder } from '../utils/workspacePath';
 import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
-import { BrudAPI } from '../api/index';
+import { BrudAPI, BrudError as BrudErrorClass } from '../api/index';
 import type { BrudError } from '../api/types';
 import {
   searchNotFoundError,
@@ -25,6 +25,8 @@ import {
   noValidOperationsError,
   validationError,
   toolDisabledError,
+  executionFailedError,
+  commandFailedError,
   isBrudError,
 } from '../api/errors';
 import type { BrudSettings } from '../settings/types';
@@ -76,6 +78,7 @@ export interface OperationResult {
     modified: string[];
     skipped: string[];
     failed: string[];
+    fileErrors?: Array<{ path: string; code?: string; details?: string }>;
   };
   data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }
@@ -107,7 +110,73 @@ function getOperationTargetPath(operation: FileOperation): string {
   if ('from' in operation && typeof operation.from === 'string') {
     return operation.from;
   }
+  if ('directory' in operation && typeof operation.directory === 'string' && operation.directory.length > 0) {
+    return operation.directory;
+  }
+  if ('command' in operation && typeof operation.command === 'string') {
+    return operation.command;
+  }
+  if ('commands' in operation) {
+    const commands = (operation as { commands?: unknown }).commands;
+    if (Array.isArray(commands) && typeof commands[0] === 'string') {
+      return commands[0];
+    }
+  }
+  if ('toolKind' in operation && typeof operation.toolKind === 'string') {
+    return operation.toolKind;
+  }
+  if ('patterns' in operation) {
+    const patterns = (operation as { patterns?: unknown }).patterns;
+    if (Array.isArray(patterns)) {
+      const joined = patterns.filter((pattern): pattern is string => typeof pattern === 'string').join(', ');
+      if (joined.length > 0) {
+        return joined;
+      }
+    }
+  }
   return '';
+}
+
+function getOperationSecondaryTargetPath(operation: FileOperation): string | undefined {
+  if ('to' in operation && typeof operation.to === 'string') {
+    return operation.to;
+  }
+  return undefined;
+}
+
+interface OperationFailureOptions {
+  status?: 'failed' | 'aborted';
+  message?: string;
+  path?: string;
+  to?: string;
+  data?: OperationResult['data'];
+}
+
+function recordOperationFailure(
+  operationResults: OperationResult[],
+  errors: BrudError[],
+  operationIndex: number,
+  operation: FileOperation,
+  error: BrudError,
+  options: OperationFailureOptions = {},
+): void {
+  errors.push(error);
+
+  const targetPath = options.path ?? getOperationTargetPath(operation);
+  const secondaryPath = options.to ?? getOperationSecondaryTargetPath(operation);
+
+  operationResults.push({
+    operationIndex,
+    operationId: generateOperationId(),
+    kind: operation.kind,
+    status: options.status ?? 'failed',
+    message: options.message ?? error.details,
+    ...(error.code ? { code: error.code } : {}),
+    ...(error.details ? { details: error.details } : {}),
+    path: targetPath,
+    ...(secondaryPath ? { to: secondaryPath } : {}),
+    ...(options.data !== undefined ? { data: options.data } : {}),
+  });
 }
 
 export async function executeFileOperations(
@@ -129,12 +198,26 @@ export async function executeFileOperations(
   const errors: BrudError[] = [];
   const pathCache = createPathCache();
 
-  function validatePath(inputPath: string, folders: string[]): { valid: true; resolvedPath: string } | { valid: false; error: string } {
+  function validatePath(
+    inputPath: string,
+    folders: string[],
+  ): { valid: true; resolvedPath: string } | { valid: false; error: string; brudError: BrudError } {
     if (!settings.workspaceBoundaryEnabled) {
       const base = folders.length > 0 ? path.resolve(folders[0]) : process.cwd();
       return { valid: true, resolvedPath: path.resolve(base, inputPath) };
     }
-    return validateWorkspacePath(inputPath, folders, pathCache);
+    const result = BrudAPI.validate.path(inputPath, folders, { cache: pathCache });
+    if (!result.success) {
+      const brudError = new BrudErrorClass({
+        code: result.code ?? 'VALIDATION_ERROR',
+        friendly: result.friendly ?? 'Validation failed.',
+        details: result.details ?? result.friendly ?? 'Validation failed.',
+        path: inputPath,
+      });
+      return { valid: false, error: brudError.friendly, brudError };
+    }
+    const data = result.data as { resolvedPath?: string } | undefined;
+    return { valid: true, resolvedPath: data?.resolvedPath ?? path.resolve(inputPath) };
   }
   const operationResults: OperationResult[] = [];
   const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
@@ -262,15 +345,9 @@ export async function executeFileOperations(
 
     const toolEnabled = settings.toolAllowList[operation.kind];
     if (toolEnabled === false) {
-      errors.push(toolDisabledError(operation.kind));
-      const opPath = 'path' in operation ? (operation as any).path : ('directoryPath' in operation ? (operation as any).directoryPath : '');
-      operationResults.push({
-        operationIndex: i,
-        operationId: generateOperationId(),
-        kind: operation.kind,
-        status: 'failed',
-        message: `Tool "${operation.kind}" is disabled.`,
-        path: opPath || '',
+      const disabledError = toolDisabledError(operation.kind);
+      recordOperationFailure(operationResults, errors, i, operation, disabledError, {
+        message: disabledError.friendly,
       });
       continue;
     }
@@ -280,12 +357,7 @@ export async function executeFileOperations(
         case 'search_replace': {
           const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_replace',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.path,
             });
@@ -298,23 +370,13 @@ export async function executeFileOperations(
           const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, cleanSearch);
           if (!matchResult.success) {
             if (matchResult.code === 'SEARCH_NOT_FOUND') {
-              errors.push(searchNotFoundError(operation.path, operation.search));
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'search_replace',
+              recordOperationFailure(operationResults, errors, i, operation, searchNotFoundError(operation.path, operation.search), {
                 status: 'aborted',
-                message: searchNotFoundError(operation.path, operation.search).details,
                 path: operation.path,
               });
             } else {
-              errors.push(multipleMatchesError(operation.path));
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'search_replace',
+              recordOperationFailure(operationResults, errors, i, operation, multipleMatchesError(operation.path), {
                 status: 'aborted',
-                message: multipleMatchesError(operation.path).details,
                 path: operation.path,
               });
             }
@@ -340,12 +402,7 @@ export async function executeFileOperations(
         case 'create_file': {
           const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'create_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.path,
             });
@@ -356,13 +413,8 @@ export async function executeFileOperations(
 
           const fileNotExistsResult = await BrudAPI.validate.fileNotExists(fs, filePath);
           if (!fileNotExistsResult.success) {
-            errors.push(fileAlreadyExistsError(operation.path));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'create_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileAlreadyExistsError(operation.path), {
               status: 'aborted',
-              message: fileAlreadyExistsError(operation.path).details,
               path: operation.path,
             });
             continue;
@@ -385,12 +437,7 @@ export async function executeFileOperations(
         case 'delete_file': {
           const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'delete_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.path,
             });
@@ -415,13 +462,7 @@ export async function executeFileOperations(
           await fs.deleteFile(filePath);
 
           if (await fs.exists(filePath)) {
-            errors.push(deleteFailedError(operation.path));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'delete_file',
-              status: 'failed',
-              message: deleteFailedError(operation.path).details,
+            recordOperationFailure(operationResults, errors, i, operation, deleteFailedError(operation.path), {
               path: operation.path,
             });
           } else {
@@ -440,12 +481,7 @@ export async function executeFileOperations(
 case 'rename_file': {
           const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(validationError(fromResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'rename_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, fromResult.brudError, {
               message: fromResult.error,
               path: operation.from,
             });
@@ -454,12 +490,7 @@ case 'rename_file': {
 
           const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(validationError(toResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'rename_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, toResult.brudError, {
               message: toResult.error,
               path: operation.to,
             });
@@ -471,13 +502,8 @@ case 'rename_file': {
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(fileNotFoundError(operation.from));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'rename_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileNotFoundError(operation.from), {
               status: 'aborted',
-              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -485,13 +511,8 @@ case 'rename_file': {
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(fileAlreadyExistsError(operation.to));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'rename_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileAlreadyExistsError(operation.to), {
               status: 'aborted',
-              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -514,12 +535,7 @@ case 'rename_file': {
         case 'move_file': {
           const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(validationError(fromResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, fromResult.brudError, {
               message: fromResult.error,
               path: operation.from,
             });
@@ -528,12 +544,7 @@ case 'rename_file': {
 
           const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(validationError(toResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, toResult.brudError, {
               message: toResult.error,
               path: operation.to,
             });
@@ -545,13 +556,8 @@ case 'rename_file': {
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(fileNotFoundError(operation.from));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileNotFoundError(operation.from), {
               status: 'aborted',
-              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -559,13 +565,8 @@ case 'rename_file': {
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(fileAlreadyExistsError(operation.to));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileAlreadyExistsError(operation.to), {
               status: 'aborted',
-              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -590,12 +591,7 @@ case 'rename_file': {
         case 'copy_file': {
           const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(validationError(fromResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'copy_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, fromResult.brudError, {
               message: fromResult.error,
               path: operation.from,
             });
@@ -604,12 +600,7 @@ case 'rename_file': {
 
           const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(validationError(toResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'copy_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, toResult.brudError, {
               message: toResult.error,
               path: operation.to,
             });
@@ -621,13 +612,8 @@ case 'rename_file': {
 
           const sourceExistsResult = await BrudAPI.validate.fileExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(fileNotFoundError(operation.from));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'copy_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileNotFoundError(operation.from), {
               status: 'aborted',
-              message: fileNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -635,13 +621,8 @@ case 'rename_file': {
 
           const targetNotExistsResult = await BrudAPI.validate.fileNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(fileAlreadyExistsError(operation.to));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'copy_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileAlreadyExistsError(operation.to), {
               status: 'aborted',
-              message: fileAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -666,12 +647,7 @@ case 'rename_file': {
         case 'append_file': {
           const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'append_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.path,
             });
@@ -683,13 +659,8 @@ case 'rename_file': {
           let existingContent = '';
           const fileExistsResult = await BrudAPI.validate.fileExists(fs, filePath);
           if (!fileExistsResult.success) {
-            errors.push(fileNotFoundError(operation.path));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'append_file',
+            recordOperationFailure(operationResults, errors, i, operation, fileNotFoundError(operation.path), {
               status: 'aborted',
-              message: fileNotFoundError(operation.path).details,
               path: operation.path,
             });
             continue;
@@ -715,12 +686,7 @@ case 'rename_file': {
         case 'create_directory': {
           const result = validatePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'create_directory',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.directoryPath,
             });
@@ -757,12 +723,7 @@ case 'rename_file': {
         case 'delete_directory': {
           const result = validatePath(operation.directoryPath, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'delete_directory',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.directoryPath,
             });
@@ -787,13 +748,7 @@ case 'rename_file': {
           await fs.deleteDirectoryRecursive(directoryPath);
 
           if (await fs.exists(directoryPath)) {
-            errors.push(deleteFailedError(operation.directoryPath));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'delete_directory',
-              status: 'failed',
-              message: deleteFailedError(operation.directoryPath).details,
+            recordOperationFailure(operationResults, errors, i, operation, deleteFailedError(operation.directoryPath), {
               path: operation.directoryPath,
             });
           } else {
@@ -813,12 +768,7 @@ operationResults.push({
         case 'move_directory': {
           const fromResult = validatePath(operation.from, workspaceFolders);
           if (!fromResult.valid) {
-            errors.push(validationError(fromResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_directory',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, fromResult.brudError, {
               message: fromResult.error,
               path: operation.from,
             });
@@ -827,12 +777,7 @@ operationResults.push({
 
           const toResult = validatePath(operation.to, workspaceFolders);
           if (!toResult.valid) {
-            errors.push(validationError(toResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_directory',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, toResult.brudError, {
               message: toResult.error,
               path: operation.to,
             });
@@ -844,13 +789,8 @@ operationResults.push({
 
           const sourceExistsResult = await BrudAPI.validate.directoryExists(fs, sourcePath);
           if (!sourceExistsResult.success) {
-            errors.push(directoryNotFoundError(operation.from));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_directory',
+            recordOperationFailure(operationResults, errors, i, operation, directoryNotFoundError(operation.from), {
               status: 'aborted',
-              message: directoryNotFoundError(operation.from).details,
               path: operation.from,
             });
             continue;
@@ -858,13 +798,8 @@ operationResults.push({
 
           const targetNotExistsResult = await BrudAPI.validate.directoryNotExists(fs, targetPath);
           if (!targetNotExistsResult.success) {
-            errors.push(directoryAlreadyExistsError(operation.to));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'move_directory',
+            recordOperationFailure(operationResults, errors, i, operation, directoryAlreadyExistsError(operation.to), {
               status: 'aborted',
-              message: directoryAlreadyExistsError(operation.to).details,
               path: operation.to,
             });
             continue;
@@ -890,12 +825,7 @@ operationResults.push({
           const result = validatePath(operation.directoryPath, workspaceFolders);
           console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'extract_structure',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.directoryPath,
             });
@@ -907,13 +837,8 @@ operationResults.push({
           console.error('DEBUG extract_structure: fs.exists result=' + exists);
           const dirExistsResult = await BrudAPI.validate.directoryExists(fs, directoryPath);
           if (!dirExistsResult.success) {
-            errors.push(directoryNotFoundError(operation.directoryPath));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'extract_structure',
+            recordOperationFailure(operationResults, errors, i, operation, directoryNotFoundError(operation.directoryPath), {
               status: 'aborted',
-              message: directoryNotFoundError(operation.directoryPath).details,
               path: operation.directoryPath,
             });
             continue;
@@ -961,14 +886,9 @@ operationResults.push({
           if (settings.workspaceBoundaryEnabled) {
             const wsResult = BrudAPI.validate.workspace(workspaceFolders);
             if (!wsResult.success) {
-              errors.push(noWorkspaceError());
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'codebase_metadata',
+              recordOperationFailure(operationResults, errors, i, operation, noWorkspaceError(), {
                 status: 'aborted',
-                message: noWorkspaceError().details,
-                path: '',
+                path: workspaceFolders[0] ?? '',
               });
               continue;
             }
@@ -993,14 +913,8 @@ operationResults.push({
           if (settings.workspaceBoundaryEnabled) {
             const wsResult = BrudAPI.validate.workspace(workspaceFolders);
             if (!wsResult.success) {
-              errors.push(noWorkspaceError());
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'search_files',
+              recordOperationFailure(operationResults, errors, i, operation, noWorkspaceError(), {
                 status: 'aborted',
-                message: noWorkspaceError().details,
-                path: '',
               });
               continue;
             }
@@ -1012,12 +926,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
-            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_files',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, pathOutsideWorkspaceError(operation.directory || ''), {
               message: `Search directory is outside workspace root: ${operation.directory}.`,
               path: operation.directory || '',
             });
@@ -1051,14 +960,8 @@ operationResults.push({
           if (settings.workspaceBoundaryEnabled) {
             const wsResult = BrudAPI.validate.workspace(workspaceFolders);
             if (!wsResult.success) {
-              errors.push(noWorkspaceError());
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'append_file_multi',
+              recordOperationFailure(operationResults, errors, i, operation, noWorkspaceError(), {
                 status: 'aborted',
-                message: noWorkspaceError().details,
-                path: '',
               });
               continue;
             }
@@ -1070,12 +973,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
-            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'append_file_multi',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, pathOutsideWorkspaceError(operation.directory || ''), {
               message: `Search directory is outside workspace root: ${operation.directory}.`,
               path: operation.directory || '',
             });
@@ -1097,12 +995,18 @@ operationResults.push({
           const modifiedFiles: string[] = [];
           const skippedFiles: string[] = [];
           const failedFiles: string[] = [];
+          const fileErrors: Array<{ path: string; code?: string; details?: string }> = [];
 
           for (const filePath of matchedFiles) {
             try {
               let existingContent = '';
               if (!(await fs.exists(filePath))) {
                 failedFiles.push(filePath);
+                fileErrors.push({
+                  path: path.relative(searchDirectory, filePath),
+                  code: 'FILE_NOT_FOUND',
+                  details: `File not found: ${path.relative(searchDirectory, filePath)}`,
+                });
                 continue;
               }
               existingContent = await fs.readFile(filePath);
@@ -1113,8 +1017,13 @@ operationResults.push({
 
               await fs.writeFile(filePath, updatedContent);
               modifiedFiles.push(filePath);
-            } catch {
+            } catch (error) {
               failedFiles.push(filePath);
+              fileErrors.push({
+                path: path.relative(searchDirectory, filePath),
+                ...(isBrudError(error) ? { code: error.code } : {}),
+                details: error instanceof Error ? error.message : String(error),
+              });
             }
           }
 
@@ -1126,17 +1035,25 @@ operationResults.push({
             }
           }
 
+          const appendFailure = failedFiles.length > 0
+            ? executionFailedError(`${failedFiles.length} file(s) failed: ${failedFiles.map(f => path.relative(searchDirectory, f)).join(', ')}`)
+            : undefined;
+          if (appendFailure) {
+            errors.push(appendFailure);
+          }
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
             kind: 'append_file_multi',
             status: failedFiles.length === 0 ? 'success' : 'failed',
             message: `Appended content to ${modifiedFiles.length} files.`,
+            ...(appendFailure ? { code: appendFailure.code, details: appendFailure.details } : {}),
             path: operation.directory || '',
             fileResults: {
               modified: modifiedFiles,
               skipped: skippedFiles,
               failed: failedFiles,
+              ...(fileErrors.length > 0 ? { fileErrors } : {}),
             },
           });
           break;
@@ -1146,14 +1063,8 @@ operationResults.push({
           if (settings.workspaceBoundaryEnabled) {
             const wsResult = BrudAPI.validate.workspace(workspaceFolders);
             if (!wsResult.success) {
-              errors.push(noWorkspaceError());
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'search_replace_multi',
+              recordOperationFailure(operationResults, errors, i, operation, noWorkspaceError(), {
                 status: 'aborted',
-                message: noWorkspaceError().details,
-                path: '',
               });
               continue;
             }
@@ -1165,12 +1076,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
-            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'search_replace_multi',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, pathOutsideWorkspaceError(operation.directory || ''), {
               message: `Search directory is outside workspace root: ${operation.directory}.`,
               path: operation.directory || '',
             });
@@ -1192,6 +1098,7 @@ operationResults.push({
           const modifiedFiles: string[] = [];
           const skippedFiles: string[] = [];
           const failedFiles: string[] = [];
+          const fileErrors: Array<{ path: string; code?: string; details?: string }> = [];
 
           for (const filePath of matchedFiles) {
             try {
@@ -1208,8 +1115,13 @@ operationResults.push({
               const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + cleanSearch.length);
               await fs.writeFile(filePath, updatedContent);
               modifiedFiles.push(filePath);
-            } catch {
+            } catch (error) {
               failedFiles.push(filePath);
+              fileErrors.push({
+                path: path.relative(searchDirectory, filePath),
+                ...(isBrudError(error) ? { code: error.code } : {}),
+                details: error instanceof Error ? error.message : String(error),
+              });
             }
           }
 
@@ -1222,17 +1134,25 @@ operationResults.push({
           }
 
           const skipMsg = skippedFiles.length > 0 ? ` Skipped ${skippedFiles.length} files.` : '';
+          const replaceFailure = failedFiles.length > 0
+            ? executionFailedError(`${failedFiles.length} file(s) failed: ${failedFiles.map(f => path.relative(searchDirectory, f)).join(', ')}`)
+            : undefined;
+          if (replaceFailure) {
+            errors.push(replaceFailure);
+          }
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
             kind: 'search_replace_multi',
             status: failedFiles.length === 0 ? 'success' : 'failed',
             message: `Patched ${modifiedFiles.length} files.${skipMsg}`,
+            ...(replaceFailure ? { code: replaceFailure.code, details: replaceFailure.details } : {}),
             path: operation.directory || '',
             fileResults: {
               modified: modifiedFiles,
               skipped: skippedFiles,
               failed: failedFiles,
+              ...(fileErrors.length > 0 ? { fileErrors } : {}),
             },
           });
           break;
@@ -1241,12 +1161,7 @@ operationResults.push({
         case 'read_file': {
           const result = validatePath(operation.path, workspaceFolders);
           if (!result.valid) {
-            errors.push(validationError(result.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'read_file',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
               path: operation.path,
             });
@@ -1280,14 +1195,8 @@ operationResults.push({
           if (settings.workspaceBoundaryEnabled) {
             const wsResult = BrudAPI.validate.workspace(workspaceFolders);
             if (!wsResult.success) {
-              errors.push(noWorkspaceError());
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'read_files',
+              recordOperationFailure(operationResults, errors, i, operation, noWorkspaceError(), {
                 status: 'aborted',
-                message: noWorkspaceError().details,
-                path: '',
               });
               continue;
             }
@@ -1299,12 +1208,7 @@ operationResults.push({
             : path.resolve(workspaceRoot);
 
           if (settings.workspaceBoundaryEnabled && !isWithinWorkspaceFolder(searchDirectory, workspaceRoot)) {
-            errors.push(pathOutsideWorkspaceError(operation.directory || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'read_files',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, pathOutsideWorkspaceError(operation.directory || ''), {
               message: `Search directory is outside workspace root: ${operation.directory}.`,
               path: operation.directory || '',
             });
@@ -1352,12 +1256,7 @@ operationResults.push({
         case 'read_directory': {
           const dirResult = validatePath(operation.directoryPath, workspaceFolders);
           if (!dirResult.valid) {
-            errors.push(validationError(dirResult.error));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'read_directory',
-              status: 'failed',
+            recordOperationFailure(operationResults, errors, i, operation, dirResult.brudError, {
               message: dirResult.error,
               path: operation.directoryPath,
             });
@@ -1396,15 +1295,7 @@ operationResults.push({
 
         case 'terminal_interactive': {
           if (!terminalExecutor) {
-            errors.push(terminalUnavailableError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_interactive',
-              status: 'failed',
-              message: terminalUnavailableError().details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, terminalUnavailableError());
             continue;
           }
 
@@ -1418,31 +1309,21 @@ operationResults.push({
               : code === 'DYNAMIC_PATH'
                 ? dynamicPathError(termOp.command, termOp.command)
                 : dangerousCommandError(termOp.command);
-            errors.push(error);
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_interactive',
-              status: 'failed',
-              message: error.details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, error);
             continue;
           }
           const cwdValidation = validateTerminalCwd(termOp.cwd, workspaceFolders);
           if (!cwdValidation.valid) {
-            errors.push(invalidCwdError(termOp.cwd || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_interactive',
-              status: 'failed',
-message: invalidCwdError(termOp.cwd || '').details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, invalidCwdError(termOp.cwd || ''));
             continue;
           }
           const termResult = await terminalExecutor.execute(termOp.command, termOp.answers, cwdValidation.resolvedCwd, (termOp.timeout ?? 120) * 1000);
+          const interactiveError = !termResult.success && termResult.status !== 'interrupted'
+            ? commandFailedError(termOp.command, termResult.exitCode ?? -1, termResult.output)
+            : undefined;
+          if (interactiveError) {
+            errors.push(interactiveError);
+          }
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
@@ -1451,7 +1332,8 @@ message: invalidCwdError(termOp.cwd || '').details,
             message: termResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termResult.output}`
               : `Terminal command failed (exit code: ${termResult.exitCode})\nOutput:\n${termResult.output}`,
-            path: '',
+            ...(interactiveError ? { code: interactiveError.code, details: interactiveError.details } : {}),
+            path: termOp.command,
           });
           break;
         }
@@ -1474,15 +1356,7 @@ message: invalidCwdError(termOp.cwd || '').details,
           } else {
             const doc = globalToolRegistry.getTool(toolOp.toolKind);
             if (!doc) {
-              errors.push(toolNotFoundError(toolOp.toolKind));
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'get_tool_info',
-                status: 'failed',
-                message: toolNotFoundError(toolOp.toolKind).details,
-                path: '',
-              });
+              recordOperationFailure(operationResults, errors, i, operation, toolNotFoundError(toolOp.toolKind));
             } else {
               const params = doc.parameters.map(p =>
                 `  - ${p.name} (${p.type})${p.required ? ' [required]' : ''}: ${p.description}${p.default ? ` (default: ${p.default})` : ''}`
@@ -1503,15 +1377,7 @@ message: invalidCwdError(termOp.cwd || '').details,
 
         case 'terminal_command': {
           if (!terminalExecutor) {
-            errors.push(terminalUnavailableError());
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_command',
-              status: 'failed',
-              message: terminalUnavailableError().details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, terminalUnavailableError());
             continue;
           }
 
@@ -1529,15 +1395,7 @@ message: invalidCwdError(termOp.cwd || '').details,
                   : code === 'DYNAMIC_PATH'
                     ? dynamicPathError(cmd, cmd)
                     : dangerousCommandError(cmd);
-                errors.push(error);
-                operationResults.push({
-                  operationIndex: i,
-                  operationId: generateOperationId(),
-                  kind: 'terminal_command',
-                  status: 'failed',
-                  message: error.details,
-                  path: '',
-                });
+                recordOperationFailure(operationResults, errors, i, operation, error);
                 hasDangerous = true;
                 break;
               }
@@ -1547,15 +1405,7 @@ message: invalidCwdError(termOp.cwd || '').details,
             }
             const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
             if (!cwdValidation.valid) {
-              errors.push(invalidCwdError(termCmdOp.cwd || ''));
-              operationResults.push({
-                operationIndex: i,
-                operationId: generateOperationId(),
-                kind: 'terminal_command',
-                status: 'failed',
-message: invalidCwdError(termCmdOp.cwd || '').details,
-                path: '',
-              });
+              recordOperationFailure(operationResults, errors, i, operation, invalidCwdError(termCmdOp.cwd || ''));
               continue;
             }
             const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
@@ -1567,13 +1417,21 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             }
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
+            const failedGroupResult = groupResult.results.find(r => !r.success && r.status !== 'interrupted');
+            const groupError = !groupResult.success && failedGroupResult
+              ? commandFailedError(failedGroupResult.command, failedGroupResult.exitCode ?? -1, failedGroupResult.output)
+              : undefined;
+            if (groupError) {
+              errors.push(groupError);
+            }
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: groupResult.results.some(r => r.status === 'interrupted') ? 'interrupted' : (groupResult.success ? 'success' : 'failed'),
               message: `Executed ${groupResult.results.length} commands. ${succeeded} succeeded, ${failed} failed.`,
-              path: '',
+              ...(groupError ? { code: groupError.code, details: groupError.details } : {}),
+              path: termCmdOp.commands[0],
               data: groupResult.results.map(r => ({
                 command: r.command,
                 output: r.output,
@@ -1594,28 +1452,12 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
               : code === 'DYNAMIC_PATH'
                 ? dynamicPathError(termCmdOp.command, termCmdOp.command)
                 : dangerousCommandError(termCmdOp.command);
-            errors.push(error);
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_command',
-              status: 'failed',
-              message: error.details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, error);
             continue;
           }
           const cwdValidation = validateTerminalCwd(termCmdOp.cwd, workspaceFolders);
           if (!cwdValidation.valid) {
-            errors.push(invalidCwdError(termCmdOp.cwd || ''));
-            operationResults.push({
-              operationIndex: i,
-              operationId: generateOperationId(),
-              kind: 'terminal_command',
-              status: 'failed',
-message: invalidCwdError(termCmdOp.cwd || '').details,
-              path: '',
-            });
+            recordOperationFailure(operationResults, errors, i, operation, invalidCwdError(termCmdOp.cwd || ''));
             continue;
           }
           const termCmdTimeout = (termCmdOp.timeout ?? 120) * 1000;
@@ -1628,13 +1470,21 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             const groupResult = await terminalExecutor.executeConditional(conditional, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
+            const failedConditionalResult = groupResult.results.find(r => !r.success && r.status !== 'interrupted');
+            const conditionalError = !groupResult.success && failedConditionalResult
+              ? commandFailedError(failedConditionalResult.command, failedConditionalResult.exitCode ?? -1, failedConditionalResult.output)
+              : undefined;
+            if (conditionalError) {
+              errors.push(conditionalError);
+            }
             operationResults.push({
               operationIndex: i,
               operationId: generateOperationId(),
               kind: 'terminal_command',
               status: groupResult.results.some(r => r.status === 'interrupted') ? 'interrupted' : (groupResult.success ? 'success' : 'failed'),
               message: `Executed conditional command. ${succeeded} succeeded, ${failed} failed.`,
-              path: '',
+              ...(conditionalError ? { code: conditionalError.code, details: conditionalError.details } : {}),
+              path: termCmdOp.command,
               data: groupResult.results.map(r => ({
                 command: r.command,
                 output: r.output,
@@ -1646,6 +1496,12 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             break;
           }
           const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
+          const termCmdError = !termCmdResult.success && termCmdResult.status !== 'interrupted'
+            ? commandFailedError(termCmdOp.command, termCmdResult.exitCode ?? -1, termCmdResult.output)
+            : undefined;
+          if (termCmdError) {
+            errors.push(termCmdError);
+          }
           operationResults.push({
             operationIndex: i,
             operationId: generateOperationId(),
@@ -1654,7 +1510,8 @@ message: invalidCwdError(termCmdOp.cwd || '').details,
             message: termCmdResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termCmdResult.output}`
               : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
-            path: '',
+            ...(termCmdError ? { code: termCmdError.code, details: termCmdError.details } : {}),
+            path: termCmdOp.command,
             data: {
               command: termCmdOp.command,
               output: termCmdResult.output,

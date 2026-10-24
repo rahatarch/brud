@@ -204,12 +204,14 @@ export interface OperationResult {
   code?: string;
   details?: string;
   path: string;
+  to?: string;
   title?: string;
   description?: string;
   fileResults?: {
     modified: string[];
     skipped: string[];
     failed: string[];
+    fileErrors?: Array<{ path: string; code?: string; details?: string }>;
   };
   data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
 }

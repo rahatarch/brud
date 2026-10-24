@@ -89,10 +89,13 @@ export class ExecuteAllFilesHandler {
           toolKind: 'terminal_command',
           data: {
             command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
-            output: op.message || '',
+            output: op.details ? '' : (op.message || ''),
             exitCode: null,
             duration: 0,
             success: false,
+            ...(op.code ? { code: op.code } : {}),
+            ...(op.details ? { details: op.details } : {}),
+            ...(op.status ? { status: op.status } : {}),
           },
         });
       }
