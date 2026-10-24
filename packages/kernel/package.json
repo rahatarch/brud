@@ -2,17 +2,18 @@
   "name": "@brud/kernel",
   "version": "0.1.4",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
     }
   },
   "scripts": {
     "build": "tsc",
+    "test": "node --import tsx --test \"src/__tests__/*.test.ts\" \"drivers/**/*.test.ts\" \"services/**/*.test.ts\"",
     "clean": "rimraf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {}

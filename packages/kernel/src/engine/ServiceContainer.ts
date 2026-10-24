@@ -45,7 +45,7 @@ export class ServiceContainer implements IServiceContainer {
   }
 
   has<T>(token: Token<T>): boolean {
-    if (this.registry.has(token)) return true;
+    if (this.registry.has(token)) { return true; }
     return this.parent ? this.parent.has(token) : false;
   }
 

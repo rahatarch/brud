@@ -7,7 +7,7 @@
     "noImplicitAny": true,
     "declaration": true,
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "."
   },
-  "include": ["src"]
+  "include": ["src", "drivers", "services"]
 }

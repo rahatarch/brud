@@ -50,7 +50,7 @@ export class ExecutionPipeline implements IExecutionPipeline {
   }
 
   private verifyCapabilities(handler: OperationHandler): symbol | null {
-    if (!handler.requiredCapabilities) return null;
+    if (!handler.requiredCapabilities) { return null; }
     for (const token of handler.requiredCapabilities) {
       if (!this.serviceContainer.has(token)) {
         return token;

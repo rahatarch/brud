@@ -1,10 +1,22 @@
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { ServiceContainer, OperationRegistry, ExecutionPipeline, BrudKernel } from '../engine/index.js';
+import {
+  ServiceContainer,
+  OperationRegistry,
+  ExecutionPipeline,
+  BrudKernel,
+  LifecycleStateError,
+  MissingDependencyError,
+  ServiceNotFoundError,
+} from '../engine/index.js';
 import { createToken } from '../contracts/container.js';
+import { createServiceToken } from '../contracts/serviceToken.js';
 import type { ExecutionContext } from '../contracts/context.js';
 import type { OperationHandler, OperationResult } from '../contracts/handler.js';
 import type { Token } from '../contracts/container.js';
+import type { ServiceContext } from '../contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
+import type { ServiceToken } from '../contracts/serviceToken.js';
 
 const SAMPLE_TOKEN = createToken<string>('sample.config');
 const CAP_TOKEN = createToken<string>('required.capability');
@@ -411,5 +423,317 @@ describe('BrudKernel prompt manifest', () => {
     });
     const manifest = kernel.generatePromptManifest();
     assert.strictEqual(manifest.operations.length, 0);
+  });
+});
+// ── Microkernel Lifecycle Orchestration ─────────────────────────
+
+interface ProbeService {
+  readonly id: string;
+}
+
+interface ProbeOptions {
+  readonly token: ServiceToken<ProbeService>;
+  readonly dependencies?: readonly ServiceToken<unknown>[];
+  readonly onFactory?: (context: ServiceContext) => void;
+  readonly onInitialize?: () => void;
+  readonly onDispose?: () => void;
+  readonly failInitialize?: boolean;
+}
+
+function probeToken(id: string): ServiceToken<ProbeService> {
+  return createServiceToken<ProbeService>(id, `${id} probe`);
+}
+
+function probeDescriptor(options: ProbeOptions): ServiceDescriptor<ProbeService> {
+  return {
+    token: options.token,
+    tier: 'core',
+    dependencies: options.dependencies ?? [],
+    factory: (context) => {
+      options.onFactory?.(context);
+      return {
+        id: options.token.id,
+        initialize: async () => {
+          options.onInitialize?.();
+          if (options.failInitialize) {
+            throw new Error(`init failed: ${options.token.id}`);
+          }
+        },
+        dispose: async () => {
+          options.onDispose?.();
+        },
+      };
+    },
+  };
+}
+
+function isLifecycleError(code: string): (error: unknown) => boolean {
+  return (error: unknown) => {
+    assert.ok(error instanceof LifecycleStateError);
+    assert.strictEqual(error.code, code);
+    return true;
+  };
+}
+
+describe('BrudKernel lifecycle orchestrator', () => {
+  const workspaceRoot = '/tmp/brud-kernel-lifecycle';
+  const callerContext: ServiceContext = {
+    callerId: 'test-suite',
+    tier: 'userland',
+    workspaceRoot,
+  };
+
+  it('boots services, resolves them, and shuts down cleanly', async () => {
+    const kernel = new BrudKernel();
+    const alpha = probeToken('alpha');
+    const events: string[] = [];
+
+    kernel.register(probeDescriptor({
+      token: alpha,
+      onFactory: (context) => {
+        assert.strictEqual(context.callerId, 'kernel');
+        assert.strictEqual(context.tier, 'core');
+        assert.strictEqual(context.workspaceRoot, workspaceRoot);
+        events.push('factory:alpha');
+      },
+      onInitialize: () => events.push('init:alpha'),
+      onDispose: () => events.push('dispose:alpha'),
+    }));
+
+    assert.strictEqual(kernel.lifecycleState, 'UNINITIALIZED');
+    assert.throws(
+      () => kernel.requestAccess(callerContext, alpha),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+
+    await kernel.boot({ workspaceRoot });
+
+    assert.strictEqual(kernel.lifecycleState, 'RUNNING');
+    assert.strictEqual(kernel.hasService(alpha), true);
+    assert.strictEqual(kernel.requestAccess(callerContext, alpha).id, 'alpha');
+    assert.deepStrictEqual(
+      kernel.listServices().map((service) => ({
+        id: service.id,
+        tier: service.tier,
+        initialized: service.initialized,
+      })),
+      [{ id: 'alpha', tier: 'core', initialized: true }],
+    );
+
+    await kernel.shutdown();
+
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
+    assert.deepStrictEqual(events, ['factory:alpha', 'init:alpha', 'dispose:alpha']);
+    assert.throws(
+      () => kernel.requestAccess(callerContext, alpha),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('starts services in dependency order regardless of registration order', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const b = probeToken('b');
+    const c = probeToken('c');
+    const events: string[] = [];
+
+    kernel.register(probeDescriptor({
+      token: c,
+      dependencies: [b],
+      onFactory: () => events.push('factory:c'),
+      onInitialize: () => events.push('init:c'),
+    }));
+    kernel.register(probeDescriptor({
+      token: b,
+      dependencies: [a],
+      onFactory: () => events.push('factory:b'),
+      onInitialize: () => events.push('init:b'),
+    }));
+    kernel.register(probeDescriptor({
+      token: a,
+      onFactory: () => events.push('factory:a'),
+      onInitialize: () => events.push('init:a'),
+    }));
+
+    await kernel.boot({ workspaceRoot });
+
+    assert.deepStrictEqual(events, [
+      'factory:a',
+      'init:a',
+      'factory:b',
+      'init:b',
+      'factory:c',
+      'init:c',
+    ]);
+  });
+
+  it('disposes services in reverse dependency order', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const b = probeToken('b');
+    const c = probeToken('c');
+    const disposed: string[] = [];
+
+    kernel.register(probeDescriptor({ token: a, onDispose: () => disposed.push('a') }));
+    kernel.register(probeDescriptor({ token: b, dependencies: [a], onDispose: () => disposed.push('b') }));
+    kernel.register(probeDescriptor({ token: c, dependencies: [b], onDispose: () => disposed.push('c') }));
+
+    await kernel.boot({ workspaceRoot });
+    await kernel.shutdown();
+
+    assert.deepStrictEqual(disposed, ['c', 'b', 'a']);
+  });
+
+  it('rolls back initialized services when a later initialization fails', async () => {
+    const kernel = new BrudKernel();
+    const stable = probeToken('stable');
+    const broken = probeToken('broken');
+    const downstream = probeToken('downstream');
+    const events: string[] = [];
+
+    kernel.register(probeDescriptor({
+      token: downstream,
+      dependencies: [broken],
+      onInitialize: () => events.push('init:downstream'),
+    }));
+    kernel.register(probeDescriptor({
+      token: broken,
+      dependencies: [stable],
+      failInitialize: true,
+    }));
+    kernel.register(probeDescriptor({
+      token: stable,
+      onInitialize: () => events.push('init:stable'),
+      onDispose: () => events.push('dispose:stable'),
+    }));
+
+    await assert.rejects(
+      () => kernel.boot({ workspaceRoot }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /init failed: broken/);
+        return true;
+      },
+    );
+
+    assert.deepStrictEqual(events, ['init:stable', 'dispose:stable']);
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
+    assert.throws(
+      () => kernel.register(probeDescriptor({ token: probeToken('late') })),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+    assert.throws(
+      () => kernel.requestAccess(callerContext, stable),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('rejects registration after the registry is frozen by boot', async () => {
+    const kernel = new BrudKernel();
+    kernel.register(probeDescriptor({ token: probeToken('first') }));
+
+    await kernel.boot({ workspaceRoot });
+
+    assert.throws(
+      () => kernel.register(probeDescriptor({ token: probeToken('second') })),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('rejects a second boot after shutdown', async () => {
+    const kernel = new BrudKernel();
+    kernel.register(probeDescriptor({ token: probeToken('single') }));
+
+    await kernel.boot({ workspaceRoot });
+    await kernel.shutdown();
+
+    await assert.rejects(
+      () => kernel.boot({ workspaceRoot }),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('rejects booting twice without shutting down first', async () => {
+    const kernel = new BrudKernel();
+
+    await kernel.boot({ workspaceRoot });
+
+    await assert.rejects(
+      () => kernel.boot({ workspaceRoot }),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('rejects shutdown before boot', async () => {
+    const kernel = new BrudKernel();
+
+    await assert.rejects(
+      () => kernel.shutdown(),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('disposes the kernel when the dependency graph is invalid', async () => {
+    const kernel = new BrudKernel();
+    kernel.register(probeDescriptor({
+      token: probeToken('root'),
+      dependencies: [probeToken('ghost')],
+    }));
+
+    await assert.rejects(
+      () => kernel.boot({ workspaceRoot }),
+      (error: unknown) => {
+        assert.ok(error instanceof MissingDependencyError);
+        assert.strictEqual(error.missingTokenId, 'ghost');
+        assert.strictEqual(error.dependentTokenId, 'root');
+        return true;
+      },
+    );
+
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
+  });
+
+  it('throws ServiceNotFoundError for unknown services after boot', async () => {
+    const kernel = new BrudKernel();
+
+    await kernel.boot({ workspaceRoot });
+
+    assert.throws(
+      () => kernel.requestAccess(callerContext, probeToken('absent')),
+      (error: unknown) => {
+        assert.ok(error instanceof ServiceNotFoundError);
+        assert.strictEqual(error.tokenId, 'absent');
+        return true;
+      },
+    );
+  });
+
+  it('continues disposing remaining services after one dispose rejects', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const b = probeToken('b');
+    const disposed: string[] = [];
+
+    kernel.register(probeDescriptor({
+      token: a,
+      onDispose: () => disposed.push('a'),
+    }));
+    kernel.register({
+      token: b,
+      tier: 'core',
+      dependencies: [a],
+      factory: () => ({
+        id: 'b',
+        async initialize() { return; },
+        async dispose() { throw new Error('dispose failed: b'); },
+      }),
+    });
+
+    await kernel.boot({ workspaceRoot });
+
+    await assert.rejects(() => kernel.shutdown(), /dispose failed: b/);
+
+    assert.deepStrictEqual(disposed, ['a']);
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
   });
 });

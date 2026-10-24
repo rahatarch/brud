@@ -3,9 +3,19 @@ import type { OperationResult, PromptDescriptor } from '../contracts/handler.js'
 import type { IExecutionPipeline } from '../contracts/pipeline.js';
 import type { IServiceContainer, Token } from '../contracts/container.js';
 import type { IOperationRegistry } from '../contracts/registry.js';
+import type { ServiceInfo } from '../contracts/accessBroker.js';
+import type { KernelBootOptions, IBrudKernel } from '../contracts/kernel.js';
+import type { IServiceLifecycle, ServiceContext } from '../contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
+import type { ServiceToken } from '../contracts/serviceToken.js';
 import { ServiceContainer } from './ServiceContainer.js';
 import { OperationRegistry } from './OperationRegistry.js';
 import { ExecutionPipeline } from './ExecutionPipeline.js';
+import { KernelRegistry } from './KernelRegistry.js';
+import { KernelAccessBroker } from './KernelAccessBroker.js';
+import { topologicalSort } from './dag.js';
+import { LifecycleStateError } from './errors.js';
+import type { KernelLifecycleState } from './state.js';
 
 export interface KernelExecuteOptions {
   signal?: AbortSignal;
@@ -23,17 +33,139 @@ export interface PromptManifest {
   operations: PromptManifestEntry[];
 }
 
-export class BrudKernel {
+interface InitializedService {
+  readonly tokenId: string;
+  readonly instance: IServiceLifecycle;
+}
+
+export class BrudKernel implements IBrudKernel {
   readonly services: IServiceContainer;
   readonly operations: IOperationRegistry;
   readonly pipeline: IExecutionPipeline;
   private readonly maxCallDepth: number;
+  private readonly registry: KernelRegistry;
+  private readonly accessBroker: KernelAccessBroker;
+  private readonly initializedServices: InitializedService[] = [];
+  private state: KernelLifecycleState = 'UNINITIALIZED';
 
   constructor(options?: { maxCallDepth?: number }) {
     this.services = new ServiceContainer();
     this.operations = new OperationRegistry();
     this.pipeline = new ExecutionPipeline(this.services);
     this.maxCallDepth = options?.maxCallDepth ?? 5;
+    this.registry = new KernelRegistry();
+    this.accessBroker = new KernelAccessBroker(this.registry, () => this.state);
+  }
+
+  get lifecycleState(): KernelLifecycleState {
+    return this.state;
+  }
+
+  register<TService, TInternal extends TService = TService>(
+    descriptor: ServiceDescriptor<TService, TInternal>,
+  ): void {
+    if (this.state !== 'UNINITIALIZED') {
+      throw new LifecycleStateError('register', this.state, 'UNINITIALIZED');
+    }
+
+    this.registry.register(descriptor);
+  }
+
+  async boot(options: KernelBootOptions): Promise<void> {
+    if (this.state !== 'UNINITIALIZED') {
+      throw new LifecycleStateError('boot', this.state, 'UNINITIALIZED');
+    }
+
+    this.state = 'BOOTING';
+    this.registry.freeze();
+
+    try {
+      const ordered = topologicalSort(this.descriptorMap());
+      this.initializedServices.length = 0;
+
+      for (const descriptor of ordered) {
+        const context: ServiceContext = {
+          callerId: 'kernel',
+          tier: descriptor.tier,
+          workspaceRoot: options.workspaceRoot,
+        };
+
+        const instance = descriptor.factory(context, this.accessBroker);
+        this.registry.setInstance(descriptor.token.id, instance);
+
+        if (typeof instance.initialize === 'function') {
+          await instance.initialize(this.accessBroker);
+        }
+
+        this.initializedServices.push({ tokenId: descriptor.token.id, instance });
+      }
+
+      this.state = 'RUNNING';
+    } catch (error: unknown) {
+      await this.rollbackInitialized();
+      this.state = 'DISPOSED';
+      throw error;
+    }
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.state !== 'RUNNING') {
+      throw new LifecycleStateError('shutdown', this.state, 'RUNNING');
+    }
+
+    this.state = 'SHUTTING_DOWN';
+
+    let firstError: unknown;
+    const pending = this.initializedServices.splice(0).reverse();
+
+    for (const { instance } of pending) {
+      try {
+        await instance.dispose?.();
+      } catch (error: unknown) {
+        if (firstError === undefined) {
+          firstError = error;
+        }
+      }
+    }
+
+    this.registry.clearInstances();
+    this.state = 'DISPOSED';
+
+    if (firstError !== undefined) {
+      throw firstError;
+    }
+  }
+
+  requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {
+    return this.accessBroker.requestAccess(caller, token);
+  }
+
+  hasService(token: ServiceToken<unknown>): boolean {
+    return this.accessBroker.hasService(token);
+  }
+
+  listServices(): readonly ServiceInfo[] {
+    return this.accessBroker.listServices();
+  }
+
+  private descriptorMap(): Map<string, ServiceDescriptor<unknown>> {
+    return new Map(
+      this.registry.listDescriptors().map((descriptor) => [descriptor.token.id, descriptor]),
+    );
+  }
+
+  private async rollbackInitialized(): Promise<void> {
+    const pending = this.initializedServices.splice(0).reverse();
+
+    for (const { instance } of pending) {
+      try {
+        await instance.dispose?.();
+      } catch {
+        continue;
+      }
+    }
+
+    this.registry.clearInstances();
   }
 
   async execute<TInput, TOutput>(
@@ -107,7 +239,7 @@ export class BrudKernel {
       callDepth: 0,
       metadata: options?.metadata,
       resolve: <T>(token: Token<T>): T => kernel.services.resolve(token),
-      invoke: invokeImpl as unknown as ExecutionContext['invoke'],
+      invoke: invokeImpl,
       createChildContext: createChildContextImpl,
     };
 
