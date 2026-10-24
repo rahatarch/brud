@@ -1,9 +1,15 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import type { ExtensionMessage } from '@brud/protocol';
 
 export class BrudTerminalPanelManager {
   private _panel: vscode.WebviewPanel | undefined;
-  private _pendingMessage: any = null;
+  private _pendingQueue: ExtensionMessage[] = [];
+  private _isReady = false;
+  private _closeAfterFlush = false;
+  private _closeTimer: NodeJS.Timeout | null = null;
+  private _currentRunId: string | undefined = undefined;
+  private readonly MAX_QUEUE_COUNT = 2000;
   private _onKillProcess: ((processId: string) => void) | null = null;
   private _getActiveProcessIds: (() => string[]) | null = null;
 
@@ -17,12 +23,26 @@ export class BrudTerminalPanelManager {
     this._getActiveProcessIds = getter;
   }
 
-  public postMessage(message: any): void {
-    if (this._panel) {
-      this._panel.webview.postMessage(message);
-    } else {
-      this._pendingMessage = message;
+  public postMessage(message: ExtensionMessage): void {
+    if (!this._panel) {
+      return;
     }
+
+    if (this._isReady) {
+      this._panel.webview.postMessage(message);
+      return;
+    }
+
+    if (this._pendingQueue.length >= this.MAX_QUEUE_COUNT) {
+      const dropIndex = this._pendingQueue.findIndex((queued) => !queued.streamDone);
+      if (dropIndex >= 0) {
+        this._pendingQueue.splice(dropIndex, 1);
+      } else {
+        this._pendingQueue.shift();
+      }
+    }
+
+    this._pendingQueue.push(message);
   }
 
   public postChunk(chunk: string, chunkIndex: number, processId: string): void {
@@ -45,11 +65,26 @@ export class BrudTerminalPanelManager {
     });
   }
 
-  public openTerminalStreamPanel() {
+  public openTerminalStreamPanel(runId?: string) {
+    const previousRunId = this._currentRunId;
+    this._currentRunId = runId;
+
+    if (this._closeTimer) {
+      clearTimeout(this._closeTimer);
+      this._closeTimer = null;
+    }
+    this._closeAfterFlush = false;
+
     if (this._panel) {
+      if (!this._isReady && runId !== previousRunId) {
+        this._pendingQueue = [];
+      }
       this._panel.reveal(vscode.ViewColumn.One);
       return;
     }
+
+    this._pendingQueue = [];
+    this._isReady = false;
 
     this._panel = vscode.window.createWebviewPanel(
       'brud-terminal-stream',
@@ -67,14 +102,23 @@ export class BrudTerminalPanelManager {
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
     this._panel.onDidDispose(() => {
+      this._resetState();
       this._panel = undefined;
     });
 
     this._panel.webview.onDidReceiveMessage((message) => {
       if (message.command === 'ready') {
-        if (this._pendingMessage) {
-          this._panel?.webview.postMessage(this._pendingMessage);
-          this._pendingMessage = null;
+        if (!this._isReady) {
+          this._isReady = true;
+          const queued = this._pendingQueue;
+          this._pendingQueue = [];
+          for (const pending of queued) {
+            this._panel?.webview.postMessage(pending);
+          }
+          if (this._closeAfterFlush) {
+            this._closeAfterFlush = false;
+            this._scheduleDispose(400);
+          }
         }
         return;
       }
@@ -88,11 +132,52 @@ export class BrudTerminalPanelManager {
     });
   }
 
-  public closePanel() {
-    if (this._panel) {
-      this._panel.dispose();
-      this._panel = undefined;
+  public closePanel(runId?: string) {
+    if (runId && this._currentRunId && runId !== this._currentRunId) {
+      return;
     }
+
+    if (!this._panel) {
+      this._resetState();
+      return;
+    }
+
+    if (!this._isReady) {
+      this._closeAfterFlush = true;
+      if (!this._closeTimer) {
+        this._scheduleDispose(2000);
+      }
+      return;
+    }
+
+    this._scheduleDispose(400);
+  }
+
+  private _scheduleDispose(delayMs: number): void {
+    if (this._closeTimer) {
+      clearTimeout(this._closeTimer);
+    }
+    this._closeTimer = setTimeout(() => {
+      this._doDispose();
+    }, delayMs);
+  }
+
+  private _resetState(): void {
+    if (this._closeTimer) {
+      clearTimeout(this._closeTimer);
+      this._closeTimer = null;
+    }
+    this._isReady = false;
+    this._closeAfterFlush = false;
+    this._pendingQueue = [];
+    this._currentRunId = undefined;
+  }
+
+  private _doDispose(): void {
+    const panel = this._panel;
+    this._resetState();
+    this._panel = undefined;
+    panel?.dispose();
   }
 
   private _getHtmlForWebview(webview: vscode.Webview): string {

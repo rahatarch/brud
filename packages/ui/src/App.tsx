@@ -166,6 +166,7 @@ function App() {
   const { messages, sessionState, sendPrompt, addReport, resetSession } = useChatStore();
   const chatAreaRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
+  const isBusy = sessionState === 'working';
 
   const handleScroll = useCallback(() => {
     const el = chatAreaRef.current;
@@ -182,14 +183,14 @@ function App() {
   }, []);
 
   const handleSend = () => {
-    if (!inputText.trim()) return;
+    if (isBusy || !inputText.trim()) return;
     sendPrompt(inputText);
     sendToExtension({ command: 'applyPatch', text: inputText });
     setInputText('');
   };
 
   const handlePreview = () => {
-    if (!inputText.trim()) return;
+    if (isBusy || !inputText.trim()) return;
     sendToExtension({ command: 'previewPatch', text: inputText });
   };
 
@@ -237,6 +238,7 @@ function App() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      if (isBusy) return;
       handleSend();
     }
   };
@@ -335,13 +337,15 @@ function App() {
             value={inputText}
             onChange={e => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Paste your Brud Prompt here..."
-            className="w-full min-h-[60px] rounded-t-md bg-surface-2 p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none text-sm"
+            disabled={isBusy}
+            placeholder={isBusy ? 'Execution in progress...' : 'Paste your Brud Prompt here...'}
+            className="w-full min-h-[60px] rounded-t-md bg-surface-2 p-4 resize-none text-text font-sans placeholder:text-text-muted outline-none text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           />
           <div className="flex items-center justify-end gap-2 px-2 mb-2 bg-surface-2 rounded-b-md">
             <button
               onClick={handlePreview}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer"
+              disabled={isBusy}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-text disabled:hover:brightness-100"
               title="Preview Diff"
             >
               <Eye size={16} />
@@ -349,7 +353,8 @@ function App() {
             </button>
             <button
               onClick={handleSend}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer"
+              disabled={isBusy}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-text bg-surface-3 rounded-md hover:text-primary hover:brightness-110 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-text disabled:hover:brightness-100"
               title="Execute"
             >
               <Send size={16} />

@@ -22,6 +22,12 @@ export class BrudDiffPreviewPanelManager {
     }
   }
 
+  public postIfOpen(message: any): void {
+    if (this._panel) {
+      this._panel.webview.postMessage(message);
+    }
+  }
+
   public openNoPreviewPanel(detail?: string) {
     const msg = detail
       ? { command: 'noPreviewableOps', detail }

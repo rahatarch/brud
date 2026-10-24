@@ -3,7 +3,9 @@ import * as fs from 'fs';
 
 export class BrudUnifiedResultsPanelManager {
   private _panel: vscode.WebviewPanel | undefined;
-  private _pendingMessage: any = null;
+  private _pendingQueue: any[] = [];
+  private _isReady: boolean = false;
+  private readonly MAX_QUEUE_COUNT = 2000;
   private _onKillProcess: ((processId: string) => void) | null = null;
   private _getActiveProcessIds: (() => string[]) | null = null;
 
@@ -18,11 +20,25 @@ export class BrudUnifiedResultsPanelManager {
   }
 
   public postMessage(message: any): void {
-    if (this._panel) {
-      this._panel.webview.postMessage(message);
-    } else {
-      this._pendingMessage = message;
+    if (!this._panel) {
+      return;
     }
+
+    if (this._isReady) {
+      this._panel.webview.postMessage(message);
+      return;
+    }
+
+    if (this._pendingQueue.length >= this.MAX_QUEUE_COUNT) {
+      const dropIndex = this._pendingQueue.findIndex((queued) => !queued.streamDone);
+      if (dropIndex >= 0) {
+        this._pendingQueue.splice(dropIndex, 1);
+      } else {
+        this._pendingQueue.shift();
+      }
+    }
+
+    this._pendingQueue.push(message);
   }
 
   public postChunk(chunk: string, chunkIndex: number, processId: string): void {
@@ -50,9 +66,12 @@ export class BrudUnifiedResultsPanelManager {
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
-      this._panel.webview.postMessage(message);
+      this.postMessage(message);
       return;
     }
+
+    this._isReady = false;
+    this._pendingQueue = [message];
 
     this._panel = vscode.window.createWebviewPanel(
       'brud-unified-results-panel',
@@ -69,16 +88,20 @@ export class BrudUnifiedResultsPanelManager {
 
     this._panel.webview.html = this._getHtmlForWebview(this._panel.webview);
 
-    this._pendingMessage = message;
-
     this._panel.onDidDispose(() => {
+      this._isReady = false;
+      this._pendingQueue = [];
       this._panel = undefined;
     });
 
     this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready' && this._pendingMessage) {
-        this._panel?.webview.postMessage(this._pendingMessage);
-        this._pendingMessage = null;
+      if (message.command === 'ready') {
+        this._isReady = true;
+        const queued = [...this._pendingQueue];
+        this._pendingQueue = [];
+        for (const msg of queued) {
+          this._panel?.webview.postMessage(msg);
+        }
       }
       if (message.command === 'killProcess' && message.processId && this._onKillProcess) {
         this._onKillProcess(message.processId);

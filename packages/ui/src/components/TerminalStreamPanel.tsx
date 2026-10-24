@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { XCircle, Terminal, Loader2 } from 'lucide-react';
-import { sendKillProcess, onExtensionMessage } from '../bridge/vscodeBridge';
+import { sendKillProcess, sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 
 interface ProcessStream {
   buffer: string;
@@ -43,6 +43,10 @@ function TerminalStreamPanel() {
         return next;
       });
     });
+  }, []);
+
+  useEffect(() => {
+    sendToExtension({ command: 'ready' });
   }, []);
 
   useEffect(() => {

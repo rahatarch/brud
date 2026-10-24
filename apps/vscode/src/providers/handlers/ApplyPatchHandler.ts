@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
+import { randomUUID } from 'crypto';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
-import type { FileOperation, OperationResult, SessionMetadata } from '@brud/core';
+import type { FileOperation, FileOperationResult, OperationResult, SessionMetadata } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
@@ -32,6 +33,7 @@ export class ApplyPatchHandler {
   }
 
   async handle(text: string): Promise<void> {
+    const runId = randomUUID();
     await closePreviewTabs();
     this.panelManager.closeDiffPreview();
     this.outputChannel.appendLine('DEBUG: Before parseOperations');
@@ -56,132 +58,149 @@ export class ApplyPatchHandler {
 
     const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
 
-    let lastProcessId: string | undefined;
+    const activeProcessIds = new Set<string>();
 
     const onChunk = (chunk: string, chunkIndex: number) => {
       const processIds = this.executionCoordinator.getActiveProcessIds();
       const processId = processIds.length > 0 ? processIds[processIds.length - 1] : 'default';
-      lastProcessId = processId;
+      activeProcessIds.add(processId);
       const chunkMsg: ExtensionMessage = { command: 'terminalChunk', chunk, chunkIndex, processId };
       this.getWebview()?.postMessage(chunkMsg);
       this.panelManager.postTerminalChunk(chunk, chunkIndex, processId);
     };
 
-    this.panelManager.showTerminalStream();
-
-    const executionResult = await this.executionCoordinator.execute(operations, text, undefined, sessionMetadata, onChunk);
-
-    if (lastProcessId) {
-      const streamStatus = executionResult.success ? 'success' : 'failed';
-      this.panelManager.postStreamDone(lastProcessId, streamStatus);
-    }
-    this.outputChannel.appendLine('DEBUG: After executionCoordinator.execute - success: ' + executionResult.success + ' - errors: ' + executionResult.errors.length);
-
-    for (const err of executionResult.errors) {
-      this.outputChannel.appendLine(`  ERROR: ${err}`);
+    const hasStreamingTerminal = operations.some((op) => op.kind === 'terminal_command');
+    if (hasStreamingTerminal) {
+      this.panelManager.showTerminalStream(runId);
     }
 
-    let parsedMessage: any;
+    let executionResult: FileOperationResult;
     try {
-      parsedMessage = JSON.parse(executionResult.message);
-    } catch {
-      parsedMessage = null;
-    }
+      executionResult = await this.executionCoordinator.execute(operations, text, undefined, sessionMetadata, onChunk);
 
-    if (parsedMessage && parsedMessage.extractionResults) {
-      for (const item of parsedMessage.extractionResults) {
+      if (hasStreamingTerminal) {
+        const liveIds = this.executionCoordinator.getActiveProcessIds();
+        for (const id of liveIds) {
+          activeProcessIds.add(id);
+        }
+        const streamStatus = executionResult?.success ? 'success' : 'failed';
+        for (const processId of activeProcessIds) {
+          this.panelManager.postStreamDone(processId, streamStatus);
+        }
+      }
+      this.outputChannel.appendLine('DEBUG: After executionCoordinator.execute - success: ' + executionResult?.success + ' - errors: ' + (executionResult?.errors?.length ?? 0));
+
+      for (const err of executionResult?.errors ?? []) {
+        this.outputChannel.appendLine(`  ERROR: ${err}`);
+      }
+
+      let parsedMessage: any;
+      try {
+        parsedMessage = JSON.parse(executionResult.message);
+      } catch {
+        parsedMessage = null;
+      }
+
+      if (parsedMessage && parsedMessage.extractionResults) {
+        for (const item of parsedMessage.extractionResults) {
+          unifiedResults.operations.push({
+            toolKind: 'extractionResults',
+            data: {
+              json: item.json,
+              directoryPath: item.directoryPath,
+              depth: item.depth,
+              fileCount: item.fileCount,
+              directoryCount: item.directoryCount,
+            },
+          });
+        }
+      }
+
+      if (parsedMessage && parsedMessage.readResults) {
+        for (const d of parsedMessage.readResults) {
+          unifiedResults.operations.push({
+            toolKind: 'readResults',
+            data: {
+              files: d.files || [],
+              totalFiles: d.totalFiles || 0,
+              totalSize: d.totalSize || 0,
+            },
+          });
+        }
+      }
+
+      if (parsedMessage && parsedMessage.search_results) {
+        const searchResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
+        for (const entry of searchResults) {
+          unifiedResults.operations.push({
+            toolKind: 'search_files',
+            data: {
+              results: entry.results.results || [],
+              totalMatches: entry.results.totalMatches || 0,
+              truncated: entry.results.truncated || false,
+            },
+          });
+        }
+      }
+
+      if (parsedMessage && parsedMessage.codebase_metadata) {
         unifiedResults.operations.push({
-          toolKind: 'extractionResults',
-          data: {
-            json: item.json,
-            directoryPath: item.directoryPath,
-            depth: item.depth,
-            fileCount: item.fileCount,
-            directoryCount: item.directoryCount,
-          },
+          toolKind: 'codebase_metadata',
+          data: parsedMessage.codebase_metadata,
         });
+      }
+
+      const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory', 'search_files', 'codebase_metadata']);
+
+      for (const opResult of executionResult.operationResults) {
+        if (opResult.kind === 'terminal_command' && opResult.data) {
+          const items = transformTerminalOperationData([opResult] as any, operations);
+          unifiedResults.operations.push(...items);
+        } else if (opResult.kind === 'terminal_command' && !opResult.data) {
+          const origOp = operations[opResult.operationIndex] as any;
+          unifiedResults.operations.push({
+            toolKind: 'terminal_command',
+            data: buildFailedTerminalData(opResult, origOp),
+          });
+        } else if (opResult.kind === 'get_tool_info') {
+          unifiedResults.operations.push({
+            toolKind: 'tool_info',
+            data: {
+              message: opResult.message,
+              status: opResult.status,
+              toolKind: (operations[opResult.operationIndex] as any)?.toolKind,
+              ...(opResult.code ? { code: opResult.code } : {}),
+              ...(opResult.details ? { details: opResult.details } : {}),
+            },
+          });
+        } else if (!(READ_SUCCESS_KINDS.has(opResult.kind) && opResult.status === 'success')) {
+          unifiedResults.operations.push({
+            toolKind: opResult.kind,
+            data: opResult,
+          });
+        }
+      }
+
+      if (unifiedResults.operations.length > 0) {
+        this.lastExecutionResult = unifiedResults;
+        this.panelManager.showUnifiedResults(unifiedResults);
+      }
+    } finally {
+      if (hasStreamingTerminal) {
+        this.panelManager.closeTerminalStreamPanel(runId);
       }
     }
 
-    if (parsedMessage && parsedMessage.readResults) {
-      for (const d of parsedMessage.readResults) {
-        unifiedResults.operations.push({
-          toolKind: 'readResults',
-          data: {
-            files: d.files || [],
-            totalFiles: d.totalFiles || 0,
-            totalSize: d.totalSize || 0,
-          },
-        });
-      }
-    }
-
-    if (parsedMessage && parsedMessage.search_results) {
-      const searchResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
-      for (const entry of searchResults) {
-        unifiedResults.operations.push({
-          toolKind: 'search_files',
-          data: {
-            results: entry.results.results || [],
-            totalMatches: entry.results.totalMatches || 0,
-            truncated: entry.results.truncated || false,
-          },
-        });
-      }
-    }
-
-    if (parsedMessage && parsedMessage.codebase_metadata) {
-      unifiedResults.operations.push({
-        toolKind: 'codebase_metadata',
-        data: parsedMessage.codebase_metadata,
-      });
-    }
-
-    const READ_SUCCESS_KINDS = new Set(['read_file', 'read_files', 'read_directory', 'search_files', 'codebase_metadata']);
-
-    for (const opResult of executionResult.operationResults) {
-      if (opResult.kind === 'terminal_command' && opResult.data) {
-        const items = transformTerminalOperationData([opResult] as any, operations);
-        unifiedResults.operations.push(...items);
-      } else if (opResult.kind === 'terminal_command' && !opResult.data) {
-        const origOp = operations[opResult.operationIndex] as any;
-        unifiedResults.operations.push({
-          toolKind: 'terminal_command',
-          data: buildFailedTerminalData(opResult, origOp),
-        });
-      } else if (opResult.kind === 'get_tool_info') {
-        unifiedResults.operations.push({
-          toolKind: 'tool_info',
-          data: {
-            message: opResult.message,
-            status: opResult.status,
-            toolKind: (operations[opResult.operationIndex] as any)?.toolKind,
-            ...(opResult.code ? { code: opResult.code } : {}),
-            ...(opResult.details ? { details: opResult.details } : {}),
-          },
-        });
-      } else if (!(READ_SUCCESS_KINDS.has(opResult.kind) && opResult.status === 'success')) {
-        unifiedResults.operations.push({
-          toolKind: opResult.kind,
-          data: opResult,
-        });
-      }
-    }
-
-    if (unifiedResults.operations.length > 0) {
-      this.lastExecutionResult = unifiedResults;
-      this.panelManager.showUnifiedResults(unifiedResults);
-      this.panelManager.closeTerminalStreamPanel();
-    } else {
-      this.panelManager.closeTerminalStreamPanel();
-    }
-
-    const pointerMsg = getChatStatusMessage({ success: executionResult.success, operationResults: executionResult.operationResults, errors: executionResult.errors });
-    const command = executionResult.success ? 'success' : 'error';
+    const pointerMsg = getChatStatusMessage({
+      success: executionResult?.success ?? false,
+      operationResults: executionResult?.operationResults ?? [],
+      errors: executionResult?.errors ?? [],
+    });
+    const command = executionResult?.success ? 'success' : 'error';
     const msg: ExtensionMessage = { command, message: pointerMsg };
     this.getWebview()?.postMessage(msg);
 
-    if (!executionResult.success) {
+    if (!executionResult?.success) {
       this.outputChannel.appendLine('=== EXECUTION SUMMARY ===');
       this.outputChannel.appendLine('Execution result: ' + JSON.stringify(executionResult));
       this.outputChannel.show(true);

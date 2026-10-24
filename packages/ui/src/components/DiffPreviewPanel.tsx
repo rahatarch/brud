@@ -78,6 +78,7 @@ function DiffPreviewPanel() {
   const [patchedFileIndices, setPatchedFileIndices] = useState<Set<number>>(new Set());
   const [noPreview, setNoPreview] = useState(false);
   const [noPreviewDetail, setNoPreviewDetail] = useState<string | undefined>(undefined);
+  const [isExecuting, setIsExecuting] = useState(false);
   const [countdown, setCountdown] = useState(5);
   const diffContentRef = useRef<HTMLDivElement>(null);
   const successTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -96,6 +97,7 @@ function DiffPreviewPanel() {
         setSuccessMessage(null);
         setPatchedFileIndices(new Set());
         setNoPreview(false);
+        setIsExecuting(false);
         setCountdown(5);
       }
       if (message.command === 'noPreviewableOps') {
@@ -105,8 +107,13 @@ function DiffPreviewPanel() {
         setCountdown(5);
         setSuccessMessage(null);
         setPatchedFileIndices(new Set());
+        setIsExecuting(false);
+      }
+      if (message.command === 'executionState') {
+        setIsExecuting(message.executing === true);
       }
       if (message.command === 'filePatched' && typeof message.fileIndex === 'number') {
+        setIsExecuting(false);
         setPatchedFileIndices(prev => {
           const next = new Set(prev);
           next.add(message.fileIndex);
@@ -114,6 +121,7 @@ function DiffPreviewPanel() {
         });
       }
       if (message.command === 'executeSuccess' && message.message) {
+        setIsExecuting(false);
         if (diffData) {
           const allIndices = new Set(Array.from({ length: diffData.files.length }, (_, i) => i));
           setPatchedFileIndices(allIndices);
@@ -184,12 +192,16 @@ function DiffPreviewPanel() {
   }, [diffData, currentFileIndex]);
 
   const handleExecuteCurrent = useCallback(() => {
+    if (isExecuting) return;
+    setIsExecuting(true);
     sendToExtension({ command: 'executeCurrentFile', fileIndex: currentFileIndex });
-  }, [currentFileIndex]);
+  }, [currentFileIndex, isExecuting]);
 
   const handleExecuteAll = useCallback(() => {
+    if (isExecuting) return;
+    setIsExecuting(true);
     sendToExtension({ command: 'executeAllFiles' });
-  }, []);
+  }, [isExecuting]);
 
   const handleReject = useCallback(() => {
     sendToExtension({ command: 'rejectPreview' });
@@ -316,11 +328,11 @@ function DiffPreviewPanel() {
         <div className="flex items-center gap-2">
           <button
             onClick={handleExecuteAll}
-            disabled={allPatched || allFilesIdentical}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors cursor-pointer ${
-              allPatched || allFilesIdentical
+            disabled={allPatched || allFilesIdentical || isExecuting}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+              allPatched || allFilesIdentical || isExecuting
                 ? 'bg-surface-1 text-text-tertiary cursor-not-allowed'
-                : 'bg-primary hover:bg-primary-hover text-white'
+                : 'bg-primary hover:bg-primary-hover text-white cursor-pointer'
             }`}
           >
             <Play size={12} />
@@ -409,7 +421,12 @@ function DiffPreviewPanel() {
           {!patchedFileIndices.has(currentFileIndex) && !isCurrentFileIdentical && (
             <button
               onClick={handleExecuteCurrent}
-              className="flex items-center gap-1 px-2 py-1 text-xs font-medium rounded bg-primary hover:bg-primary-hover text-white transition-colors cursor-pointer shrink-0"
+              disabled={isExecuting}
+              className={`flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors shrink-0 ${
+                isExecuting
+                  ? 'bg-surface-1 text-text-tertiary cursor-not-allowed'
+                  : 'bg-primary hover:bg-primary-hover text-white cursor-pointer'
+              }`}
             >
               <Play size={10} />
               Execute This File

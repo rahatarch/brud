@@ -36,6 +36,8 @@ export function reportExecutionResult(
     outputChannel.appendLine(`  ERROR: ${err.details}`);
   }
 
+  let readResultData: ReadResultData | null = null;
+
   if (result.success) {
     let readData: any;
     try {
@@ -47,14 +49,13 @@ export function reportExecutionResult(
     const isReadResult = readData && (readData.totalFiles !== undefined || (Array.isArray(readData) && readData.some((d: any) => d.totalFiles !== undefined)));
 
     if (isReadResult) {
-      const readResultData: ReadResultData = Array.isArray(readData)
+      readResultData = Array.isArray(readData)
         ? readData.reduce((merged: ReadResultData, d: any) => ({
             files: [...(merged.files || []), ...(d.files || [])],
             totalFiles: merged.totalFiles + (d.totalFiles || 0),
             totalSize: merged.totalSize + (d.totalSize || 0),
           }), { files: [], totalFiles: 0, totalSize: 0 })
         : readData;
-      return readResultData;
     }
   }
 
@@ -67,7 +68,7 @@ export function reportExecutionResult(
     outputChannel.show(true);
   }
 
-  return null;
+  return readResultData;
 }
 
 export function transformTerminalOperationData(

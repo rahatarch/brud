@@ -28,6 +28,10 @@ export class PanelManager {
     this.diffPreviewPanelManager.postMessage(message);
   }
 
+  postDiffPreviewMessageIfOpen(message: any): void {
+    this.diffPreviewPanelManager.postIfOpen(message);
+  }
+
   closeDiffPreview(): void {
     this.diffPreviewPanelManager.closePanel();
   }
@@ -44,12 +48,12 @@ export class PanelManager {
     this.readPanelManager?.openReadPanel(data);
   }
 
-  showTerminalStream(): void {
-    this.terminalPanelManager.openTerminalStreamPanel();
+  showTerminalStream(runId: string): void {
+    this.terminalPanelManager.openTerminalStreamPanel(runId);
   }
 
-  closeTerminalStreamPanel(): void {
-    this.terminalPanelManager.closePanel();
+  closeTerminalStreamPanel(runId: string): void {
+    this.terminalPanelManager.closePanel(runId);
   }
 
   postTerminalChunk(chunk: string, chunkIndex: number, processId: string): void {

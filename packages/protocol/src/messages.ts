@@ -79,6 +79,7 @@ export type ExtensionCommand =
   | 'promptVersionsResult'
   | 'promptReverted'
   | 'terminalChunk'
+  | 'executionState'
   | 'mcpStatus'
   | 'mcpConfigCopied';
 
@@ -157,6 +158,7 @@ export interface ExtensionMessage {
   chunkIndex?: number;
   streamDone?: boolean;
   streamStatus?: 'success' | 'failed' | 'interrupted';
+  executing?: boolean;
 }
 
 export interface HistorySessionResult {
