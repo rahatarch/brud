@@ -1,6 +1,8 @@
 export * from './contracts/index.js';
+export * from './bootstrap/index.js';
 export * from '../drivers/index.js';
 export * from '../services/BrudFileSystem/index.js';
+export * from '../services/UniversalHistory/index.js';
 
 export { ServiceContainer } from './engine/ServiceContainer.js';
 export { OperationRegistry } from './engine/OperationRegistry.js';

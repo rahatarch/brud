@@ -1,2 +1,3 @@
 export { FileSystemToken } from './tokens.js';
-export { FileSystemDescriptor } from './descriptor.js';
+export { FileSystemDescriptor, createFileSystemDescriptor } from './descriptor.js';
+export type { FileSystemDescriptorOptions } from './descriptor.js';
