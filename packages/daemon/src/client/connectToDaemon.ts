@@ -35,6 +35,7 @@ export interface ConnectDaemonOptions {
   readonly handshakeTimeoutMs?: number;
   readonly connectTimeoutMs?: number;
   readonly client?: DaemonClientIdentity;
+  readonly clientInfo?: DaemonClientIdentity;
   readonly capabilities?: readonly string[];
 }
 
@@ -66,7 +67,8 @@ async function openClient(
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         token,
         workspaceRoot: endpoint.workspaceRoot,
-        client: options.client
+        client: options.clientInfo
+          ?? options.client
           ?? { name: DAEMON_CLIENT_NAME, version: DAEMON_CLIENT_VERSION },
         capabilities: options.capabilities ?? DAEMON_CLIENT_CAPABILITIES,
       },

@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@brud/core": "*",
+    "@brud/daemon": "*",
     "@brud/protocol": "*",
     "@brud/vscode-adapter": "*"
   }

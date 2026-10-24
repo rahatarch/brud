@@ -7,3 +7,4 @@ export * from './settingsProvider';
 export * from './promptStore';
 export * from './cascadingPromptStore';
 export * from './brudHome';
+export * from './daemon/index';

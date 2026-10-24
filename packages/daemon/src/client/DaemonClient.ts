@@ -9,6 +9,7 @@ import type {
   FsListEntry,
   FsListResult,
   FsReadFileResult,
+  FsStatResult,
   FsWriteAtomicResult,
   HistoryBeginSessionResult,
   HistoryCommitOutcome,
@@ -283,6 +284,11 @@ export class DaemonClient {
   async fsExists(path: string): Promise<boolean> {
     const result = await this.request<FsExistsResult>(Protocol.FS_EXISTS, { path });
     return result.exists;
+  }
+
+  async fsStat(path: string): Promise<FsStatResult['stat']> {
+    const result = await this.request<FsStatResult>(Protocol.FS_STAT, { path });
+    return result.stat;
   }
 
   async fsList(path: string, limit?: number): Promise<readonly FsListEntry[]> {

@@ -13,6 +13,7 @@ import { BrudReadPanelManager } from './ReadPanelProvider';
 import type { UnifiedSessionResults } from '@brud/protocol';
 import { WorkspaceResolver } from './services/WorkspaceResolver';
 import { ExecutionCoordinator } from './services/ExecutionCoordinator';
+import type { DaemonClientProvider } from './services/ExecutionCoordinator';
 import { ErrorReporter } from './services/ErrorReporter';
 import { PanelManager } from './services/PanelManager';
 import { ApplyPatchHandler } from './handlers/ApplyPatchHandler';
@@ -117,12 +118,14 @@ export class SurgicalViewDependencies {
     private readonly _clearOperationsByFile: () => void,
     private readonly _resetCurrentFileIndex: () => void,
     private readonly _showPreviewForFile: (filePath: string) => Promise<void>,
+    private readonly _getDaemonClient: DaemonClientProvider = async () => undefined,
   ) {
     // Services
     const workspaceResolver = new WorkspaceResolver();
     const executionCoordinator = new ExecutionCoordinator(
       undefined,
       () => this.getSettings(),
+      this._getDaemonClient,
     );
     const errorReporter = new ErrorReporter(
       () => this._getWebview(),

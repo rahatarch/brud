@@ -361,6 +361,13 @@ describe('daemon client', () => {
     assert.equal(await client.fsExists('notes/hello.md'), true);
     assert.equal(await client.fsExists('notes/missing.md'), false);
 
+    const stat = await client.fsStat('notes/hello.md');
+    assert.ok(stat !== null);
+    assert.equal(stat.isFile, true);
+    assert.equal(stat.isDirectory, false);
+    assert.equal(stat.size, Buffer.byteLength(text, 'utf8'));
+    assert.equal(await client.fsStat('notes/missing.md'), null);
+
     await client.fsWriteAtomic('notes/second.md', 'second');
 
     const entries = await client.fsList('notes');

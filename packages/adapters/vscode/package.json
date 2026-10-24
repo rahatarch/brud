@@ -4,10 +4,12 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "test": "node --import tsx --test \"src/__tests__/*.test.ts\""
   },
   "dependencies": {
     "@brud/core": "*",
+    "@brud/daemon": "*",
     "@brud/protocol": "*",
     "@types/vscode": "^1.80.0"
   },

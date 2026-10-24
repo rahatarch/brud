@@ -17,6 +17,7 @@ import { isRecord } from '@brud/protocol';
 import type { WebviewMessage, ExtensionMessage, ReportSection, UnifiedSessionResults } from '@brud/protocol';
 import { SurgicalViewDependencies } from './SurgicalViewDependencies';
 import { SurgicalViewRouter } from './SurgicalViewRouter';
+import type { DaemonClientProvider } from './services/ExecutionCoordinator';
 
 export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _view?: vscode.WebviewView;
@@ -46,6 +47,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
     unifiedResultsPanelManager?: BrudUnifiedResultsPanelManager,
     terminalPanelManager?: BrudTerminalPanelManager,
+    getDaemonClient?: DaemonClientProvider,
   ) {
     this._mainWindowProvider = mainWindowProvider;
     this._structurePanelManager = structurePanelManager;
@@ -81,6 +83,7 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
       () => { this._operationsByFile.clear(); },
       () => { this._currentFileIndex = 0; },
       async (filePath) => { await this._showPreviewForFile(filePath); },
+      getDaemonClient,
     );
 
     this._deps.wireHandlers();

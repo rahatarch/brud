@@ -46,6 +46,7 @@ async function fileExists(path: string): Promise<boolean> {
 export async function resolveDaemonCliPath(): Promise<string> {
   const candidates = [
     resolve(__dirname, '..', 'cli.js'),
+    resolve(__dirname, 'daemon', 'cli.js'),
     resolve(__dirname, '..', '..', 'dist', 'cli.js'),
   ];
 

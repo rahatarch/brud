@@ -13,9 +13,13 @@ import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem, getEffectiveSettings } from '@brud/vscode-adapter';
 import { initializeToolRegistry } from '@brud/core';
 import { startHttpServer } from '@brud/mcp';
+import { connectToDaemon } from '@brud/daemon';
+import type { DaemonClient } from '@brud/daemon';
 import { McpServerService } from './mcp/McpServerService';
 
 let mcpServiceRef: McpServerService | undefined;
+let daemonClientRef: DaemonClient | undefined;
+let daemonClientPromise: Promise<DaemonClient | undefined> | undefined;
 
 async function readMcpAutoOn(root: string | undefined): Promise<boolean> {
   if (!root) {
@@ -41,6 +45,28 @@ export function activate(context: vscode.ExtensionContext) {
   initializeToolRegistry();
 
   const logger = BrudLogger.getInstance();
+  const workspaceRootUri = vscode.workspace.workspaceFolders?.[0]?.uri;
+  const workspaceRoot = workspaceRootUri?.fsPath;
+
+  daemonClientPromise = workspaceRoot === undefined
+    ? Promise.resolve(undefined)
+    : connectToDaemon({
+      workspaceRoot,
+      clientInfo: { name: 'brud-vscode', version: __BRUD_EXTENSION_VERSION__ },
+    })
+      .then((client) => {
+        daemonClientRef = client;
+        logger.appendLine(`[daemon] connected to ${client.handshake?.workspaceRoot ?? workspaceRoot}`);
+        return client;
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        logger.appendLine(`[daemon] connection failed: ${message}`);
+        return undefined;
+      });
+
+  const getDaemonClient = () => daemonClientPromise ?? Promise.resolve(undefined);
+
   const previewProvider = new BrudCodePreviewProvider();
 
   const mcpService = new McpServerService({
@@ -107,6 +133,7 @@ export function activate(context: vscode.ExtensionContext) {
     diffPreviewPanelManager,
     unifiedResultsPanelManager,
     terminalPanelManager,
+    getDaemonClient,
   );
 
   // Wire settings reload: after MainWindow saves settings, reload sidebar immediately
@@ -185,9 +212,24 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export async function deactivate(): Promise<void> {
+  const client = daemonClientRef;
+  const pending = daemonClientPromise;
+  daemonClientRef = undefined;
+  daemonClientPromise = undefined;
+
   const service = mcpServiceRef;
   mcpServiceRef = undefined;
-  if (service) {
-    await service.dispose();
+
+  try {
+    if (service) {
+      await service.dispose();
+    }
+  } finally {
+    if (client) {
+      await client.close();
+    } else if (pending) {
+      const resolved = await pending.catch(() => undefined);
+      await resolved?.close();
+    }
   }
 }
