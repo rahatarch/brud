@@ -6,6 +6,11 @@ import { getEffectiveSettings } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { BrudTerminalPanelManager } from './TerminalStreamPanelProvider';
+import { BrudUnifiedResultsPanelManager } from './UnifiedResultsPanelProvider';
+import { BrudMainWindowManager } from './MainWindowProvider';
+import { BrudStructurePanelManager } from './StructurePanelProvider';
+import { BrudReadPanelManager } from './ReadPanelProvider';
+import type { UnifiedSessionResults } from '@brud/protocol';
 import { WorkspaceResolver } from './services/WorkspaceResolver';
 import { ExecutionCoordinator } from './services/ExecutionCoordinator';
 import { ErrorReporter } from './services/ErrorReporter';
@@ -88,11 +93,11 @@ export class SurgicalViewDependencies {
     private readonly _extensionUri: vscode.Uri,
     private readonly _outputChannel: vscode.OutputChannel,
     private readonly _previewProvider: BrudCodePreviewProvider,
-    private readonly _mainWindowProvider: any,
-    private readonly _structurePanelManager: any,
-    private readonly _readPanelManager: any,
+    private readonly _mainWindowProvider: BrudMainWindowManager | undefined,
+    private readonly _structurePanelManager: BrudStructurePanelManager | undefined,
+    private readonly _readPanelManager: BrudReadPanelManager | undefined,
     private readonly _diffPreviewPanelManager: BrudDiffPreviewPanelManager,
-    private readonly _unifiedResultsPanelManager: any,
+    private readonly _unifiedResultsPanelManager: BrudUnifiedResultsPanelManager | undefined,
     private readonly _terminalPanelManager: BrudTerminalPanelManager,
     // State accessors — provided by the owner (SurgicalViewProvider)
     private readonly _getFileList: () => string[],
@@ -106,8 +111,8 @@ export class SurgicalViewDependencies {
     private readonly _getDiffPreviewSessionId: () => string | undefined,
     private readonly _setDiffPreviewSessionId: (id: string | undefined) => void,
     private readonly _getWebview: () => vscode.Webview | undefined,
-    private readonly _getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
-    private readonly _setLastExecutionResult: (val: { operations: { toolKind: string; data: any }[] } | null) => void,
+    private readonly _getLastExecutionResult: () => UnifiedSessionResults | null,
+    private readonly _setLastExecutionResult: (val: UnifiedSessionResults | null) => void,
     private readonly _clearFileList: () => void,
     private readonly _clearOperationsByFile: () => void,
     private readonly _resetCurrentFileIndex: () => void,

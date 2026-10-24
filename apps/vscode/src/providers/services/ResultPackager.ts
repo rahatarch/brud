@@ -1,15 +1,21 @@
+import type { FileOperation } from '@brud/core';
 import type { OperationResult } from '@brud/protocol';
 import { transformTerminalOperation, buildFailedTerminalData } from './TerminalDataAdapter';
+import type { TerminalGroupData, TerminalResultData } from './TerminalDataAdapter';
 
 export interface UnifiedOperation {
   toolKind: string;
-  data: any;
+  data: unknown;
 }
 
 export interface PackageResultInput {
-  operationResults: any[];
-  operations: any[];
-  structuredData?: any;
+  operationResults: OperationResult[];
+  operations: FileOperation[];
+  structuredData?: unknown;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 export function packageOperationResults(input: PackageResultInput): UnifiedOperation[] {
@@ -18,11 +24,11 @@ export function packageOperationResults(input: PackageResultInput): UnifiedOpera
 
   for (const op of operationResults) {
     if (op.kind === 'terminal_command') {
-      const transformed = transformTerminalOperation(op, operations);
+      const transformed: TerminalGroupData | TerminalResultData | null = transformTerminalOperation(op, operations);
       if (transformed) {
         result.push({ toolKind: 'terminal_command', data: transformed });
       } else {
-        const origOp = operations[op.operationIndex] as any;
+        const origOp = op.operationIndex === undefined ? undefined : operations[op.operationIndex];
         result.push({
           toolKind: 'terminal_command',
           data: buildFailedTerminalData(op, origOp),
@@ -36,10 +42,10 @@ export function packageOperationResults(input: PackageResultInput): UnifiedOpera
   return result;
 }
 
-export function extractStructuredData(message: string): any | null {
+export function extractStructuredData(message: string): unknown {
   try {
-    const parsed = JSON.parse(message);
-    if (parsed && parsed.combined) {
+    const parsed: unknown = JSON.parse(message);
+    if (isRecord(parsed) && parsed.combined !== undefined) {
       return parsed.combined;
     }
     return parsed;

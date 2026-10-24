@@ -4,7 +4,7 @@ export function detectFields(content: string): string[] {
 }
 
 export function substituteFields(content: string, values: Record<string, string>): string {
-  return content.replace(/\$\{\[([^\[\]]+)\]\}/g, (_, key) => {
+  return content.replace(/\$\{\[([^\[\]]+)\]\}/g, (_match: string, key: string) => {
     const trimmed = key.trim();
     return values[trimmed] ?? `\${[${trimmed}]}`;
   });

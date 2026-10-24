@@ -42,7 +42,9 @@ describe('operationResultRenderer diagnostics', () => {
   });
 
   it('keeps summaryFormatter on a single line without diagnostics', () => {
-    const summary = operationResultRenderer.summaryFormatter(failedDirectory({
+    const summaryFormatter = operationResultRenderer.summaryFormatter;
+    assert.ok(summaryFormatter);
+    const summary = summaryFormatter(failedDirectory({
       code: 'BATCH_LIMIT_EXCEEDED',
       details: 'Requested 435 files; the limit is 100 per batch.',
     }));

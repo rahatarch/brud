@@ -1,51 +1,55 @@
-export type WebviewCommand =
-  | 'applyPatch'
-  | 'previewPatch'
-  | 'previewNextFile'
-  | 'previewPrevFile'
-  | 'previewAllFiles'
-  | 'executeCurrentFile'
-  | 'executeAllFiles'
-  | 'rejectPreview'
-  | 'doneDiffPreview'
-  | 'closeDiffPreview'
-  | 'hidePreviewNavigation'
-  | 'showPreviewNavigation'
-  | 'updatePreviewHeader'
-  | 'openMainWindow'
-  | 'extractStructure'
-  | 'ready'
-  | 'getHistory'
-  | 'getRevertHistory'
-  | 'revertSession'
-  | 'revertOperations'
-  | 'deleteSingleSession'
-  | 'wipeHistory'
-  | 'softDeleteSession'
-  | 'restoreSession'
-  | 'restoreAllSessions'
-  | 'getTrashedSessions'
-  | 'permanentDelete'
-  | 'getSessionSnapshots'
-  | 'openUnifiedResults'
-  | 'openPromptLibrary'
-  | 'openGetStarted'
-  | 'previewNoChanges'
-  | 'getSettings'
-  | 'saveSettings'
-  | 'getToolList'
-  | 'getPrompts'
-  | 'savePrompt'
-  | 'deletePrompt'
-  | 'getPromptVersions'
-  | 'revertPrompt'
-  | 'killProcess'
-  | 'copyPrompt'
-  | 'getMcpStatus'
-  | 'startMcpServer'
-  | 'stopMcpServer'
-  | 'setMcpAutoOn'
-  | 'copyMcpConfig';
+export const WEBVIEW_COMMANDS = [
+  'applyPatch',
+  'previewPatch',
+  'previewNextFile',
+  'previewPrevFile',
+  'previewAllFiles',
+  'executeCurrentFile',
+  'executeAllFiles',
+  'rejectPreview',
+  'doneDiffPreview',
+  'closeDiffPreview',
+  'hidePreviewNavigation',
+  'showPreviewNavigation',
+  'updatePreviewHeader',
+  'openMainWindow',
+  'extractStructure',
+  'ready',
+  'getHistory',
+  'getRevertHistory',
+  'revertSession',
+  'revertOperations',
+  'deleteSingleSession',
+  'wipeHistory',
+  'softDeleteSession',
+  'restoreSession',
+  'restoreAllSessions',
+  'getTrashedSessions',
+  'permanentDelete',
+  'getSessionSnapshots',
+  'openUnifiedResults',
+  'openPromptLibrary',
+  'openGetStarted',
+  'previewNoChanges',
+  'getSettings',
+  'saveSettings',
+  'getToolList',
+  'getPrompts',
+  'savePrompt',
+  'deletePrompt',
+  'getPromptVersions',
+  'revertPrompt',
+  'killProcess',
+  'copyPrompt',
+  'getMcpStatus',
+  'startMcpServer',
+  'stopMcpServer',
+  'setMcpAutoOn',
+  'copyMcpConfig',
+  'getActiveProcessIds',
+] as const;
+
+export type WebviewCommand = typeof WEBVIEW_COMMANDS[number];
 
 export type ExtensionCommand =
   | 'success'
@@ -80,6 +84,10 @@ export type ExtensionCommand =
   | 'promptReverted'
   | 'terminalChunk'
   | 'executionState'
+  | 'activeProcessIds'
+  | 'unifiedResults'
+  | 'noPreviewableOps'
+  | 'executeSuccess'
   | 'mcpStatus'
   | 'mcpConfigCopied';
 
@@ -94,6 +102,35 @@ export interface McpStatusPayload {
   autoOn: boolean;
 }
 
+export interface PromptVersionPayload {
+  version: number;
+  content: string;
+  timestamp: string;
+  message?: string;
+}
+
+export interface PromptPayload {
+  id: string;
+  title: string;
+  description: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  currentVersion: number;
+  scope: 'global' | 'workspace';
+  versions: PromptVersionPayload[];
+}
+
+export interface BrudSettingsPayload {
+  workspaceBoundaryEnabled?: boolean;
+  commandValidationEnabled?: boolean;
+  toolAllowList?: Record<string, boolean>;
+  mcpAutoOn?: boolean;
+  readConcurrency?: number;
+  readMaxBatchFiles?: number;
+  readMaxAggregateBytes?: number;
+}
+
 export interface WebviewMessage {
   command: WebviewCommand;
   text?: string;
@@ -103,13 +140,25 @@ export interface WebviewMessage {
   triggeredBy?: 'user' | 'system';
   permanentDelete?: boolean;
   fileIndex?: number;
-  settings?: Record<string, any>;
+  settings?: BrudSettingsPayload;
   promptId?: string;
-  promptData?: any;
+  promptData?: PromptPayload;
   promptScope?: 'global' | 'workspace';
   version?: number;
   processId?: string;
   enabled?: boolean;
+}
+
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+export function isWebviewCommand(value: unknown): value is WebviewCommand {
+  return typeof value === 'string' && (WEBVIEW_COMMANDS as readonly string[]).includes(value);
+}
+
+export function isWebviewMessage(value: unknown): value is WebviewMessage {
+  return isRecord(value) && isWebviewCommand(value.command);
 }
 
 export interface ReportSection {
@@ -118,8 +167,17 @@ export interface ReportSection {
   content?: string;
   items?: Array<{ label: string; value: string; status?: 'success' | 'failed' | 'aborted' | 'interrupted' }>;
   buttonText?: string;
-  buttonAction?: string;
+  buttonAction?: WebviewCommand;
   copyText?: string;
+}
+
+export interface UnifiedOperationResult {
+  toolKind: string;
+  data: unknown;
+}
+
+export interface UnifiedSessionResults {
+  operations: UnifiedOperationResult[];
 }
 
 export interface ExtensionMessage {
@@ -144,13 +202,13 @@ export interface ExtensionMessage {
   diffPreviewData?: DiffPreviewData;
   snapshotData?: SessionSnapshotsResult | null;
   structured?: ReportSection[];
-  settings?: Record<string, any>;
+  settings?: BrudSettingsPayload;
   source?: string;
   warnings?: string[];
   tools?: Array<{ kind: string; name: string; description: string }>;
-  prompts?: any[];
-  prompt?: any;
-  versions?: any[];
+  prompts?: PromptPayload[];
+  prompt?: PromptPayload;
+  versions?: PromptVersionPayload[];
   savedPromptId?: string;
   errorMessage?: string;
   processId?: string;
@@ -159,6 +217,9 @@ export interface ExtensionMessage {
   streamDone?: boolean;
   streamStatus?: 'success' | 'failed' | 'interrupted';
   executing?: boolean;
+  results?: UnifiedSessionResults;
+  detail?: string;
+  processIds?: string[];
 }
 
 export interface HistorySessionResult {
@@ -170,7 +231,7 @@ export interface HistorySessionResult {
   operationTypes: string[];
   operations: OperationResult[];
   filesAffected: string[];
-  metadataUsed: Record<string, any>;
+  metadataUsed: Record<string, unknown>;
   terminalCommands: string[];
   revertCommands: string[];
   sessionTitle?: string;

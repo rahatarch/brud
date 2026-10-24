@@ -170,7 +170,7 @@ function DetailView({ session, onBack, onViewRevertHistory }: { session: History
 
     const unsubscribe = onExtensionMessage((message) => {
       if (message.command === 'sessionSnapshotsResult') {
-        setSnapshotData(message.snapshotData);
+        setSnapshotData(message.snapshotData ?? null);
         setSnapshotLoading(false);
       }
     });

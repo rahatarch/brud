@@ -34,9 +34,12 @@ export class StructureService implements IStructureService {
     const resolvedPath = path.resolve(options.directoryPath);
     const json = await extractDirectoryStructure(this.fs, resolvedPath, depth);
 
-    let parsed: Record<string, any> = {};
+    let parsed: Record<string, unknown> = {};
     try {
-      parsed = JSON.parse(json);
+      const value: unknown = JSON.parse(json);
+      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+        parsed = value as Record<string, unknown>;
+      }
     } catch {
       // ignore parse errors for counting
     }

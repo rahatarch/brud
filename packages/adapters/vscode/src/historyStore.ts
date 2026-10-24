@@ -5,12 +5,112 @@ import { revertSession, sessionNotFoundError } from '@brud/core';
 import type { FileSystem } from '@brud/core';
 import { getWorkspaceFolders } from './workspace';
 
+interface SerializedSnapshotData {
+  sessionId: string;
+  snapshotType: 'pre' | 'post';
+  files: Record<string, string>;
+  diffFromPrevious: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(item => typeof item === 'string');
+}
+
+function isSerializedSnapshotData(value: unknown): value is SerializedSnapshotData {
+  return isRecord(value)
+    && typeof value.sessionId === 'string'
+    && (value.snapshotType === 'pre' || value.snapshotType === 'post')
+    && isRecord(value.files)
+    && Object.values(value.files).every(item => typeof item === 'string')
+    && typeof value.diffFromPrevious === 'string';
+}
+
+function isHistoryOperation(value: unknown): boolean {
+  return isRecord(value)
+    && typeof value.operationId === 'string'
+    && typeof value.operationIndex === 'number'
+    && typeof value.kind === 'string'
+    && typeof value.status === 'string'
+    && typeof value.message === 'string'
+    && typeof value.path === 'string';
+}
+
+function isHistorySession(value: unknown): value is HistorySession {
+  return isRecord(value)
+    && typeof value.sessionId === 'string'
+    && typeof value.timestamp === 'string'
+    && typeof value.originalPrompt === 'string'
+    && (value.status === 'success' || value.status === 'failure')
+    && typeof value.operationCount === 'number'
+    && isStringArray(value.operationTypes)
+    && Array.isArray(value.operations)
+    && value.operations.every(isHistoryOperation)
+    && isStringArray(value.filesAffected)
+    && isRecord(value.metadataUsed)
+    && isStringArray(value.terminalCommands)
+    && isStringArray(value.revertCommands);
+}
+
+function isRevertHistoryEntry(value: unknown): value is RevertHistoryEntry {
+  return isRecord(value)
+    && typeof value.revertId === 'string'
+    && typeof value.timestamp === 'string'
+    && (value.targetState === 'pre' || value.targetState === 'post')
+    && isStringArray(value.revertedOperationIds)
+    && (value.status === 'success' || value.status === 'failed');
+}
+
+function isDeleteHistoryEntry(value: unknown): value is DeleteHistoryEntry {
+  if (!isRecord(value) || typeof value.deleteId !== 'string' || typeof value.timestamp !== 'string') {
+    return false;
+  }
+  if (typeof value.deletedCount === 'number') {
+    return Array.isArray(value.deletedSessions)
+      && typeof value.reason === 'string'
+      && typeof value.triggeredBy === 'string';
+  }
+  return typeof value.sessionId === 'string'
+    && (value.action === 'soft_delete' || value.action === 'restore');
+}
+
+function isDeleteHistory(value: unknown): value is DeleteHistory {
+  return isRecord(value)
+    && typeof value.workspace === 'string'
+    && Array.isArray(value.deletions)
+    && value.deletions.every(isDeleteHistoryEntry);
+}
+
+function isCleanupState(value: unknown): value is { lastCleanup: string | null } {
+  return isRecord(value)
+    && (value.lastCleanup === null || typeof value.lastCleanup === 'string');
+}
+
+function readHistorySession(raw: string): HistorySession {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isHistorySession(parsed)) {
+    throw new Error('Invalid history session data');
+  }
+  return parsed;
+}
+
+function readSerializedSnapshot(raw: string): SerializedSnapshotData {
+  const parsed: unknown = JSON.parse(raw);
+  if (!isSerializedSnapshotData(parsed)) {
+    throw new Error('Invalid snapshot data');
+  }
+  return parsed;
+}
+
 export class WorkspaceHistoryStore implements HistoryStore {
   private brudDirEnsured = false;
 
   constructor(
     private workspaceRoot: string,
-    private fileSystem: FileSystem,
+    public readonly fileSystem: FileSystem,
   ) {
     this.ensureBrudDirectory().catch(() => {});
   }
@@ -69,7 +169,11 @@ export class WorkspaceHistoryStore implements HistoryStore {
       return { workspace: this.workspaceRoot, deletions: [] };
     }
     const raw = await this.fileSystem.readFile(filePath);
-    return JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    if (!isDeleteHistory(parsed)) {
+      throw new Error('Invalid delete history data');
+    }
+    return parsed;
   }
 
   async recordDeleteHistory(entry: Omit<DeleteHistoryEntry, 'deleteId' | 'timestamp'>): Promise<void> {
@@ -90,7 +194,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
     }
 
     const raw = await this.fileSystem.readFile(sessionPath);
-    const session: HistorySession = JSON.parse(raw);
+    const session = readHistorySession(raw);
 
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -130,7 +234,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
     }
 
     const raw = await this.fileSystem.readFile(sessionPath);
-    const session: HistorySession = JSON.parse(raw);
+    const session = readHistorySession(raw);
 
     const now = new Date().toISOString();
 
@@ -284,7 +388,8 @@ export class WorkspaceHistoryStore implements HistoryStore {
       return { lastCleanup: null };
     }
     const raw = await this.fileSystem.readFile(this.cleanupStateFile);
-    return JSON.parse(raw);
+    const parsed: unknown = JSON.parse(raw);
+    return isCleanupState(parsed) ? parsed : { lastCleanup: null };
   }
 
   private async updateCleanupState(): Promise<void> {
@@ -369,9 +474,9 @@ export class WorkspaceHistoryStore implements HistoryStore {
       this.fileSystem.readFile(postPath),
     ]);
 
-    const session: HistorySession = JSON.parse(sessionRaw);
-    const preData = JSON.parse(preRaw);
-    const postData = JSON.parse(postRaw);
+    const session = readHistorySession(sessionRaw);
+    const preData = readSerializedSnapshot(preRaw);
+    const postData = readSerializedSnapshot(postRaw);
 
     const preSnapshot: SnapshotData = {
       ...preData,
@@ -405,8 +510,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
     for (const dir of sessionDirs) {
       try {
         const raw = await this.fileSystem.readFile(this.sessionFile(dir));
-        const session: HistorySession = JSON.parse(raw);
-        sessions.push(session);
+        sessions.push(readHistorySession(raw));
       } catch {
         // Skip invalid/malformed session directories
       }
@@ -430,8 +534,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
       if (await this.fileSystem.exists(sessionPath)) {
         try {
           const raw = await this.fileSystem.readFile(sessionPath);
-          const session: HistorySession = JSON.parse(raw);
-          createdAt = session.timestamp;
+          createdAt = readHistorySession(raw).timestamp;
         } catch {
           // If session.json is corrupt, proceed without creation timestamp
         }
@@ -523,7 +626,7 @@ export class WorkspaceHistoryStore implements HistoryStore {
           const sessionPath = this.sessionFile(dir);
           if (await this.fileSystem.exists(sessionPath)) {
             const raw = await this.fileSystem.readFile(sessionPath);
-            const session: HistorySession = JSON.parse(raw);
+            const session = readHistorySession(raw);
             deletedSessions.push({ sessionId: session.sessionId, createdAt: session.timestamp });
           } else {
             deletedSessions.push({ sessionId: dir, createdAt: '' });
@@ -592,8 +695,8 @@ export class WorkspaceHistoryStore implements HistoryStore {
     if (await this.fileSystem.exists(revertsPath)) {
       const raw = await this.fileSystem.readFile(revertsPath);
       try {
-        const existing = JSON.parse(raw);
-        if (Array.isArray(existing)) {
+        const existing: unknown = JSON.parse(raw);
+        if (Array.isArray(existing) && existing.every(isRevertHistoryEntry)) {
           reverts = existing;
         }
       } catch {
@@ -612,8 +715,8 @@ export class WorkspaceHistoryStore implements HistoryStore {
     if (await this.fileSystem.exists(revertsPath)) {
       const raw = await this.fileSystem.readFile(revertsPath);
       try {
-        const existing = JSON.parse(raw);
-        if (Array.isArray(existing)) {
+        const existing: unknown = JSON.parse(raw);
+        if (Array.isArray(existing) && existing.every(isRevertHistoryEntry)) {
           reverts = existing;
         }
       } catch {

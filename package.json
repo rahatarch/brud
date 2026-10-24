@@ -165,6 +165,7 @@
     "@vscode/test-electron": "^2.5.2",
     "@vscode/vsce": "^4.0.0",
     "eslint": "^9.39.3",
+    "gitarmor": "^1.0.0",
     "tailwindcss": "^4.3.3",
     "ts-loader": "^9.5.4",
     "tsx": "^4.23.13",

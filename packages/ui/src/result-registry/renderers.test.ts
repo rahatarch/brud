@@ -1,39 +1,47 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-function readCanRender(data: any): boolean {
-  return !!(data && data.files && Array.isArray(data.files) && data.files.length > 0);
+import {
+  isCodebaseMetadataPayload,
+  isErrorPayload,
+  isOperationResultPayload,
+  isReadResultPayload,
+  isSearchResultPayload,
+  isStructurePayload,
+  isTerminalPayload,
+  isToolInfoPayload,
+} from './types';
+
+function readCanRender(data: unknown): boolean {
+  return isReadResultPayload(data) && data.files.length > 0;
 }
 
-function searchCanRender(data: any): boolean {
-  return !!(data && data.results && Array.isArray(data.results));
+function searchCanRender(data: unknown): boolean {
+  return isSearchResultPayload(data);
 }
 
-function structureCanRender(data: any): boolean {
-  return !!(data && typeof data.json === 'string');
+function structureCanRender(data: unknown): boolean {
+  return isStructurePayload(data);
 }
 
-function metadataCanRender(data: any): boolean {
-  return !!(data && typeof data.root === 'string');
+function metadataCanRender(data: unknown): boolean {
+  return isCodebaseMetadataPayload(data);
 }
 
-function terminalCanRender(data: any): boolean {
-  function isGroupResultData(d: any): boolean {
-    return !!(d && typeof d === 'object' && 'mode' in d && 'results' in d);
-  }
-  return !!(data && (isGroupResultData(data) || Array.isArray(data) || typeof data.command === 'string'));
+function terminalCanRender(data: unknown): boolean {
+  return isTerminalPayload(data);
 }
 
-function toolInfoCanRender(data: any): boolean {
-  return !!(data && typeof data.message === 'string');
+function toolInfoCanRender(data: unknown): boolean {
+  return isToolInfoPayload(data);
 }
 
-function errorCanRender(data: any): boolean {
-  return !!(data && typeof data.friendlyMessage === 'string');
+function errorCanRender(data: unknown): boolean {
+  return isErrorPayload(data);
 }
 
-function operationResultCanRender(data: any): boolean {
-  return !!(data && typeof data.status === 'string' && typeof data.kind === 'string');
+function operationResultCanRender(data: unknown): boolean {
+  return isOperationResultPayload(data);
 }
 
 describe('canRender contracts (logic tests)', () => {
@@ -54,7 +62,7 @@ describe('canRender contracts (logic tests)', () => {
 
   describe('searchRenderer shape', () => {
     it('returns true for valid search data', () => {
-      assert.equal(searchCanRender({ results: [{ path: 'a.ts' }] }), true);
+      assert.equal(searchCanRender({ results: [{ path: 'a.ts', name: 'a.ts', extension: 'ts', directory: 'src', size: 1 }], totalMatches: 1, truncated: false }), true);
     });
     it('returns false for missing results', () => {
       assert.equal(searchCanRender({}), false);
@@ -66,7 +74,7 @@ describe('canRender contracts (logic tests)', () => {
 
   describe('structureRenderer shape', () => {
     it('returns true for valid structure data', () => {
-      assert.equal(structureCanRender({ json: '{}', directoryPath: '/', depth: 1 }), true);
+      assert.equal(structureCanRender({ json: '{}', directoryPath: '/', depth: 1, fileCount: 1, directoryCount: 0 }), true);
     });
     it('returns false for missing json (non-string)', () => {
       assert.equal(structureCanRender({ json: 42 }), false);
@@ -78,7 +86,7 @@ describe('canRender contracts (logic tests)', () => {
 
   describe('metadataRenderer shape', () => {
     it('returns true for valid metadata data', () => {
-      assert.equal(metadataCanRender({ root: '/project', totalFiles: 10 }), true);
+      assert.equal(metadataCanRender({ root: '/project', totalFiles: 10, totalFolders: 2, mostDenseFolder: 'src', mostDenseCount: 8 }), true);
     });
     it('returns false when root is undefined', () => {
       assert.equal(metadataCanRender({ totalFiles: 10 }), false);
@@ -93,7 +101,7 @@ describe('canRender contracts (logic tests)', () => {
       assert.equal(terminalCanRender({ command: 'ls', output: '', exitCode: 0, duration: 100, success: true }), true);
     });
     it('returns true for group result', () => {
-      assert.equal(terminalCanRender({ mode: 'sequential', results: [] }), true);
+      assert.equal(terminalCanRender({ mode: 'sequential', results: [], totalDuration: 0, succeeded: 0, failed: 0 }), true);
     });
     it('returns true for array', () => {
       assert.equal(terminalCanRender([{ command: 'ls', output: '', exitCode: 0, duration: 100, success: true }]), true);

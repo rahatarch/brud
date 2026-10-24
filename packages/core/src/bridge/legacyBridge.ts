@@ -9,6 +9,10 @@ import { DEFAULT_SETTINGS } from '../settings/types.js';
 import type { FileOperation } from '../types/patch.js';
 import { StructureService } from '../services/structureService.js';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 const LEGACY_KINDS: readonly string[] = [
   "search_replace", "create_file", "delete_file", "rename_file",
   "move_file", "copy_file", "append_file", "create_directory",
@@ -35,10 +39,11 @@ export function createLegacyOperationHandler(kind: string): OperationHandler {
       let settings: BrudSettings = DEFAULT_SETTINGS;
       try { settings = context.resolve<BrudSettings>(CoreTokens.Settings); } catch { }
 
+      const inputRecord = isRecord(input) ? input : {};
       const operation = {
+        ...inputRecord,
         kind,
-        index: (input as any)?.index ?? "0",
-        ...(input as Record<string, unknown>)
+        index: typeof inputRecord.index === 'string' ? inputRecord.index : "0",
       } as FileOperation;
       const workspaceRoot = context.workspaceRoot;
 

@@ -3,6 +3,7 @@ import { BrudAPI } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import type { FileOperation, PatchBlock } from '@brud/core';
+import { isRecord } from '@brud/protocol';
 import type { ExtensionMessage } from '@brud/protocol';
 import { BrudCodePreviewProvider } from '../DiffPreviewProvider';
 
@@ -29,9 +30,16 @@ export class PreviewAllFilesHandler {
         continue;
       }
 
+      const resolvedPath = isRecord(result.data) && typeof result.data.resolvedPath === 'string'
+        ? result.data.resolvedPath
+        : undefined;
+      if (!resolvedPath) {
+        continue;
+      }
+
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolvedPath));
       } catch {
         continue;
       }
@@ -81,9 +89,16 @@ export class PreviewAllFilesHandler {
       return;
     }
 
+    const firstResolvedPath = isRecord(firstFileResult.data) && typeof firstFileResult.data.resolvedPath === 'string'
+      ? firstFileResult.data.resolvedPath
+      : undefined;
+    if (!firstResolvedPath) {
+      return;
+    }
+
     let firstDocument: vscode.TextDocument;
     try {
-      firstDocument = await vscode.workspace.openTextDocument(vscode.Uri.file((firstFileResult.data as any).resolvedPath));
+      firstDocument = await vscode.workspace.openTextDocument(vscode.Uri.file(firstResolvedPath));
     } catch {
       return;
     }

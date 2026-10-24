@@ -100,6 +100,10 @@ function summarizeReadResult(operationIndex: number, data: ReadResult): string {
 
 
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
 function getOperationTargetPath(operation: FileOperation): string {
   if ('directoryPath' in operation && typeof operation.directoryPath === 'string') {
     return operation.directoryPath;
@@ -328,9 +332,7 @@ export async function executeFileOperations(
     if (signal?.aborted) {
       for (let j = i; j < operations.length; j++) {
         const pending = operations[j];
-        const pendingPath = 'path' in pending
-          ? (pending as any).path
-          : ('directoryPath' in pending ? (pending as any).directoryPath : '');
+        const pendingPath = getOperationTargetPath(pending);
         operationResults.push({
           operationIndex: j,
           operationId: generateOperationId(),
@@ -845,9 +847,12 @@ operationResults.push({
           }
 
           const json = await extractDirectoryStructure(fs, directoryPath, operation.depth);
-          let parsed: Record<string, any> = {};
+          let parsed: Record<string, unknown> = {};
           try {
-            parsed = JSON.parse(json);
+            const value: unknown = JSON.parse(json);
+            if (isRecord(value)) {
+              parsed = value;
+            }
           } catch {
             // ignore parse errors for counting
           }
@@ -1575,7 +1580,7 @@ operationResults.push({
 
   let result: { success: boolean; message: string; errors: BrudError[]; operationResults: OperationResult[]; sessionId?: string };
 
-  const combined: any = {};
+  const combined: Record<string, unknown> = {};
 
   if (extractionResults.length > 0) {
     combined.extractionResults = extractionResults.map(r => ({
@@ -1600,14 +1605,18 @@ operationResults.push({
   }
 
   if (metadataResult) {
-    combined.codebase_metadata = JSON.parse(metadataResult);
+    const parsedMetadata: unknown = JSON.parse(metadataResult);
+    combined.codebase_metadata = parsedMetadata;
   }
 
   if (searchResults.size > 0) {
-    const searchArray = Array.from(searchResults.entries()).map(([opIndex, json]) => ({
-      operationIndex: opIndex,
-      results: JSON.parse(json)
-    }));
+    const searchArray = Array.from(searchResults.entries()).map(([opIndex, json]) => {
+      const parsedResults: unknown = JSON.parse(json);
+      return {
+        operationIndex: opIndex,
+        results: parsedResults,
+      };
+    });
     combined.search_results = searchArray;
   }
 

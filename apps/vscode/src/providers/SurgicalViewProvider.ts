@@ -5,11 +5,16 @@ import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
 import { BrudTerminalPanelManager } from './TerminalStreamPanelProvider';
+import { BrudUnifiedResultsPanelManager } from './UnifiedResultsPanelProvider';
+import { BrudMainWindowManager } from './MainWindowProvider';
+import { BrudStructurePanelManager } from './StructurePanelProvider';
+import { BrudReadPanelManager } from './ReadPanelProvider';
 import { BrudAPI } from '@brud/core';
 import { fileOpenError, previewNotAvailableError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
 import { PatchBlock, FileOperation } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, ReportSection } from '@brud/protocol';
+import { isRecord } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, ReportSection, UnifiedSessionResults } from '@brud/protocol';
 import { SurgicalViewDependencies } from './SurgicalViewDependencies';
 import { SurgicalViewRouter } from './SurgicalViewRouter';
 
@@ -18,15 +23,15 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
   private _operationsByFile: Map<string, FileOperation[]> = new Map();
   private _fileList: string[] = [];
   private _currentFileIndex: number = 0;
-  private _mainWindowProvider: any;
-  private _structurePanelManager: any;
-  private _readPanelManager: any;
-  private _unifiedResultsPanelManager: any;
+  private _mainWindowProvider: BrudMainWindowManager | undefined;
+  private _structurePanelManager: BrudStructurePanelManager | undefined;
+  private _readPanelManager: BrudReadPanelManager | undefined;
+  private _unifiedResultsPanelManager: BrudUnifiedResultsPanelManager | undefined;
   private _diffPreviewPanelManager: BrudDiffPreviewPanelManager;
   private _terminalPanelManager: BrudTerminalPanelManager;
   private _originalPrompt: string = '';
   private _diffPreviewSessionId: string | undefined = undefined;
-  private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
+  private _lastExecutionResult: UnifiedSessionResults | null = null;
 
   private _deps: SurgicalViewDependencies;
   private _router: SurgicalViewRouter;
@@ -35,11 +40,11 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     private readonly _extensionUri: vscode.Uri,
     private readonly _outputChannel: vscode.OutputChannel,
     private readonly _previewProvider: BrudCodePreviewProvider,
-    mainWindowProvider?: any,
-    structurePanelManager?: any,
-    readPanelManager?: any,
+    mainWindowProvider?: BrudMainWindowManager,
+    structurePanelManager?: BrudStructurePanelManager,
+    readPanelManager?: BrudReadPanelManager,
     diffPreviewPanelManager?: BrudDiffPreviewPanelManager,
-    unifiedResultsPanelManager?: any,
+    unifiedResultsPanelManager?: BrudUnifiedResultsPanelManager,
     terminalPanelManager?: BrudTerminalPanelManager,
   ) {
     this._mainWindowProvider = mainWindowProvider;
@@ -157,7 +162,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length === 0 && createFileOps.length === 0 && appendFileOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
+        const resolvedPath = isRecord(result.data) && typeof result.data.resolvedPath === 'string'
+          ? result.data.resolvedPath
+          : undefined;
+        if (!resolvedPath) {
+          throw fileOpenError(filePath);
+        }
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolvedPath));
       } catch {
         this._sendErrorToWebview(fileOpenError(filePath));
         const headerMsg: ExtensionMessage = {
@@ -247,7 +258,13 @@ export class BrudSRViewProvider implements vscode.WebviewViewProvider {
     if (searchReplaceOps.length > 0) {
       let document: vscode.TextDocument;
       try {
-        document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
+        const resolvedPath = isRecord(result.data) && typeof result.data.resolvedPath === 'string'
+          ? result.data.resolvedPath
+          : undefined;
+        if (!resolvedPath) {
+          throw fileOpenError(filePath);
+        }
+        document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolvedPath));
       } catch (e) {
         if (createFileOps.length > 0) {
           const fileExtension = filePath.split('.').pop() || '';
@@ -464,7 +481,7 @@ fileIndex: this._currentFileIndex,
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

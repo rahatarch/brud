@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { BrudError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
 import type { ExtensionMessage, ReportSection } from '@brud/protocol';
+import type { BrudUnifiedResultsPanelManager } from '../UnifiedResultsPanelProvider';
 
 export type ErrorInput =
   | string
@@ -11,7 +12,7 @@ export type ErrorInput =
 export class ErrorReporter {
   constructor(
     private getWebview: () => vscode.Webview | undefined,
-    private getUnifiedResultsPanelManager: () => any,
+    private getUnifiedResultsPanelManager: () => BrudUnifiedResultsPanelManager | undefined,
     private outputChannel: vscode.OutputChannel,
   ) {}
 

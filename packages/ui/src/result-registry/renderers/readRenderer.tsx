@@ -1,23 +1,8 @@
 import { useState, useCallback } from 'react';
 import { Copy, Check, FileText, ChevronDown, ChevronRight } from 'lucide-react';
-import { ToolResultRenderer } from '../types';
-
-interface ReadFileEntry {
-  path: string;
-  content: string;
-  size: number;
-  startLine?: number;
-  endLine?: number;
-  totalLines?: number;
-  isImported?: boolean;
-  importedFrom?: string;
-}
-
-interface ReadResultData {
-  files: ReadFileEntry[];
-  totalFiles: number;
-  totalSize: number;
-}
+import { isReadResultPayload } from '../types';
+import type { ReadResultPayload, ToolResultRenderer } from '../types';
+import type { ReadFileEntry } from '@brud/protocol';
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -39,7 +24,7 @@ function formatWithGutters(file: ReadFileEntry): string {
   return `${header}\n${formatted}`;
 }
 
-function ReadFileList({ data }: { data: ReadResultData }) {
+function ReadFileList({ data }: { data: ReadResultPayload }) {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
 
@@ -102,31 +87,26 @@ function ReadFileList({ data }: { data: ReadResultData }) {
 export const readRenderer: ToolResultRenderer = {
   toolKind: 'readResults',
   title: 'File Reading',
-  canRender: (data: any) => {
-    return data && data.files && Array.isArray(data.files) && data.files.length > 0;
-  },
-  renderSection: (data: any) => {
-    const readData = data as ReadResultData;
-    if (!readData || !readData.files || readData.files.length === 0) return null;
+  canRender: (data: unknown) => isReadResultPayload(data) && data.files.length > 0,
+  renderSection: (data: unknown) => {
+    if (!isReadResultPayload(data) || data.files.length === 0) return null;
     return (
       <div>
         <div className="px-6 py-2 border-b border-border bg-surface-2 text-xs text-text-secondary">
-          {readData.totalFiles} files ({formatSize(readData.totalSize || 0)})
+          {data.totalFiles ?? data.files.length} files ({formatSize(data.totalSize ?? 0)})
         </div>
-        <ReadFileList data={readData} />
+        <ReadFileList data={data} />
       </div>
     );
   },
-  copyFormatter: (data: any) => {
-    const readData = data as ReadResultData;
-    if (!readData || !readData.files) return '';
-    return readData.files.map(f => {
+  copyFormatter: (data: unknown) => {
+    if (!isReadResultPayload(data)) return '';
+    return data.files.map(f => {
       return `Size: ${formatSize(f.size)}\n---\n${formatWithGutters(f)}`;
     }).join('\n\n');
   },
-  summaryFormatter: (data: any) => {
-    const readData = data as ReadResultData;
-    if (!readData || !readData.files) return '';
-    return `[success] Read Files: ${readData.totalFiles} files, ${formatSize(readData.totalSize || 0)} total`;
+  summaryFormatter: (data: unknown) => {
+    if (!isReadResultPayload(data)) return '';
+    return `[success] Read Files: ${data.totalFiles ?? data.files.length} files, ${formatSize(data.totalSize ?? 0)} total`;
   },
 };

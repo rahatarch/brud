@@ -2,6 +2,23 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { parseLegacyFormat } from './legacy.js';
 import { parseYamlFormat } from './yaml.js';
+import type { FileOperation, TerminalCommandOperation, TerminalInteractiveOperation } from '../types/patch.js';
+
+function asTerminalCommand(ops: FileOperation[]): TerminalCommandOperation {
+  const op = ops[0];
+  if (op?.kind !== 'terminal_command') {
+    throw new Error('Expected terminal_command operation');
+  }
+  return op;
+}
+
+function asTerminalInteractive(ops: FileOperation[]): TerminalInteractiveOperation {
+  const op = ops[0];
+  if (op?.kind !== 'terminal_interactive') {
+    throw new Error('Expected terminal_interactive operation');
+  }
+  return op;
+}
 
 describe('Terminal Parser - Legacy Format', () => {
 
@@ -12,7 +29,7 @@ Command: echo hello
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
     assert.strictEqual(ops[0].kind, 'terminal_command');
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'echo hello');
   });
 
@@ -25,7 +42,7 @@ Mode: sequential
 >>>>>>> END TERMINAL_COMMAND [1]`;
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.deepStrictEqual(op.commands, ['npm install', 'npm run build']);
     assert.strictEqual(op.mode, 'sequential');
   });
@@ -39,7 +56,7 @@ Mode: parallel
 >>>>>>> END TERMINAL_COMMAND [1]`;
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.deepStrictEqual(op.commands, ['npm run lint', 'npm run test']);
     assert.strictEqual(op.mode, 'parallel');
   });
@@ -51,7 +68,7 @@ OnSuccess: npm run deploy
 >>>>>>> END TERMINAL_COMMAND [1]`;
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'npm run build');
     assert.ok(op.onSuccess);
     assert.strictEqual(op.onSuccess.commands[0], 'npm run deploy');
@@ -64,7 +81,7 @@ OnFailure: npm run cleanup
 >>>>>>> END TERMINAL_COMMAND [1]`;
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'npm run build');
     assert.ok(op.onFailure);
     assert.strictEqual(op.onFailure.commands[0], 'npm run cleanup');
@@ -80,7 +97,7 @@ Answers:
     const ops = parseLegacyFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
     assert.strictEqual(ops[0].kind, 'terminal_interactive');
-    const op = ops[0] as any;
+    const op = asTerminalInteractive(ops);
     assert.strictEqual(op.command, 'bash setup.sh');
     assert.deepStrictEqual(op.answers, ['Brud', '1']);
   });
@@ -94,7 +111,7 @@ index: "1"
 command: echo hello`;
     const ops = parseYamlFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'echo hello');
   });
 
@@ -107,7 +124,7 @@ commands:
 mode: sequential`;
     const ops = parseYamlFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.deepStrictEqual(op.commands, ['npm install', 'npm run build']);
     assert.strictEqual(op.mode, 'sequential');
   });
@@ -121,7 +138,7 @@ commands:
 mode: parallel`;
     const ops = parseYamlFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.deepStrictEqual(op.commands, ['npm run lint', 'npm run test']);
     assert.strictEqual(op.mode, 'parallel');
   });
@@ -136,7 +153,7 @@ on_success:
     - npm run deploy`;
     const ops = parseYamlFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'npm run build');
     assert.ok(op.onSuccess);
     assert.strictEqual(op.onSuccess.commands[0], 'npm run deploy');
@@ -152,7 +169,7 @@ on_failure:
     - npm run cleanup`;
     const ops = parseYamlFormat(input, ['/workspace']);
     assert.strictEqual(ops.length, 1);
-    const op = ops[0] as any;
+    const op = asTerminalCommand(ops);
     assert.strictEqual(op.command, 'npm run build');
     assert.ok(op.onFailure);
     assert.strictEqual(op.onFailure.commands[0], 'npm run cleanup');

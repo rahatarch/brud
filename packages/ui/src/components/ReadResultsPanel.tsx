@@ -1,21 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Copy, Check, FileText, ChevronDown, ChevronRight } from 'lucide-react';
 import CustomScrollbar from './CustomScrollbar';
-import { sendToExtension } from '../bridge/vscodeBridge';
-
-interface ReadFileEntry {
-  path: string;
-  content: string;
-  size: number;
-  isImported?: boolean;
-  importedFrom?: string;
-}
-
-interface ReadResultData {
-  files: ReadFileEntry[];
-  totalFiles: number;
-  totalSize: number;
-}
+import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
+import type { ReadFileEntry, ReadResultData } from '@brud/protocol';
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return '0 B';
@@ -36,15 +23,11 @@ function ReadResultsPanel() {
   }, []);
 
   useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      const message = event.data;
+    return onExtensionMessage((message) => {
       if (message.command === 'readResult' && message.readResult) {
         setReadResult(message.readResult);
       }
-    }
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    });
   }, []);
 
   const toggleFile = useCallback((filePath: string) => {

@@ -41,7 +41,7 @@ export class BrudKernel {
     input: TInput,
     options?: KernelExecuteOptions
   ): Promise<OperationResult<TOutput>> {
-    const handler = this.operations.get(kind);
+    const handler = this.operations.get<TInput, TOutput>(kind);
     if (!handler) {
       return {
         status: "failed",
@@ -51,7 +51,7 @@ export class BrudKernel {
     }
 
     const context = this.createExecutionContext(options);
-    return this.pipeline.execute<TInput, TOutput>(handler as any, context, input);
+    return this.pipeline.execute<TInput, TOutput>(handler, context, input);
   }
 
   private createExecutionContext(options?: KernelExecuteOptions): ExecutionContext {
@@ -76,7 +76,7 @@ export class BrudKernel {
         } as OperationResult<TOutput>;
       }
       const childCtx = this.createChildContext({ callDepth: nextDepth });
-      const handler = kernel.operations.get(kind);
+      const handler = kernel.operations.get<TInput, TOutput>(kind);
       if (!handler) {
         return {
           status: "failed",
@@ -84,7 +84,7 @@ export class BrudKernel {
           durationMs: 0,
         } as OperationResult<TOutput>;
       }
-      return kernel.pipeline.execute<TInput, TOutput>(handler as any, childCtx, input as any) as Promise<OperationResult<TOutput>>;
+      return kernel.pipeline.execute<TInput, TOutput>(handler, childCtx, input);
     }
 
     function createChildContextImpl(this: ExecutionContext, overrides?: Partial<ExecutionContext>): ExecutionContext {

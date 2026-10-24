@@ -1,18 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Play, X, FileText, Check, AlertTriangle } from 'lucide-react';
-import { sendToExtension } from '../bridge/vscodeBridge';
-
-interface DiffFileEntry {
-  filePath: string;
-  originalContent: string;
-  modifiedContent: string;
-  languageId?: string;
-}
-
-interface DiffPreviewData {
-  files: DiffFileEntry[];
-  currentIndex: number;
-}
+import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
+import type { DiffPreviewData } from '@brud/protocol';
 
 function computeLineDiff(original: string, modified: string): { type: 'same' | 'added' | 'removed'; text: string }[] {
   const origLines = original.split('\n');
@@ -89,8 +78,7 @@ function DiffPreviewPanel() {
   }, []);
 
   useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      const message = event.data;
+    return onExtensionMessage((message) => {
       if (message.command === 'diffPreviewResult' && message.diffPreviewData) {
         setDiffData(message.diffPreviewData);
         setCurrentFileIndex(message.diffPreviewData.currentIndex || 0);
@@ -113,10 +101,11 @@ function DiffPreviewPanel() {
         setIsExecuting(message.executing === true);
       }
       if (message.command === 'filePatched' && typeof message.fileIndex === 'number') {
+        const { fileIndex } = message;
         setIsExecuting(false);
         setPatchedFileIndices(prev => {
           const next = new Set(prev);
-          next.add(message.fileIndex);
+          next.add(fileIndex);
           return next;
         });
       }
@@ -134,11 +123,11 @@ function DiffPreviewPanel() {
           sendToExtension({ command: 'closeDiffPreview' });
         }, 3000);
       }
-    }
+    });
+  }, [diffData]);
 
-    window.addEventListener('message', handleMessage);
+  useEffect(() => {
     return () => {
-      window.removeEventListener('message', handleMessage);
       if (successTimerRef.current) {
         clearTimeout(successTimerRef.current);
       }
@@ -146,7 +135,7 @@ function DiffPreviewPanel() {
         clearInterval(noPreviewTimerRef.current);
       }
     };
-  }, [diffData]);
+  }, []);
 
   useEffect(() => {
     if (!noPreview) return;

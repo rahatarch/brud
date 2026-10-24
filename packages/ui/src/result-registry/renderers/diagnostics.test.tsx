@@ -10,10 +10,12 @@ let terminalRenderer: TerminalRenderer;
 let toolInfoRenderer: ToolInfoRenderer;
 
 before(async () => {
-  (globalThis as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
-    postMessage: () => undefined,
-    getState: () => undefined,
-    setState: () => undefined,
+  Object.assign(globalThis, {
+    acquireVsCodeApi: () => ({
+      postMessage: () => undefined,
+      getState: () => undefined,
+      setState: () => undefined,
+    }),
   });
   terminalRenderer = (await import('./terminalRenderer')).terminalRenderer;
   toolInfoRenderer = (await import('./toolInfoRenderer')).toolInfoRenderer;
@@ -91,7 +93,9 @@ describe('terminalRenderer diagnostics', () => {
   });
 
   it('keeps the summary on a single line', () => {
-    const summary = terminalRenderer.summaryFormatter(failed);
+    const summaryFormatter = terminalRenderer.summaryFormatter;
+    assert.ok(summaryFormatter);
+    const summary = summaryFormatter(failed);
     assert.strictEqual(summary.includes('\n'), false);
     assert.ok(summary.includes('[failure] Terminal: npm test'));
   });

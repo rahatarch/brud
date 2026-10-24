@@ -2,16 +2,17 @@ import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
-import type { FileOperation, FileOperationResult, OperationResult, SessionMetadata } from '@brud/core';
-import type { ExtensionMessage } from '@brud/protocol';
+import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import type { ExtensionMessage, UnifiedSessionResults } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { closePreviewTabs, getChatStatusMessage, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
 import { buildFailedTerminalData } from '../services/TerminalDataAdapter';
+import { parseStructuredExecutionMessage } from '../services/executionPayloads';
 
 export class ApplyPatchHandler {
-  private _lastExecutionResult: { operations: { toolKind: string; data: any }[] } | null = null;
+  private _lastExecutionResult: UnifiedSessionResults | null = null;
 
   constructor(
     private outputChannel: vscode.OutputChannel,
@@ -19,16 +20,16 @@ export class ApplyPatchHandler {
     private panelManager: PanelManager,
     private executionCoordinator: ExecutionCoordinator,
     private getWebview: () => vscode.Webview | undefined,
-    private getSetLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
-    private setLastExecutionResult: (result: { operations: { toolKind: string; data: any }[] } | null) => void,
+    private getSetLastExecutionResult: () => UnifiedSessionResults | null,
+    private setLastExecutionResult: (result: UnifiedSessionResults | null) => void,
     private setSessionMetadata: (m: SessionMetadata | undefined) => void,
   ) {}
 
-  get lastExecutionResult(): { operations: { toolKind: string; data: any }[] } | null {
+  get lastExecutionResult(): UnifiedSessionResults | null {
     return this.getSetLastExecutionResult();
   }
 
-  set lastExecutionResult(value: { operations: { toolKind: string; data: any }[] } | null) {
+  set lastExecutionResult(value: UnifiedSessionResults | null) {
     this.setLastExecutionResult(value);
   }
 
@@ -38,7 +39,7 @@ export class ApplyPatchHandler {
     this.panelManager.closeDiffPreview();
     this.outputChannel.appendLine('DEBUG: Before parseOperations');
 
-    let operations: any[];
+    let operations: FileOperation[];
     let sessionMetadata: SessionMetadata | undefined;
     try {
       const parsed = parseOperationsWithMetadata(cleanBrudInput(text), getWorkspaceFolders());
@@ -56,7 +57,7 @@ export class ApplyPatchHandler {
       return;
     }
 
-    const unifiedResults: { operations: { toolKind: string; data: any }[] } = { operations: [] };
+    const unifiedResults: UnifiedSessionResults = { operations: [] };
 
     const activeProcessIds = new Set<string>();
 
@@ -94,59 +95,24 @@ export class ApplyPatchHandler {
         this.outputChannel.appendLine(`  ERROR: ${err}`);
       }
 
-      let parsedMessage: any;
-      try {
-        parsedMessage = JSON.parse(executionResult.message);
-      } catch {
-        parsedMessage = null;
+      const parsedMessage = parseStructuredExecutionMessage(executionResult.message);
+
+      for (const item of parsedMessage?.extractionResults ?? []) {
+        unifiedResults.operations.push({ toolKind: 'extractionResults', data: item });
       }
 
-      if (parsedMessage && parsedMessage.extractionResults) {
-        for (const item of parsedMessage.extractionResults) {
-          unifiedResults.operations.push({
-            toolKind: 'extractionResults',
-            data: {
-              json: item.json,
-              directoryPath: item.directoryPath,
-              depth: item.depth,
-              fileCount: item.fileCount,
-              directoryCount: item.directoryCount,
-            },
-          });
-        }
+      for (const item of parsedMessage?.readResults ?? []) {
+        unifiedResults.operations.push({ toolKind: 'readResults', data: item });
       }
 
-      if (parsedMessage && parsedMessage.readResults) {
-        for (const d of parsedMessage.readResults) {
-          unifiedResults.operations.push({
-            toolKind: 'readResults',
-            data: {
-              files: d.files || [],
-              totalFiles: d.totalFiles || 0,
-              totalSize: d.totalSize || 0,
-            },
-          });
-        }
+      for (const entry of parsedMessage?.searchResults ?? []) {
+        unifiedResults.operations.push({ toolKind: 'search_files', data: entry.results });
       }
 
-      if (parsedMessage && parsedMessage.search_results) {
-        const searchResults = parsedMessage.search_results as Array<{ operationIndex: number; results: { results: any[]; totalMatches: number; truncated: boolean } }>;
-        for (const entry of searchResults) {
-          unifiedResults.operations.push({
-            toolKind: 'search_files',
-            data: {
-              results: entry.results.results || [],
-              totalMatches: entry.results.totalMatches || 0,
-              truncated: entry.results.truncated || false,
-            },
-          });
-        }
-      }
-
-      if (parsedMessage && parsedMessage.codebase_metadata) {
+      if (parsedMessage?.codebaseMetadata) {
         unifiedResults.operations.push({
           toolKind: 'codebase_metadata',
-          data: parsedMessage.codebase_metadata,
+          data: parsedMessage.codebaseMetadata,
         });
       }
 
@@ -154,10 +120,10 @@ export class ApplyPatchHandler {
 
       for (const opResult of executionResult.operationResults) {
         if (opResult.kind === 'terminal_command' && opResult.data) {
-          const items = transformTerminalOperationData([opResult] as any, operations);
+          const items = transformTerminalOperationData([opResult], operations);
           unifiedResults.operations.push(...items);
         } else if (opResult.kind === 'terminal_command' && !opResult.data) {
-          const origOp = operations[opResult.operationIndex] as any;
+          const origOp = operations[opResult.operationIndex];
           unifiedResults.operations.push({
             toolKind: 'terminal_command',
             data: buildFailedTerminalData(opResult, origOp),
@@ -168,7 +134,10 @@ export class ApplyPatchHandler {
             data: {
               message: opResult.message,
               status: opResult.status,
-              toolKind: (operations[opResult.operationIndex] as any)?.toolKind,
+              toolKind: (() => {
+                const originalOperation = operations[opResult.operationIndex];
+                return originalOperation && 'toolKind' in originalOperation ? originalOperation.toolKind : undefined;
+              })(),
               ...(opResult.code ? { code: opResult.code } : {}),
               ...(opResult.details ? { details: opResult.details } : {}),
             },

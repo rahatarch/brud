@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isWebviewMessage } from '@brud/protocol';
 import type { ExtensionMessage } from '@brud/protocol';
 
 export class BrudTerminalPanelManager {
@@ -106,7 +107,10 @@ export class BrudTerminalPanelManager {
       this._panel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (!isWebviewMessage(message)) {
+        return;
+      }
       if (message.command === 'ready') {
         if (!this._isReady) {
           this._isReady = true;
@@ -188,7 +192,7 @@ export class BrudTerminalPanelManager {
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

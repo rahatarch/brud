@@ -94,6 +94,14 @@ export {
 
 export type { ValidationResult } from './types';
 
+export interface SessionLookupStore {
+  getSession(sessionId: string): Promise<unknown>;
+}
+
+export interface TerminalAvailabilityConfig {
+  terminalExecutor?: unknown;
+}
+
 const DANGEROUS_PATTERNS: RegExp[] = [
   /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
   /\brm\s+-(?:rf|fr)\s+\*\s*$/,
@@ -371,7 +379,7 @@ export const BrudAPI = {
       return success({ path, searchText, index: firstIndex });
     },
 
-    requiredField(field: string, value: any, operation?: string): ValidationResult {
+    requiredField(field: string, value: unknown, operation?: string): ValidationResult {
       if (value === undefined || value === null || value === '') {
         return fail(missingFieldError(field, operation));
       }
@@ -413,8 +421,8 @@ export const BrudAPI = {
       return success({ index });
     },
 
-    validAnswers(answers: any): ValidationResult {
-      if (!answers || !Array.isArray(answers)) {
+    validAnswers(answers: unknown): ValidationResult {
+      if (!Array.isArray(answers)) {
         return fail(missingFieldError('answers'));
       }
       return success({ answers });
@@ -455,7 +463,7 @@ export const BrudAPI = {
       return success({ operations });
     },
 
-    canGeneratePreview(files: any[]): ValidationResult {
+    canGeneratePreview(files: unknown[]): ValidationResult {
       if (!files || files.length === 0) {
         return fail(noPreviewError());
       }
@@ -507,14 +515,14 @@ export const BrudAPI = {
       return success({ toolKind });
     },
 
-    terminalAvailable(config: any): ValidationResult {
+    terminalAvailable(config: TerminalAvailabilityConfig | null | undefined): ValidationResult {
       if (!config?.terminalExecutor) {
         return fail(terminalUnavailableError());
       }
       return success({ config });
     },
 
-    async canRevert(sessionId: string, historyStore: any): Promise<ValidationResult> {
+    async canRevert(sessionId: string, historyStore?: SessionLookupStore): Promise<ValidationResult> {
       const sessionResult = await this.sessionExists(sessionId, historyStore);
       if (!sessionResult.success) {
         return sessionResult;
@@ -522,7 +530,7 @@ export const BrudAPI = {
       return success({ sessionId });
     },
 
-    async sessionExists(sessionId: string, historyStore: any): Promise<ValidationResult> {
+    async sessionExists(sessionId: string, historyStore?: SessionLookupStore): Promise<ValidationResult> {
       if (!historyStore?.getSession) {
         return fail(sessionNotFoundError(sessionId));
       }

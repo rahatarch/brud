@@ -58,8 +58,8 @@ export function parseOperationsWithMetadata(
   for (const op of operations) {
     const meta = operationMetadata.get(op.index);
     if (meta) {
-      (op as any).title = meta.title;
-      (op as any).description = meta.description;
+      op.title = meta.title;
+      op.description = meta.description;
     }
   }
 

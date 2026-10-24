@@ -4,6 +4,7 @@ import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudAPI } from '@brud/core';
 import { findMatches, reconstructContent } from '@brud/core';
 import type { FileOperation, PatchBlock, SessionMetadata } from '@brud/core';
+import { isRecord } from '@brud/protocol';
 import type { DiffFileEntry, DiffPreviewData, ExtensionMessage, ReportSection } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
@@ -37,7 +38,9 @@ function groupOperationsByFile(operations: FileOperation[]): Map<string, FileOpe
       ? op.directoryPath
       : op.kind === 'terminal_interactive'
       ? '__terminal_interactive__'
-      : (op as any).path;
+      : 'path' in op
+      ? op.path
+      : '';
     const existing = grouped.get(key) || [];
     existing.push(op);
     grouped.set(key, existing);
@@ -108,9 +111,13 @@ export class PreviewPatchHandler {
       let originalContent = '';
       let modifiedContent = '';
 
-      if (result.success) {
+      const resolvedPath = isRecord(result.data) && typeof result.data.resolvedPath === 'string'
+        ? result.data.resolvedPath
+        : undefined;
+
+      if (result.success && resolvedPath) {
         try {
-          const document = await vscode.workspace.openTextDocument(vscode.Uri.file((result.data as any).resolvedPath));
+          const document = await vscode.workspace.openTextDocument(vscode.Uri.file(resolvedPath));
           const docLines: string[] = [];
           for (let i = 0; i < document.lineCount; i++) {
             docLines.push(document.lineAt(i).text);
@@ -183,10 +190,12 @@ export class PreviewPatchHandler {
     }
 
     if (diffFiles.length === 0) {
-      const searchBlocks = operations
-        .filter(op => op.kind === 'search_replace')
-        .map(op => (op as any).search)
-        .filter(Boolean);
+      const searchBlocks: string[] = [];
+      for (const op of operations) {
+        if (op.kind === 'search_replace') {
+          searchBlocks.push(op.search);
+        }
+      }
       const searchText = searchBlocks.length > 0
         ? searchBlocks.join('\n\n---\n\n')
         : 'N/A';

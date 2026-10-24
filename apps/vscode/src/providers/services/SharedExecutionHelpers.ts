@@ -2,10 +2,48 @@ import * as vscode from 'vscode';
 import type { FileOperation } from '@brud/core';
 import type { ExtensionMessage, OperationResult, ReadResultData } from '@brud/protocol';
 import { transformTerminalOperation } from './TerminalDataAdapter';
+import type { TerminalGroupData, TerminalResultData } from './TerminalDataAdapter';
 
-export function getChatStatusMessage(
-  result: { success: boolean; operationResults?: any[]; errors?: any[] },
-): string {
+interface ExecutionErrorLike {
+  friendly: string;
+  details: string;
+}
+
+interface ExecutionStatusInput {
+  success: boolean;
+  operationResults?: OperationResult[];
+  errors?: Array<string | ExecutionErrorLike>;
+}
+
+interface ExecutionReportInput {
+  success: boolean;
+  message: string;
+  errors: ExecutionErrorLike[];
+  operationResults: OperationResult[];
+}
+
+interface SerializedReadResult {
+  files: ReadResultData['files'];
+  totalFiles: number;
+  totalSize: number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function isSerializedReadResult(value: unknown): value is SerializedReadResult {
+  return isRecord(value)
+    && Array.isArray(value.files)
+    && typeof value.totalFiles === 'number'
+    && typeof value.totalSize === 'number';
+}
+
+export function getChatStatusMessage(result: ExecutionStatusInput): string {
   if (result.success && (!result.errors || result.errors.length === 0)) {
     return 'Successful. Check the report at the Report Panel.';
   }
@@ -29,7 +67,7 @@ export function getChatStatusMessage(
 export function reportExecutionResult(
   outputChannel: vscode.OutputChannel,
   getWebview: () => vscode.Webview | undefined,
-  result: { success: boolean; message: string; errors: any[]; operationResults: OperationResult[] },
+  result: ExecutionReportInput,
 ): ReadResultData | null {
   outputChannel.appendLine(result.message);
   for (const err of result.errors) {
@@ -39,23 +77,25 @@ export function reportExecutionResult(
   let readResultData: ReadResultData | null = null;
 
   if (result.success) {
-    let readData: any;
+    let parsed: unknown;
     try {
-      readData = JSON.parse(result.message);
+      parsed = JSON.parse(result.message);
     } catch {
-      readData = null;
+      parsed = null;
     }
 
-    const isReadResult = readData && (readData.totalFiles !== undefined || (Array.isArray(readData) && readData.some((d: any) => d.totalFiles !== undefined)));
+    const candidates = isSerializedReadResult(parsed)
+      ? [parsed]
+      : isUnknownArray(parsed)
+        ? parsed.filter(isSerializedReadResult)
+        : [];
 
-    if (isReadResult) {
-      readResultData = Array.isArray(readData)
-        ? readData.reduce((merged: ReadResultData, d: any) => ({
-            files: [...(merged.files || []), ...(d.files || [])],
-            totalFiles: merged.totalFiles + (d.totalFiles || 0),
-            totalSize: merged.totalSize + (d.totalSize || 0),
-          }), { files: [], totalFiles: 0, totalSize: 0 })
-        : readData;
+    if (candidates.length > 0) {
+      readResultData = candidates.reduce<ReadResultData>((merged, item) => ({
+        files: [...merged.files, ...item.files],
+        totalFiles: merged.totalFiles + item.totalFiles,
+        totalSize: merged.totalSize + item.totalSize,
+      }), { files: [], totalFiles: 0, totalSize: 0 });
     }
   }
 
@@ -74,8 +114,8 @@ export function reportExecutionResult(
 export function transformTerminalOperationData(
   operationResults: OperationResult[],
   originalOperations: FileOperation[],
-): { toolKind: 'terminal_command'; data: any }[] {
-  const result: { toolKind: 'terminal_command'; data: any }[] = [];
+): { toolKind: 'terminal_command'; data: TerminalGroupData | TerminalResultData }[] {
+  const result: { toolKind: 'terminal_command'; data: TerminalGroupData | TerminalResultData }[] = [];
   for (const op of operationResults) {
     const transformed = transformTerminalOperation(op, originalOperations);
     if (transformed) {
@@ -94,5 +134,5 @@ export async function closePreviewTabs(): Promise<void> {
       }
     }
   }
-  await new Promise(resolve => (globalThis as any).setTimeout(resolve, 100));
+  await new Promise<void>(resolve => setTimeout(resolve, 100));
 }

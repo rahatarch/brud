@@ -1,18 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Copy, Check } from 'lucide-react';
-import { sendToExtension } from '../bridge/vscodeBridge';
+import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
 import { globalRegistry } from '../result-registry/registry';
-import { ToolResultRenderer } from '../result-registry/types';
+import { isRecord } from '../result-registry/types';
 import { operationResultRenderer } from '../result-registry/renderers/operationResultRenderer';
-
-export interface UnifiedOperationResult {
-  toolKind: string;
-  data: any;
-}
-
-export interface UnifiedSessionResults {
-  operations: UnifiedOperationResult[];
-}
+import type { UnifiedSessionResults } from '@brud/protocol';
 
 interface ChunkState {
   [processId: string]: {
@@ -54,8 +46,7 @@ function UnifiedResultsPanel() {
   }, []);
 
   useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      const message = event.data;
+    return onExtensionMessage((message) => {
       if (message.command === 'unifiedResults' && message.results) {
         setResults(message.results);
         setIsRunning(false);
@@ -87,10 +78,7 @@ function UnifiedResultsPanel() {
 
         setChunks({ ...chunksRef.current });
       }
-    }
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    });
   }, []);
 
   const buildSummaryParts = useCallback(() => {
@@ -105,7 +93,7 @@ function UnifiedResultsPanel() {
           parts.push(formatted);
         }
       } else {
-        const formatted = renderer.copyFormatter(op.data);
+        const formatted = activeRenderer.copyFormatter(op.data);
         if (formatted) {
           const firstLine = formatted.split('\n')[0];
           parts.push(firstLine);
@@ -173,7 +161,7 @@ function UnifiedResultsPanel() {
     let data = op.data;
     if (op.toolKind === 'terminal_command' && activeProcessId && isRunning) {
       const chunkBuffer = chunks[activeProcessId]?.buffer;
-      if (chunkBuffer) {
+      if (chunkBuffer && isRecord(data)) {
         data = { ...data, output: chunkBuffer, isRunning: true, processId: activeProcessId };
       }
     }

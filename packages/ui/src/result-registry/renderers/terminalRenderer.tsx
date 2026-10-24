@@ -1,26 +1,8 @@
 import { Terminal, XCircle, Loader } from 'lucide-react';
-import { ToolResultRenderer } from '../types';
+import { getTerminalStreamingState, isTerminalGroupPayload, isTerminalPayload, isTerminalResultPayload } from '../types';
+import type { TerminalGroupPayload, TerminalResultPayload, ToolResultRenderer } from '../types';
 import { sendKillProcess } from '../../bridge/vscodeBridge';
 import { appendDiagnosticCopy, DiagnosticDisclosure } from './diagnostics';
-
-interface TerminalResultData {
-  command: string;
-  output: string;
-  exitCode: number | null;
-  duration: number;
-  success: boolean;
-  code?: string;
-  details?: string;
-  status?: string;
-}
-
-interface GroupResultData {
-  mode: 'single' | 'sequential' | 'parallel' | 'conditional';
-  results: TerminalResultData[];
-  totalDuration: number;
-  succeeded: number;
-  failed: number;
-}
 
 declare global {
   interface Window {
@@ -33,8 +15,8 @@ function formatDuration(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-function renderSingleCommand(termData: TerminalResultData, isRunning: boolean, processId?: string) {
-  if (!termData || !termData.command) return null;
+function renderSingleCommand(termData: TerminalResultPayload, isRunning: boolean, processId?: string) {
+  if (!termData.command) return null;
 
   return (
     <div>
@@ -84,7 +66,7 @@ function renderSingleCommand(termData: TerminalResultData, isRunning: boolean, p
   );
 }
 
-function formatSingleCopy(termData: TerminalResultData): string {
+function formatSingleCopy(termData: TerminalResultPayload): string {
   const lines = [
     `Command: ${termData.command}`,
     `Status: ${termData.success ? 'success' : 'failure'}`,
@@ -96,11 +78,7 @@ function formatSingleCopy(termData: TerminalResultData): string {
   return appendDiagnosticCopy(lines, termData).join('\n');
 }
 
-function isGroupResultData(data: any): data is GroupResultData {
-  return data && typeof data === 'object' && 'mode' in data && 'results' in data;
-}
-
-function renderGroupCommand(groupData: GroupResultData, isRunning: boolean, processId?: string) {
+function renderGroupCommand(groupData: TerminalGroupPayload, isRunning: boolean, processId?: string) {
   const modeLabel = groupData.mode.charAt(0).toUpperCase() + groupData.mode.slice(1);
   return (
     <div>
@@ -134,23 +112,29 @@ function renderGroupCommand(groupData: GroupResultData, isRunning: boolean, proc
   );
 }
 
+function asTerminalResults(data: unknown): TerminalResultPayload[] | null {
+  if (!Array.isArray(data)) {
+    return null;
+  }
+  const results = data.filter(isTerminalResultPayload);
+  return results.length === data.length ? results : null;
+}
+
 export const terminalRenderer: ToolResultRenderer = {
   toolKind: 'terminal_command',
   title: 'Terminal Command',
-  canRender: (data: any) => {
-    return data && (isGroupResultData(data) || Array.isArray(data) || typeof data.command === 'string');
-  },
-  renderSection: (data: any) => {
-    const isRunning = data?.isRunning === true;
-    const processId = data?.processId;
+  canRender: (data: unknown) => isTerminalPayload(data),
+  renderSection: (data: unknown) => {
+    const { isRunning, processId } = getTerminalStreamingState(data);
 
-    if (isGroupResultData(data)) {
+    if (isTerminalGroupPayload(data)) {
       return renderGroupCommand(data, isRunning, processId);
     }
-    if (Array.isArray(data)) {
+    const results = asTerminalResults(data);
+    if (results) {
       return (
         <div>
-          {data.map((item, index) => (
+          {results.map((item, index) => (
             <div key={index}>
               {index > 0 && <hr className="my-2 border-border" />}
               {renderSingleCommand(item, false)}
@@ -159,10 +143,13 @@ export const terminalRenderer: ToolResultRenderer = {
         </div>
       );
     }
-    return renderSingleCommand(data, isRunning, processId);
+    if (isTerminalResultPayload(data)) {
+      return renderSingleCommand(data, isRunning, processId);
+    }
+    return null;
   },
-  copyFormatter: (data: any) => {
-    if (isGroupResultData(data)) {
+  copyFormatter: (data: unknown) => {
+    if (isTerminalGroupPayload(data)) {
       const lines: string[] = [
         `Group Mode: ${data.mode}`,
         `Commands: ${data.results.length}`,
@@ -177,28 +164,32 @@ export const terminalRenderer: ToolResultRenderer = {
       }
       return lines.join('\n');
     }
-    if (Array.isArray(data)) {
-      return data.map(formatSingleCopy).join('\n\n---\n\n');
+    const results = asTerminalResults(data);
+    if (results) {
+      return results.map(formatSingleCopy).join('\n\n---\n\n');
     }
-    const termData = data as TerminalResultData;
-    if (!termData) return '';
-    return formatSingleCopy(termData);
+    if (isTerminalResultPayload(data)) {
+      return formatSingleCopy(data);
+    }
+    return '';
   },
-  summaryFormatter: (data: any) => {
-    if (isGroupResultData(data)) {
+  summaryFormatter: (data: unknown) => {
+    if (isTerminalGroupPayload(data)) {
       const status = data.failed > 0 ? 'failure' : 'success';
       return `[${status}] Terminal Group (${data.mode}): ${data.results.length} commands, ${data.succeeded} succeeded, ${data.failed} failed, ${formatDuration(data.totalDuration)}`;
     }
-    if (Array.isArray(data)) {
-      const succeeded = data.filter(r => r.success).length;
-      const failed = data.filter(r => !r.success).length;
-      const totalDuration = data.reduce((sum, r) => sum + (r.duration || 0), 0);
+    const results = asTerminalResults(data);
+    if (results) {
+      const succeeded = results.filter(r => r.success).length;
+      const failed = results.filter(r => !r.success).length;
+      const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
       const status = failed > 0 ? 'failure' : 'success';
-      return `[${status}] Terminal Commands: ${data.length} commands, ${succeeded} succeeded, ${failed} failed, ${formatDuration(totalDuration)}`;
+      return `[${status}] Terminal Commands: ${results.length} commands, ${succeeded} succeeded, ${failed} failed, ${formatDuration(totalDuration)}`;
     }
-    const termData = data as TerminalResultData;
-    if (!termData || !termData.command) return '';
-    const status = termData.success ? 'success' : 'failure';
-    return `[${status}] Terminal: ${termData.command} — exit ${termData.exitCode !== null ? termData.exitCode : 'N/A'}, ${formatDuration(termData.duration)}`;
+    if (isTerminalResultPayload(data) && data.command) {
+      const status = data.success ? 'success' : 'failure';
+      return `[${status}] Terminal: ${data.command} — exit ${data.exitCode !== null ? data.exitCode : 'N/A'}, ${formatDuration(data.duration)}`;
+    }
+    return '';
   },
 };

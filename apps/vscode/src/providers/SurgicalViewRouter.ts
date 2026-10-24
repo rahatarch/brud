@@ -1,4 +1,4 @@
-import type { WebviewMessage } from '@brud/protocol';
+import type { UnifiedSessionResults, WebviewMessage } from '@brud/protocol';
 import { SurgicalViewDependencies } from './SurgicalViewDependencies';
 
 const EXECUTION_COMMANDS: ReadonlySet<string> = new Set([
@@ -12,7 +12,7 @@ export class SurgicalViewRouter {
 
   constructor(
     private deps: SurgicalViewDependencies,
-    private getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
+    private getLastExecutionResult: () => UnifiedSessionResults | null,
   ) {}
 
   async handle(data: WebviewMessage): Promise<void> {
@@ -85,10 +85,9 @@ export class SurgicalViewRouter {
           }
           break;
       }
-    } catch (error: any) {
-      this.deps.services.errorReporter.sendError(
-        `Operation failed: ${error?.message || String(error)}`
-      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.deps.services.errorReporter.sendError(`Operation failed: ${message}`);
     } finally {
       if (isExecutionCommand) {
         this._isExecuting = false;

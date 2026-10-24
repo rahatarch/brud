@@ -6,6 +6,7 @@ import { DonePreviewHandler } from './DonePreviewHandler';
 import { PreviewPrevFileHandler } from './PreviewPrevFileHandler';
 import { PreviewNextFileHandler } from './PreviewNextFileHandler';
 import { PanelManager } from '../services/PanelManager';
+import { isWebviewMessage } from '@brud/protocol';
 
 export class DiffPreviewRouter {
   constructor(
@@ -19,8 +20,11 @@ export class DiffPreviewRouter {
     private previewNextFileHandler: PreviewNextFileHandler,
   ) {}
 
-  async handle(message: any): Promise<void> {
+  async handle(message: unknown): Promise<void> {
     this.outputChannel.appendLine(`[DEBUG] DiffPreviewRouter received: ${JSON.stringify(message)}`);
+    if (!isWebviewMessage(message)) {
+      return;
+    }
     switch (message.command) {
       case 'executeCurrentFile':
         await this.executeCurrentFileHandler.handle(message.fileIndex);

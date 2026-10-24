@@ -34,21 +34,121 @@ class NodeFs implements FileSystem {
   }
 }
 
+
+interface OperationResultLike {
+  kind: string;
+  status: string;
+  path?: string;
+  message?: string;
+  files?: unknown[];
+}
+
+interface LegacyResultData {
+  message: string;
+  operationResults?: OperationResultLike[];
+}
+
+interface ReadFileEntryLike {
+  path: string;
+  content?: string;
+}
+
+interface ReadResultLike {
+  operationIndex: number;
+  files: ReadFileEntryLike[];
+  totalFiles: number;
+  totalSize?: number;
+}
+
+interface CombinedResult {
+  readResults?: ReadResultLike[];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function isOperationResultLike(value: unknown): value is OperationResultLike {
+  return isRecord(value) && typeof value.kind === 'string' && typeof value.status === 'string';
+}
+
+function parseLegacyResult(data: unknown): LegacyResultData | undefined {
+  if (!isRecord(data) || typeof data.message !== 'string') {
+    return undefined;
+  }
+  const operationResults = isUnknownArray(data.operationResults)
+    ? data.operationResults.filter(isOperationResultLike)
+    : undefined;
+  return { message: data.message, operationResults };
+}
+
+function isReadFileEntryLike(value: unknown): value is ReadFileEntryLike {
+  return isRecord(value) && typeof value.path === 'string';
+}
+
+function isReadResultLike(value: unknown): value is ReadResultLike {
+  return isRecord(value)
+    && typeof value.operationIndex === 'number'
+    && typeof value.totalFiles === 'number'
+    && isUnknownArray(value.files)
+    && value.files.every(isReadFileEntryLike);
+}
+
+function parseCombinedMessage(raw: string): CombinedResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!isRecord(parsed)) {
+    return {};
+  }
+  return {
+    readResults: isUnknownArray(parsed.readResults)
+      ? parsed.readResults.filter(isReadResultLike)
+      : undefined,
+  };
+}
+
+function readFilePath(operation: FileOperation): string {
+  return 'path' in operation && typeof operation.path === 'string' ? operation.path : '';
+}
+
+function readImportFlag(operation: FileOperation): boolean | undefined {
+  return 'isImportRead' in operation && typeof operation.isImportRead === 'boolean'
+    ? operation.isImportRead
+    : undefined;
+}
+
+function readMaxDepth(operation: FileOperation): number | undefined {
+  return 'maxDepth' in operation && typeof operation.maxDepth === 'number'
+    ? operation.maxDepth
+    : undefined;
+}
+
 const STRUCTURED_KEYS = new Set(['codebase_metadata', 'extractionResults', 'readResults', 'search_results']);
 
 function tryMergeMessage(message: string, combinedPayload: Record<string, unknown>): void {
   if (!message) return;
   try {
-    const parsed = JSON.parse(message);
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+    const parsed: unknown = JSON.parse(message);
+    if (isRecord(parsed)) {
       for (const key of STRUCTURED_KEYS) {
-        if (key in parsed && parsed[key] !== undefined) {
-          if (Array.isArray(parsed[key])) {
-            const existing = Array.isArray(combinedPayload[key]) ? (combinedPayload[key] as any[]) : [];
-            combinedPayload[key] = [...existing, ...(parsed[key] as any[])];
-          } else {
-            combinedPayload[key] = parsed[key];
-          }
+        const value = parsed[key];
+        if (value === undefined) {
+          continue;
+        }
+        if (isUnknownArray(value)) {
+          const existing = combinedPayload[key];
+          const existingItems = isUnknownArray(existing) ? existing : [];
+          combinedPayload[key] = [...existingItems, ...value];
+        } else {
+          combinedPayload[key] = value;
         }
       }
     }
@@ -142,19 +242,19 @@ test('Scenario A: sequential READ_FILE blocks — 12-layer signal trajectory', a
   const viaLegacy = parseLegacyFormat(patch, [root]);
   const viaHandlerPath = parseOperationsWithMetadata(cleanBrudInput(patch), [root]);
   log('\n[L3-PARSE] parseLegacyFormat operations[]:');
-  for (const op of viaLegacy) log(`  ops[${viaLegacy.indexOf(op)}] = ${JSON.stringify({ kind: op.kind, path: (op as any).path, index: op.index, isImportRead: (op as any).isImportRead, maxDepth: (op as any).maxDepth } as any)}`);
+  for (const op of viaLegacy) log(`  ops[${viaLegacy.indexOf(op)}] = ${JSON.stringify({ kind: op.kind, path: readFilePath(op), index: op.index, isImportRead: readImportFlag(op), maxDepth: readMaxDepth(op) })}`);
   log(`[L3-PARSE] parseOperationsWithMetadata(cleanBrudInput()) .operations.length = ${viaHandlerPath.operations.length}`);
   assert.equal(viaLegacy.length, 2);
   assert.equal(viaHandlerPath.operations.length, 2);
-  assert.equal((viaLegacy[0] as any).path, 'web/package.json');
-  assert.equal((viaLegacy[1] as any).path, 'web/tsconfig.json');
+  assert.equal(readFilePath(viaLegacy[0]), 'web/package.json');
+  assert.equal(readFilePath(viaLegacy[1]), 'web/tsconfig.json');
   const operations = viaLegacy;
 
   const fs = new NodeFs();
   const kernel = await bootCoreKernel({ fs, settings: DEFAULT_SETTINGS });
 
   const combinedPayload: Record<string, unknown> = {};
-  const operationResults: any[] = [];
+  const operationResults: OperationResultLike[] = [];
 
   log('\n[L5-L10] adapter harness loop (verbatim of executeOperations.ts:75-150) over kernel.execute():');
   for (let i = 0; i < operations.length; i++) {
@@ -163,21 +263,21 @@ test('Scenario A: sequential READ_FILE blocks — 12-layer signal trajectory', a
       workspaceRoot: root,
       metadata: { workspaceRoot: root, operationIndex: i },
     });
-    const legacyResult = result.data as any;
+    const legacyResult = parseLegacyResult(result.data);
     const before = JSON.stringify(combinedPayload.readResults ?? null);
     if (legacyResult) {
       tryMergeMessage(legacyResult.message, combinedPayload);
       if (legacyResult.operationResults) {
         for (const opRes of legacyResult.operationResults) {
-          tryMergeMessage(opRes.message, combinedPayload);
+          tryMergeMessage(opRes.message ?? '', combinedPayload);
         }
         operationResults.push(...legacyResult.operationResults);
       }
     }
     const after = JSON.stringify(combinedPayload.readResults ?? null);
-    log(`\n  --- iteration i=${i} kind=${operation.kind} path=${(operation as any).path} parsed.index=${operation.index} ---`);
+    log(`\n  --- iteration i=${i} kind=${operation.kind} path=${readFilePath(operation)} parsed.index=${operation.index} ---`);
     log(`  kernel.execute -> legacyResult.message            = ${legacyResult?.message ?? '(none)'}`);
-    log(`  legacyResult.operationResults[0]= ${JSON.stringify({ kind: legacyResult?.operationResults?.[0]?.kind, status: legacyResult?.operationResults?.[0]?.status, path: legacyResult?.operationResults?.[0]?.path, files: legacyResult?.operationResults?.[0]?.files?.length }) as any}`);
+    log(`  legacyResult.operationResults[0]= ${JSON.stringify({ kind: legacyResult?.operationResults?.[0]?.kind, status: legacyResult?.operationResults?.[0]?.status, path: legacyResult?.operationResults?.[0]?.path, files: legacyResult?.operationResults?.[0]?.files?.length })}`);
     log(`  combinedPayload.readResults BEFORE tryMergeMessage = ${before}`);
     log(`  combinedPayload.readResults AFTER  tryMergeMessage = ${after}`);
   }
@@ -189,13 +289,13 @@ test('Scenario A: sequential READ_FILE blocks — 12-layer signal trajectory', a
   log('\n[L10-L11] exact serialized result.message produced by the adapter loop:');
   log(finalMessage);
 
-  const parsed = JSON.parse(finalMessage);
+  const parsed = parseCombinedMessage(finalMessage);
   log('\n[L11-HOST] ApplyPatchHandler unpacking of parsedMessage.readResults (for..of):');
   const readResults = parsed.readResults ?? [];
   log(`  parsedMessage.readResults.length = ${readResults.length}`);
   for (const d of readResults) {
     const files = d.files ?? [];
-    log(`    readResults entry operationIndex=${d.operationIndex} totalFiles=${d.totalFiles} files=${files.map((f: any) => f.path).join(', ')}`);
+    log(`    readResults entry operationIndex=${d.operationIndex} totalFiles=${d.totalFiles} files=${files.map((f) => f.path).join(', ')}`);
   }
 
   log('\n[L12-WEBVIEW] renderers/readRenderer.tsx ReadFileList would render:');
@@ -206,15 +306,15 @@ test('Scenario A: sequential READ_FILE blocks — 12-layer signal trajectory', a
   }
 
   log('\n>>> DIAGNOSIS:');
-  const readPaths = readResults.flatMap((e: any) => (e.files ?? []).map((f: any) => f.path));
+  const readPaths = readResults.flatMap((e) => e.files.map((f) => f.path));
   log(`  Files surfacing to webview: ${JSON.stringify(readPaths)}`);
-  log(`  READ_FILE [1] web/package.json present? ${readPaths.some((p: string) => p.endsWith('package.json')) ? 'YES' : 'NO — STILL DROPPED'}`);
-  log(`  READ_FILE [2] web/tsconfig.json present? ${readPaths.some((p: string) => p.endsWith('tsconfig.json')) ? 'YES' : 'NO — STILL DROPPED'}`);
+  log(`  READ_FILE [1] web/package.json present? ${readPaths.some((p) => p.endsWith('package.json')) ? 'YES' : 'NO — STILL DROPPED'}`);
+  log(`  READ_FILE [2] web/tsconfig.json present? ${readPaths.some((p) => p.endsWith('tsconfig.json')) ? 'YES' : 'NO — STILL DROPPED'}`);
   log(`  readResults.length = ${readResults.length}  (expected 2 — both sequential READ_FILE results preserved)`);
 
   assert.equal(readResults.length, 2);
-  assert.ok(readPaths.some((p: string) => p.endsWith('tsconfig.json')));
-  assert.ok(readPaths.some((p: string) => p.endsWith('package.json')));
+  assert.ok(readPaths.some((p) => p.endsWith('tsconfig.json')));
+  assert.ok(readPaths.some((p) => p.endsWith('package.json')));
   await fsp.rm(root, { recursive: true, force: true });
 });
 
@@ -242,8 +342,14 @@ test('Scenario B: READ_FILES multi-file pattern evaluation', async () => {
   log('SCENARIO B — READ_FILES PATTERNS');
   log('==================================');
 
-  const op1 = parseLegacyFormat(syntax1, [root])[0] as any;
-  const op2 = parseLegacyFormat(syntax2, [root])[0] as any;
+  const parsedOp1 = parseLegacyFormat(syntax1, [root])[0];
+  const parsedOp2 = parseLegacyFormat(syntax2, [root])[0];
+  assert.equal(parsedOp1?.kind, 'read_files');
+  assert.equal(parsedOp2?.kind, 'read_files');
+  const op1 = parsedOp1.kind === 'read_files' ? parsedOp1 : undefined;
+  const op2 = parsedOp2.kind === 'read_files' ? parsedOp2 : undefined;
+  assert.ok(op1);
+  assert.ok(op2);
 
   log('\n[STAGE 1 — legacy.ts:1134 splitRespectingBraces() brace-aware splitting]');
   log(`  SYNTAX 1: "app/composables/{useSearchMenus,useAdminLogin}.ts"`);
@@ -288,13 +394,13 @@ test('Scenario B: READ_FILES multi-file pattern evaluation', async () => {
   const fs = new NodeFs();
   const kernel = await bootCoreKernel({ fs, settings: DEFAULT_SETTINGS });
 
-  for (const [label, op] of [['SYNTAX 1', op1], ['SYNTAX 2', op2]] as [string, any][]) {
+  for (const [label, op] of [['SYNTAX 1', op1], ['SYNTAX 2', op2]] as const) {
     const result = await kernel.execute('read_files', op, { workspaceRoot: root, metadata: { workspaceRoot: root, operationIndex: 0 } });
-    const msg = (result.data as any)?.message;
-    let parsed: any = null;
-    try { parsed = JSON.parse(msg); } catch { /* noop */ }
-    const found = parsed?.readResults?.[0]?.files?.length ?? 0;
-    const total = parsed?.readResults?.[0]?.totalFiles ?? 0;
+    const legacyResult = parseLegacyResult(result.data);
+    const msg = legacyResult?.message ?? '';
+    const parsed = parseCombinedMessage(msg);
+    const found = parsed.readResults?.[0]?.files.length ?? 0;
+    const total = parsed.readResults?.[0]?.totalFiles ?? 0;
     log(`  ${label}: kernel result.status=${result.status}`);
     log(`  ${label}: readResults[0].totalFiles = ${total}  (expected 2) — files[${found}] ${found === 0 ? '<<-- MATCH FAILED: no files resolved' : ''}`);
     log(`  ${label}: serialized message = ${msg}`);

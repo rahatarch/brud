@@ -232,8 +232,12 @@ function createInstrumentedPort(
       if (property in overrides) {
         return overrides[property as keyof FileSystem];
       }
-      const value = Reflect.get(target, property, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      const value: unknown = Reflect.get(target, property, receiver);
+      if (typeof value === 'function') {
+        const fn = value as (...args: unknown[]) => unknown;
+        return fn.bind(target);
+      }
+      return value;
     },
   }) as FileSystem;
 }

@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isWebviewMessage } from '@brud/protocol';
+import type { ExtensionMessage, UnifiedSessionResults } from '@brud/protocol';
 
 export class BrudUnifiedResultsPanelManager {
   private _panel: vscode.WebviewPanel | undefined;
-  private _pendingQueue: any[] = [];
+  private _pendingQueue: ExtensionMessage[] = [];
   private _isReady: boolean = false;
   private readonly MAX_QUEUE_COUNT = 2000;
   private _onKillProcess: ((processId: string) => void) | null = null;
@@ -19,7 +21,7 @@ export class BrudUnifiedResultsPanelManager {
     this._getActiveProcessIds = getter;
   }
 
-  public postMessage(message: any): void {
+  public postMessage(message: ExtensionMessage): void {
     if (!this._panel) {
       return;
     }
@@ -61,8 +63,8 @@ export class BrudUnifiedResultsPanelManager {
     });
   }
 
-  public openUnifiedResultsPanel(results: Record<string, any>) {
-    const message = { command: 'unifiedResults', results };
+  public openUnifiedResultsPanel(results: UnifiedSessionResults) {
+    const message: ExtensionMessage = { command: 'unifiedResults', results };
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
@@ -94,7 +96,11 @@ export class BrudUnifiedResultsPanelManager {
       this._panel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
+    this._panel.webview.onDidReceiveMessage((rawMessage: unknown) => {
+      if (!isWebviewMessage(rawMessage)) {
+        return;
+      }
+      const message = rawMessage;
       if (message.command === 'ready') {
         this._isReady = true;
         const queued = [...this._pendingQueue];
@@ -121,7 +127,7 @@ export class BrudUnifiedResultsPanelManager {
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

@@ -12,19 +12,24 @@ import TerminalStreamPanel from './components/TerminalStreamPanel';
 import { initResultRegistry } from './result-registry/init';
 import { sendToExtension, onExtensionMessage } from './bridge/vscodeBridge';
 import type { ReportSection } from '@brud/protocol';
+import type { ReactNode } from 'react';
 
 initResultRegistry();
 
-function StatusBadge({ status }: { status: 'success' | 'failed' | 'aborted' }) {
+type ReportItemStatus = 'success' | 'failed' | 'aborted' | 'interrupted';
+
+function StatusBadge({ status }: { status: ReportItemStatus }) {
   const colors: Record<string, string> = {
     success: 'bg-green-500/10 text-green-400 border-green-500/30',
     failed: 'bg-red-500/10 text-red-400 border-red-500/30',
     aborted: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
+    interrupted: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
   };
-  const icons: Record<string, any> = {
+  const icons: Record<ReportItemStatus, ReactNode> = {
     success: <CheckCircle size={12} />,
     failed: <XCircle size={12} />,
     aborted: <AlertCircle size={12} />,
+    interrupted: <AlertCircle size={12} />,
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border break-words ${colors[status]}`}>
@@ -113,7 +118,7 @@ function StructuredReport({ sections }: { sections: ReportSection[] }) {
             return (
               <div key={i}>
                 <button
-                  onClick={() => sendToExtension({ command: section.buttonAction || 'openUnifiedResults' })}
+                  onClick={() => sendToExtension({ command: section.buttonAction ?? 'openUnifiedResults' })}
                   className="flex items-center gap-1.5 text-xs text-primary hover:text-primary-hover cursor-pointer bg-surface-2 border border-border-subtle rounded px-3 py-2 transition-colors w-full text-left break-words"
                 >
                   {section.buttonText || 'See Details'}

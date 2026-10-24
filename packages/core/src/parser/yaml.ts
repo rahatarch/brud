@@ -1,14 +1,18 @@
 import * as yaml from 'js-yaml';
-import { FileOperation } from '../types/patch';
+import type { FileOperation, TerminalCommandOperation, TerminalInteractiveOperation } from '../types/patch';
 import { CommandGroup } from '../terminal/types';
 import { BrudAPI, BrudError, missingFieldError, invalidFieldError, missingIndexError, unknownOperationError } from '../api/index';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
 function parseCommandGroup(value: unknown): CommandGroup | undefined {
   if (typeof value === 'string') {
     return { type: 'sequential', commands: [value] };
   }
-  if (value && typeof value === 'object') {
-    const obj = value as Record<string, unknown>;
+  if (isRecord(value)) {
+    const obj = value;
     const commands = obj.commands as (string | CommandGroup)[] | undefined;
     if (commands && Array.isArray(commands) && commands.length > 0) {
       return {
@@ -31,11 +35,11 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
       continue;
     }
 
-    const parsed = yaml.load(trimmed) as Record<string, unknown> | undefined;
-
-    if (!parsed || typeof parsed !== 'object') {
+    const loaded: unknown = yaml.load(trimmed);
+    if (!isRecord(loaded)) {
       continue;
     }
+    const parsed = loaded;
 
     const operation = parsed.operation as string | undefined;
     if (!operation) {
@@ -412,7 +416,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
         }
         const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-        const interactiveOp: any = {
+        const interactiveOp: TerminalInteractiveOperation = {
           kind: 'terminal_interactive',
           command,
           answers,
@@ -423,7 +427,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (raw) {
           interactiveOp.raw = true;
         }
-        operations.push(interactiveOp as FileOperation);
+        operations.push(interactiveOp);
         break;
       }
       case 'terminal_command': {
@@ -448,8 +452,9 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
           throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
         }
         const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-        const op: any = {
+        const op: TerminalCommandOperation = {
           kind: 'terminal_command',
+          command: commands && commands.length > 0 ? '' : (command ?? ''),
           index: String(index),
         };
         if (commands && Array.isArray(commands)) {
@@ -461,7 +466,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
             op.stopOnFailure = stopOnFailure;
           }
         } else {
-          op.command = command;
+          op.command = command ?? '';
         }
         op.timeout = timeout ?? undefined;
         op.cwd = cwdData?.resolvedCwd;
@@ -475,7 +480,7 @@ export function parseYamlFormat(input: string, workspaceFolders: string[] = []):
         if (onFailure) {
           op.onFailure = onFailure;
         }
-        operations.push(op as FileOperation);
+        operations.push(op);
         break;
       }
       case 'get_tool_info': {

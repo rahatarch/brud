@@ -1,19 +1,6 @@
 import { FileText } from 'lucide-react';
-import { ToolResultRenderer } from '../types';
-
-interface SearchFileItem {
-  path: string;
-  name: string;
-  extension: string;
-  directory: string;
-  size: number;
-}
-
-interface SearchFilesResult {
-  results: SearchFileItem[];
-  totalMatches: number;
-  truncated: boolean;
-}
+import { isSearchResultPayload } from '../types';
+import type { ToolResultRenderer } from '../types';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -24,21 +11,18 @@ function formatSize(bytes: number): string {
 export const searchRenderer: ToolResultRenderer = {
   toolKind: 'search_files',
   title: 'Search Results',
-  canRender: (data: any) => {
-    return data && data.results && Array.isArray(data.results);
-  },
-  renderSection: (data: any) => {
-    const searchData = data as SearchFilesResult;
-    if (!searchData || !searchData.results) return null;
+  canRender: (data: unknown) => isSearchResultPayload(data),
+  renderSection: (data: unknown) => {
+    if (!isSearchResultPayload(data)) return null;
     return (
       <div>
         <div className="px-6 py-3 border-b border-border bg-surface-2 text-sm text-text-secondary">
-          {searchData.truncated
-            ? `Found ${searchData.totalMatches} files, showing first ${searchData.results.length}`
-            : `Found ${searchData.totalMatches} files`}
+          {data.truncated
+            ? `Found ${data.totalMatches} files, showing first ${data.results.length}`
+            : `Found ${data.totalMatches} files`}
         </div>
         <div className="divide-y divide-border">
-          {searchData.results.map((file, index) => (
+          {data.results.map((file, index) => (
             <div key={index} className="flex items-center gap-3 px-6 py-3 hover:bg-surface-2 transition-colors">
               <FileText size={14} className="text-text-tertiary shrink-0" />
               <span className="text-xs text-text font-mono flex-1 truncate">{file.path}</span>
@@ -54,19 +38,15 @@ export const searchRenderer: ToolResultRenderer = {
       </div>
     );
   },
-  copyFormatter: (data: any) => {
-    const searchData = data as SearchFilesResult;
-    if (!searchData || !searchData.results) return '';
-    return searchData.results.map(r => r.path).join('\n');
+  copyFormatter: (data: unknown) => {
+    if (!isSearchResultPayload(data)) return '';
+    return data.results.map(r => r.path).join('\n');
   },
-  summaryFormatter: (data: any) => {
-    const searchData = data as SearchFilesResult;
-    if (!searchData || !searchData.results) return '';
-    const total = searchData.totalMatches;
-    const truncated = searchData.truncated;
-    let summary = `[success] Search Files: ${total} files found`;
-    if (truncated) {
-      summary += ` (showing first ${searchData.results.length})`;
+  summaryFormatter: (data: unknown) => {
+    if (!isSearchResultPayload(data)) return '';
+    let summary = `[success] Search Files: ${data.totalMatches} files found`;
+    if (data.truncated) {
+      summary += ` (showing first ${data.results.length})`;
     }
     return summary;
   },

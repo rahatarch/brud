@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import type { FileOperation, FileOperationResult, SessionMetadata, ChunkCallback } from '@brud/core';
-import type { ExtensionMessage } from '@brud/protocol';
+import type { ExtensionMessage, UnifiedOperationResult, UnifiedSessionResults } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
 import { reportExecutionResult, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
+import { buildFailedTerminalData } from '../services/TerminalDataAdapter';
 
 export class ExecuteCurrentFileHandler {
   constructor(
@@ -20,8 +21,8 @@ export class ExecuteCurrentFileHandler {
     private getDiffPreviewSessionId: () => string | undefined,
     private setDiffPreviewSessionId: (id: string | undefined) => void,
     private getWebview: () => vscode.Webview | undefined,
-    private getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
-    private setLastExecutionResult: (val: { operations: { toolKind: string; data: any }[] } | null) => void,
+    private getLastExecutionResult: () => UnifiedSessionResults | null,
+    private setLastExecutionResult: (val: UnifiedSessionResults | null) => void,
     private getSessionMetadata: () => SessionMetadata | undefined,
   ) {}
 
@@ -105,7 +106,7 @@ export class ExecuteCurrentFileHandler {
 
       const terminalOps = transformTerminalOperationData(result.operationResults, operations);
 
-      const unifiedOps: { toolKind: string; data: any }[] = [];
+      const unifiedOps: UnifiedOperationResult[] = [];
       if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
       unifiedOps.push(...terminalOps);
 
@@ -119,19 +120,10 @@ export class ExecuteCurrentFileHandler {
 
       for (const op of result.operationResults) {
         if (op.kind === 'terminal_command' && !op.data) {
-          const origOp = operations[op.operationIndex] as any;
+          const origOp = operations[op.operationIndex];
           unifiedOps.push({
             toolKind: 'terminal_command',
-            data: {
-              command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
-              output: op.details ? '' : (op.message || ''),
-              exitCode: null,
-              duration: 0,
-              success: false,
-              ...(op.code ? { code: op.code } : {}),
-              ...(op.details ? { details: op.details } : {}),
-              ...(op.status ? { status: op.status } : {}),
-            },
+            data: buildFailedTerminalData(op, origOp),
           });
         }
       }

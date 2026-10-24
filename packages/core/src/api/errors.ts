@@ -1,6 +1,6 @@
 import type { BrudError as BrudErrorShape } from './types';
 
-type CaptureStackTrace = (target: object, constructor?: Function) => void;
+type CaptureStackTrace = (target: object, constructor?: new (...args: never[]) => unknown) => void;
 
 export class BrudError extends Error implements BrudErrorShape {
   code: string;
@@ -22,7 +22,8 @@ export class BrudError extends Error implements BrudErrorShape {
     this.operationKind = opts.operationKind;
     this.exitCode = opts.exitCode;
 
-    const capture = (Error as unknown as { captureStackTrace?: CaptureStackTrace }).captureStackTrace;
+    const errorWithCapture: { captureStackTrace?: CaptureStackTrace } = Error;
+    const capture = errorWithCapture.captureStackTrace;
     if (typeof capture === 'function') {
       capture(this, BrudError);
     }

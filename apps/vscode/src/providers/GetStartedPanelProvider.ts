@@ -1,5 +1,7 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isWebviewMessage } from '@brud/protocol';
+import type { ExtensionMessage } from '@brud/protocol';
 
 export class BrudGetStartedManager {
   private _panel: vscode.WebviewPanel | undefined;
@@ -32,7 +34,10 @@ export class BrudGetStartedManager {
       this._panel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((message: any) => {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (!isWebviewMessage(message)) {
+        return;
+      }
       switch (message.command) {
         case 'openPromptLibrary':
         case 'openMainWindow':
@@ -42,7 +47,7 @@ export class BrudGetStartedManager {
     });
   }
 
-  public postMessage(message: any): void {
+  public postMessage(message: ExtensionMessage): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     }
@@ -59,7 +64,7 @@ export class BrudGetStartedManager {
     html = html.replace('</title>', `</title>\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`);
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

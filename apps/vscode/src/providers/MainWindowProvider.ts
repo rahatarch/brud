@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { WorkspaceHistoryStore, getWorkspaceFolders, VSCodeFileSystem, loadBrudSettings, saveBrudSettings, getEffectiveSettings, VSCodePromptStore, CascadingPromptStore, getGlobalPromptsDir, ensureBrudHomeDir } from '@brud/vscode-adapter';
 import { mergeSettings, globalToolRegistry, extractCodebaseMetadata } from '@brud/core';
-import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult } from '@brud/protocol';
+import type { WebviewMessage, ExtensionMessage, HistorySessionResult, RevertHistoryData, SnapshotDataResult, SessionSnapshotsResult, BrudSettingsPayload } from '@brud/protocol';
 import { revertOperations, invalidRevertRequestError, type UserPrompt, type UserPromptVersion } from '@brud/core';
 import type { McpServerService } from '../mcp/McpServerService';
 import { serializeMcpClientConfig } from '../mcp/mcpConfig';
@@ -58,7 +58,7 @@ export class BrudMainWindowManager {
     this._mcpSubscription = service.onDidChange(() => this._pushMcpStatus());
   }
 
-  public postMessage(message: any): void {
+  public postMessage(message: ExtensionMessage): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     }
@@ -249,7 +249,7 @@ export class BrudMainWindowManager {
       operationIds,
       targetState,
       this._historyStore,
-      this._historyStore['fileSystem'],
+      this._historyStore.fileSystem,
       getWorkspaceFolders(),
       (revertEntry) => {
         this._historyStore!.saveRevertHistory(sessionId, revertEntry).catch(() => {});
@@ -487,7 +487,7 @@ export class BrudMainWindowManager {
     this._panel?.webview.postMessage({ command: 'toolListResult', tools } satisfies ExtensionMessage);
   }
 
-  private async _handleSaveSettings(settings?: Record<string, any>): Promise<void> {
+  private async _handleSaveSettings(settings?: BrudSettingsPayload): Promise<void> {
     const folders = getWorkspaceFolders();
     if (folders.length === 0 || !settings) {
       return;
@@ -623,7 +623,7 @@ export class BrudMainWindowManager {
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

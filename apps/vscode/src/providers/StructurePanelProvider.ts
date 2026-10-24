@@ -1,13 +1,17 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import { isWebviewMessage } from '@brud/protocol';
+import type { CodebaseMetadataResult, ExtensionMessage, SearchFilesResult, StructureResult } from '@brud/protocol';
+
+export type StructurePanelPayload = StructureResult | StructureResult[] | CodebaseMetadataResult;
 
 export class BrudStructurePanelManager {
   private _panel: vscode.WebviewPanel | undefined;
-  private _pendingMessage: any = null;
+  private _pendingMessage: ExtensionMessage | undefined;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
-  public postMessage(message: any): void {
+  public postMessage(message: ExtensionMessage): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     } else {
@@ -15,9 +19,9 @@ export class BrudStructurePanelManager {
     }
   }
 
-  public openStructurePanel(data: any) {
-    const isMetadata = data && typeof data === 'object' && 'root' in data;
-    const message = isMetadata
+  public openStructurePanel(data: StructurePanelPayload): void {
+    const isMetadata = !Array.isArray(data) && 'root' in data;
+    const message: ExtensionMessage = isMetadata
       ? { command: 'structureResult', codebaseMetadata: data }
       : Array.isArray(data)
         ? { command: 'structureResult', structures: data }
@@ -50,16 +54,16 @@ export class BrudStructurePanelManager {
       this._panel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready' && this._pendingMessage) {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (isWebviewMessage(message) && message.command === 'ready' && this._pendingMessage) {
         this._panel?.webview.postMessage(this._pendingMessage);
-        this._pendingMessage = null;
+        this._pendingMessage = undefined;
       }
     });
   }
 
-  public openSearchResultsPanel(searchResults: any) {
-    const message = { command: 'searchFilesResult', searchResults };
+  public openSearchResultsPanel(searchResults: SearchFilesResult): void {
+    const message: ExtensionMessage = { command: 'searchFilesResult', searchResults };
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
@@ -88,10 +92,10 @@ export class BrudStructurePanelManager {
       this._panel = undefined;
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready' && this._pendingMessage) {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (isWebviewMessage(message) && message.command === 'ready' && this._pendingMessage) {
         this._panel?.webview.postMessage(this._pendingMessage);
-        this._pendingMessage = null;
+        this._pendingMessage = undefined;
       }
     });
   }
@@ -104,7 +108,7 @@ export class BrudStructurePanelManager {
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

@@ -1,19 +1,47 @@
 import { bootCoreKernel, noWorkspaceError, isBrudError } from '@brud/core';
-import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings, ChunkCallback, HistoryStore } from '@brud/core';
+import type { FileOperation, FileOperationResult, OperationResult, SessionMetadata, BrudSettings, ChunkCallback, HistoryStore } from '@brud/core';
 import { DEFAULT_SETTINGS } from '@brud/core';
 import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
 import type { TerminalExecutor } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
 
-function getOperationTarget(operation: any): string {
-  return operation?.directoryPath
-    || operation?.directory
-    || operation?.path
-    || operation?.from
-    || operation?.command
-    || operation?.toolKind
-    || '';
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function getOperationTarget(operation: FileOperation): string {
+  if ('directoryPath' in operation) {
+    return operation.directoryPath;
+  }
+  if ('directory' in operation && typeof operation.directory === 'string') {
+    return operation.directory;
+  }
+  if ('path' in operation) {
+    return operation.path;
+  }
+  if ('from' in operation) {
+    return operation.from;
+  }
+  if ('command' in operation) {
+    return operation.command;
+  }
+  if ('toolKind' in operation) {
+    return operation.toolKind ?? '';
+  }
+  return '';
+}
+
+function isFileOperationResult(value: unknown): value is FileOperationResult {
+  return isRecord(value)
+    && typeof value.success === 'boolean'
+    && typeof value.message === 'string'
+    && Array.isArray(value.errors)
+    && Array.isArray(value.operationResults);
 }
 
 function describeThrownError(err: unknown): { code: string; friendly: string; details: string } {
@@ -51,13 +79,13 @@ export async function executeOperationsFromVSCode(
 
   const terminalExecutor: TerminalExecutor = {
     execute: executeTerminalCommand,
-    executeCommand: (command: string, cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+    executeCommand: (command, cwd, timeout, env, _onChunk, signal) =>
       executeCommand(command, cwd, timeout, env, onChunk, signal),
-    executeSequential: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, stopOnFailure?: boolean, _onChunk?: any, signal?: AbortSignal) =>
+    executeSequential: (commands, cwd, timeout, env, stopOnFailure, _onChunk, signal) =>
       executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
-    executeParallel: (commands: string[], cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+    executeParallel: (commands, cwd, timeout, env, _onChunk, signal) =>
       executeParallel(commands, cwd, timeout, env, onChunk, signal),
-    executeConditional: (conditional: any, cwd?: string, timeout?: number, env?: Record<string, string>, _onChunk?: any, signal?: AbortSignal) =>
+    executeConditional: (conditional, cwd, timeout, env, _onChunk, signal) =>
       executeConditional(conditional, cwd, timeout, env, onChunk, signal),
   };
 
@@ -69,26 +97,7 @@ export async function executeOperationsFromVSCode(
   });
 
   const workspaceRoot = workspaceFolders[0];
-  const operationResults: Array<{
-    operationId: string;
-    operationIndex: number;
-    kind: string;
-    status: 'success' | 'aborted' | 'failed' | 'interrupted';
-    message: string;
-    path: string;
-    from?: string;
-    to?: string;
-    directoryPath?: string;
-    files?: string[];
-    title?: string;
-    description?: string;
-    fileResults?: {
-      modified: string[];
-      skipped: string[];
-      failed: string[];
-    };
-    data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
-  }> = [];
+  const operationResults: OperationResult[] = [];
   const errors: Array<{ code: string; friendly: string; details: string; path?: string; command?: string }> = [];
   let lastSessionId: string | undefined;
   const combinedPayload: Record<string, unknown> = {};
@@ -96,17 +105,20 @@ export async function executeOperationsFromVSCode(
   function tryMergeMessage(message: string): void {
     if (!message) return;
     try {
-      const parsed = JSON.parse(message);
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      const parsed: unknown = JSON.parse(message);
+      if (isRecord(parsed)) {
         const STRUCTURED_KEYS = new Set(['codebase_metadata', 'extractionResults', 'readResults', 'search_results']);
         for (const key of STRUCTURED_KEYS) {
-          if (key in parsed && parsed[key] !== undefined) {
-            if (Array.isArray(parsed[key])) {
-              const existing = Array.isArray(combinedPayload[key]) ? (combinedPayload[key] as any[]) : [];
-              combinedPayload[key] = [...existing, ...(parsed[key] as any[])];
-            } else {
-              combinedPayload[key] = parsed[key];
-            }
+          const value = parsed[key];
+          if (value === undefined) {
+            continue;
+          }
+          if (isUnknownArray(value)) {
+            const existing = combinedPayload[key];
+            const existingItems = isUnknownArray(existing) ? existing : [];
+            combinedPayload[key] = [...existingItems, ...value];
+          } else {
+            combinedPayload[key] = value;
           }
         }
       }
@@ -133,7 +145,7 @@ export async function executeOperationsFromVSCode(
         },
       );
 
-      const legacyResult = result.data as FileOperationResult | undefined;
+      const legacyResult = isFileOperationResult(result.data) ? result.data : undefined;
       if (legacyResult) {
         tryMergeMessage(legacyResult.message);
         if (legacyResult.operationResults) {
@@ -155,7 +167,7 @@ export async function executeOperationsFromVSCode(
           kind: operation.kind,
           status: result.status === 'success' ? 'success' : 'failed',
           message: result.message || (result.error ? String(result.error) : '') || `Operation ${operation.kind} completed.`,
-          path: 'path' in operation ? (operation as any).path || '' : '',
+          path: getOperationTarget(operation),
         });
       }
     } catch (err) {
@@ -170,7 +182,7 @@ export async function executeOperationsFromVSCode(
         ...(described.code ? { code: described.code } : {}),
         ...(described.details ? { details: described.details } : {}),
         path: getOperationTarget(operation),
-        ...(typeof (operation as any).to === 'string' ? { to: (operation as any).to } : {}),
+        ...('to' in operation ? { to: operation.to } : {}),
       });
     }
   }

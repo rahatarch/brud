@@ -33,7 +33,7 @@ async function formatFileEntry(fs: FileSystem, fullPath: string, fileName: strin
   }
 }
 
-interface StructureNode {
+export interface StructureNode {
   [key: string]: (string | StructureNode)[];
 }
 

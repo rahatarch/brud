@@ -6,6 +6,7 @@ import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { executeFileOperations } from './index.js';
 import type { FileOperation } from '../types/patch.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
+import { parseReadEnvelope } from '../testing/readEnvelope.js';
 
 describe('read operation response envelope', () => {
   let tempDir: string;
@@ -41,7 +42,7 @@ describe('read operation response envelope', () => {
     assert.ok(!message.includes('SECRET_SENTINEL'), 'individual result must not embed raw file content');
     assert.ok(!message.includes(content), 'individual result must not embed the full source text');
 
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.strictEqual(parsed.readResults.length, 1);
     assert.strictEqual(parsed.readResults[0].files[0].content, content);
   });
@@ -60,7 +61,7 @@ describe('read operation response envelope', () => {
     assert.strictEqual(result.success, false);
     assert.ok(result.errors.length > 0, 'expected accumulated errors in aggregate result');
 
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.strictEqual(parsed.readResults.length, 1);
     assert.strictEqual(parsed.readResults[0].files[0].content, 'const partial = true;\n');
   });
@@ -98,11 +99,11 @@ describe('read operation response envelope', () => {
       readMaxAggregateBytes: Buffer.byteLength(contentA, 'utf8'),
     });
 
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.ok(Array.isArray(parsed.readResults));
     assert.strictEqual(parsed.readResults.length, 2);
 
-    const directoryResult = parsed.readResults.find((r: any) => r.operationIndex === 0);
+    const directoryResult = parsed.readResults.find((r) => r.operationIndex === 0);
     assert.ok(directoryResult, 'expected read_directory entry');
     assert.strictEqual(directoryResult.files.length, 1);
     assert.strictEqual(directoryResult.totalFiles, 1);
@@ -111,7 +112,7 @@ describe('read operation response envelope', () => {
     assert.strictEqual(directoryResult.limitHit, 'bytes');
     assert.deepStrictEqual(directoryResult.skips, []);
 
-    const missingResult = parsed.readResults.find((r: any) => r.operationIndex === 1);
+    const missingResult = parsed.readResults.find((r) => r.operationIndex === 1);
     assert.ok(missingResult, 'expected skipped read_file entry');
     assert.strictEqual(missingResult.totalFiles, 0);
     assert.strictEqual(missingResult.totalSize, 0);

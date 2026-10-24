@@ -25,12 +25,12 @@ export function recordSession(
 
   const operationTypes = operations.map(op => op.kind);
 
-  const metadataUsed: Record<string, any> = {};
+  const metadataUsed: Record<string, Record<string, unknown>[]> = {};
   for (const op of operations) {
     if (!metadataUsed[op.kind]) {
       metadataUsed[op.kind] = [];
     }
-    const entry: Record<string, any> = {};
+    const entry: Record<string, unknown> = {};
     switch (op.kind) {
       case 'search_replace':
         entry.path = op.path;

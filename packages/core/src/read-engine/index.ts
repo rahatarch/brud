@@ -190,7 +190,7 @@ async function runBoundedPool<T>(
   signal: AbortSignal | undefined,
   worker: (item: string, index: number) => Promise<T>,
 ): Promise<Array<PoolOutcome<T> | undefined>> {
-  const outcomes: Array<PoolOutcome<T> | undefined> = new Array(items.length);
+  const outcomes: Array<PoolOutcome<T> | undefined> = new Array<PoolOutcome<T> | undefined>(items.length).fill(undefined);
   if (items.length === 0) {
     return outcomes;
   }

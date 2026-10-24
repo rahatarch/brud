@@ -1,11 +1,12 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import type { FileOperation, FileOperationResult, SessionMetadata, ChunkCallback } from '@brud/core';
-import type { ExtensionMessage } from '@brud/protocol';
+import type { ExtensionMessage, UnifiedOperationResult, UnifiedSessionResults } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';
 import { WorkspaceResolver } from '../services/WorkspaceResolver';
 import { reportExecutionResult, transformTerminalOperationData, closePreviewTabs } from '../services/SharedExecutionHelpers';
+import { buildFailedTerminalData } from '../services/TerminalDataAdapter';
 
 export class ExecuteAllFilesHandler {
   constructor(
@@ -100,7 +101,7 @@ export class ExecuteAllFilesHandler {
 
       const terminalOps = transformTerminalOperationData(result.operationResults, allOperations);
 
-      const unifiedOps: { toolKind: string; data: any }[] = [];
+      const unifiedOps: UnifiedOperationResult[] = [];
       if (readData) unifiedOps.push({ toolKind: 'readResults', data: readData });
       unifiedOps.push(...terminalOps);
 
@@ -114,19 +115,10 @@ export class ExecuteAllFilesHandler {
 
       for (const op of result.operationResults) {
         if (op.kind === 'terminal_command' && !op.data) {
-          const origOp = allOperations[op.operationIndex] as any;
+          const origOp = allOperations[op.operationIndex];
           unifiedOps.push({
             toolKind: 'terminal_command',
-            data: {
-              command: origOp?.command || (origOp?.commands ? origOp.commands.join(' && ') : op.message || ''),
-              output: op.details ? '' : (op.message || ''),
-              exitCode: null,
-              duration: 0,
-              success: false,
-              ...(op.code ? { code: op.code } : {}),
-              ...(op.details ? { details: op.details } : {}),
-              ...(op.status ? { status: op.status } : {}),
-            },
+            data: buildFailedTerminalData(op, origOp),
           });
         }
       }

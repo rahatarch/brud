@@ -1,6 +1,14 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
+interface TerminalData {
+  command: string;
+  output: string;
+  exitCode: number | null;
+  duration: number;
+  success: boolean;
+}
+
 interface OperationResult {
   operationId: string;
   operationIndex: number;
@@ -8,10 +16,15 @@ interface OperationResult {
   status: 'success' | 'aborted' | 'failed';
   message: string;
   path: string;
-  data?: { command: string; output: string; exitCode: number | null; duration: number; success: boolean } | Array<{ command: string; output: string; exitCode: number | null; duration: number; success: boolean }>;
+  data?: TerminalData | TerminalData[];
 }
 
-function unwrapTerminalOps(operationResults: OperationResult[]): { toolKind: string; data: any }[] {
+interface UnifiedOperation {
+  toolKind: 'terminal_command';
+  data: TerminalData;
+}
+
+function unwrapTerminalOps(operationResults: OperationResult[]): UnifiedOperation[] {
   return operationResults
     .filter(op => op.kind === 'terminal_command' && op.data)
     .flatMap(op => Array.isArray(op.data)
@@ -19,7 +32,7 @@ function unwrapTerminalOps(operationResults: OperationResult[]): { toolKind: str
       : [{ toolKind: 'terminal_command' as const, data: op.data! }]);
 }
 
-function makeTerminalData(command: string, output: string = '') {
+function makeTerminalData(command: string, output: string = ''): TerminalData {
   return { command, output, exitCode: 0, duration: 100, success: true };
 }
 

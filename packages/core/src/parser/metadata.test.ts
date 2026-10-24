@@ -1,4 +1,11 @@
 import { describe, it } from 'node:test';
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === code;
+}
 import assert from 'node:assert';
 import { extractMetadata, parseMetadataLines } from './metadata.js';
 import { parseOperationsWithMetadata } from './index.js';
@@ -309,15 +316,11 @@ describe('Metadata Parser - parseMetadataLines', () => {
   });
 
   it('throws on wrong case field', () => {
-    assert.throws(() => parseMetadataLines('Title: Wrong'), (err: any) => {
-      return err.code === 'E_METADATA_FIELD_CASE';
-    });
+    assert.throws(() => parseMetadataLines('Title: Wrong'), (err: unknown) => hasErrorCode(err, 'E_METADATA_FIELD_CASE'));
   });
 
   it('throws on unknown field', () => {
-    assert.throws(() => parseMetadataLines('invalid: value'), (err: any) => {
-      return err.code === 'E_METADATA_UNKNOWN_FIELD';
-    });
+    assert.throws(() => parseMetadataLines('invalid: value'), (err: unknown) => hasErrorCode(err, 'E_METADATA_UNKNOWN_FIELD'));
   });
 });
 
@@ -391,8 +394,8 @@ c
 >>>>>>> END CREATE_FILE [3]`;
     const result = parseOperationsWithMetadata(input, ['/workspace']);
     assert.strictEqual(result.operations.length, 3);
-    assert.strictEqual((result.operations[0] as any).title, 'Op One');
-    assert.strictEqual((result.operations[1] as any).title, undefined);
-    assert.strictEqual((result.operations[2] as any).title, 'Op Three');
+    assert.strictEqual(result.operations[0].title, 'Op One');
+    assert.strictEqual(result.operations[1].title, undefined);
+    assert.strictEqual(result.operations[2].title, 'Op Three');
   });
 });

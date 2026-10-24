@@ -1,4 +1,11 @@
 import { describe, it, before, after } from 'node:test';
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === code;
+}
 import assert from 'node:assert';
 import * as fs from 'fs/promises';
 import * as pathModule from 'path';
@@ -92,7 +99,7 @@ hello
 
     const { operations, sessionMetadata } = parseOperationsWithMetadata(input, workspaceFolders);
     assert.strictEqual(sessionMetadata, undefined);
-    assert.strictEqual((operations[0] as any).title, 'Create config');
+    assert.strictEqual(operations[0].title, 'Create config');
 
     const result = await executeFileOperations(
       operations, nodeFs, workspaceFolders, store, 'test prompt', undefined, undefined, sessionMetadata,
@@ -377,9 +384,9 @@ patched2
     const { operations, sessionMetadata } = parseOperationsWithMetadata(input, workspaceFolders);
     assert.strictEqual(sessionMetadata, undefined);
     assert.strictEqual(operations.length, 2);
-    assert.strictEqual((operations[0] as any).title, 'Fix file one');
-    assert.strictEqual((operations[1] as any).title, 'Fix file two');
-    assert.strictEqual((operations[1] as any).description, 'Patching second file');
+    assert.strictEqual(operations[0].title, 'Fix file one');
+    assert.strictEqual(operations[1].title, 'Fix file two');
+    assert.strictEqual(operations[1].description, 'Patching second file');
 
     const result = await executeFileOperations(
       operations, nodeFs, workspaceFolders, store, 'test prompt', undefined, undefined, sessionMetadata,
@@ -558,7 +565,7 @@ title: Test
 </Session_Metadata>`;
     assert.throws(
       () => parseOperationsWithMetadata(input, workspaceFolders),
-      (err: any) => err.code === 'E_METADATA_WRONG_CASE',
+      (err: unknown) => hasErrorCode(err, 'E_METADATA_WRONG_CASE'),
     );
   });
 
@@ -574,7 +581,7 @@ title: Second
 </session_metadata>`;
     assert.throws(
       () => parseOperationsWithMetadata(input, workspaceFolders),
-      (err: any) => err.code === 'E_DUPLICATE_SESSION_METADATA',
+      (err: unknown) => hasErrorCode(err, 'E_DUPLICATE_SESSION_METADATA'),
     );
   });
 
@@ -587,7 +594,7 @@ Title: My Session
 </session_metadata>`;
     assert.throws(
       () => parseOperationsWithMetadata(input, workspaceFolders),
-      (err: any) => err.code === 'E_METADATA_FIELD_CASE',
+      (err: unknown) => hasErrorCode(err, 'E_METADATA_FIELD_CASE'),
     );
   });
 
@@ -600,7 +607,7 @@ title: Unclosed
 `;
     assert.throws(
       () => parseOperationsWithMetadata(input, workspaceFolders),
-      (err: any) => err.code === 'E_METADATA_UNCLOSED',
+      (err: unknown) => hasErrorCode(err, 'E_METADATA_UNCLOSED'),
     );
   });
 });

@@ -7,6 +7,7 @@
     "rootDir": ".",
     "outDir": "out",
     "strict": true /* enable all strict type-checking options */,
+    "noImplicitAny": true /* disallow implicit any */,
     "types": ["node", "vscode", "mocha"]
     /* Additional Checks */
     // "noImplicitReturns": true, /* Report error when not all code paths in function return a value. */

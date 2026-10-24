@@ -2,6 +2,7 @@ import * as path from 'path';
 import { NodeFileSystem } from './nodeFileSystem.js';
 import type { HistoryStore } from '../history/store.js';
 import type { HistoryEntry, HistorySession, RevertHistoryEntry } from '../history/types.js';
+import { parseHistorySession, parseSerializedSnapshot } from './historyJson.js';
 
 export class TestHistoryStore implements HistoryStore {
   private sessionsDir: string;
@@ -59,9 +60,9 @@ export class TestHistoryStore implements HistoryStore {
       this.fs.readFile(this.preFile(sessionId)),
       this.fs.readFile(this.postFile(sessionId)),
     ]);
-    const session: HistorySession = JSON.parse(sessionRaw);
-    const preData = JSON.parse(preRaw);
-    const postData = JSON.parse(postRaw);
+    const session = parseHistorySession(sessionRaw);
+    const preData = parseSerializedSnapshot(preRaw);
+    const postData = parseSerializedSnapshot(postRaw);
     return {
       session,
       preSnapshot: { ...preData, files: this.objectToMap(preData.files) },
@@ -78,7 +79,7 @@ export class TestHistoryStore implements HistoryStore {
     for (const dir of sessionDirs) {
       try {
         const raw = await this.fs.readFile(this.sessionFile(dir));
-        const session: HistorySession = JSON.parse(raw);
+        const session = parseHistorySession(raw);
         if (!session.isDeleted) {
           sessions.push(session);
         }
@@ -127,7 +128,7 @@ export class TestHistoryStore implements HistoryStore {
     const sessionPath = this.sessionFile(sessionId);
     if (!(await this.fs.exists(sessionPath))) return;
     const raw = await this.fs.readFile(sessionPath);
-    const session: HistorySession = JSON.parse(raw);
+    const session = parseHistorySession(raw);
     session.isDeleted = true;
     session.deletedAt = new Date().toISOString();
     session.deletedBy = deletedBy;
@@ -140,7 +141,7 @@ export class TestHistoryStore implements HistoryStore {
     const sessionPath = this.sessionFile(sessionId);
     if (!(await this.fs.exists(sessionPath))) return;
     const raw = await this.fs.readFile(sessionPath);
-    const session: HistorySession = JSON.parse(raw);
+    const session = parseHistorySession(raw);
     session.isDeleted = false;
     session.deletedAt = undefined;
     session.expiresAt = undefined;
@@ -158,7 +159,7 @@ export class TestHistoryStore implements HistoryStore {
     for (const dir of sessionDirs) {
       try {
         const raw = await this.fs.readFile(this.sessionFile(dir));
-        const session: HistorySession = JSON.parse(raw);
+        const session = parseHistorySession(raw);
         if (session.isDeleted) {
           sessions.push(session);
         }
@@ -179,7 +180,7 @@ export class TestHistoryStore implements HistoryStore {
     for (const dir of sessionDirs) {
       try {
         const raw = await this.fs.readFile(this.sessionFile(dir));
-        const session: HistorySession = JSON.parse(raw);
+        const session = parseHistorySession(raw);
         if (session.isDeleted && session.expiresAt && new Date(session.expiresAt) <= now) {
           sessions.push(session);
         }

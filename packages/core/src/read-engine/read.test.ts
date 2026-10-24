@@ -7,7 +7,15 @@ import { readFiles } from './index.js';
 import { validateWorkspacePath } from '../utils/workspacePath.js';
 import { parseOperations } from '../parser/index.js';
 import { executeFileOperations } from '../file-operations/index.js';
+import { parseReadEnvelope } from '../testing/readEnvelope.js';
 import { BrudError, BrudAPI } from '../api/index.js';
+
+function hasErrorCode(error: unknown, code: string): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { code?: unknown }).code === code;
+}
 
 describe('readFiles integration tests', () => {
   let tempDir: string;
@@ -177,7 +185,7 @@ MaxDepth: 0
 
     const result = await executeFileOperations(ops, nodeFs, [tempDir]);
     assert.strictEqual(result.success, true);
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.ok(parsed.readResults, 'expected readResults in message');
     assert.ok(Array.isArray(parsed.readResults));
     assert.strictEqual(parsed.readResults.length, 1);
@@ -208,12 +216,12 @@ MaxDepth: 3
 
     const result = await executeFileOperations(ops, nodeFs, [tempDir]);
     assert.strictEqual(result.success, true);
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.ok(parsed.readResults, 'expected readResults in message');
     assert.ok(Array.isArray(parsed.readResults));
     assert.strictEqual(parsed.readResults.length, 1);
     assert.strictEqual(parsed.readResults[0].totalFiles, 2);
-    const paths = parsed.readResults[0].files.map((f: { path: string }) => f.path);
+    const paths = parsed.readResults[0].files.map((f) => f.path);
     assert.ok(paths.includes(fileA));
     assert.ok(paths.includes(fileB));
   });
@@ -237,7 +245,7 @@ End Line: 4
 
     const result = await executeFileOperations(ops, nodeFs, [tempDir]);
     assert.strictEqual(result.success, true);
-    const parsed = JSON.parse(result.message);
+    const parsed = parseReadEnvelope(result.message);
     assert.ok(parsed.readResults, 'expected readResults in message');
     assert.ok(Array.isArray(parsed.readResults));
     assert.strictEqual(parsed.readResults.length, 1);
@@ -298,7 +306,7 @@ End Line: 4
       await nodeFs.writeFile(fp, fiveLineContent);
       await assert.rejects(
         () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 0),
-        (err: any) => err.code === 'INVALID_LINE_RANGE',
+        (err: unknown) => hasErrorCode(err, 'INVALID_LINE_RANGE'),
       );
     });
 
@@ -307,7 +315,7 @@ End Line: 4
       await nodeFs.writeFile(fp, fiveLineContent);
       await assert.rejects(
         () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 10),
-        (err: any) => err.code === 'INVALID_LINE_RANGE',
+        (err: unknown) => hasErrorCode(err, 'INVALID_LINE_RANGE'),
       );
     });
 
@@ -316,7 +324,7 @@ End Line: 4
       await nodeFs.writeFile(fp, fiveLineContent);
       await assert.rejects(
         () => readFiles(nodeFs, [fp], false, 0, undefined, undefined, 4, 2),
-        (err: any) => err.code === 'INVALID_LINE_RANGE',
+        (err: unknown) => hasErrorCode(err, 'INVALID_LINE_RANGE'),
       );
     });
 

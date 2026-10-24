@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import type { FileOperation } from '@brud/core';
-import type { ExtensionMessage } from '@brud/protocol';
+import type { FileOperation, SessionMetadata } from '@brud/core';
+import type { ExtensionMessage, UnifiedSessionResults } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 
 export class DonePreviewHandler {
@@ -8,13 +8,13 @@ export class DonePreviewHandler {
     private panelManager: PanelManager,
     private getFileList: () => string[],
     private getOperationsByFile: () => Map<string, FileOperation[]>,
-    private getLastExecutionResult: () => { operations: { toolKind: string; data: any }[] } | null,
+    private getLastExecutionResult: () => UnifiedSessionResults | null,
     private getWebview: () => vscode.Webview | undefined,
     private setFileList: (list: string[]) => void,
     private setOperationsByFile: (map: Map<string, FileOperation[]>) => void,
     private setCurrentFileIndex: (idx: number) => void,
     private setDiffPreviewSessionId: (id: string | undefined) => void,
-    private setSessionMetadata: (m: any) => void,
+    private setSessionMetadata: (m: SessionMetadata | undefined) => void,
   ) {}
 
   async handle(): Promise<void> {

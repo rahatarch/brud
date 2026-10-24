@@ -1,36 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Copy, Check, FileText } from 'lucide-react';
-import { sendToExtension } from '../bridge/vscodeBridge';
-
-interface StructureData {
-  json: string;
-  directoryPath: string;
-  depth: number;
-  fileCount: number;
-  directoryCount: number;
-}
-
-interface CodebaseMetadataResult {
-  root: string;
-  totalFiles: number;
-  totalFolders: number;
-  mostDenseFolder: string;
-  mostDenseCount: number;
-}
-
-interface SearchFileItem {
-  path: string;
-  name: string;
-  extension: string;
-  directory: string;
-  size: number;
-}
-
-interface SearchFilesResult {
-  results: SearchFileItem[];
-  totalMatches: number;
-  truncated: boolean;
-}
+import { sendToExtension, onExtensionMessage } from '../bridge/vscodeBridge';
+import type {
+  CodebaseMetadataResult,
+  SearchFilesResult,
+  StructureResult as StructureData,
+} from '@brud/protocol';
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -49,8 +24,7 @@ function StructurePanel() {
   }, []);
 
   useEffect(() => {
-    function handleMessage(event: MessageEvent) {
-      const message = event.data;
+    return onExtensionMessage((message) => {
       if (message.command === 'structureResult') {
         if (message.codebaseMetadata) {
           setMetadata(message.codebaseMetadata);
@@ -65,15 +39,12 @@ function StructurePanel() {
           setMetadata(null);
           setSearchResults(null);
         }
-      } else if (message.command === 'searchFilesResult') {
+      } else if (message.command === 'searchFilesResult' && message.searchResults) {
         setSearchResults(message.searchResults);
         setStructures([]);
         setMetadata(null);
       }
-    }
-
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    });
   }, []);
 
   const handleCopy = useCallback(() => {

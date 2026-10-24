@@ -1,18 +1,27 @@
+import type { BrudUnifiedResultsPanelManager } from '../UnifiedResultsPanelProvider';
 import { BrudDiffPreviewPanelManager } from '../DiffPreviewPanelProvider';
 import { BrudTerminalPanelManager } from '../TerminalStreamPanelProvider';
-import type { DiffPreviewData } from '@brud/protocol';
+import type { BrudMainWindowManager } from '../MainWindowProvider';
+import type { BrudStructurePanelManager, StructurePanelPayload } from '../StructurePanelProvider';
+import type { BrudReadPanelManager } from '../ReadPanelProvider';
+import type {
+  DiffPreviewData,
+  ExtensionMessage,
+  ReadResultData,
+  UnifiedSessionResults,
+} from '@brud/protocol';
 
 export class PanelManager {
   constructor(
-    public readonly unifiedResultsPanelManager: any,
+    public readonly unifiedResultsPanelManager: BrudUnifiedResultsPanelManager | undefined,
     public readonly diffPreviewPanelManager: BrudDiffPreviewPanelManager,
-    public readonly mainWindowProvider: any,
-    public readonly structurePanelManager: any,
-    public readonly readPanelManager: any,
+    public readonly mainWindowProvider: BrudMainWindowManager | undefined,
+    public readonly structurePanelManager: BrudStructurePanelManager | undefined,
+    public readonly readPanelManager: BrudReadPanelManager | undefined,
     public readonly terminalPanelManager: BrudTerminalPanelManager,
   ) {}
 
-  showUnifiedResults(results: Record<string, any>): void {
+  showUnifiedResults(results: UnifiedSessionResults): void {
     this.unifiedResultsPanelManager?.openUnifiedResultsPanel(results);
   }
 
@@ -24,11 +33,11 @@ export class PanelManager {
     this.diffPreviewPanelManager.openNoPreviewPanel(detail);
   }
 
-  postDiffPreviewMessage(message: any): void {
+  postDiffPreviewMessage(message: ExtensionMessage): void {
     this.diffPreviewPanelManager.postMessage(message);
   }
 
-  postDiffPreviewMessageIfOpen(message: any): void {
+  postDiffPreviewMessageIfOpen(message: ExtensionMessage): void {
     this.diffPreviewPanelManager.postIfOpen(message);
   }
 
@@ -40,11 +49,11 @@ export class PanelManager {
     this.mainWindowProvider?.openMainWindow();
   }
 
-  showStructure(data: any): void {
+  showStructure(data: StructurePanelPayload): void {
     this.structurePanelManager?.openStructurePanel(data);
   }
 
-  showRead(data: any): void {
+  showRead(data: ReadResultData): void {
     this.readPanelManager?.openReadPanel(data);
   }
 

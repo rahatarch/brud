@@ -1,30 +1,8 @@
 import { Check, X, AlertTriangle, ChevronRight, Copy, CheckIcon } from 'lucide-react';
 import { useState } from 'react';
-import { ToolResultRenderer } from '../types';
+import { isOperationResultPayload } from '../types';
+import type { OperationStatus, ToolResultRenderer } from '../types';
 import { appendDiagnosticCopy, DiagnosticDisclosure } from './diagnostics';
-
-interface OperationResultData {
-  operationId: string;
-  operationIndex: number;
-  kind: string;
-  status: 'success' | 'aborted' | 'failed';
-  message: string;
-  code?: string;
-  details?: string;
-  path: string;
-  title?: string;
-  description?: string;
-  from?: string;
-  to?: string;
-  directoryPath?: string;
-  files?: string[];
-  fileResults?: {
-    modified: string[];
-    skipped: string[];
-    failed: string[];
-  };
-  data?: any;
-}
 
 const KIND_LABELS: Record<string, string> = {
   search_replace: 'Search & Replace',
@@ -52,7 +30,7 @@ function getKindLabel(kind: string): string {
   return KIND_LABELS[kind] || kind.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-const STATUS_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: string; border: string }> = {
+const STATUS_CONFIG: Record<OperationStatus, { icon: React.ReactNode; bg: string; text: string; border: string }> = {
   success: {
     icon: <Check size={14} />,
     bg: 'bg-green-500/10',
@@ -71,10 +49,16 @@ const STATUS_CONFIG: Record<string, { icon: React.ReactNode; bg: string; text: s
     text: 'text-yellow-400',
     border: 'border-yellow-500/30',
   },
+  interrupted: {
+    icon: <AlertTriangle size={14} />,
+    bg: 'bg-yellow-500/10',
+    text: 'text-yellow-400',
+    border: 'border-yellow-500/30',
+  },
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] || STATUS_CONFIG.failed;
+function StatusBadge({ status }: { status: OperationStatus }) {
+  const cfg = STATUS_CONFIG[status];
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${cfg.bg} ${cfg.text} ${cfg.border}`}>
       {cfg.icon}
@@ -103,12 +87,17 @@ function CopyButton({ text }: { text: string }) {
 export const operationResultRenderer: ToolResultRenderer = {
   toolKind: 'operation_result',
   title: 'Operation Result',
-  canRender: (data: any) => {
-    return data && typeof data.status === 'string' && typeof data.kind === 'string';
-  },
-  renderSection: (data: any) => {
-    const op = data as OperationResultData;
-    if (!op || !op.status) {
+  canRender: (data: unknown) => isOperationResultPayload(data),
+  renderSection: (data: unknown) => {
+    if (!isOperationResultPayload(data)) {
+      return (
+        <div className="px-6 py-3 border-b border-border bg-red-500/10">
+          <div className="text-sm text-red-400">Unknown result type</div>
+        </div>
+      );
+    }
+    const op = data;
+    if (!op.status) {
       return (
         <div className="px-6 py-3 border-b border-border bg-red-500/10">
           <div className="text-sm text-red-400">
@@ -119,7 +108,7 @@ export const operationResultRenderer: ToolResultRenderer = {
     }
 
     const kindLabel = getKindLabel(op.kind);
-    const statusCfg = STATUS_CONFIG[op.status] || STATUS_CONFIG.failed;
+    const statusCfg = STATUS_CONFIG[op.status];
     const showPathFromTo = ['rename_file', 'move_file', 'copy_file'].includes(op.kind);
     const isDirectory = op.kind === 'create_directory';
 
@@ -218,9 +207,9 @@ export const operationResultRenderer: ToolResultRenderer = {
       </div>
     );
   },
-  copyFormatter: (data: any) => {
-    const op = data as OperationResultData;
-    if (!op || !op.kind) return '';
+  copyFormatter: (data: unknown) => {
+    if (!isOperationResultPayload(data)) return '';
+    const op = data;
     const kindLabel = getKindLabel(op.kind);
     const path = op.path || op.directoryPath || '';
     const titlePrefix = op.title ? `${op.title}: ` : '';
@@ -240,9 +229,9 @@ export const operationResultRenderer: ToolResultRenderer = {
     }
     return result;
   },
-  summaryFormatter: (data: any) => {
-    const op = data as OperationResultData;
-    if (!op || !op.kind) return '';
+  summaryFormatter: (data: unknown) => {
+    if (!isOperationResultPayload(data)) return '';
+    const op = data;
     const kindLabel = getKindLabel(op.kind);
     const titlePrefix = op.title ? `${op.title} — ` : '';
     const status = op.status;

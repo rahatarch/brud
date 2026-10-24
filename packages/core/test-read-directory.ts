@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as os from 'os';
 import { NodeFileSystem } from './src/testing/nodeFileSystem.js';
 import { executeFileOperations } from './src/file-operations/index.js';
+import { parseReadEnvelope } from './src/testing/readEnvelope.js';
 import type { FileOperation } from './src/types/patch.js';
 
 async function main() {
@@ -67,16 +68,11 @@ async function main() {
   // 6. Check: Does readResults contain ALL read operations including read_directory?
   console.log('\n====== CHECK: readResults in message ======');
   try {
-    const parsed = JSON.parse(result.message);
-    console.log('combined keys:', Object.keys(parsed));
-    if (parsed.readResults) {
-      console.log('readResults entries:', parsed.readResults.length);
-      parsed.readResults.forEach((r: any, idx: number) => {
-        console.log(`  readResults[${idx}]: operationIndex=${r.operationIndex}, totalFiles=${r.totalFiles}, files=${r.files?.map((f: any) => f.path)}`);
-      });
-    } else {
-      console.log('NO readResults in combined object!');
-    }
+    const parsed = parseReadEnvelope(result.message);
+    console.log('readResults entries:', parsed.readResults.length);
+    parsed.readResults.forEach((r, idx) => {
+      console.log(`  readResults[${idx}]: operationIndex=${r.operationIndex}, totalFiles=${r.totalFiles}, files=${r.files.map((f) => f.path)}`);
+    });
   } catch (e) {
     console.log('message is not JSON:', result.message);
   }

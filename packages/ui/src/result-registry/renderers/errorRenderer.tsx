@@ -1,18 +1,17 @@
 import { AlertCircle, ChevronRight, Copy, Check } from 'lucide-react';
 import { useState } from 'react';
-import { ToolResultRenderer } from '../types';
+import { isErrorPayload } from '../types';
+import type { ToolResultRenderer } from '../types';
 import type { ReportSection } from '@brud/protocol';
 
-interface ErrorResultData {
-  structured?: ReportSection[];
-  friendlyMessage: string;
-}
+type ReportItemStatus = 'success' | 'failed' | 'aborted' | 'interrupted';
 
-function StatusBadge({ status }: { status: 'success' | 'failed' | 'aborted' }) {
+function StatusBadge({ status }: { status: ReportItemStatus }) {
   const colors: Record<string, string> = {
     success: 'bg-green-500/10 text-green-400 border-green-500/30',
     failed: 'bg-red-500/10 text-red-400 border-red-500/30',
     aborted: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
+    interrupted: 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30',
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium border ${colors[status]}`}>
@@ -133,12 +132,9 @@ function formatSectionForCopy(section: ReportSection): string {
 export const errorRenderer: ToolResultRenderer = {
   toolKind: 'error',
   title: 'Error',
-  canRender: (data: any) => {
-    return data && typeof data.friendlyMessage === 'string';
-  },
-  renderSection: (data: any) => {
-    const errorData = data as ErrorResultData;
-    if (!errorData || !errorData.friendlyMessage) return null;
+  canRender: (data: unknown) => isErrorPayload(data),
+  renderSection: (data: unknown) => {
+    if (!isErrorPayload(data) || !data.friendlyMessage) return null;
 
     return (
       <div>
@@ -147,35 +143,33 @@ export const errorRenderer: ToolResultRenderer = {
             <AlertCircle size={16} className="text-red-400 shrink-0 mt-0.5" />
             <div>
               <div className="text-sm font-medium text-red-400">Error</div>
-              <div className="text-xs text-red-300 mt-1">{errorData.friendlyMessage}</div>
+              <div className="text-xs text-red-300 mt-1">{data.friendlyMessage}</div>
             </div>
           </div>
         </div>
-        {errorData.structured && errorData.structured.length > 0 && (
+        {data.structured && data.structured.length > 0 && (
           <div className="p-6 space-y-3">
-            {errorData.structured.map((section, i) => renderSectionContent(section, i))}
+            {data.structured.map((section, i) => renderSectionContent(section, i))}
           </div>
         )}
       </div>
     );
   },
-  copyFormatter: (data: any) => {
-    const errorData = data as ErrorResultData;
-    if (!errorData || !errorData.friendlyMessage) return '';
+  copyFormatter: (data: unknown) => {
+    if (!isErrorPayload(data) || !data.friendlyMessage) return '';
     const lines: string[] = [
-      `Error: ${errorData.friendlyMessage}`,
+      `Error: ${data.friendlyMessage}`,
     ];
-    if (errorData.structured) {
-      for (const section of errorData.structured) {
+    if (data.structured) {
+      for (const section of data.structured) {
         lines.push('');
         lines.push(formatSectionForCopy(section));
       }
     }
     return lines.join('\n');
   },
-  summaryFormatter: (data: any) => {
-    const errorData = data as ErrorResultData;
-    if (!errorData || !errorData.friendlyMessage) return '';
-    return `[error] ${errorData.friendlyMessage}`;
+  summaryFormatter: (data: unknown) => {
+    if (!isErrorPayload(data) || !data.friendlyMessage) return '';
+    return `[error] ${data.friendlyMessage}`;
   },
 };

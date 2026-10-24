@@ -259,7 +259,8 @@ describe('MCP structural sanitization', () => {
     const result = await dispatchToolCall(kernel, 'read_file', { filePath: 'a.txt' }, { workspaceRoot: root });
 
     assert.strictEqual(typeof result.content[0].text, 'string');
-    const parsed = JSON.parse(result.content[0].text);
+    const parsed: unknown = JSON.parse(result.content[0].text);
+    assert.ok(typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed));
     assert.deepStrictEqual(Object.keys(parsed).sort(), ['operationResults', 'readResults', 'success']);
     assert.strictEqual(result.content.length, 1);
   });

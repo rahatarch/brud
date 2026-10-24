@@ -1,4 +1,4 @@
-import { FileOperation } from '../types/patch';
+import type { FileOperation, TerminalCommandOperation, TerminalInteractiveOperation } from '../types/patch';
 import { BrudAPI, BrudError, missingFieldError, missingIndexError } from '../api/index';
 
 type State = 'IDLE' | 'SEARCH' | 'REPLACE' | 'CREATE_CONTENT' | 'DELETE_PATH' | 'RENAME_FROM' | 'RENAME_TO' | 'MOVE_FROM' | 'MOVE_TO' | 'COPY_FROM' | 'COPY_TO' | 'APPEND_CONTENT' | 'APPEND_FILE_MULTI' | 'SEARCH_REPLACE_MULTI' | 'CREATE_DIRECTORY' | 'DELETE_DIRECTORY' | 'MOVE_DIRECTORY_FROM' | 'MOVE_DIRECTORY_TO' | 'EXTRACT_STRUCTURE' | 'CODEBASE_METADATA' | 'SEARCH_FILES' | 'READ_FILE' | 'READ_FILES' | 'READ_DIRECTORY' | 'TERMINAL_INTERACTIVE' | 'TERMINAL_COMMAND' | 'TERMINAL_COMMAND_RAW' | 'TERMINAL_INTERACTIVE_RAW' | 'GET_TOOL_INFO';
@@ -340,7 +340,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
       }
       const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-      const op: any = {
+      const op: TerminalInteractiveOperation = {
         kind: 'terminal_interactive',
         command: currentTerminalCommand,
         answers: currentTerminalAnswers,
@@ -351,7 +351,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (currentTerminalRaw) {
         op.raw = true;
       }
-      operations.push(op as FileOperation);
+      operations.push(op);
     }
     currentTerminalCommand = '';
     currentTerminalAnswers = [];
@@ -367,8 +367,9 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
         throw new BrudError({ code: 'INVALID_CWD', friendly: cwdResult.friendly!, details: cwdResult.details! });
       }
       const cwdData = cwdResult.data as { resolvedCwd?: string } | undefined;
-      const op: any = {
+      const op: TerminalCommandOperation = {
         kind: 'terminal_command',
+        command: currentTerminalCommands.length > 0 ? '' : currentTerminalCommand,
         index: currentIndex,
       };
       if (currentTerminalCommands.length > 0) {
@@ -398,7 +399,7 @@ export function parseLegacyFormat(input: string, workspaceFolders: string[] = []
       if (currentTerminalRaw) {
         op.raw = true;
       }
-      operations.push(op as FileOperation);
+      operations.push(op);
     }
     currentTerminalCommand = '';
     currentTerminalTimeout = 120;

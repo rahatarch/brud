@@ -1,20 +1,21 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import type { DiffPreviewData } from '@brud/protocol';
+import { isWebviewMessage } from '@brud/protocol';
+import type { DiffPreviewData, ExtensionMessage } from '@brud/protocol';
 
 export class BrudDiffPreviewPanelManager {
   private _panel: vscode.WebviewPanel | undefined;
-  private _pendingMessage: any = null;
+  private _pendingMessage: ExtensionMessage | undefined;
   private _disposables: vscode.Disposable[] = [];
-  private _messageHandler: ((message: any) => void) | undefined;
+  private _messageHandler: ((message: unknown) => void) | undefined;
 
   constructor(private readonly _extensionUri: vscode.Uri) {}
 
-  public setMessageHandler(handler: (message: any) => void): void {
+  public setMessageHandler(handler: (message: unknown) => void): void {
     this._messageHandler = handler;
   }
 
-  public postMessage(message: any): void {
+  public postMessage(message: ExtensionMessage): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     } else {
@@ -22,14 +23,14 @@ export class BrudDiffPreviewPanelManager {
     }
   }
 
-  public postIfOpen(message: any): void {
+  public postIfOpen(message: ExtensionMessage): void {
     if (this._panel) {
       this._panel.webview.postMessage(message);
     }
   }
 
   public openNoPreviewPanel(detail?: string) {
-    const msg = detail
+    const msg: ExtensionMessage = detail
       ? { command: 'noPreviewableOps', detail }
       : { command: 'noPreviewableOps' };
 
@@ -64,11 +65,11 @@ export class BrudDiffPreviewPanelManager {
       this._disposables = [];
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready') {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (isWebviewMessage(message) && message.command === 'ready') {
         if (this._pendingMessage) {
           this._panel?.webview.postMessage(this._pendingMessage);
-          this._pendingMessage = null;
+          this._pendingMessage = undefined;
         }
         return;
       }
@@ -77,7 +78,7 @@ export class BrudDiffPreviewPanelManager {
   }
 
   public openDiffPreview(data: DiffPreviewData) {
-    const message = { command: 'diffPreviewResult', diffPreviewData: data };
+    const message: ExtensionMessage = { command: 'diffPreviewResult', diffPreviewData: data };
 
     if (this._panel) {
       this._panel.reveal(vscode.ViewColumn.One);
@@ -110,11 +111,11 @@ export class BrudDiffPreviewPanelManager {
       this._disposables = [];
     });
 
-    this._panel.webview.onDidReceiveMessage((message) => {
-      if (message.command === 'ready') {
+    this._panel.webview.onDidReceiveMessage((message: unknown) => {
+      if (isWebviewMessage(message) && message.command === 'ready') {
         if (this._pendingMessage) {
           this._panel?.webview.postMessage(this._pendingMessage);
-          this._pendingMessage = null;
+          this._pendingMessage = undefined;
         }
         return;
       }
@@ -137,7 +138,7 @@ export class BrudDiffPreviewPanelManager {
     html = html.replace(/<link[^>]*fonts\.gstatic\.com[^>]*>/g, '');
 
     const assetRegex = /(?:src|href)="(\.\/(?:assets|images)\/[^"]+)"/g;
-    html = html.replace(assetRegex, (match, assetPath) => {
+    html = html.replace(assetRegex, (match: string, assetPath: string) => {
       const assetUri = vscode.Uri.joinPath(this._extensionUri, 'dist', 'webview', assetPath.replace('./', ''));
       const webviewUri = webview.asWebviewUri(assetUri);
       return match.replace(assetPath, webviewUri.toString());

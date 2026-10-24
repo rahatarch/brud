@@ -14,7 +14,7 @@ export interface HistorySession {
   operationTypes: string[];
   operations: OperationResult[];
   filesAffected: string[];
-  metadataUsed: Record<string, any>;
+  metadataUsed: Record<string, unknown>;
   terminalCommands: string[];
   revertCommands: string[];
   sessionTitle?: string;

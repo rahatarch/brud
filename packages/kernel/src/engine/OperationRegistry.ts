@@ -11,8 +11,8 @@ export class OperationRegistry implements IOperationRegistry {
     this.handlers.set(handler.kind, handler);
   }
 
-  get(kind: string): OperationHandler | undefined {
-    return this.handlers.get(kind);
+  get<TInput = unknown, TOutput = unknown>(kind: string): OperationHandler<TInput, TOutput> | undefined {
+    return this.handlers.get(kind) as OperationHandler<TInput, TOutput> | undefined;
   }
 
   has(kind: string): boolean {

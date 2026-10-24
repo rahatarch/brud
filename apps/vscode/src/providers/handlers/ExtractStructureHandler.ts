@@ -2,14 +2,23 @@ import * as vscode from 'vscode';
 import { parseOperations, cleanBrudInput, BrudError, noExtractOperationsError } from '@brud/core';
 import { bootCoreKernel } from '@brud/core';
 import { getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { BrudSettings } from '@brud/core';
-import type { ExtensionMessage } from '@brud/protocol';
+import type { BrudKernel, BrudSettings, FileOperation } from '@brud/core';
+import { isRecord } from '@brud/protocol';
+import type { ExtensionMessage, OperationResult, StructureResult, UnifiedOperationResult } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { closePreviewTabs } from '../services/SharedExecutionHelpers';
+import { isStructureResult, readOperationResults } from '../services/executionPayloads';
+
+function describeError(value: unknown): string {
+  if (value instanceof Error) {
+    return value.message;
+  }
+  return typeof value === 'string' ? value : String(value);
+}
 
 export class ExtractStructureHandler {
-  private kernelPromise: Promise<any> | null = null;
+  private kernelPromise: Promise<BrudKernel> | null = null;
 
   constructor(
     private outputChannel: vscode.OutputChannel,
@@ -19,7 +28,7 @@ export class ExtractStructureHandler {
     private getSettings: () => BrudSettings,
   ) {}
 
-  private async getKernel(): Promise<any> {
+  private async getKernel(): Promise<BrudKernel> {
     if (!this.kernelPromise) {
       this.kernelPromise = bootCoreKernel({
         fs: new VSCodeFileSystem(),
@@ -31,7 +40,7 @@ export class ExtractStructureHandler {
   async handle(text: string): Promise<void> {
     await closePreviewTabs();
 
-    let operations;
+    let operations: FileOperation[];
     try {
       operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
     } catch (e) {
@@ -51,39 +60,31 @@ export class ExtractStructureHandler {
 
     const kernel = await this.getKernel();
 
-    const extractionResults: { directoryPath: string; depth: number; json: string; fileCount: number; directoryCount: number }[] = [];
-    const operationResults: any[] = [];
-    const errors: any[] = [];
+    const extractionResults: StructureResult[] = [];
+    const operationResults: OperationResult[] = [];
+    const errors: string[] = [];
     let allSuccess = true;
 
     for (const op of extractOps) {
-      const result = await kernel.execute('extract_structure', op);
-      if (result.status === 'success' && result.data) {
-        const data = result.data as any;
-        const sr = data.operationResults?.find((r: any) => r.kind === 'extract_structure');
-        const er = extractionResults.find(e => e.directoryPath === op.directoryPath) || ({
-          directoryPath: op.directoryPath,
-          depth: op.depth,
-          json: '',
-          fileCount: 0,
-          directoryCount: 0,
-        });
-        if (data.extractionResults?.length > 0) {
-          extractionResults.push(...data.extractionResults);
-        }
-        if (sr) {
-          operationResults.push(sr);
-        }
-        if (data.errors?.length > 0) {
-          errors.push(...data.errors);
+      const result = await kernel.execute<FileOperation, unknown>('extract_structure', op);
+      if (result.status === 'success' && isRecord(result.data)) {
+        const data = result.data;
+        const extracted = Array.isArray(data.extractionResults)
+          ? data.extractionResults.filter(isStructureResult)
+          : [];
+        const operationData = readOperationResults(data.operationResults);
+        extractionResults.push(...extracted);
+        operationResults.push(...operationData.filter(item => item.kind === 'extract_structure'));
+        if (Array.isArray(data.errors)) {
+          errors.push(...data.errors.map(describeError));
         }
       } else {
         allSuccess = false;
-        errors.push(result.error || 'Unknown error');
+        errors.push(describeError(result.error));
       }
     }
 
-    const unifiedOps: { toolKind: string; data: any }[] = [];
+    const unifiedOps: UnifiedOperationResult[] = [];
 
     if (!allSuccess) {
       this.outputChannel.appendLine('=== EXECUTION FAILURE ===');
@@ -98,23 +99,15 @@ export class ExtractStructureHandler {
 
     if (allSuccess && errors.length === 0) {
       try {
-        const structureResults = extractionResults.map((item: any) => ({
-          json: item.json,
-          directoryPath: item.directoryPath,
-          depth: item.depth,
-          fileCount: item.fileCount,
-          directoryCount: item.directoryCount,
-        }));
-        unifiedOps.push(...structureResults.map(s => ({
-          toolKind: 'extractionResults',
-          data: s,
-        })));
-        const structureNames = structureResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
+        for (const structure of extractionResults) {
+          unifiedOps.push({ toolKind: 'extractionResults', data: structure });
+        }
+        const structureNames = extractionResults.map(s => `${s.directoryPath} (depth ${s.depth})`).join(', ');
         this.outputChannel.appendLine(`Extracted directory structures: ${structureNames}`);
         const pointerMsg: ExtensionMessage = { command: 'success', message: 'Successful. Check the report at the Report Panel.' };
         this.getWebview()?.postMessage(pointerMsg);
       } catch (e) {
-        this.outputChannel.appendLine('Error parsing extract_structure result: ' + (e instanceof Error ? e.message : String(e)));
+        this.outputChannel.appendLine('Error parsing extract_structure result: ' + describeError(e));
       }
     }
 

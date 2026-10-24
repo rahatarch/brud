@@ -1,4 +1,5 @@
-import { ChildProcess } from 'child_process';
+import { spawn } from 'child_process';
+import type { ChildProcess } from 'child_process';
 import { ChunkCallback } from './types';
 
 interface RegisteredProcess {
@@ -25,7 +26,6 @@ function forceKillChild(child: ChildProcess): void {
   }
   if (process.platform === 'win32') {
     try {
-      const { spawn } = require('child_process');
       spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
     } catch {
       try { child.kill(); } catch {}

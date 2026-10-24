@@ -24,7 +24,6 @@ function forceKillProcess(child: ChildProcess): void {
   }
   if (process.platform === 'win32') {
     try {
-      const { spawn } = require('child_process');
       spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
     } catch {
       try { child.kill(); } catch {}
