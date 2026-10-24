@@ -3,6 +3,7 @@
 'use strict';
 
 const path = require('path');
+const webpack = require('webpack');
 
 //@ts-check
 /** @typedef {import('webpack').Configuration} WebpackConfig **/
@@ -18,7 +19,7 @@ const extensionConfig = {
     path: path.resolve(__dirname, 'dist'),
     filename: 'extension.js',
     libraryTarget: 'commonjs2',
-    clean: { keep: /webview[\\/]/ }
+    clean: { keep: /webview[\\/]|daemon[\\/]|^[\\/]?daemon[\\/]/ }
   },
   externals: {
     vscode: 'commonjs vscode' // the vscode-module is created on-the-fly and must be excluded. Add other modules that cannot be webpack'ed, 📖 -> https://webpack.js.org/configuration/externals/
@@ -41,6 +42,11 @@ const extensionConfig = {
       }
     ]
   },
+  plugins: [
+    new webpack.DefinePlugin({
+      __BRUD_EXTENSION_VERSION__: JSON.stringify(require('./package.json').version),
+    }),
+  ],
   devtool: 'nosources-source-map',
   infrastructureLogging: {
     level: "log", // enables logging required for problem matchers
