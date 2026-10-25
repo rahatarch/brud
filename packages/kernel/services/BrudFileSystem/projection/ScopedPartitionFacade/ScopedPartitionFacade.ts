@@ -1,5 +1,6 @@
 import type { DirectoryEntry, FileStats } from '../../../../drivers/contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
+import { assertNotProtectedPath } from '../../security/protectedPaths.js';
 import {
   PathTraversalViolationError,
   assertSafeRelativePath,
@@ -59,7 +60,9 @@ export class ScopedPartitionFacade implements IBrudFileSystem {
   }
 
   async writeAtomic(relativePath: string, data: Uint8Array | string): Promise<void> {
-    await this.service.writeAtomic(this.toScopedPath(relativePath), data);
+    const scopedPath = this.toMutableScopedPath(relativePath);
+
+    await this.service.writeAtomic(scopedPath, data);
   }
 
   async createFile(
@@ -67,11 +70,15 @@ export class ScopedPartitionFacade implements IBrudFileSystem {
     data: Uint8Array | string,
     options?: { overwrite?: boolean },
   ): Promise<void> {
-    await this.service.createFile(this.toScopedPath(relativePath), data, options);
+    const scopedPath = this.toMutableScopedPath(relativePath);
+
+    await this.service.createFile(scopedPath, data, options);
   }
 
   async deleteFile(relativePath: string): Promise<void> {
-    await this.service.deleteFile(this.toScopedPath(relativePath));
+    const scopedPath = this.toMutableScopedPath(relativePath);
+
+    await this.service.deleteFile(scopedPath);
   }
 
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
@@ -94,5 +101,13 @@ export class ScopedPartitionFacade implements IBrudFileSystem {
     }
 
     return `${this.scopePrefix}/${safePath}`;
+  }
+
+  private toMutableScopedPath(relativePath: string): string {
+    const scopedPath = this.toScopedPath(relativePath);
+
+    assertNotProtectedPath(scopedPath);
+
+    return scopedPath;
   }
 }

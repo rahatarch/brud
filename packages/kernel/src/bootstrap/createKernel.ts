@@ -1,6 +1,9 @@
 import { realpathSync } from 'node:fs';
 import type { IStorageDriver } from '../../drivers/contracts/index.js';
 import { createFileSystemDescriptor } from '../../services/BrudFileSystem/descriptor/descriptor.js';
+import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import type { IFileMutationJournal } from '../../services/BrudFileSystem/events/types.js';
+import { HISTORY_TRUSTED_SCOPE } from '../../services/BrudFileSystem/security/protectedPaths.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { createPluginManagerDescriptor } from '../../services/PluginManager/descriptor/index.js';
 import {
@@ -12,6 +15,7 @@ import {
   createUniversalHistoryDescriptor,
   type UniversalHistoryDescriptorOptions,
 } from '../../services/UniversalHistory/descriptor/index.js';
+import type { WorkspaceService } from '../../services/WorkspaceService/orchestrator/WorkspaceService.js';
 import {
   createWorkspaceDescriptor,
   type WorkspaceDescriptorOptions,
@@ -44,6 +48,14 @@ export interface CreateStandardKernelOptions {
    */
   readonly workspace?: WorkspaceDescriptorOptions;
   /**
+   * Mutation journal the filesystem publishes pre/post descriptors to.
+   *
+   * Phase 4 (`UniversalHistory`) binds a listener here. When omitted, the
+   * filesystem keeps a private journal that stays disabled until a listener
+   * subscribes through the service instance.
+   */
+  readonly mutationJournal?: IFileMutationJournal;
+  /**
    * Plugins registered into the plugin manager before the kernel boots.
    *
    * Registration is passive. The plugins are activated during the boot
@@ -55,12 +67,11 @@ export interface CreateStandardKernelOptions {
 /**
  * Canonicalizes the boot workspace root before any service is constructed.
  *
- * `WorkspaceService.primaryRoot` and the `BrudFileSystem` `PathValidator` root
- * must be the same string, otherwise a workspace reached through a symbolic
- * link yields two different notions of "inside". The boot root is therefore
- * resolved once here and handed to every descriptor through
- * `ServiceContext.workspaceRoot` instead of letting each service canonicalize
- * its own copy.
+ * `WorkspaceService.primaryRoot` and the filesystem's bound root must be the
+ * same string, otherwise a workspace reached through a symbolic link yields two
+ * different notions of "inside". The boot root is therefore resolved once here
+ * and handed to every descriptor through `ServiceContext.workspaceRoot`; the
+ * filesystem then binds to the workspace authority's canonical root.
  *
  * Roots that only exist inside a virtual driver (an in-memory root such as
  * `/workspace`) do not resolve on the host and keep their declared form; the
@@ -92,13 +103,51 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  */
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
   const kernel = new BrudKernel();
+  const storageDriver = options?.storageDriver ?? new DurableNodeStorageDriver();
   kernel.register(createSettingsDescriptor(options?.settings));
   kernel.register(createSettingsReaderDescriptor());
-  kernel.register(createWorkspaceDescriptor({
-    driver: options?.storageDriver,
+  // Capture the workspace instance built by its descriptor so the filesystem
+  // descriptor receives the same canonical authority instead of constructing
+  // a second, divergent path model. Topological order guarantees the workspace
+  // factory has run before the filesystem factory because the descriptor
+  // declares `WorkspaceToken` as a dependency.
+  const workspaceBinding: { instance?: WorkspaceService } = {};
+  const workspaceDriver = options?.workspace?.driver ?? storageDriver;
+  const workspaceDescriptor = createWorkspaceDescriptor({
     ...options?.workspace,
+    driver: workspaceDriver,
+  });
+
+  kernel.register({
+    ...workspaceDescriptor,
+    factory: (context, broker) => {
+      const instance = workspaceDescriptor.factory(context, broker);
+
+      workspaceBinding.instance = instance;
+
+      return instance;
+    },
+  });
+  kernel.register(createFileSystemDescriptor({
+    driver: workspaceDriver,
+    ...(options?.mutationJournal === undefined
+      ? {}
+      : { mutationJournal: options.mutationJournal }),
+    trustedWriteScopesByCaller: {
+      [HISTORY_TRUSTED_SCOPE.owner]: [HISTORY_TRUSTED_SCOPE.prefix],
+    },
+    workspace: () => {
+      const instance = workspaceBinding.instance;
+
+      if (instance === undefined) {
+        throw new Error(
+          'brud.core.workspace must be constructed before brud.core.filesystem',
+        );
+      }
+
+      return instance;
+    },
   }));
-  kernel.register(createFileSystemDescriptor({ driver: options?.storageDriver }));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
   kernel.register(createPluginManagerDescriptor({
     initialPlugins: options?.initialPlugins,

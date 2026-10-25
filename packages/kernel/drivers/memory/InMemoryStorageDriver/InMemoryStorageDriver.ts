@@ -9,6 +9,7 @@ import type {
 interface MemoryFile {
   data: Uint8Array;
   mtimeMs: number;
+  mode: number;
 }
 
 const ROOT = '/';
@@ -92,7 +93,68 @@ export class InMemoryStorageDriver implements IStorageDriver {
       throw new StorageError('EISDIR', 'write', path);
     }
     const bytes = typeof data === 'string' ? Uint8Array.from(Buffer.from(data, 'utf8')) : copyBytes(data);
-    this.files.set(path, { data: bytes, mtimeMs: Date.now() });
+    const existing = this.files.get(path);
+    this.files.set(path, {
+      data: bytes,
+      mtimeMs: Date.now(),
+      mode: existing?.mode ?? 0o644,
+    });
+  }
+
+  async writeFileExclusive(
+    absolutePath: string,
+    data: Uint8Array | string,
+    options?: { readonly mode?: number },
+  ): Promise<void> {
+    const path = normalizePath(absolutePath);
+    const parent = parentPath(path);
+
+    if (this.files.has(parent)) {
+      throw new StorageError('ENOTDIR', 'open', path);
+    }
+    if (!this.directories.has(parent)) {
+      throw new StorageError('ENOENT', 'open', path);
+    }
+    if (this.files.has(path) || this.directories.has(path)) {
+      throw new StorageError('EEXIST', 'open', path);
+    }
+
+    const bytes = typeof data === 'string' ? Uint8Array.from(Buffer.from(data, 'utf8')) : copyBytes(data);
+    this.files.set(path, {
+      data: bytes,
+      mtimeMs: Date.now(),
+      mode: options?.mode ?? 0o644,
+    });
+  }
+
+  async link(existingPath: string, newPath: string): Promise<void> {
+    const source = normalizePath(existingPath);
+    const target = normalizePath(newPath);
+
+    if (this.files.has(target) || this.directories.has(target)) {
+      throw new StorageError('EEXIST', 'link', target);
+    }
+
+    const sourceFile = this.files.get(source);
+    if (sourceFile === undefined) {
+      throw new StorageError('ENOENT', 'link', source);
+    }
+
+    const targetParent = parentPath(target);
+    if (!this.directories.has(targetParent) || this.files.has(targetParent)) {
+      throw new StorageError('ENOENT', 'link', target);
+    }
+
+    this.files.set(target, sourceFile);
+  }
+
+  async chmod(absolutePath: string, mode: number): Promise<void> {
+    const path = normalizePath(absolutePath);
+    const file = this.files.get(path);
+    if (file === undefined) {
+      throw new StorageError('ENOENT', 'chmod', path);
+    }
+    file.mode = mode & 0o777;
   }
 
   async deleteFile(absolutePath: string): Promise<void> {
@@ -243,6 +305,7 @@ export class InMemoryStorageDriver implements IStorageDriver {
         mtimeMs: file.mtimeMs,
         isFile: true,
         isDirectory: false,
+        mode: file.mode,
       };
     }
     const directoryMtime = this.directories.get(path);
@@ -252,6 +315,7 @@ export class InMemoryStorageDriver implements IStorageDriver {
         mtimeMs: directoryMtime,
         isFile: false,
         isDirectory: true,
+        mode: 0o755,
       };
     }
     return null;

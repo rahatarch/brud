@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { FileAlreadyExistsError } from '../operations/shared/errors.js';
-import { PathTraversalViolationError } from '../validation/PathValidator/PathValidator.js';
+import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import { BrudFileSystem } from './BrudFileSystem.js';
 
 class RenameFailingDriver extends InMemoryStorageDriver {
@@ -17,13 +17,13 @@ class RenameFailingDriver extends InMemoryStorageDriver {
 }
 
 function isTraversalViolation(error: unknown): boolean {
-  return error instanceof PathTraversalViolationError
-    && error.code === 'PATH_TRAVERSAL_DETECTED';
+  return error instanceof WorkspaceViolationError
+    && error.code === 'WORKSPACE_PATH_VIOLATION';
 }
 
 function isSymlinkEscape(error: unknown): boolean {
   return isTraversalViolation(error)
-    && error instanceof PathTraversalViolationError
+    && error instanceof WorkspaceViolationError
     && error.rule === 'SYMLINK_ESCAPE';
 }
 
@@ -147,7 +147,8 @@ describe('BrudFileSystem', () => {
     it('keeps the previous contents when the atomic rename fails', async () => {
       const driver = new RenameFailingDriver();
       const { service } = await createService(driver);
-      await service.createFile('reports/summary.txt', 'original');
+      await driver.mkdir('/workspace/reports', { recursive: true });
+      await driver.writeFile('/workspace/reports/summary.txt', 'original');
 
       await assert.rejects(
         service.writeAtomic('reports/summary.txt', 'replacement'),

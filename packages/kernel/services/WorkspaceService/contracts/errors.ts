@@ -24,7 +24,9 @@ export type WorkspaceViolationRule =
   | 'FILESYSTEM_ROOT'
   | 'UNKNOWN_ROOT'
   | 'UNVERIFIABLE_LINEAGE'
-  | 'INVALID_INPUT';
+  | 'INVALID_INPUT'
+  | 'PATH_VIOLATION'
+  | 'PROTECTED_PATH_DENIED';
 
 const CONTROL_CHARACTER_PATTERN = /[\x00-\x1F\x7F]/g;
 

@@ -1,4 +1,18 @@
-import { lstat, mkdir, readdir, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import {
+  chmod,
+  link,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  readFile,
+  realpath,
+  rename,
+  stat,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import type {
   DirectoryEntry,
   FileStats,
@@ -25,6 +39,36 @@ export class NodeStorageDriver implements IStorageDriver {
       return;
     }
     await writeFile(absolutePath, data);
+  }
+
+  async writeFileExclusive(
+    absolutePath: string,
+    data: Uint8Array | string,
+    options?: { readonly mode?: number },
+  ): Promise<void> {
+    const handle = await open(
+      absolutePath,
+      constants.O_CREAT | constants.O_EXCL | constants.O_WRONLY,
+      options?.mode ?? 0o644,
+    );
+
+    try {
+      if (typeof data === 'string') {
+        await handle.writeFile(data, 'utf8');
+      } else {
+        await handle.writeFile(data);
+      }
+    } finally {
+      await handle.close();
+    }
+  }
+
+  async link(existingPath: string, newPath: string): Promise<void> {
+    await link(existingPath, newPath);
+  }
+
+  async chmod(absolutePath: string, mode: number): Promise<void> {
+    await chmod(absolutePath, mode);
   }
 
   async deleteFile(absolutePath: string): Promise<void> {
@@ -56,6 +100,7 @@ export class NodeStorageDriver implements IStorageDriver {
         mtimeMs: stats.mtimeMs,
         isFile: stats.isFile(),
         isDirectory: stats.isDirectory(),
+        mode: stats.mode & 0o777,
       };
     } catch (error: unknown) {
       if (isErrnoException(error, 'ENOENT')) {

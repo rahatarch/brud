@@ -16,7 +16,7 @@ async function createFacade(): Promise<{
 }> {
   const service = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
   await service.initialize();
-  const facade = new ScopedPartitionFacade(service, '.brud/history');
+  const facade = new ScopedPartitionFacade(service, '.brud/work');
   return { facade, service };
 }
 
@@ -24,7 +24,7 @@ describe('ScopedPartitionFacade', () => {
   it('normalises the partition prefix', async () => {
     const { facade } = await createFacade();
 
-    assert.equal(facade.partitionPrefix, '.brud/history');
+    assert.equal(facade.partitionPrefix, '.brud/work');
     assert.equal(
       new ScopedPartitionFacade(facade, 'nested\\partition').partitionPrefix,
       'nested/partition',
@@ -36,7 +36,7 @@ describe('ScopedPartitionFacade', () => {
 
     await facade.createFile('sessions/one.json', '{"id":1}');
 
-    assert.equal(await service.readText('.brud/history/sessions/one.json'), '{"id":1}');
+    assert.equal(await service.readText('.brud/work/sessions/one.json'), '{"id":1}');
     assert.equal(await facade.readText('sessions/one.json'), '{"id":1}');
     assert.equal(await facade.exists('sessions/one.json'), true);
     assert.equal(await service.exists('sessions/one.json'), false);
@@ -59,7 +59,7 @@ describe('ScopedPartitionFacade', () => {
 
   it('maps the facade root to the partition directory', async () => {
     const { facade, service } = await createFacade();
-    await service.createFile('.brud/history/root.txt', 'root');
+    await service.createFile('.brud/work/root.txt', 'root');
 
     const entries = await facade.readDirectory('');
     assert.deepEqual(entries, [{ name: 'root.txt', isFile: true, isDirectory: false }]);

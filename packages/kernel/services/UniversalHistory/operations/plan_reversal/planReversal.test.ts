@@ -32,7 +32,7 @@ async function createHarness(context: TestContext): Promise<Harness> {
   const ledger = new SqliteLedger({ dbPath: ':memory:' });
   context.after(() => ledger.close());
 
-  const fileSystem = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
+  const fileSystem = new BrudFileSystem('/workspace', new InMemoryStorageDriver(), { trustedWriteScopes: ['.brud/history'] });
   await fileSystem.initialize();
 
   return { ledger, fileSystem };

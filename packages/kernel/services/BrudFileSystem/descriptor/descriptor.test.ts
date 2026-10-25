@@ -47,12 +47,15 @@ async function createInstance(): Promise<BrudFileSystem> {
 }
 
 describe('FileSystemDescriptor', () => {
-  it('describes a core service with no dependencies', () => {
+  it('describes a core service depending on the workspace and settings reader', () => {
     assert.equal(FileSystemDescriptor.token, FileSystemToken);
     assert.equal(FileSystemToken.id, 'brud.core.filesystem');
     assert.equal(FileSystemToken.description, 'Centralized atomic filesystem service');
     assert.equal(FileSystemDescriptor.tier, 'core');
-    assert.deepEqual(FileSystemDescriptor.dependencies, []);
+    assert.deepEqual(
+      FileSystemDescriptor.dependencies.map((token) => token.id),
+      ['brud.core.workspace', 'brud.core.settings.reader'],
+    );
   });
 
   it('constructs a BrudFileSystem from the workspace root', async () => {
@@ -98,12 +101,12 @@ describe('FileSystemDescriptor', () => {
 
     const projection = project(
       instance,
-      createCaller({ tier: 'core', partitionPrefix: '.brud/history' }),
+      createCaller({ tier: 'core', partitionPrefix: '.brud/work' }),
     );
 
     assert.ok(projection instanceof ScopedPartitionFacade);
     await projection.createFile('session.json', '{"ok":true}');
-    assert.equal(await instance.readText('.brud/history/session.json'), '{"ok":true}');
+    assert.equal(await instance.readText('.brud/work/session.json'), '{"ok":true}');
   });
 
   it('projects userland callers to a read-only facade', async () => {
@@ -125,11 +128,11 @@ describe('FileSystemDescriptor', () => {
     const project = FileSystemDescriptor.project;
     assert.ok(project);
     const instance = await createInstance();
-    await instance.createFile('.brud/history/scoped.txt', 'scoped');
+    await instance.createFile('.brud/work/scoped.txt', 'scoped');
 
     const projection = project(
       instance,
-      createCaller({ tier: 'userland', partitionPrefix: '.brud/history' }),
+      createCaller({ tier: 'userland', partitionPrefix: '.brud/work' }),
     );
 
     assert.ok(projection instanceof ReadOnlyFacade);

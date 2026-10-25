@@ -36,7 +36,7 @@ async function createHarness(context: TestContext): Promise<Harness> {
   context.after(() => ledger.close());
 
   const driver = new InMemoryStorageDriver();
-  const fileSystem = new BrudFileSystem('/workspace', driver);
+  const fileSystem = new BrudFileSystem('/workspace', driver, { trustedWriteScopes: ['.brud/history'] });
   await fileSystem.initialize();
 
   return { ledger, fileSystem, driver };

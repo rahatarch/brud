@@ -97,14 +97,14 @@ describe('createStandardKernel', () => {
 
     try {
       const scopedFs = kernel.requestAccess(
-        createCaller({ partitionPrefix: '.brud/history' }),
+        createCaller({ partitionPrefix: '.brud/work' }),
         FileSystemToken,
       );
 
       await scopedFs.writeAtomic('index.json', '{"version": 1}');
 
       assert.equal(
-        await driver.readText(`${WORKSPACE_ROOT}/.brud/history/index.json`),
+        await driver.readText(`${WORKSPACE_ROOT}/.brud/work/index.json`),
         '{"version": 1}',
       );
     } finally {

@@ -40,7 +40,7 @@ function bytesOf(value: Uint8Array): readonly number[] {
 
 async function createHarness(context: TestContext): Promise<Harness> {
   const driver = new InMemoryStorageDriver();
-  const fileSystem = new BrudFileSystem(WORKSPACE_ROOT, driver);
+  const fileSystem = new BrudFileSystem(WORKSPACE_ROOT, driver, { trustedWriteScopes: ['.brud/history'] });
   await fileSystem.initialize();
 
   const ledger = new SqliteLedger({ dbPath: ':memory:' });

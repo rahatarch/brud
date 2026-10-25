@@ -281,21 +281,26 @@ Two consequences matter for the rollout:
 
 #### 2.3.1 `BrudFileSystem` (`brud.core.filesystem`)
 
-**Contract:** `IBrudFileSystem` exposes `readFile`, `readText`, `writeAtomic`, `createFile`, `deleteFile`, `readDirectory`, `stat`, `exists`. Paths are **workspace-relative**; there is no absolute-path overload.
+**Contract:** `IBrudFileSystem` exposes `readFile`, `readText`, `writeAtomic`, `createFile`, `deleteFile`, `readDirectory`, `stat`, `exists`. Paths are **workspace-relative**. Absolute paths are accepted only when `WorkspaceService` proves they resolve strictly inside the canonical workspace root; every other absolute path is rejected.
 
-**Implementation:** `BrudFileSystem` is the sole consumer of `PathValidator` and the only path from userland to an `IStorageDriver`.
+**Implementation:** `BrudFileSystem` delegates all containment and canonicalization to `WorkspaceService.resolveContained` and is the only path from userland to an `IStorageDriver`. `PathValidator` remains the lexical guard inside `ScopedPartitionFacade`; it is not a substitute for workspace containment.
 
 | Mechanism | Implementation | Invariant | Evidence |
 |---|---|---|---|
-| Ambient validation | Every public method calls `validator.resolveContained(path, driver)` before touching the driver | No driver call without validation | `orchestrator/BrudFileSystem.ts` |
-| Lexical traversal defense | Segment-aware `..`, absolute, UNC, drive-qualified, null-byte, device-name, ADS, and trailing dot/space rules | Rejected with a typed `PathViolationRule` | `validation/PathValidator/PathValidator.ts`, `validation/PathValidator/errors.ts` |
-| Canonical containment | `resolveContained()` resolves the real root and the nearest existing real ancestor, then performs a segment-aware boundary check | Symlink escape is rejected; non-existent create targets still work | `PathValidator.resolveContained` (line 208) |
-| Atomic staged writes | `writeAtomic` writes `<path>.tmp`, then `rename`, and removes the temp file on failure | Readers never observe a partially written file | `operations/write_atomic/writeAtomic.ts` |
-| CAS blob staging | UniversalHistory commits content-addressed blobs through this service's `writeAtomic` into `.brud/history/blobs/<shard>/<sha256>` | Blob commits inherit atomic staging and per-path serialization; duplicate digests are idempotent | `UniversalHistory/operations/commit_session/commitSession.ts` |
-| Per-path serialization | `KeyedWriteMutex` around every mutating call | Two writers cannot interleave on the same absolute path | `concurrency/KeyedWriteMutex/KeyedWriteMutex.ts` |
-| Partition projection | `ScopedPartitionFacade` pins a safe relative prefix | History or a plugin can be confined to a subtree | `projection/ScopedPartitionFacade/` |
-| Read-only projection | `ReadOnlyFacade` throws `READ_ONLY_VIOLATION` on mutators | Userland callers cannot write through the facade | `projection/ReadOnlyFacade/` |
-| Driver portability | `IStorageDriver` implemented by Node and in-memory drivers; includes `realpath` and `lstat` | Same semantics without a Node import in the service | `drivers/contracts/IStorageDriver/` |
+| Ambient validation | Every public operation resolves the caller path through `WorkspaceService.resolveContained` before any driver call; generated staging paths are resolved again | No driver call without workspace validation | `orchestrator/BrudFileSystem.ts` |
+| Canonical containment | `WorkspaceService` resolves the real root and nearest existing real ancestor, then performs a segment-aware boundary and symlink check | Symlink escape is rejected; non-existent create targets still work | `services/WorkspaceService/` |
+| Root write rejection | `writeAtomic` / `createFile` reject `''`, `'.'`, and existing directories with `PATH_VIOLATION` or `CANNOT_WRITE_DIRECTORY` | Staging can never run against the workspace root | `orchestrator/BrudFileSystem.ts` |
+| Secure staging | Unique sibling name `.${basename}.${pid}.${uuid}.tmp`, created with `O_CREAT` + `O_EXCL` + `O_WRONLY`; a pre-existing file or symlink fails closed | Predictable `<path>.tmp` collisions and symlink following are impossible | `operations/shared/staging.ts`, `drivers/node/NodeStorageDriver/` |
+| Atomic staged writes | Staging file flushed, then `rename`; readers observe the old or the new complete file | No partial content is ever visible | `operations/write_atomic/writeAtomic.ts` |
+| Cross-process concurrency | Every writer has a private staging file; `rename` provides last-writer-wins without tearing. `createFile({ overwrite: false })` publishes with an atomic `link`, so exactly one creator wins | Concurrent instances and processes cannot corrupt or spuriously fail a shared target | `operations/write_atomic/writeAtomic.ts`, `operations/create_file/createFile.ts` |
+| Metadata preservation | Existing file `mode` is read before staging and applied with `chmod` before publication; new files default to `0o644` | Executable scripts stay executable across rewrites | `orchestrator/BrudFileSystem.ts`, `drivers/DurableNodeStorageDriver.ts` |
+| Mutation journal | Non-blocking journal: descriptors publish only after staging succeeds and before publication, and listeners run in a queued microtask. A post-rename `fsync` failure emits `committed_with_durability_warning` and throws an error with `committed: true` | No phantom history for failed writes; a slow or failing history sink cannot fail or delay a mutation; committed-but-not-durable is never reported as failure | `events/`, `orchestrator/BrudFileSystem.ts` |
+| Startup staging sweep | `initialize()` removes `.${basename}.${pid}.${uuid}.tmp` files whose owner is gone or older than one hour, reporting failures to the logger | Orphan temporary files cannot accumulate or be mistaken for user files | `operations/shared/staging.ts` |
+| Protected-path denylist (A10) | `.brud/settings.json`, `.brud/history/**`, and `.git/**` reject writes/deletes with `PROTECTED_PATH_DENIED`; only the history subsystem receives a `.brud/history` capability through its descriptor projection | Plugins cannot rewrite policy, history, or git metadata | `security/protectedPaths.ts`, `descriptor/descriptor.ts` |
+| Tier projection | Raw writable handles are reserved for `tier: 'core'`; kernel and userland callers receive a scoped or read-only projection. The descriptor declares an explicit `accessPolicy` | A lower-trust caller cannot obtain an unrestricted writable filesystem | `descriptor/descriptor.ts`, `projection/` |
+| CAS blob staging | UniversalHistory commits content-addressed blobs through this service's `writeAtomic` into `.brud/history/blobs/<shard>/<sha256>` using its granted history scope | Blob commits inherit atomic staging and per-path serialization; duplicate digests are idempotent | `UniversalHistory/operations/commit_session/commitSession.ts` |
+| Per-path serialization | `KeyedWriteMutex` around every mutating call | Two writers in one instance cannot interleave on the same absolute path | `concurrency/KeyedWriteMutex/KeyedWriteMutex.ts` |
+| Driver portability | `IStorageDriver` implemented by the durable Node driver and the in-memory driver; optional exclusive-create, link, chmod, and flush capabilities | The service stays Node-free while the production driver provides POSIX guarantees | `drivers/contracts/IStorageDriver/`, `drivers/DurableNodeStorageDriver.ts` |
 
 **Clarification of terminology.** `BrudFileSystem` provides atomic *staged* writes. Content-addressed (CAS) blob commits are a **UniversalHistory** feature that stages blobs through `writeAtomic` into `.brud/history/blobs/<shard>/<sha256>`. Do not describe `writeAtomic` as compare-and-swap: it is not.
 
@@ -304,7 +309,7 @@ Two consequences matter for the rollout:
 - No `rename`, `copy`, `createDirectory`, or `deleteDirectory` in `IBrudFileSystem`. Directory removal and moves are currently performed inside the legacy switch. `brud.tools.filesystem` cannot be extracted without these primitives (G-7).
 - Single root per instance. Multi-root identity belongs to WorkspaceService (Phase 2).
 - No canonicalization cache. The audit's A8 remains open; Phase 2 adds a batch-scoped cache.
-- The validator rejects absolute paths inside the root, which is a deliberate behaviour change from legacy core. The translation adapter owns compatibility (Phase 3).
+- Caller-declared `tier` and `callerId` remain forgeable until the kernel mints `ServiceContext` (audit A5). Projection is therefore defense in depth, not caller authentication.
 - No operation metadata on errors; the adapter supplies `operationKind` when mapping to legacy results.
 
 #### 2.3.2 `UniversalHistory` (`brud.core.universalHistory`)
@@ -1474,6 +1479,24 @@ flowchart TD
 - After Phase 5, leaf plugins (Phase 6) can be built in parallel by independent owners, provided each has its own fixtures and no shared package.
 - The history import bridge can be developed during Phase 8 and integrated at Phase 9.
 - Desktop shell work proceeds independently and consumes the protocol; it does not block on Phases 6–11.
+
+#### Phase 3 filesystem remediation parity (V-1–V-11)
+
+The Phase 3 audit findings are closed as follows. Each row maps to a regression suite under `packages/kernel/services/BrudFileSystem/__tests__/`.
+
+| Finding | Closed by | Regression |
+|---|---|---|
+| V-1 predictable staging and symlink following | UUID/pid staging name, `O_EXCL` creation, containment re-resolution | `stagingSecurity.test.ts` |
+| V-2 staging symlink traversal | Exclusive create fails closed on any existing entry, including dangling symlinks | `stagingSecurity.test.ts` |
+| V-3 root/directory writes | `PATH_VIOLATION` for `''`/`'.'`; `CANNOT_WRITE_DIRECTORY` for directories | `rootAndMetadata.test.ts` |
+| V-4 user-file destruction | Unique staging names never collide with a legitimate `<name>.tmp` | `stagingSecurity.test.ts` |
+| V-5 cross-process clobbering | Per-writer staging plus atomic `rename`; create-only uses atomic `link` | `stagingSecurity.test.ts` |
+| V-6 premature journal events | `before` publishes only after staging/flush and prerequisite validation | `journalAtomicity.test.ts` |
+| V-7 commit/fsync split-brain | `committed_with_durability_warning` event and error with `committed: true` | `journalAtomicity.test.ts` |
+| V-8 orphan staging files | Idempotent startup sweep for dead-PID or one-hour-old staging files | `journalAtomicity.test.ts` |
+| V-9 tier projection and A10 denylist | Explicit `accessPolicy`, core-only raw handles, protected-path capability | `protectedPaths.test.ts` |
+| V-10 mode loss | Existing mode read via `stat` and applied with `chmod` before publication | `rootAndMetadata.test.ts` |
+| V-11 spec drift | This section and §2.3.1 document the implemented delegation and staging algorithm | documentation review |
 
 ### 5.4 Cutover Strategy
 
