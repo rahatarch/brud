@@ -6,7 +6,8 @@ export type PluginErrorCode =
   | 'PLUGIN_DUPLICATE'
   | 'PLUGIN_DEPENDENCY'
   | 'PLUGIN_PERMISSION'
-  | 'PLUGIN_LIFECYCLE';
+  | 'PLUGIN_LIFECYCLE'
+  | 'PLUGIN_MANIFEST';
 
 /**
  * Base class for every plugin domain failure.
