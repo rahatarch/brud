@@ -296,13 +296,30 @@ Two consequences matter for the rollout:
 | Metadata preservation | Existing file `mode` is read before staging and applied with `chmod` before publication; new files default to `0o644` | Executable scripts stay executable across rewrites | `orchestrator/BrudFileSystem.ts`, `drivers/DurableNodeStorageDriver.ts` |
 | Mutation journal | Non-blocking journal: descriptors publish only after staging succeeds and before publication, and listeners run in a queued microtask. A post-rename `fsync` failure emits `committed_with_durability_warning` and throws an error with `committed: true` | No phantom history for failed writes; a slow or failing history sink cannot fail or delay a mutation; committed-but-not-durable is never reported as failure | `events/`, `orchestrator/BrudFileSystem.ts` |
 | Startup staging sweep | `initialize()` removes `.${basename}.${pid}.${uuid}.tmp` files whose owner is gone or older than one hour, reporting failures to the logger | Orphan temporary files cannot accumulate or be mistaken for user files | `operations/shared/staging.ts` |
-| Protected-path denylist (A10) | `.brud/settings.json`, `.brud/history/**`, and `.git/**` reject writes/deletes with `PROTECTED_PATH_DENIED`; only the history subsystem receives a `.brud/history` capability through its descriptor projection | Plugins cannot rewrite policy, history, or git metadata | `security/protectedPaths.ts`, `descriptor/descriptor.ts` |
+| Protected-path denylist (A10) | The A10 denylist gates **write, mutate, and delete** operations on `.brud/settings.json`, `.brud/history/**`, and `.git/**`; every such attempt fails with `PROTECTED_PATH_DENIED`. Only the history subsystem receives a `.brud/history` write capability through its descriptor projection. **Reading history entries is not denied by A10**: it is governed by the `HistoryToken` access policy (`AccessPolicy` + tier projection), which returns the full service to `tier: 'core'` callers and a read-only facade to everyone else | Plugins cannot rewrite policy, history, or git metadata, while history reads remain available through the audited contract rather than the raw filesystem | `security/protectedPaths.ts`, `descriptor/descriptor.ts`, `UniversalHistory/descriptor/HistoryDescriptor.ts` |
 | Tier projection | Raw writable handles are reserved for `tier: 'core'`; kernel and userland callers receive a scoped or read-only projection. The descriptor declares an explicit `accessPolicy` | A lower-trust caller cannot obtain an unrestricted writable filesystem | `descriptor/descriptor.ts`, `projection/` |
-| CAS blob staging | UniversalHistory commits content-addressed blobs through this service's `writeAtomic` into `.brud/history/blobs/<shard>/<sha256>` using its granted history scope | Blob commits inherit atomic staging and per-path serialization; duplicate digests are idempotent | `UniversalHistory/operations/commit_session/commitSession.ts` |
+| CAS blob staging | UniversalHistory commits content-addressed blobs through this service's `writeAtomic` into the blob store under `.brud/history/blobs/` using its granted history scope (see the layout note below) | Blob commits inherit atomic staging and per-path serialization; duplicate digests are idempotent | `UniversalHistory/operations/commit_session/commitSession.ts`, `UniversalHistory/storage/SqliteHistoryStorage.ts` |
 | Per-path serialization | `KeyedWriteMutex` around every mutating call | Two writers in one instance cannot interleave on the same absolute path | `concurrency/KeyedWriteMutex/KeyedWriteMutex.ts` |
 | Driver portability | `IStorageDriver` implemented by the durable Node driver and the in-memory driver; optional exclusive-create, link, chmod, and flush capabilities | The service stays Node-free while the production driver provides POSIX guarantees | `drivers/contracts/IStorageDriver/`, `drivers/DurableNodeStorageDriver.ts` |
 
-**Clarification of terminology.** `BrudFileSystem` provides atomic *staged* writes. Content-addressed (CAS) blob commits are a **UniversalHistory** feature that stages blobs through `writeAtomic` into `.brud/history/blobs/<shard>/<sha256>`. Do not describe `writeAtomic` as compare-and-swap: it is not.
+**Clarification of terminology.** `BrudFileSystem` provides atomic *staged* writes. Content-addressed (CAS) blob commits are a **UniversalHistory** feature that stages blobs through `writeAtomic` into the history blob store. Do not describe `writeAtomic` as compare-and-swap: it is not.
+
+**History blob layout and payload threshold.** The journal-driven ledger (`brud.core.history`) stores payloads under a flat, content-addressed layout:
+
+```
+.brud/history/
+  history.db            # SQLite ledger (WAL, busy_timeout = 5000 ms)
+  blobs/<sha256>        # offloaded payload, named by its lowercase hex digest
+```
+
+The decision is size-based, not kind-based:
+
+| Payload size | Storage | Ledger reference |
+|---|---|---|
+| `<= 65,536` bytes (64 KiB) | Inlined in `mutations.inline_data` / `contents.inline_data` | `blob_ref` is `NULL` |
+| `> 65,536` bytes (64 KiB) | Offloaded to `.brud/history/blobs/<sha256>` | `blob_ref = '.brud/history/blobs/<sha256>'` |
+
+The threshold is exported as `INLINE_SNAPSHOT_LIMIT_BYTES`. Blob bytes are re-hashed on every read; a digest mismatch raises `BlobIntegrityError` (`BLOB_DIGEST_MISMATCH`) and the bytes are never replayed into the workspace. The legacy session ledger (`SqliteLedger` / `commitSession`) uses a sharded `<first-2>/<sha256>` layout; the journal-driven ledger documented here is flat.
 
 **Known limits (target for later phases):**
 
@@ -322,7 +339,7 @@ Two consequences matter for the rollout:
 |---|---|---|
 | Durable state ledger | SQLite at `.brud/history/ledger.db`; WAL where supported; foreign keys ON; `synchronous = NORMAL` | `storage/SqliteLedger/schema.ts` |
 | ACID session commit | `BEGIN IMMEDIATE` transaction around session status and all file rows; rollback on error | `storage/SqliteLedger/SqliteLedger.ts` |
-| CAS blob store | SHA-256 content addressing at `.brud/history/blobs/<first-2>/<sha256>`; digest verified before write | `operations/commit_session/commitSession.ts` |
+| CAS blob store | SHA-256 content addressing at `.brud/history/blobs/<first-2>/<sha256>` for the session ledger, `.brud/history/blobs/<sha256>` for the journal ledger; digest verified before write and re-verified on every read | `operations/commit_session/commitSession.ts`, `storage/SqliteHistoryStorage.ts` |
 | Baseline capture | Declared targets are captured before mutation; digest + bytes/text; no whole-tree snapshot | `operations/capture_baseline/` |
 | Forward deltas | Only changed targets produce rows; binary payloads carry a blob digest | `operations/compute_delta/` |
 | Reversal planning | Pure plan with conflict detection against current SHA-256; `executeReversal` applies it | `operations/plan_reversal/`, `operations/execute_reversal/` |
@@ -338,6 +355,18 @@ Two consequences matter for the rollout:
 - No read-only projection. Any caller that can resolve the token can mutate (G-8).
 - No abort-with-rollback path. `commitSession('aborted')` finalizes without file rows, so a partially applied batch has no ledger-based reversal plan (G-17).
 - Legacy JSON sessions are not imported. Phase 9 adds a one-way importer.
+
+**Journal ledger hardening (journal-driven `brud.core.history`).** The Phase 4 reversal engine adds the following guarantees to the store above:
+
+| Property | Implementation | Evidence |
+|---|---|---|
+| Content-addressed integrity | Every blob read re-computes SHA-256 and fails with `BlobIntegrityError` on mismatch; inline payloads are re-hashed before replay | `storage/SqliteHistoryStorage.ts` |
+| All-or-nothing reversal | Undo, redo, and checkpoint rollback pre-flight **every** pre-image in the batch before writing; a missing or corrupted payload returns `payload_missing` / `payload_corrupt` with zero disk writes | `engine/RollbackEngine.ts` |
+| Frozen cursor on failure | `undo_cursor` advances only when a batch ends `success`; `partial`, `drift_aborted`, `payload_*` leave it untouched | `engine/RollbackEngine.ts` |
+| Atomic ingestion | Content insert, redo-tail truncation, mutation insert, and cursor upsert share one `BEGIN IMMEDIATE` transaction | `storage/SqliteHistoryStorage.ts` |
+| Multi-process safety | `PRAGMA busy_timeout = 5000` so concurrent writers queue instead of failing with `database is locked` | `storage/SqliteHistoryStorage.ts` |
+| Degraded read-only boot | `SQLITE_READONLY` / `EACCES` / `EPERM` during open or WAL setup degrades the service: boot succeeds, ingestion is a no-op, reversals throw `HistoryDegradedError` | `storage/SqliteHistoryStorage.ts`, `descriptor/HistoryDescriptor.ts` |
+| Ingestion telemetry | Background journal failures are forwarded to `context.logger?.warn(...)` instead of being swallowed | `listener/JournalSubscriber.ts`, `descriptor/HistoryDescriptor.ts` |
 
 #### 2.3.3 `PluginManager` (`PluginManager`)
 
@@ -361,6 +390,7 @@ The `OFFICIAL_PLUGIN_BRAND` symbol is declared only in kernel source and is abse
 - `IPluginContext` exposes only `getFileSystem()` and `getUniversalHistory()` (G-5, G-6).
 - Activation occurs during `BOOTING`, before broker grants (G-9).
 - The logger writes to `console`, which is a host leak; Phase 5 routes it to a telemetry sink.
+- Plugin history access resolves the legacy `brud.core.universalHistory` token, not the Phase 4 `brud.core.history` audit surface. The A10 denylist gates only **write, mutate, and delete** operations on `.brud/history/**` (`PROTECTED_PATH_DENIED`); it does **not** gate reads. Entry-level reads of the audit surface are governed by the `HistoryToken` access policy (core tier receives the service, every other tier receives `ReadOnlyHistoryFacade`). Plugins must never read `history.db` or the blob files through raw filesystem reads.
 - Capability projection is not process isolation. See §1.6.
 - No on-disk discovery, lazy module loading, or persistence of failure state across restarts.
 - History facade is the full service; there is no read-only projection (G-8).
@@ -377,6 +407,8 @@ The `OFFICIAL_PLUGIN_BRAND` symbol is declared only in kernel source and is abse
 | Plugin activation | During `PluginManager.initialize()` while `BOOTING` | After `RUNNING` via an explicit post-boot hook |
 | Shutdown | Reverse order, all disposals attempted, first error surfaced | Same, plus plugin deactivation before filesystem disposal (already enforced by tests) |
 | Workspace root | Passed to `boot()`; used by descriptors | Canonicalized by WorkspaceService before descriptors consume it |
+| History degraded boot | Read-only `.brud/history` degrades the journal ledger: boot succeeds, ingestion is a no-op, reversals throw `HistoryDegradedError`, and a `HISTORY_DEGRADED` warning reaches the logger | Same |
+| Diagnostic sink | `KernelBootOptions.logger` / `CreateStandardKernelOptions.logger` is forwarded to `ServiceContext.logger`; history ingestion failures warn through it (console fallback) | Phase 5 telemetry sink |
 
 The bootstrap's deterministic order and reverse shutdown are already correct and must not be weakened.
 

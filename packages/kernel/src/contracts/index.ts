@@ -8,7 +8,12 @@ export {
   AllowlistViolationError,
 } from './policy.js';
 
-export type { ServiceTier, ServiceContext, IServiceLifecycle } from './lifecycle.js';
+export type {
+  ServiceTier,
+  ServiceContext,
+  IServiceLifecycle,
+  KernelLogger,
+} from './lifecycle.js';
 
 export type { ServiceInfo, IKernelAccessBroker } from './accessBroker.js';
 

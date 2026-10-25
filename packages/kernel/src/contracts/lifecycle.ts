@@ -6,6 +6,17 @@ import type { IKernelAccessBroker } from './accessBroker.js';
 export type ServiceTier = 'kernel' | 'core' | 'userland';
 
 /**
+ * Minimal diagnostic logger surface a kernel can inject into services.
+ *
+ * Services treat it as an optional sink: the kernel supplies it during boot,
+ * but standalone construction (tests, adapters) may omit it.
+ */
+export interface KernelLogger {
+  /** Emits a structured, non-fatal diagnostic warning. */
+  warn(message: string, meta?: Record<string, unknown>): void;
+}
+
+/**
  * Ambient context supplied to a service at construction and access time.
  */
 export interface ServiceContext {
@@ -20,6 +31,9 @@ export interface ServiceContext {
 
   /** Optional partition namespace isolating service state. */
   readonly partitionPrefix?: string;
+
+  /** Kernel diagnostic sink. Absent in standalone construction. */
+  readonly logger?: KernelLogger;
 }
 
 /**

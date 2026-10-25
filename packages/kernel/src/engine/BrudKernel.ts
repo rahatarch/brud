@@ -88,6 +88,7 @@ export class BrudKernel implements IBrudKernel {
           callerId: 'kernel',
           tier: descriptor.tier,
           workspaceRoot: options.workspaceRoot,
+          ...(options.logger === undefined ? {} : { logger: options.logger }),
         };
 
         const instance = descriptor.factory(context, this.accessBroker);

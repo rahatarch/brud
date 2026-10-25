@@ -27,7 +27,15 @@ import {
   type WorkspaceDescriptorOptions,
 } from '../../services/WorkspaceService/descriptor/descriptor.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
+import type { KernelLogger } from '../contracts/lifecycle.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
+
+/** Fallback diagnostic sink used when the host does not supply one. */
+const DEFAULT_KERNEL_LOGGER: KernelLogger = {
+  warn: (message, meta) => {
+    console.warn(message, meta ?? {});
+  },
+};
 
 /**
  * Options accepted by {@link createStandardKernel}.
@@ -77,6 +85,12 @@ export interface CreateStandardKernelOptions {
    * sequence, after the filesystem and history services have initialized.
    */
   readonly initialPlugins?: readonly IBrudPlugin[];
+  /**
+   * Kernel diagnostic sink forwarded to every service context. Defaults to a
+   * console-backed sink so background failures (history ingestion, degraded
+   * read-only storage) are never fully silent.
+   */
+  readonly logger?: KernelLogger;
 }
 
 /**
@@ -183,6 +197,7 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
     boot({
       ...bootOptions,
       workspaceRoot: canonicalizeBootRoot(bootOptions.workspaceRoot),
+      logger: bootOptions.logger ?? options?.logger ?? DEFAULT_KERNEL_LOGGER,
     });
 
   return kernel;

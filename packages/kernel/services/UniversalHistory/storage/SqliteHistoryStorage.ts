@@ -13,7 +13,7 @@ import type {
   HistoryQueryFilter,
 } from '../contracts/models.js';
 import { UNDO_CURSOR_KEY, HISTORY_SCHEMA_SQL } from './historySchema.js';
-import { isSha256Hex } from './hash.js';
+import { isSha256Hex, sha256Hex } from './hash.js';
 
 /** Path segment that opens an anonymous in-memory database. */
 export const IN_MEMORY_HISTORY_DB_PATH = ':memory:';
@@ -23,6 +23,23 @@ export const INLINE_SNAPSHOT_LIMIT_BYTES = 64 * 1024;
 
 /** Default workspace-relative prefix used for blob references. */
 export const DEFAULT_BLOB_REF_PREFIX = '.brud/history/blobs';
+
+/**
+ * Milliseconds a SQLite statement waits for a competing writer's lock.
+ *
+ * Node's built-in driver does not expose a connection-level busy handler, so
+ * the wait window is configured through the synchronous `busy_timeout`
+ * pragma. Multi-process writers therefore queue instead of failing with
+ * `SQLITE_BUSY`.
+ */
+export const HISTORY_BUSY_TIMEOUT_MS = 5000;
+
+/** SQLite primary result codes that mean "storage cannot be written". */
+const SQLITE_READONLY_CODE = 8;
+const SQLITE_PERM_CODE = 3;
+const SQLITE_CANTOPEN_CODE = 14;
+
+const READ_ONLY_FS_ERROR_CODES: readonly string[] = ['EACCES', 'EPERM', 'EROFS'];
 
 const OPERATION_KINDS: readonly HistoryOperationKind[] = ['write', 'unlink', 'mkdir'];
 
@@ -48,6 +65,98 @@ export class HistoryStorageClosedError extends Error {
     super('The universal history storage connection is closed');
     this.name = 'HistoryStorageClosedError';
   }
+}
+
+/** Digest-verification details attached to {@link BlobIntegrityError}. */
+export interface BlobIntegrityDetails {
+  /** Workspace-relative blob reference recorded in the ledger. */
+  readonly blobRef: string;
+
+  /** Digest the blob is addressed by. */
+  readonly expectedHash: string;
+
+  /** Digest actually computed from the bytes on disk. */
+  readonly actualHash: string;
+}
+
+/**
+ * Thrown when historical bytes no longer match their content address.
+ *
+ * A mismatch means the payload was truncated, tampered with, or replaced
+ * after ingestion. The bytes are never returned to callers, so a corrupted
+ * pre-image can never be written back into the workspace.
+ */
+export class BlobIntegrityError extends Error {
+  readonly code: 'BLOB_DIGEST_MISMATCH';
+
+  readonly blobRef: string;
+
+  readonly expectedHash: string;
+
+  readonly actualHash: string;
+
+  constructor(code: 'BLOB_DIGEST_MISMATCH', details: BlobIntegrityDetails) {
+    super(
+      `Blob digest mismatch for "${details.blobRef}": `
+        + `expected ${details.expectedHash}, computed ${details.actualHash}`,
+    );
+    this.name = 'BlobIntegrityError';
+    this.code = code;
+    this.blobRef = details.blobRef;
+    this.expectedHash = details.expectedHash;
+    this.actualHash = details.actualHash;
+  }
+}
+
+/** Why the history storage runs without write access. */
+export type HistoryDegradedReason = 'READ_ONLY_STORAGE';
+
+/**
+ * Thrown when a mutating history operation is attempted while the ledger is
+ * running in degraded, read-only mode.
+ */
+export class HistoryDegradedError extends Error {
+  readonly code = 'HISTORY_DEGRADED';
+
+  readonly reason: HistoryDegradedReason;
+
+  constructor(reason: HistoryDegradedReason = 'READ_ONLY_STORAGE') {
+    super(
+      'Universal history is running in degraded read-only mode; '
+        + 'rollback and ingestion mutations are unavailable',
+    );
+    this.name = 'HistoryDegradedError';
+    this.reason = reason;
+  }
+}
+
+function isReadOnlyStorageError(error: unknown): boolean {
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const code = (error as NodeJS.ErrnoException).code;
+
+  if (typeof code === 'string' && READ_ONLY_FS_ERROR_CODES.includes(code)) {
+    return true;
+  }
+
+  const errcode = (error as { errcode?: unknown }).errcode;
+
+  if (typeof errcode === 'number') {
+    const primary = errcode & 0xff;
+
+    if (
+      primary === SQLITE_READONLY_CODE
+      || primary === SQLITE_PERM_CODE
+      || primary === SQLITE_CANTOPEN_CODE
+    ) {
+      return true;
+    }
+  }
+
+  return /readonly database|read-only database|unable to open database file|permission denied/iu
+    .test(error.message);
 }
 
 /** Normalizes and validates a workspace-relative path. */
@@ -229,7 +338,7 @@ export interface SqliteHistoryStorageOptions {
  * concurrent mutations cannot interleave statements on one connection.
  */
 export class SqliteHistoryStorage {
-  private readonly db: DatabaseSync;
+  private db: DatabaseSync | undefined;
 
   private readonly statements = new Map<string, StatementSync>();
 
@@ -239,41 +348,83 @@ export class SqliteHistoryStorage {
 
   private readonly inlineThresholdBytes: number;
 
-  private readonly journalMode: string;
+  private journalMode = 'unknown';
+
+  private degraded: HistoryDegradedReason | undefined;
+
+  private inTransaction = false;
 
   private closed = false;
 
   constructor(options: SqliteHistoryStorageOptions) {
     const { dbPath } = options;
 
-    if (dbPath !== IN_MEMORY_HISTORY_DB_PATH) {
-      if (!isAbsolute(dbPath)) {
-        throw new RangeError(
-          `History database path must be ":memory:" or an absolute path: "${dbPath}"`,
-        );
-      }
-
-      mkdirSync(dirname(dbPath), { recursive: true });
-    }
-
     this.blobDir = options.blobDir;
     this.blobRefPrefix = (options.blobRefPrefix ?? DEFAULT_BLOB_REF_PREFIX)
       .replace(TRAILING_SEPARATOR_PATTERN, '');
     this.inlineThresholdBytes = options.inlineThresholdBytes ?? INLINE_SNAPSHOT_LIMIT_BYTES;
-    this.db = new DatabaseSync(dbPath, { enableForeignKeyConstraints: true });
 
     try {
-      this.db.exec(HISTORY_SCHEMA_SQL);
-      this.journalMode = this.readJournalMode();
+      if (dbPath !== IN_MEMORY_HISTORY_DB_PATH) {
+        if (!isAbsolute(dbPath)) {
+          throw new RangeError(
+            `History database path must be ":memory:" or an absolute path: "${dbPath}"`,
+          );
+        }
+
+        mkdirSync(dirname(dbPath), { recursive: true });
+      }
+
+      const db = new DatabaseSync(dbPath, { enableForeignKeyConstraints: true });
+
+      try {
+        db.exec(`PRAGMA busy_timeout = ${HISTORY_BUSY_TIMEOUT_MS}`);
+        db.exec(HISTORY_SCHEMA_SQL);
+        this.journalMode = this.applyJournalMode(db);
+      } catch (error) {
+        db.close();
+        throw error;
+      }
+
+      this.db = db;
     } catch (error) {
-      this.db.close();
-      throw error;
+      if (!isReadOnlyStorageError(error)) {
+        throw error;
+      }
+
+      // A ledger that cannot be written must still not take the kernel down.
+      // In degraded mode reads report an empty ledger, ingestion becomes a
+      // safe no-op, and reversals fail loudly instead of half-applying a
+      // batch. Degrading is a state transition, never a boot failure.
+      this.degraded = 'READ_ONLY_STORAGE';
+      this.db = undefined;
+      this.journalMode = 'unknown';
     }
+  }
+
+  /** Whether the ledger was opened without write access. */
+  get isDegraded(): boolean {
+    return this.degraded !== undefined;
+  }
+
+  /** Reason the ledger is degraded, or `undefined` when fully writable. */
+  get degradedReason(): HistoryDegradedReason | undefined {
+    return this.degraded;
   }
 
   /** Journal mode reported by SQLite (`wal` for file-backed databases). */
   get journalModeValue(): string {
     return this.journalMode;
+  }
+
+  /**
+   * Throws {@link HistoryDegradedError} when the ledger cannot be mutated.
+   *
+   * Rollback planning calls this before reading any payload so a degraded
+   * ledger never starts a batch it cannot persist.
+   */
+  assertWritable(): void {
+    this.assertOpen();
   }
 
   /** Absolute blob directory, when blobs are enabled. */
@@ -287,6 +438,10 @@ export class SqliteHistoryStorage {
     createdAt: number,
     metadata?: Record<string, unknown>,
   ): void {
+    if (this.isDegraded) {
+      return;
+    }
+
     this.assertOpen();
     this.prepare(
       'INSERT OR IGNORE INTO sessions (session_id, created_at, metadata) VALUES (?, ?, ?)',
@@ -299,6 +454,10 @@ export class SqliteHistoryStorage {
     createdAt: number,
     metadata?: Record<string, unknown>,
   ): void {
+    if (this.isDegraded) {
+      return;
+    }
+
     this.assertOpen();
     this.prepare(
       `INSERT INTO sessions (session_id, created_at, metadata) VALUES (?, ?, ?)
@@ -314,13 +473,29 @@ export class SqliteHistoryStorage {
    * standard linear undo model.
    */
   async recordMutation(input: RecordMutationInput): Promise<MutationRecord> {
-    this.assertOpen();
-
     const targetPath = toHistoryRelativePath(input.targetPath);
 
     if (!isOperationKind(input.operationKind)) {
       throw new TypeError(`Unsupported history operation kind: "${input.operationKind}"`);
     }
+
+    if (this.isDegraded) {
+      return {
+        mutationId: input.mutationId,
+        sessionId: input.sessionId,
+        timestamp: input.timestamp,
+        targetPath,
+        operationKind: input.operationKind,
+        previousHash: input.previousHash,
+        updatedHash: input.updatedHash,
+        blobRef: null,
+        metadata: input.metadata ?? {},
+        seq: 0,
+        inlineData: null,
+      };
+    }
+
+    this.assertOpen();
 
     const existing = this.getMutation(input.mutationId);
 
@@ -328,65 +503,85 @@ export class SqliteHistoryStorage {
       return existing;
     }
 
-    this.ensureSession(input.sessionId, input.timestamp);
-
-    let inlineData: Buffer | null = null;
-    let blobRef: string | null = null;
+    // Blob placement is filesystem work, so it happens before the SQLite
+    // transaction opens. Content-addressed writes are idempotent, so a crash
+    // between the blob write and the commit only leaves an unreferenced blob.
+    let stored: StoredContent | null = null;
 
     if (input.content !== undefined && input.updatedHash.length > 0) {
-      const stored = await this.storeContent(input.updatedHash, input.content);
-
-      inlineData = stored.inlineData;
-      blobRef = stored.blobRef;
+      stored = await this.prepareContentRecord(input.updatedHash, input.content);
     }
 
-    const cursor = this.getCursor();
-    const maxSeq = this.maxSequence();
+    // Replacing a mutation after an undo invalidates the redo tail. The
+    // truncation, the new mutation row, and the cursor move commit together so
+    // a crash window can never leave the cursor pointing past `max(seq)`.
+    return this.transaction(() => {
+      // Re-check under the write lock: another process may have recorded the
+      // same journal mutation between the fast-path lookup and `BEGIN`.
+      const concurrent = this.getMutation(input.mutationId);
 
-    if (cursor < maxSeq) {
-      this.prepare('DELETE FROM mutations WHERE seq > ?').run(cursor);
-    }
+      if (concurrent !== undefined) {
+        return concurrent;
+      }
 
-    const seq = this.maxSequence() + 1;
+      this.ensureSession(input.sessionId, input.timestamp);
 
-    this.prepare(
-      `INSERT INTO mutations (
-         mutation_id, session_id, timestamp, path, operation_kind,
-         previous_hash, updated_hash, inline_data, blob_ref, metadata, seq
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(
-      input.mutationId,
-      input.sessionId,
-      input.timestamp,
-      targetPath,
-      input.operationKind,
-      input.previousHash,
-      input.updatedHash,
-      inlineData,
-      blobRef,
-      serializeMetadata(input.metadata),
-      seq,
-    );
+      if (stored !== null) {
+        this.insertContentRecord(stored);
+      }
 
-    this.setCursor(seq);
+      const cursor = this.getCursor();
+      const maxSeq = this.maxSequence();
 
-    return {
-      mutationId: input.mutationId,
-      sessionId: input.sessionId,
-      timestamp: input.timestamp,
-      targetPath,
-      operationKind: input.operationKind,
-      previousHash: input.previousHash,
-      updatedHash: input.updatedHash,
-      blobRef,
-      metadata: input.metadata ?? {},
-      seq,
-      inlineData,
-    };
+      if (cursor < maxSeq) {
+        this.prepare('DELETE FROM mutations WHERE seq > ?').run(cursor);
+      }
+
+      const seq = this.maxSequence() + 1;
+
+      this.prepare(
+        `INSERT INTO mutations (
+           mutation_id, session_id, timestamp, path, operation_kind,
+           previous_hash, updated_hash, inline_data, blob_ref, metadata, seq
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).run(
+        input.mutationId,
+        input.sessionId,
+        input.timestamp,
+        targetPath,
+        input.operationKind,
+        input.previousHash,
+        input.updatedHash,
+        stored?.inlineData ?? null,
+        stored?.blobRef ?? null,
+        serializeMetadata(input.metadata),
+        seq,
+      );
+
+      this.setCursor(seq);
+
+      return {
+        mutationId: input.mutationId,
+        sessionId: input.sessionId,
+        timestamp: input.timestamp,
+        targetPath,
+        operationKind: input.operationKind,
+        previousHash: input.previousHash,
+        updatedHash: input.updatedHash,
+        blobRef: stored?.blobRef ?? null,
+        metadata: input.metadata ?? {},
+        seq,
+        inlineData: stored?.inlineData ?? null,
+      };
+    });
   }
 
   /** Returns the snapshot for a digest, or `null` when it is unknown. */
   async getContent(sha256: string): Promise<Uint8Array | null> {
+    if (this.isDegraded) {
+      return null;
+    }
+
     this.assertOpen();
 
     if (!isSha256Hex(sha256)) {
@@ -424,6 +619,10 @@ export class SqliteHistoryStorage {
 
   /** Reports whether a snapshot for this digest is already stored. */
   hasContent(sha256: string): boolean {
+    if (this.isDegraded) {
+      return false;
+    }
+
     this.assertOpen();
 
     if (!isSha256Hex(sha256)) {
@@ -443,6 +642,10 @@ export class SqliteHistoryStorage {
 
   /** Returns the durable content record for a digest, or `null`. */
   getContentRecord(sha256: string): StoredContent | null {
+    if (this.isDegraded) {
+      return null;
+    }
+
     this.assertOpen();
 
     const row = this.prepare(
@@ -463,17 +666,39 @@ export class SqliteHistoryStorage {
 
   /** Stores a snapshot without creating a mutation entry. */
   async putContent(sha256: string, content: Uint8Array): Promise<StoredContent> {
+    if (this.isDegraded) {
+      const bytes = Buffer.from(Uint8Array.from(content));
+
+      return { sha256, size: bytes.byteLength, inlineData: bytes, blobRef: null };
+    }
+
     this.assertOpen();
 
     if (!isSha256Hex(sha256)) {
       throw new TypeError(`Invalid SHA-256 digest: "${sha256}"`);
     }
 
-    return this.storeContent(sha256, content);
+    const existing = this.getContentRecord(sha256);
+
+    if (existing !== null) {
+      return existing;
+    }
+
+    const stored = await this.prepareContentRecord(sha256, content);
+
+    this.transaction(() => {
+      this.insertContentRecord(stored);
+    });
+
+    return stored;
   }
 
   /** Current global undo cursor. */
   getCursor(): number {
+    if (this.isDegraded) {
+      return 0;
+    }
+
     this.assertOpen();
 
     const row = this.prepare(
@@ -493,6 +718,10 @@ export class SqliteHistoryStorage {
 
   /** Moves the global undo cursor. */
   setCursor(value: number): void {
+    if (this.isDegraded) {
+      return;
+    }
+
     this.assertOpen();
 
     const normalized = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
@@ -505,6 +734,10 @@ export class SqliteHistoryStorage {
 
   /** Highest mutation sequence recorded, or `0` when empty. */
   maxSequence(): number {
+    if (this.isDegraded) {
+      return 0;
+    }
+
     this.assertOpen();
 
     const row = this.prepare(
@@ -516,6 +749,10 @@ export class SqliteHistoryStorage {
 
   /** Newest reversible mutations at or below the cursor. */
   getMutationsDescending(cursor: number, limit: number): readonly MutationRecord[] {
+    if (this.isDegraded) {
+      return [];
+    }
+
     return this.selectMutationRange(
       'SELECT * FROM mutations WHERE seq <= ? AND operation_kind <> \'mkdir\' ORDER BY seq DESC',
       cursor,
@@ -525,6 +762,10 @@ export class SqliteHistoryStorage {
 
   /** Oldest redoable mutations above the cursor. */
   getMutationsAscending(cursor: number, limit: number): readonly MutationRecord[] {
+    if (this.isDegraded) {
+      return [];
+    }
+
     return this.selectMutationRange(
       'SELECT * FROM mutations WHERE seq > ? AND operation_kind <> \'mkdir\' ORDER BY seq ASC',
       cursor,
@@ -534,6 +775,10 @@ export class SqliteHistoryStorage {
 
   /** Lists mutations newest-first using the public filter shape. */
   listMutations(filter: HistoryQueryFilter = {}): readonly MutationRecord[] {
+    if (this.isDegraded) {
+      return [];
+    }
+
     this.assertOpen();
 
     const limit = normalizeLimit(filter.limit);
@@ -587,6 +832,10 @@ export class SqliteHistoryStorage {
 
   /** Resolves one mutation by identifier. */
   getMutation(mutationId: string): MutationRecord | undefined {
+    if (this.isDegraded) {
+      return undefined;
+    }
+
     this.assertOpen();
 
     const row = this.prepare(
@@ -598,6 +847,10 @@ export class SqliteHistoryStorage {
 
   /** Persists a checkpoint. */
   insertCheckpoint(checkpoint: Checkpoint): void {
+    if (this.isDegraded) {
+      return;
+    }
+
     this.assertOpen();
     this.ensureSession(checkpoint.sessionId, checkpoint.timestamp);
 
@@ -617,6 +870,10 @@ export class SqliteHistoryStorage {
 
   /** Resolves one checkpoint. */
   getCheckpoint(checkpointId: string): Checkpoint | undefined {
+    if (this.isDegraded) {
+      return undefined;
+    }
+
     this.assertOpen();
 
     const row = this.prepare(
@@ -628,6 +885,10 @@ export class SqliteHistoryStorage {
 
   /** Lists checkpoints newest-first. */
   listCheckpoints(sessionId?: string): readonly Checkpoint[] {
+    if (this.isDegraded) {
+      return [];
+    }
+
     this.assertOpen();
 
     const rows = sessionId === undefined
@@ -650,18 +911,19 @@ export class SqliteHistoryStorage {
 
     this.closed = true;
     this.statements.clear();
-    this.db.close();
+    this.db?.close();
+    this.db = undefined;
   }
 
-  private readJournalMode(): string {
-    const row = this.db.prepare('PRAGMA journal_mode = WAL').get() as Record<
+  private applyJournalMode(db: DatabaseSync): string {
+    const row = db.prepare('PRAGMA journal_mode = WAL').get() as Record<
       string,
       SQLOutputValue
     >;
     const mode = row.journal_mode;
 
-    this.db.exec('PRAGMA synchronous = NORMAL');
-    this.db.exec('PRAGMA foreign_keys = ON');
+    db.exec('PRAGMA synchronous = NORMAL');
+    db.exec('PRAGMA foreign_keys = ON');
 
     return typeof mode === 'string' ? mode.toLowerCase() : 'unknown';
   }
@@ -684,7 +946,18 @@ export class SqliteHistoryStorage {
     return rows.map((row) => this.toMutationRecord(row));
   }
 
-  private async storeContent(sha256: string, content: Uint8Array): Promise<StoredContent> {
+  /**
+   * Resolves where a payload lives without touching the ledger.
+   *
+   * Large payloads are staged into the content-addressed blob directory
+   * first; the returned record is inserted by the caller inside its
+   * transaction so a crash never leaves a `contents` row pointing at a blob
+   * that was never written.
+   */
+  private async prepareContentRecord(
+    sha256: string,
+    content: Uint8Array,
+  ): Promise<StoredContent> {
     const existing = this.getContentRecord(sha256);
 
     if (existing !== null) {
@@ -702,17 +975,20 @@ export class SqliteHistoryStorage {
       inlineData = bytes;
     }
 
-    this.prepare(
-      `INSERT INTO contents (sha256, size, inline_data, blob_ref, created_at)
-       VALUES (?, ?, ?, ?, ?)`,
-    ).run(sha256, bytes.byteLength, inlineData, blobRef, Date.now());
-
     return {
       sha256,
       size: bytes.byteLength,
       inlineData,
       blobRef,
     };
+  }
+
+  private insertContentRecord(stored: StoredContent): void {
+    this.prepare(
+      `INSERT INTO contents (sha256, size, inline_data, blob_ref, created_at)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(sha256) DO NOTHING`,
+    ).run(stored.sha256, stored.size, stored.inlineData, stored.blobRef, Date.now());
   }
 
   private async writeBlobIfMissing(sha256: string, bytes: Uint8Array): Promise<void> {
@@ -741,16 +1017,41 @@ export class SqliteHistoryStorage {
     }
   }
 
+  /**
+   * Reads a content-addressed blob and proves it still matches its digest.
+   *
+   * The content address is the integrity contract: bytes that no longer hash
+   * to `sha256` are treated as untrusted and never returned, because a
+   * corrupted pre-image must not be replayed into the workspace.
+   *
+   * @param sha256 - Digest naming the blob.
+   * @returns The verified payload, or `null` when the blob does not exist.
+   */
   private async readBlob(sha256: string): Promise<Uint8Array | null> {
     if (this.blobDir === undefined) {
       return null;
     }
 
+    let buffer: Buffer;
+
     try {
-      return Uint8Array.from(await readFile(join(this.blobDir, sha256)));
+      buffer = await readFile(join(this.blobDir, sha256));
     } catch {
+      // Missing blob: reported as a missing payload by the rollback engine.
       return null;
     }
+
+    const actualHash = sha256Hex(buffer);
+
+    if (actualHash !== sha256) {
+      throw new BlobIntegrityError('BLOB_DIGEST_MISMATCH', {
+        blobRef: `${this.blobRefPrefix}/${sha256}`,
+        expectedHash: sha256,
+        actualHash,
+      });
+    }
+
+    return Uint8Array.from(buffer);
   }
 
   private toMutationRecord(row: Record<string, SQLOutputValue>): MutationRecord {
@@ -790,6 +1091,56 @@ export class SqliteHistoryStorage {
     if (this.closed) {
       throw new HistoryStorageClosedError();
     }
+
+    if (this.degraded !== undefined) {
+      throw new HistoryDegradedError(this.degraded);
+    }
+  }
+
+  /**
+   * Runs `work` inside a single `BEGIN IMMEDIATE` transaction.
+   *
+   * `IMMEDIATE` acquires the write lock up front, so competing processes wait
+   * on `busy_timeout` instead of discovering the conflict halfway through.
+   * Nested calls join the open transaction rather than starting a savepoint.
+   */
+  private transaction<T>(work: () => T): T {
+    const db = this.requireDb();
+
+    if (this.inTransaction) {
+      return work();
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    this.inTransaction = true;
+
+    try {
+      const result = work();
+
+      db.exec('COMMIT');
+
+      return result;
+    } catch (error) {
+      try {
+        db.exec('ROLLBACK');
+      } catch {
+        // A transaction that already failed to start has nothing to roll back.
+      }
+
+      throw error;
+    } finally {
+      this.inTransaction = false;
+    }
+  }
+
+  private requireDb(): DatabaseSync {
+    this.assertOpen();
+
+    if (this.db === undefined) {
+      throw new HistoryStorageClosedError();
+    }
+
+    return this.db;
   }
 
   private prepare(sql: string): StatementSync {
@@ -799,7 +1150,7 @@ export class SqliteHistoryStorage {
       return cached;
     }
 
-    const statement = this.db.prepare(sql);
+    const statement = this.requireDb().prepare(sql);
     this.statements.set(sql, statement);
 
     return statement;

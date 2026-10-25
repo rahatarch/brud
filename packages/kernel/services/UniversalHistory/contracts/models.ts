@@ -79,8 +79,24 @@ export interface DetectedDrift {
   readonly actualHash: string;
 }
 
-/** Terminal status of an undo, redo, or checkpoint rollback. */
-export type RollbackStatus = 'success' | 'partial' | 'drift_aborted';
+/**
+ * Terminal status of an undo, redo, or checkpoint rollback.
+ *
+ * - `success`: every planned step was applied and the cursor advanced.
+ * - `partial`: at least one step was skipped or failed mid-batch; the cursor
+ *   is frozen so the batch stays inside historical reach.
+ * - `drift_aborted`: a target no longer matches the digest recorded by history.
+ * - `payload_missing`: a required pre-image could not be resolved before the
+ *   batch started; nothing was written.
+ * - `payload_corrupt`: a required pre-image failed digest re-verification
+ *   before the batch started; nothing was written.
+ */
+export type RollbackStatus =
+  | 'success'
+  | 'partial'
+  | 'drift_aborted'
+  | 'payload_missing'
+  | 'payload_corrupt';
 
 /** Outcome of a reversal operation. */
 export interface RollbackReport {
@@ -89,6 +105,9 @@ export interface RollbackReport {
 
   /** Paths that could not be restored (missing payload or unsupported kind). */
   readonly skippedPaths: string[];
+
+  /** Paths whose stored pre-image failed digest verification. */
+  readonly corruptedPaths: string[];
 
   /** Files that were modified outside recorded history. */
   readonly detectedDrift: DetectedDrift[];

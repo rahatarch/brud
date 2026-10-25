@@ -1,10 +1,17 @@
 import { join } from 'node:path';
 import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
-import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type {
+  KernelLogger,
+  ServiceContext,
+  ServiceTier,
+} from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
-import type { IFileMutationJournal } from '../../BrudFileSystem/events/types.js';
+import type {
+  FileMutationEvent,
+  IFileMutationJournal,
+} from '../../BrudFileSystem/events/types.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import type { IUniversalHistory } from '../contracts/IUniversalHistory.js';
@@ -45,6 +52,30 @@ export interface HistoryDescriptorOptions {
 
   /** Mutation journal to consume. Typically the filesystem's shared journal. */
   readonly journal?: IFileMutationJournal;
+
+  /**
+   * Diagnostic sink for non-fatal failures. Defaults to `context.logger`
+   * supplied by the booting kernel.
+   */
+  readonly logger?: KernelLogger;
+
+  /** Additional sink receiving journal ingestion failures. */
+  readonly onIngestionError?: (error: unknown, event?: FileMutationEvent) => void;
+}
+
+/** Renders an error for a diagnostic warning without leaking stack traces. */
+function errorMeta(error: unknown): Record<string, unknown> {
+  if (error instanceof Error) {
+    const code = (error as { code?: unknown }).code;
+
+    return {
+      name: error.name,
+      message: error.message,
+      ...(typeof code === 'string' ? { code } : {}),
+    };
+  }
+
+  return { message: String(error) };
 }
 
 /**
@@ -75,11 +106,43 @@ export function createHistoryDescriptor(
         ?? (inMemory
           ? undefined
           : join(context.workspaceRoot, HISTORY_BLOB_DIR_RELATIVE_PATH));
+      const logger = options?.logger ?? context.logger;
       const storage = new SqliteHistoryStorage({
         dbPath,
         ...(blobDir === undefined ? {} : { blobDir }),
         blobRefPrefix: HISTORY_BLOB_DIR_RELATIVE_PATH,
       });
+
+      if (storage.isDegraded) {
+        // Read-only history must never fail kernel boot. Ingestion becomes a
+        // no-op and reversals throw HistoryDegradedError, so the diagnostic is
+        // the only signal that durability is unavailable.
+        logger?.warn(
+          'brud.core.history: history storage is read-only; running in degraded mode',
+          {
+            code: 'HISTORY_DEGRADED',
+            reason: storage.degradedReason ?? 'READ_ONLY_STORAGE',
+            database: inMemory ? IN_MEMORY_HISTORY_DB_PATH : HISTORY_DB_RELATIVE_PATH,
+          },
+        );
+      }
+
+      const reportIngestionError = (
+        error: unknown,
+        event?: FileMutationEvent,
+      ): void => {
+        options?.onIngestionError?.(error, event);
+        logger?.warn('brud.core.history: journal ingestion failed', {
+          ...errorMeta(error),
+          ...(event === undefined
+            ? {}
+            : {
+              path: event.path,
+              mutationId: event.mutationId,
+              operation: event.operation,
+            }),
+        });
+      };
       const fileSystem = new LazyFileSystem(
         (): IBrudFileSystem => broker.requestAccess(
           {
@@ -94,6 +157,7 @@ export function createHistoryDescriptor(
       return new UniversalHistory({
         storage,
         fileSystem,
+        onIngestionError: reportIngestionError,
         ...(options?.journal === undefined ? {} : { journal: options.journal }),
       });
     },

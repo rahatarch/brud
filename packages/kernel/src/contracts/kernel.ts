@@ -1,4 +1,5 @@
 import type { IKernelAccessBroker } from './accessBroker.js';
+import type { KernelLogger } from './lifecycle.js';
 import type { ServiceDescriptor } from './serviceDescriptor.js';
 
 /**
@@ -7,6 +8,9 @@ import type { ServiceDescriptor } from './serviceDescriptor.js';
 export interface KernelBootOptions {
   /** Absolute path of the workspace the kernel operates in. */
   readonly workspaceRoot: string;
+
+  /** Optional diagnostic sink forwarded to every service context. */
+  readonly logger?: KernelLogger;
 }
 
 /**

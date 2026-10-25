@@ -199,7 +199,7 @@ export class JournalSubscriber {
     this.tail = this.tail
       .then(work)
       .catch((error: unknown) => {
-        this.onError(error);
+        this.report(error);
       })
       .finally(() => {
         this.pending -= 1;
@@ -223,9 +223,11 @@ export class JournalSubscriber {
       }
 
       await this.storage.putContent(previousHash, bytes);
-    } catch {
+    } catch (error) {
       // Best effort: a pre-mutation payload can disappear or be replaced by a
-      // concurrent writer. Recording must still proceed with the hashes.
+      // concurrent writer. Recording must still proceed with the hashes, but
+      // the failure is surfaced so operators see pre-images that were lost.
+      this.report(error, event);
     }
   }
 
@@ -288,7 +290,9 @@ export class JournalSubscriber {
       await this.storage.putContent(actualHash, bytes);
 
       return bytes;
-    } catch {
+    } catch (error) {
+      this.report(error, event);
+
       return undefined;
     }
   }
@@ -304,8 +308,18 @@ export class JournalSubscriber {
       if (content !== null) {
         await this.storage.putContent(previousHash, content);
       }
+    } catch (error) {
+      // Missing historical payloads surface as skipped rollback paths; the
+      // failure is reported so a lost pre-image is not silent.
+      this.report(error);
+    }
+  }
+
+  private report(error: unknown, event?: FileMutationEvent): void {
+    try {
+      this.onError(error, event);
     } catch {
-      // Missing historical payloads surface as skipped rollback paths.
+      // A failing diagnostic sink must never break ingestion.
     }
   }
 }

@@ -12,7 +12,10 @@ export { LedgerIndex } from './LedgerIndex/LedgerIndex.js';
 export type { LedgerFilter, LedgerTimeRange } from './LedgerIndex/LedgerIndex.js';
 
 export {
+  BlobIntegrityError,
   DEFAULT_BLOB_REF_PREFIX,
+  HISTORY_BUSY_TIMEOUT_MS,
+  HistoryDegradedError,
   HistoryStorageClosedError,
   INLINE_SNAPSHOT_LIMIT_BYTES,
   IN_MEMORY_HISTORY_DB_PATH,
@@ -22,6 +25,8 @@ export {
   toHistoryRelativePath,
 } from './SqliteHistoryStorage.js';
 export type {
+  BlobIntegrityDetails,
+  HistoryDegradedReason,
   MutationRecord,
   RecordMutationInput,
   SqliteHistoryStorageOptions,
