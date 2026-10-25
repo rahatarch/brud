@@ -7,7 +7,7 @@ import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { ReadOnlyFacade, ReadOnlyViolationError } from '../projection/ReadOnlyFacade/ReadOnlyFacade.js';
 import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
-import { FileSystemDescriptor } from './descriptor.js';
+import { FileSystemDescriptor, createFileSystemDescriptor } from './descriptor.js';
 import { FileSystemToken } from './tokens.js';
 
 function createCaller(overrides: Partial<ServiceContext>): ServiceContext {
@@ -63,6 +63,21 @@ describe('FileSystemDescriptor', () => {
 
     assert.ok(built instanceof BrudFileSystem);
     assert.equal(built.workspaceRoot, '/workspace');
+    await built.dispose();
+  });
+
+  it('binds an explicitly supplied canonical root instead of the context root', async () => {
+    const descriptor = createFileSystemDescriptor({
+      driver: new InMemoryStorageDriver(),
+      root: '/canonical/workspace',
+    });
+
+    const built = descriptor.factory(
+      createCaller({ callerId: 'kernel', tier: 'core', workspaceRoot: '/linked/workspace' }),
+      createBroker(),
+    );
+
+    assert.equal(built.workspaceRoot, '/canonical/workspace');
     await built.dispose();
   });
 

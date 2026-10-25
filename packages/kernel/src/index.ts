@@ -5,6 +5,7 @@ export * from '../services/BrudFileSystem/index.js';
 export * from '../services/UniversalHistory/index.js';
 export * from '../services/PluginManager/index.js';
 export * from '../services/SettingsService/index.js';
+export * from '../services/WorkspaceService/index.js';
 
 export { ServiceContainer } from './engine/ServiceContainer.js';
 export { OperationRegistry } from './engine/OperationRegistry.js';

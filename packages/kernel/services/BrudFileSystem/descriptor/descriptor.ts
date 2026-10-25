@@ -11,6 +11,16 @@ import { FileSystemToken } from './tokens.js';
 export interface FileSystemDescriptorOptions {
   /** Storage backend used by the service. Defaults to {@link NodeStorageDriver}. */
   readonly driver?: IStorageDriver;
+
+  /**
+   * Canonical workspace root the service binds to.
+   *
+   * When set, the factory uses this root instead of the (possibly
+   * uncanonicalized) `context.workspaceRoot`, which is what keeps the
+   * filesystem's `PathValidator` root identical to
+   * `WorkspaceService.primaryRoot`.
+   */
+  readonly root?: string;
 }
 
 export function createFileSystemDescriptor(
@@ -23,7 +33,7 @@ export function createFileSystemDescriptor(
     tier: 'core',
     dependencies: [],
     factory: (context: ServiceContext): BrudFileSystem =>
-      new BrudFileSystem(context.workspaceRoot, driver),
+      new BrudFileSystem(options?.root ?? context.workspaceRoot, driver),
     project: (instance: BrudFileSystem, caller: ServiceContext): IBrudFileSystem => {
       let projection: IBrudFileSystem = instance;
 

@@ -13,4 +13,7 @@ export interface DirectoryEntry {
 
 export interface PathEntryStats {
   isSymbolicLink: boolean;
+
+  /** Modification time in milliseconds, when the driver can report it. */
+  mtimeMs?: number;
 }

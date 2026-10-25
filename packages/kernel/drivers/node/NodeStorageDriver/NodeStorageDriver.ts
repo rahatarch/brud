@@ -72,7 +72,7 @@ export class NodeStorageDriver implements IStorageDriver {
   async lstat(absolutePath: string): Promise<PathEntryStats | null> {
     try {
       const stats = await lstat(absolutePath);
-      return { isSymbolicLink: stats.isSymbolicLink() };
+      return { isSymbolicLink: stats.isSymbolicLink(), mtimeMs: stats.mtimeMs };
     } catch (error: unknown) {
       if (isErrnoException(error, 'ENOENT') || isErrnoException(error, 'ENOTDIR')) {
         return null;

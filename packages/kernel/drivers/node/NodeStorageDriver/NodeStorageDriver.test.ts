@@ -159,9 +159,10 @@ describe('NodeStorageDriver', () => {
     await symlink(target, link);
     await symlink(join(caseDirectory, 'missing.txt'), dangling);
 
-    assert.deepEqual(await driver.lstat(link), { isSymbolicLink: true });
-    assert.deepEqual(await driver.lstat(dangling), { isSymbolicLink: true });
-    assert.deepEqual(await driver.lstat(target), { isSymbolicLink: false });
+    assert.equal((await driver.lstat(link))?.isSymbolicLink, true);
+    assert.equal((await driver.lstat(dangling))?.isSymbolicLink, true);
+    assert.equal((await driver.lstat(target))?.isSymbolicLink, false);
+    assert.equal(typeof (await driver.lstat(target))?.mtimeMs, 'number');
     assert.equal(await driver.lstat(join(caseDirectory, 'missing.txt')), null);
   });
 });
