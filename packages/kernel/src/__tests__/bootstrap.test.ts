@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { InMemoryStorageDriver } from '../../drivers/memory/index.js';
 import { FileSystemToken } from '../../services/BrudFileSystem/descriptor/tokens.js';
+import { PluginManagerToken } from '../../services/PluginManager/contracts/tokens.js';
 import { UniversalHistoryToken } from '../../services/UniversalHistory/descriptor/tokens.js';
 import { createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
@@ -38,12 +39,14 @@ describe('createStandardKernel', () => {
     assert.equal(kernel.lifecycleState, 'UNINITIALIZED');
     assert.equal(kernel.hasService(FileSystemToken), true);
     assert.equal(kernel.hasService(UniversalHistoryToken), true);
+    assert.equal(kernel.hasService(PluginManagerToken), true);
 
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.equal(kernel.hasService(FileSystemToken), true);
     assert.equal(kernel.hasService(UniversalHistoryToken), true);
+    assert.equal(kernel.hasService(PluginManagerToken), true);
 
     await kernel.shutdown();
   });
