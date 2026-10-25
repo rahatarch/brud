@@ -2,6 +2,7 @@ import { realpathSync } from 'node:fs';
 import type { IStorageDriver } from '../../drivers/contracts/index.js';
 import { createFileSystemDescriptor } from '../../services/BrudFileSystem/descriptor/descriptor.js';
 import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { createFileMutationJournal } from '../../services/BrudFileSystem/events/FileMutationJournal.js';
 import type { IFileMutationJournal } from '../../services/BrudFileSystem/events/types.js';
 import { HISTORY_TRUSTED_SCOPE } from '../../services/BrudFileSystem/security/protectedPaths.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
@@ -11,6 +12,11 @@ import {
   createSettingsReaderDescriptor,
   type SettingsDescriptorOptions,
 } from '../../services/SettingsService/descriptor/descriptor.js';
+import {
+  createHistoryDescriptor,
+  HISTORY_CALLER_ID,
+  type HistoryDescriptorOptions,
+} from '../../services/UniversalHistory/descriptor/index.js';
 import {
   createUniversalHistoryDescriptor,
   type UniversalHistoryDescriptorOptions,
@@ -34,6 +40,15 @@ export interface CreateStandardKernelOptions {
    * the boot workspace.
    */
   readonly history?: UniversalHistoryDescriptorOptions;
+  /**
+   * Journal-driven history overrides. Defaults to `.brud/history/history.db`
+   * inside the boot workspace and consumes the shared mutation journal.
+   *
+   * When {@link history} requests an in-memory ledger and this option is
+   * omitted, the journal ledger also defaults to `:memory:` so ephemeral
+   * kernels do not write to the host filesystem.
+   */
+  readonly historyJournal?: HistoryDescriptorOptions;
   /**
    * Settings store, defaults, or warning sink overrides. Defaults to the
    * filesystem-backed `~/.brud/settings.json` and
@@ -104,6 +119,12 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
   const kernel = new BrudKernel();
   const storageDriver = options?.storageDriver ?? new DurableNodeStorageDriver();
+  // One journal instance is shared by the filesystem and the journal-driven
+  // history service. When the host does not provide one, the bootstrap owns it
+  // so history can observe every mutation from the first boot.
+  const mutationJournal = options?.mutationJournal ?? createFileMutationJournal();
+  const historyJournalOptions: HistoryDescriptorOptions = options?.historyJournal
+    ?? (options?.history?.inMemory === true ? { inMemory: true } : {});
   kernel.register(createSettingsDescriptor(options?.settings));
   kernel.register(createSettingsReaderDescriptor());
   // Capture the workspace instance built by its descriptor so the filesystem
@@ -130,11 +151,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   });
   kernel.register(createFileSystemDescriptor({
     driver: workspaceDriver,
-    ...(options?.mutationJournal === undefined
-      ? {}
-      : { mutationJournal: options.mutationJournal }),
+    mutationJournal,
     trustedWriteScopesByCaller: {
       [HISTORY_TRUSTED_SCOPE.owner]: [HISTORY_TRUSTED_SCOPE.prefix],
+      [HISTORY_CALLER_ID]: [HISTORY_TRUSTED_SCOPE.prefix],
     },
     workspace: () => {
       const instance = workspaceBinding.instance;
@@ -149,6 +169,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
     },
   }));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
+  kernel.register(createHistoryDescriptor({
+    ...historyJournalOptions,
+    journal: mutationJournal,
+  }));
   kernel.register(createPluginManagerDescriptor({
     initialPlugins: options?.initialPlugins,
     withUniversalHistory: true,

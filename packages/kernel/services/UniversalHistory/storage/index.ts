@@ -11,6 +11,24 @@ export type { IdAllocatorOptions } from './IdAllocator/IdAllocator.js';
 export { LedgerIndex } from './LedgerIndex/LedgerIndex.js';
 export type { LedgerFilter, LedgerTimeRange } from './LedgerIndex/LedgerIndex.js';
 
+export {
+  DEFAULT_BLOB_REF_PREFIX,
+  HistoryStorageClosedError,
+  INLINE_SNAPSHOT_LIMIT_BYTES,
+  IN_MEMORY_HISTORY_DB_PATH,
+  InvalidHistoryPathError,
+  SqliteHistoryStorage,
+  createDrift,
+  toHistoryRelativePath,
+} from './SqliteHistoryStorage.js';
+export type {
+  MutationRecord,
+  RecordMutationInput,
+  SqliteHistoryStorageOptions,
+  StoredContent,
+} from './SqliteHistoryStorage.js';
+export { isSha256Hex, sha256Hex as historySha256Hex } from './hash.js';
+
 export { SqliteLedger } from './SqliteLedger/SqliteLedger.js';
 export type {
   LedgerQueryFilter,

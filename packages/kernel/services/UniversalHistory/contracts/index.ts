@@ -12,3 +12,14 @@ export type {
   CommitOutcome,
   IUniversalHistoryService,
 } from './IUniversalHistoryService/IUniversalHistoryService.js';
+
+export type { IUniversalHistory } from './IUniversalHistory.js';
+export type {
+  Checkpoint,
+  DetectedDrift,
+  HistoryEntry,
+  HistoryOperationKind,
+  HistoryQueryFilter,
+  RollbackReport,
+  RollbackStatus,
+} from './models.js';
