@@ -3,6 +3,11 @@ import { createFileSystemDescriptor } from '../../services/BrudFileSystem/descri
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { createPluginManagerDescriptor } from '../../services/PluginManager/descriptor/index.js';
 import {
+  createSettingsDescriptor,
+  createSettingsReaderDescriptor,
+  type SettingsDescriptorOptions,
+} from '../../services/SettingsService/descriptor/descriptor.js';
+import {
   createUniversalHistoryDescriptor,
   type UniversalHistoryDescriptorOptions,
 } from '../../services/UniversalHistory/descriptor/index.js';
@@ -19,6 +24,12 @@ export interface CreateStandardKernelOptions {
    * the boot workspace.
    */
   readonly history?: UniversalHistoryDescriptorOptions;
+  /**
+   * Settings store, defaults, or warning sink overrides. Defaults to the
+   * filesystem-backed `~/.brud/settings.json` and
+   * `<workspace>/.brud/settings.json` scopes.
+   */
+  readonly settings?: SettingsDescriptorOptions;
   /**
    * Plugins registered into the plugin manager before the kernel boots.
    *
@@ -39,6 +50,8 @@ export interface CreateStandardKernelOptions {
  */
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
   const kernel = new BrudKernel();
+  kernel.register(createSettingsDescriptor(options?.settings));
+  kernel.register(createSettingsReaderDescriptor());
   kernel.register(createFileSystemDescriptor({ driver: options?.storageDriver }));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
   kernel.register(createPluginManagerDescriptor({

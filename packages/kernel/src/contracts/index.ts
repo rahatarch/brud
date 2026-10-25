@@ -2,7 +2,11 @@ export type { ServiceToken, InferService } from './serviceToken.js';
 export { createServiceToken } from './serviceToken.js';
 
 export type { ServiceAccessPolicy } from './policy.js';
-export { BlacklistedAccessViolationError, AllowlistViolationError } from './policy.js';
+export {
+  AccessDeniedError,
+  BlacklistedAccessViolationError,
+  AllowlistViolationError,
+} from './policy.js';
 
 export type { ServiceTier, ServiceContext, IServiceLifecycle } from './lifecycle.js';
 

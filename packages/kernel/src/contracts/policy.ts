@@ -15,17 +15,40 @@ export interface ServiceAccessPolicy {
 }
 
 /**
- * Raised when a caller matches the deny list of a service's access policy.
+ * Base class for every rejection produced by a service access policy.
+ *
+ * Callers should branch on this type when they only need to know that the
+ * broker refused access; the concrete subclasses carry the finer reason.
  */
-export class BlacklistedAccessViolationError extends Error {
+export abstract class AccessDeniedError extends Error {
   /** Stable, machine-readable error code. */
-  public readonly code = 'BLACKLISTED_ACCESS' as const;
+  public abstract readonly code: string;
 
   /** Identifier of the caller that attempted access. */
   public readonly callerId: string;
 
   /** Identifier of the service that denied access. */
   public readonly targetServiceId: string;
+
+  /**
+   * @param message - Path-free, human-readable denial description.
+   * @param callerId - Identifier of the caller that attempted access.
+   * @param targetServiceId - Identifier of the service that denied access.
+   */
+  protected constructor(message: string, callerId: string, targetServiceId: string) {
+    super(message);
+    this.name = 'AccessDeniedError';
+    this.callerId = callerId;
+    this.targetServiceId = targetServiceId;
+  }
+}
+
+/**
+ * Raised when a caller matches the deny list of a service's access policy.
+ */
+export class BlacklistedAccessViolationError extends AccessDeniedError {
+  /** Stable, machine-readable error code. */
+  public readonly code = 'BLACKLISTED_ACCESS' as const;
 
   /** Explanation of why the caller was denied. */
   public readonly reason: string;
@@ -36,10 +59,12 @@ export class BlacklistedAccessViolationError extends Error {
    * @param reason - Explanation of why the caller was denied.
    */
   constructor(callerId: string, targetServiceId: string, reason: string) {
-    super(`Caller "${callerId}" is blacklisted from service "${targetServiceId}": ${reason}`);
+    super(
+      `Caller "${callerId}" is blacklisted from service "${targetServiceId}": ${reason}`,
+      callerId,
+      targetServiceId,
+    );
     this.name = 'BlacklistedAccessViolationError';
-    this.callerId = callerId;
-    this.targetServiceId = targetServiceId;
     this.reason = reason;
   }
 }
@@ -47,24 +72,20 @@ export class BlacklistedAccessViolationError extends Error {
 /**
  * Raised when a caller is not present in a service's allow list.
  */
-export class AllowlistViolationError extends Error {
+export class AllowlistViolationError extends AccessDeniedError {
   /** Stable, machine-readable error code. */
   public readonly code = 'NOT_IN_ALLOWLIST' as const;
-
-  /** Identifier of the caller that attempted access. */
-  public readonly callerId: string;
-
-  /** Identifier of the service that denied access. */
-  public readonly targetServiceId: string;
 
   /**
    * @param callerId - Identifier of the caller that attempted access.
    * @param targetServiceId - Identifier of the service that denied access.
    */
   constructor(callerId: string, targetServiceId: string) {
-    super(`Caller "${callerId}" is not in the allowlist for service "${targetServiceId}"`);
+    super(
+      `Caller "${callerId}" is not in the allowlist for service "${targetServiceId}"`,
+      callerId,
+      targetServiceId,
+    );
     this.name = 'AllowlistViolationError';
-    this.callerId = callerId;
-    this.targetServiceId = targetServiceId;
   }
 }

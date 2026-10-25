@@ -76,6 +76,7 @@ export class ServiceNotFoundError extends Error {
 }
 
 export {
+  AccessDeniedError,
   BlacklistedAccessViolationError,
   AllowlistViolationError,
 } from '../contracts/policy.js';
