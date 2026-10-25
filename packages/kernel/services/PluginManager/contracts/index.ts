@@ -6,10 +6,15 @@ export {
 } from './permissions.js';
 
 export type {
+  OfficialPluginManifest,
   PluginManifest,
+  PluginManifestBase,
   PluginManifestValidationFailure,
+  PluginManifestValidationFailureReason,
+  PluginManifestValidationOptions,
   PluginManifestValidationResult,
   PluginManifestValidationSuccess,
+  ThirdPartyPluginManifest,
 } from './manifest.js';
 export { PLUGIN_ID_PATTERN, SEMVER_PATTERN, validatePluginManifest } from './manifest.js';
 
@@ -29,11 +34,14 @@ export type { IPluginManagerService, PluginRecord, PluginState } from './IPlugin
 export { resolveActivationOrder, resolveDeactivationOrder } from './activationOrder.js';
 
 export type {
+  PluginAuthorizationErrorOptions,
+  PluginAuthorizationReason,
   PluginDependencyErrorOptions,
   PluginErrorCode,
   PluginLifecyclePhase,
 } from './errors.js';
 export {
+  PluginAuthorizationError,
   PluginDependencyError,
   PluginDuplicateError,
   PluginError,

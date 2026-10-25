@@ -20,22 +20,22 @@ function errorOf(candidate: unknown): string {
 describe('validatePluginManifest', () => {
   it('accepts a reverse-DNS identifier with permissions and dependencies', () => {
     const result = validatePluginManifest({
-      id: 'brud.tools.core',
+      id: 'acme.tools.core',
       name: 'Core Tools',
       version: '1.4.0',
       description: 'Registers the core tool set',
-      dependencies: ['brud.tools.shared'],
+      dependencies: ['acme.tools.shared'],
       permissions: ['tools:register', 'tools:execute'],
     });
 
     assert.deepEqual(result, {
       ok: true,
       manifest: {
-        id: 'brud.tools.core',
+        id: 'acme.tools.core',
         name: 'Core Tools',
         version: '1.4.0',
         description: 'Registers the core tool set',
-        dependencies: ['brud.tools.shared'],
+        dependencies: ['acme.tools.shared'],
         permissions: ['tools:register', 'tools:execute'],
       },
     });
@@ -61,11 +61,11 @@ describe('validatePluginManifest', () => {
   });
 
   it('returns a defensive copy of manifest arrays', () => {
-    const dependencies = ['brud.tools.shared'];
+    const dependencies = ['acme.tools.shared'];
     const permissions: ('fs:read' | 'fs:write')[] = ['fs:read'];
 
     const result = validatePluginManifest({
-      id: 'brud.tools.core',
+      id: 'acme.tools.core',
       name: 'Core Tools',
       version: '1.0.0',
       dependencies,
@@ -77,10 +77,10 @@ describe('validatePluginManifest', () => {
       return;
     }
 
-    dependencies.push('brud.tools.extra');
+    dependencies.push('acme.tools.extra');
     permissions.push('fs:write');
 
-    assert.deepEqual(result.manifest.dependencies, ['brud.tools.shared']);
+    assert.deepEqual(result.manifest.dependencies, ['acme.tools.shared']);
     assert.deepEqual(result.manifest.permissions, ['fs:read']);
   });
 
@@ -97,7 +97,7 @@ describe('validatePluginManifest', () => {
       /manifest\.id/,
     );
     assert.match(
-      errorOf({ id: 'brud..tools', name: 'X', version: '1.0.0', permissions: [] }),
+      errorOf({ id: 'acme..tools', name: 'X', version: '1.0.0', permissions: [] }),
       /manifest\.id/,
     );
     assert.match(
@@ -107,9 +107,9 @@ describe('validatePluginManifest', () => {
   });
 
   it('rejects a missing or blank name', () => {
-    assert.match(errorOf({ id: 'brud.tools', version: '1.0.0', permissions: [] }), /manifest\.name/);
+    assert.match(errorOf({ id: 'acme.tools', version: '1.0.0', permissions: [] }), /manifest\.name/);
     assert.match(
-      errorOf({ id: 'brud.tools', name: '   ', version: '1.0.0', permissions: [] }),
+      errorOf({ id: 'acme.tools', name: '   ', version: '1.0.0', permissions: [] }),
       /manifest\.name/,
     );
   });
@@ -119,7 +119,7 @@ describe('validatePluginManifest', () => {
 
     for (const version of versions) {
       assert.match(
-        errorOf({ id: 'brud.tools', name: 'Tools', version, permissions: [] }),
+        errorOf({ id: 'acme.tools', name: 'Tools', version, permissions: [] }),
         /manifest\.version/,
         version,
       );
@@ -129,7 +129,7 @@ describe('validatePluginManifest', () => {
   it('rejects unknown and duplicate permissions', () => {
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: ['fs:delete'],
@@ -139,7 +139,7 @@ describe('validatePluginManifest', () => {
 
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: ['fs:read', 'fs:read'],
@@ -148,7 +148,7 @@ describe('validatePluginManifest', () => {
     );
 
     assert.match(
-      errorOf({ id: 'brud.tools', name: 'Tools', version: '1.0.0' }),
+      errorOf({ id: 'acme.tools', name: 'Tools', version: '1.0.0' }),
       /manifest\.permissions is required/,
     );
   });
@@ -156,11 +156,11 @@ describe('validatePluginManifest', () => {
   it('rejects non-array dependencies', () => {
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: [],
-        dependencies: 'brud.tools.shared',
+        dependencies: 'acme.tools.shared',
       }),
       /manifest\.dependencies must be an array/,
     );
@@ -169,33 +169,33 @@ describe('validatePluginManifest', () => {
   it('rejects malformed, duplicate, and self-referential dependencies', () => {
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: [],
-        dependencies: ['Brud.Tools.Shared'],
+        dependencies: ['Acme.Tools.Shared'],
       }),
       /manifest\.dependencies/,
     );
 
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: [],
-        dependencies: ['brud.shared', 'brud.shared'],
+        dependencies: ['acme.shared', 'acme.shared'],
       }),
       /duplicate plugin identifier/,
     );
 
     assert.match(
       errorOf({
-        id: 'brud.tools',
+        id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
         permissions: [],
-        dependencies: ['brud.tools'],
+        dependencies: ['acme.tools'],
       }),
       /must not include the plugin itself/,
     );
@@ -214,7 +214,7 @@ describe('validatePluginManifest', () => {
   });
 
   it('exposes stable identifier and semver patterns', () => {
-    assert.equal(PLUGIN_ID_PATTERN.test('brud.tools.core'), true);
+    assert.equal(PLUGIN_ID_PATTERN.test('acme.tools.core'), true);
     assert.equal(PLUGIN_ID_PATTERN.test('brud-tools-core'), true);
     assert.equal(PLUGIN_ID_PATTERN.test('brud_tools'), false);
     assert.equal(SEMVER_PATTERN.test('1.0.0'), true);

@@ -11,10 +11,10 @@ import { PluginSubscriptions } from './PluginSubscriptions.js';
 
 function createManifest() {
   const result = validatePluginManifest({
-    id: 'brud.tools.core',
+    id: 'acme.tools.core',
     name: 'Core Tools',
     version: '1.0.0',
-    dependencies: ['brud.tools.shared'],
+    dependencies: ['acme.tools.shared'],
     permissions: ['tools:register'],
   });
 
@@ -66,13 +66,13 @@ describe('IBrudPlugin contract', () => {
       },
     };
 
-    assert.equal(plugin.manifest.id, 'brud.tools.core');
-    assert.deepEqual(plugin.manifest.dependencies, ['brud.tools.shared']);
+    assert.equal(plugin.manifest.id, 'acme.tools.core');
+    assert.deepEqual(plugin.manifest.dependencies, ['acme.tools.shared']);
 
     await plugin.activate(createContext(plugin.manifest.id));
     await plugin.deactivate?.();
 
-    assert.deepEqual(events, ['activate:brud.tools.core', 'deactivate']);
+    assert.deepEqual(events, ['activate:acme.tools.core', 'deactivate']);
   });
 
   it('allows plugins without a deactivate hook', () => {

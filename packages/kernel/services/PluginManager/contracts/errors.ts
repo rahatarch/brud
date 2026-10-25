@@ -7,7 +7,8 @@ export type PluginErrorCode =
   | 'PLUGIN_DEPENDENCY'
   | 'PLUGIN_PERMISSION'
   | 'PLUGIN_LIFECYCLE'
-  | 'PLUGIN_MANIFEST';
+  | 'PLUGIN_MANIFEST'
+  | 'PLUGIN_AUTHORIZATION';
 
 /**
  * Base class for every plugin domain failure.
@@ -137,6 +138,48 @@ export class PluginPermissionError extends PluginError {
     this.pluginId = pluginId;
     this.operation = operation;
     this.requiredPermissions = [...requiredPermissions];
+  }
+}
+
+/** Authorization claims that a plugin may attempt without valid evidence. */
+export type PluginAuthorizationReason = 'RESERVED_NAMESPACE' | 'OFFICIAL_STATUS';
+
+/** Options describing an unauthorized official plugin claim. */
+export interface PluginAuthorizationErrorOptions {
+  /** Plugin that attempted the unauthorized claim. */
+  readonly pluginId: string;
+
+  /** Claim that failed authorization. */
+  readonly reason: PluginAuthorizationReason;
+}
+
+/**
+ * Raised when a plugin attempts to claim the reserved first-party namespace or
+ * official status without presenting the internal kernel brand.
+ */
+export class PluginAuthorizationError extends PluginError {
+  public readonly code = 'PLUGIN_AUTHORIZATION' as const;
+
+  /** Plugin that attempted the unauthorized claim. */
+  public readonly pluginId: string;
+
+  /** Claim that failed authorization. */
+  public readonly reason: PluginAuthorizationReason;
+
+  constructor(options: PluginAuthorizationErrorOptions) {
+    super(PluginAuthorizationError.formatMessage(options));
+    this.name = 'PluginAuthorizationError';
+    this.pluginId = options.pluginId;
+    this.reason = options.reason;
+  }
+
+  private static formatMessage(options: PluginAuthorizationErrorOptions): string {
+    const claim =
+      options.reason === 'RESERVED_NAMESPACE'
+        ? 'the reserved official namespace'
+        : 'official plugin status';
+
+    return `Plugin "${options.pluginId}" is not authorized to claim ${claim}`;
   }
 }
 

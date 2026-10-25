@@ -3,7 +3,9 @@ import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import { resolveActivationOrder, resolveDeactivationOrder } from '../contracts/activationOrder.js';
+import { hasOfficialPluginBrand } from '../contracts/branding.js';
 import {
+  PluginAuthorizationError,
   PluginDependencyError,
   PluginDuplicateError,
   PluginLifecycleError,
@@ -80,10 +82,21 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
 
   public register(plugin: IBrudPlugin): void {
     const candidate: unknown = plugin.manifest;
-    const validation = validatePluginManifest(candidate);
+    const validation = validatePluginManifest(candidate, { officialBrandHolder: plugin });
+    const pluginId = candidatePluginId(candidate);
 
     if (!validation.ok) {
-      throw new PluginManifestValidationError(validation.error, candidatePluginId(candidate));
+      if (
+        validation.reason === 'RESERVED_NAMESPACE' ||
+        validation.reason === 'OFFICIAL_STATUS'
+      ) {
+        throw new PluginAuthorizationError({
+          pluginId: pluginId ?? 'unknown',
+          reason: validation.reason,
+        });
+      }
+
+      throw new PluginManifestValidationError(validation.error, pluginId);
     }
 
     const manifest = validation.manifest;
@@ -96,6 +109,7 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
     this.records.set(manifest.id, {
       plugin,
       manifest,
+      official: hasOfficialPluginBrand(plugin),
       state: 'unloaded',
     });
   }

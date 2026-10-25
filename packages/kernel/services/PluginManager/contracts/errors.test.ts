@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  PluginAuthorizationError,
   PluginDependencyError,
   PluginDuplicateError,
   PluginError,
@@ -68,6 +69,30 @@ describe('plugin errors', () => {
     assert.equal(error.phase, 'activate');
     assert.equal(error.cause, cause);
     assert.match(error.message, /failed to activate: boom/);
+  });
+
+  it('describes unauthorized official namespace claims', () => {
+    const error = new PluginAuthorizationError({
+      pluginId: 'brud.tools.core',
+      reason: 'RESERVED_NAMESPACE',
+    });
+
+    assert.ok(error instanceof PluginError);
+    assert.equal(error.code, 'PLUGIN_AUTHORIZATION');
+    assert.equal(error.pluginId, 'brud.tools.core');
+    assert.equal(error.reason, 'RESERVED_NAMESPACE');
+    assert.match(error.message, /reserved official namespace/);
+  });
+
+  it('describes unauthorized official status claims', () => {
+    const error = new PluginAuthorizationError({
+      pluginId: 'acme.tools.core',
+      reason: 'OFFICIAL_STATUS',
+    });
+
+    assert.equal(error.code, 'PLUGIN_AUTHORIZATION');
+    assert.equal(error.reason, 'OFFICIAL_STATUS');
+    assert.match(error.message, /official plugin status/);
   });
 
   it('handles a lifecycle failure without a cause', () => {

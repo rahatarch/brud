@@ -4,7 +4,7 @@ import { validatePluginManifest } from '../manifest.js';
 import { isPluginPermission } from '../permissions.js';
 
 const validManifest = {
-  id: 'brud.tools.core',
+  id: 'acme.tools.core',
   name: 'Core Tools',
   version: '2.3.1',
   permissions: ['tools:register', 'tools:execute'],
@@ -15,7 +15,7 @@ describe('manifest validation contract', () => {
     const result = validatePluginManifest({
       ...validManifest,
       description: 'Core tool registrations',
-      dependencies: ['brud.core.filesystem', 'brud.core.history'],
+      dependencies: ['acme.core.filesystem', 'acme.core.history'],
     });
 
     assert.equal(result.ok, true);
@@ -23,11 +23,11 @@ describe('manifest validation contract', () => {
       return;
     }
 
-    assert.equal(result.manifest.id, 'brud.tools.core');
+    assert.equal(result.manifest.id, 'acme.tools.core');
     assert.equal(result.manifest.version, '2.3.1');
     assert.deepEqual(result.manifest.dependencies, [
-      'brud.core.filesystem',
-      'brud.core.history',
+      'acme.core.filesystem',
+      'acme.core.history',
     ]);
     assert.deepEqual(result.manifest.permissions, ['tools:register', 'tools:execute']);
   });
@@ -75,7 +75,7 @@ describe('manifest validation contract', () => {
   it('rejects non-array dependencies', () => {
     const result = validatePluginManifest({
       ...validManifest,
-      dependencies: { id: 'brud.core.filesystem' },
+      dependencies: { id: 'acme.core.filesystem' },
     });
 
     assert.equal(result.ok, false);
@@ -90,7 +90,7 @@ describe('manifest validation contract', () => {
     const input = {
       ...validManifest,
       permissions: ['fs:read', 'fs:write'],
-      dependencies: ['brud.core.filesystem'],
+      dependencies: ['acme.core.filesystem'],
     };
     const snapshot = structuredClone(input);
 

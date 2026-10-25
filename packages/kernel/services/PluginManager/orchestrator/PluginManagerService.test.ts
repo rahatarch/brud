@@ -6,7 +6,9 @@ import type {
 } from '../../../drivers/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyViolationError } from '../../BrudFileSystem/projection/index.js';
+import { certifyOfficialPlugin } from '../contracts/branding.js';
 import {
+  PluginAuthorizationError,
   PluginDuplicateError,
   PluginLifecycleError,
   PluginPermissionError,
@@ -134,11 +136,11 @@ function createManager(
 describe('PluginManagerService registration', () => {
   it('registers a valid plugin as unloaded', () => {
     const manager = createManager();
-    const plugin = createPlugin({ id: 'brud.tools.core' });
+    const plugin = createPlugin({ id: 'acme.tools.core' });
 
     manager.register(plugin);
 
-    const record = manager.getPlugin('brud.tools.core');
+    const record = manager.getPlugin('acme.tools.core');
 
     assert.ok(record !== undefined);
     assert.equal(record.plugin, plugin);
@@ -146,20 +148,20 @@ describe('PluginManagerService registration', () => {
     assert.equal(record.activatedAt, undefined);
     assert.deepEqual(
       manager.listPlugins().map((entry) => entry.plugin.manifest.id),
-      ['brud.tools.core'],
+      ['acme.tools.core'],
     );
   });
 
   it('rejects duplicate registrations', () => {
     const manager = createManager();
-    manager.register(createPlugin({ id: 'brud.tools.core' }));
+    manager.register(createPlugin({ id: 'acme.tools.core' }));
 
     assert.throws(
-      () => manager.register(createPlugin({ id: 'brud.tools.core' })),
+      () => manager.register(createPlugin({ id: 'acme.tools.core' })),
       (error: unknown) => {
         assert.ok(error instanceof PluginDuplicateError);
         assert.equal(error.code, 'PLUGIN_DUPLICATE');
-        assert.equal(error.pluginId, 'brud.tools.core');
+        assert.equal(error.pluginId, 'acme.tools.core');
         return true;
       },
     );
@@ -169,7 +171,7 @@ describe('PluginManagerService registration', () => {
     const manager = createManager();
     const invalid: IBrudPlugin = {
       manifest: {
-        id: 'brud.tools.invalid',
+        id: 'acme.tools.invalid',
         name: 'Invalid Tools',
         version: '1.0',
         permissions: [],
@@ -182,12 +184,115 @@ describe('PluginManagerService registration', () => {
       (error: unknown) => {
         assert.ok(error instanceof PluginManifestValidationError);
         assert.equal(error.code, 'PLUGIN_MANIFEST');
-        assert.equal(error.pluginId, 'brud.tools.invalid');
+        assert.equal(error.pluginId, 'acme.tools.invalid');
         assert.match(error.reason, /manifest\.version/);
         return true;
       },
     );
-    assert.equal(manager.getPlugin('brud.tools.invalid'), undefined);
+    assert.equal(manager.getPlugin('acme.tools.invalid'), undefined);
+  });
+});
+
+describe('PluginManagerService official authorization', () => {
+  it('rejects a third-party plugin using the reserved namespace', () => {
+    const manager = createManager();
+
+    assert.throws(
+      () => manager.register(createPlugin({ id: 'brud.tools.core' })),
+      (error: unknown) => {
+        assert.ok(error instanceof PluginAuthorizationError);
+        assert.equal(error.code, 'PLUGIN_AUTHORIZATION');
+        assert.equal(error.pluginId, 'brud.tools.core');
+        assert.equal(error.reason, 'RESERVED_NAMESPACE');
+        assert.match(error.message, /not authorized/);
+        return true;
+      },
+    );
+
+    assert.equal(manager.getPlugin('brud.tools.core'), undefined);
+  });
+
+  it('rejects a third-party plugin using the scoped reserved namespace', () => {
+    const manager = createManager();
+
+    assert.throws(
+      () => manager.register(createPlugin({ id: '@brud/tools.core' })),
+      (error: unknown) => {
+        assert.ok(error instanceof PluginAuthorizationError);
+        assert.equal(error.reason, 'RESERVED_NAMESPACE');
+        assert.equal(error.pluginId, '@brud/tools.core');
+        return true;
+      },
+    );
+  });
+
+  it('rejects forged official metadata without the genuine brand', () => {
+    const manager = createManager();
+    const forged: IBrudPlugin = {
+      manifest: {
+        id: 'acme.tools.core',
+        name: 'Forged Official Tools',
+        version: '1.0.0',
+        permissions: [],
+        official: true,
+      },
+      activate: (): void => undefined,
+    };
+
+    assert.throws(
+      () => manager.register(forged),
+      (error: unknown) => {
+        assert.ok(error instanceof PluginAuthorizationError);
+        assert.equal(error.code, 'PLUGIN_AUTHORIZATION');
+        assert.equal(error.pluginId, 'acme.tools.core');
+        assert.equal(error.reason, 'OFFICIAL_STATUS');
+        return true;
+      },
+    );
+
+    assert.equal(manager.getPlugin('acme.tools.core'), undefined);
+  });
+
+  it('registers a certified first-party plugin in the reserved namespace', () => {
+    const manager = createManager();
+    const plugin = certifyOfficialPlugin(createPlugin({ id: 'brud.tools.core' }));
+
+    manager.register(plugin);
+
+    const record = manager.getPlugin('brud.tools.core');
+
+    assert.ok(record !== undefined);
+    assert.equal(record.plugin, plugin);
+    assert.equal(record.state, 'unloaded');
+    assert.deepEqual(
+      manager.listPlugins().map((entry) => entry.plugin.manifest.id),
+      ['brud.tools.core'],
+    );
+  });
+
+  it('registers a certified plugin that declares official status', () => {
+    const manager = createManager();
+    const base = createPlugin({ id: 'acme.tools.core' });
+    const officialManifest: PluginManifest = {
+      ...base.manifest,
+      official: true,
+    };
+    const plugin = certifyOfficialPlugin<IBrudPlugin>({
+      ...base,
+      manifest: officialManifest,
+    });
+
+    manager.register(plugin);
+
+    assert.equal(manager.getPlugin('acme.tools.core')?.state, 'unloaded');
+  });
+
+  it('registers a standard third-party plugin with a clean namespace', () => {
+    const manager = createManager();
+
+    manager.register(createPlugin({ id: 'acme.tools.core' }));
+
+    assert.equal(manager.getPlugin('acme.tools.core')?.state, 'unloaded');
   });
 });
 

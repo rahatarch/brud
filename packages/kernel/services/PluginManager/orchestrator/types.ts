@@ -19,6 +19,8 @@ export interface InternalPluginRecord {
 
   readonly manifest: PluginManifest;
 
+  readonly official: boolean;
+
   state: PluginState;
 
   activatedAt?: string;
