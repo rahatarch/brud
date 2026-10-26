@@ -107,7 +107,7 @@ flowchart TB
 
     subgraph Kernel["Microkernel (contracts and orchestration)"]
         Contracts["Contracts: tokens, descriptors, permissions, manifests"]
-        Services["Level-1 services: settings, workspace, filesystem, validation, history, terminal, plugins"]
+        Services["Level-1 services: settings, workspace, filesystem, validation, history, terminal, tools, plugins"]
         Pipeline["Registry + execution pipeline + access broker"]
     end
 
@@ -130,6 +130,8 @@ The principle has five binding rules.
 | **R3 — Access is projected** | A service instance is never handed to a caller. The access broker projects it per caller tier, permissions, and partition. | Read-only callers cannot mutate; plugins cannot reach raw drivers. |
 | **R4 — Transports are replaceable** | stdio, HTTP, JSON-RPC, and future Desktop IPC are adapters over `tools:execute`, not executions of their own. | Replacing a transport cannot change security or semantics. |
 | **R5 — Removal is reversible at the edge** | Any adapter can be deleted without losing domain logic. | Host churn (VS Code → Desktop) does not become engine churn. |
+
+**Tool execution is kernel-owned; tool implementations are plugins.** `BrudTools` (`brud.core.tools`) is a Level-1 service that owns the live tool registry, the official-certification status, the schema-validation gate, and the dispatch table. Individual tool implementations — `create_file`, `search_replace`, `read_file`, and community tools such as a vendor Git runner — are ordinary capability-gated plugins that register into it through `context.registerTool(...)`. Neither the stream block parser nor the AI prompt surface enumerates plugins; both resolve tool names against the boot-time `BrudTools` routing table.
 
 **Zero-downtime execution** in this document means the operational property implied by R1–R5: the workspace kernel and its state stay alive while surfaces attach, detach, or change transport. It does **not** promise hot-patching a running process. A migration cutover is a controlled boot or plugin reload; it is never a mid-operation replacement of the execution engine.
 
@@ -261,7 +263,7 @@ DISPOSED
 
 Two consequences matter for the rollout:
 
-1. **Deterministic order is structural.** It comes from descriptor `dependencies` plus `topologicalSort`, not from registration order. Adding Settings/Workspace/Validation/Terminal changes the graph, not the boot mechanism.
+1. **Deterministic order is structural.** It comes from descriptor `dependencies` plus `topologicalSort`, not from registration order. Adding Settings/Workspace/Validation/Terminal/Tools changes the graph, not the boot mechanism.
 2. **Grant timing is currently wrong for plugins.** `PluginManagerService.initialize()` calls `activateAll()` while the kernel is still `BOOTING`, but `KernelAccessBroker.requestAccess()` refuses anything except `RUNNING`. A plugin that calls `context.getFileSystem()` during `activate()` fails at boot. The current bootstrap test plugins do not request a facade, so the defect is latent. Phase 5 fixes it.
 
 ### 2.3 Hardened Kernel Services (Level-1)
@@ -277,6 +279,7 @@ Two consequences matter for the rollout:
 | Workspace | — | — | — | Missing (Phase 2) |
 | Validation | — | — | — | Missing (Phase 3) |
 | Terminal | — | — | — | Missing (Phase 4) |
+| Tools (`BrudTools`) | `brud.core.tools` | core | `IBrudToolsService` | Missing (Phase 5) |
 | Telemetry | — | — | — | Missing (Phase 5, sink only) |
 
 #### 2.3.1 `BrudFileSystem` (`brud.core.filesystem`)
@@ -402,13 +405,29 @@ The `OFFICIAL_PLUGIN_BRAND` symbol is declared only in kernel source and is abse
 
 | Property | Current behaviour | Target behaviour |
 |---|---|---|
-| Registered services | Filesystem, History, PluginManager | Settings → Workspace → Filesystem → History → Validation → Terminal → Telemetry → PluginManager |
+| Registered services | Filesystem, History, PluginManager | Settings → Workspace → Filesystem → History → Validation → Terminal → Tools → Telemetry → PluginManager |
 | Operation handlers | None | All official plugin tools registered |
 | Plugin activation | During `PluginManager.initialize()` while `BOOTING` | After `RUNNING` via an explicit post-boot hook |
 | Shutdown | Reverse order, all disposals attempted, first error surfaced | Same, plus plugin deactivation before filesystem disposal (already enforced by tests) |
 | Workspace root | Passed to `boot()`; used by descriptors | Canonicalized by WorkspaceService before descriptors consume it |
 | History degraded boot | Read-only `.brud/history` degrades the journal ledger: boot succeeds, ingestion is a no-op, reversals throw `HistoryDegradedError`, and a `HISTORY_DEGRADED` warning reaches the logger | Same |
 | Diagnostic sink | `KernelBootOptions.logger` / `CreateStandardKernelOptions.logger` is forwarded to `ServiceContext.logger`; history ingestion failures warn through it (console fallback) | Phase 5 telemetry sink |
+
+**Target deterministic boot sequence.** `BrudTools` is a Level-1 core service, so the tool routing table exists before any plugin is activated:
+
+```text
+Settings (brud.core.settings)
+  -> Workspace (brud.core.workspace)
+    -> FileSystem (brud.core.filesystem)
+      -> UniversalHistory (brud.core.universalHistory)
+        -> Validation (brud.core.validation)
+          -> Terminal (brud.core.terminal)
+            -> BrudTools (brud.core.tools)        <-- LEVEL-1 CORE SERVICE
+              -> Telemetry (sink)
+                -> PluginManager
+```
+
+When `PluginManager` activates plugins during the post-boot `onRunning` phase, each plugin registers its tools directly into the live `BrudTools` instance via `context.registerTool(...)`. Registration is not a separate catalog bootstrap step: the Level-1 registry is already `RUNNING`, so a plugin's tools become routable the moment its `activate()` returns and disappear when its disposable is disposed. Tools therefore become available strictly after boot and never during `BOOTING`.
 
 The bootstrap's deterministic order and reverse shutdown are already correct and must not be weakened.
 
@@ -459,7 +478,7 @@ Workspace scope wins over user scope so a project can enforce its own safety pol
 | `search/`, `read-engine/`, `import-resolver/` | File search, bounded reads, import following | `process.cwd()` fallback in `fileSearch` | `brud.search`, `brud.tools.reader`, `brud.codebase.imports` |
 | `structure-extractor/`, `metadata-extractor/` | Directory trees and codebase metadata | Filesystem port | `brud.codebase.structure` |
 | `prompt-library/`, `prompts/` | Static and user prompt cascade | File store port | `brud.prompts.library`, `brud.prompts.user` |
-| `tool-registry/` | Global tool documentation registry | Module singleton | `brud.tools.catalog` |
+| `tool-registry/` | Global tool documentation registry | Module singleton | `BrudTools` (`brud.core.tools`) for registration/routing; `brud.tools.catalog` keeps `get_tool_info` and documentation formatting |
 | `settings/` | Types, merge, read governors | Adapter loads files | `SettingsService` |
 | `validation/terminal.ts`, `api/` | Dangerous command detection, path/line/field validation, error catalog | `process.cwd()` fallback | `ValidationService`; legacy API becomes a facade |
 | `utils/workspacePath.ts`, `utils/pathResolver.ts` | Realpath containment, multi-root selection, path cache | Node `fs` directly | `WorkspaceService`; then deleted |
@@ -521,7 +540,7 @@ The daemon is the right long-lived host, but it currently cannot execute a tool.
 | Plugin branding cannot be forged by a manifest | Enforced | `branding.test.ts`, `manifest` authorization tests |
 | Plugin activation rolls back on failure | Enforced | `PluginManagerService` tests |
 | Plugins can request filesystem/history capabilities | Partial | Facades exist, but boot-time grants fail and history is not read-only |
-| Plugins can register or execute tools | Missing | No context handles; global registry is the only catalog |
+| Plugins can register or execute tools | Missing | No context handles; global registry is the only catalog. `BrudTools` (`brud.core.tools`) is scheduled in Phase 5 (G-18) |
 | MCP executes through the microkernel | Missing | `bootCoreKernel` raw container |
 | One kernel per workspace | Missing | Three execution surfaces, two kernel constructions |
 | Legacy and new history agree | Missing | JSON vs SQLite stores |
@@ -678,14 +697,75 @@ export interface ITerminalService {
 
 **Exit criteria:** no orphaned process after timeout, abort, plugin deactivation, or kernel shutdown; output is capped; cwd escape is rejected before spawn; core and plugins contain zero direct spawn imports.
 
+#### G-18 `BrudToolsService` — `brud.core.tools`
+
+**Why it blocks userland:** Tool cataloging and execution routing are not an optional documentation feature. The stream block parser (`<<<TOOL_NAME` … `>>>`), the AI prompt surface, the Brud Desktop tool palette, and the MCP bridge all require one authoritative, boot-time table that maps a tool name to a schema-validated handler. If that table lived in a late-phase userland plugin (`brud.tools.catalog`), the parser would have to load userland code before the kernel is running, or depend on plugin activation order, and every tool implementation would need a brittle parent/child plugin hierarchy to publish its descriptor.
+
+| Aspect | Target |
+|---|---|
+| Token | `brud.core.tools` |
+| Tier | core |
+| Contract | `IBrudToolsService` |
+| Dependencies | `SettingsService`, `ValidationService` |
+| Boot position | After `ValidationService`, before `PluginManager` |
+| Responsibilities | Registry and dispatch table; plugin registration surface; official certification status; schema validation gate; parser routing table; tool-definition synthesis |
+| Status | Missing (Phase 5) |
+
+**Responsibilities (normative):**
+
+1. Serves as the central registry and dispatch table for every tool — core official tools (`create_file`, `search_replace`, `read_file`, …) and community tools (for example a vendor Git runner).
+2. Exposes a unified registration interface for plugins through the `tools:register` capability on `IPluginContext`.
+3. Manages **Official Tool Certification** status by checking `OFFICIAL_PLUGIN_BRAND`; the `isOfficial` flag is derived, never asserted by the registrant.
+4. Validates tool payloads against their declared JSON Schema through `ValidationService` before the handler is invoked.
+5. Provides the direct routing table used by the stream block parser (`<<<TOOL_NAME` … `>>>`), so the tokenizer resolves a name with one lookup and never inspects plugins.
+6. Synthesizes the live tool definitions consumed by the AI prompt system, the Brud Desktop UI palette, and the MCP bridge.
+
+**Why this is Level-1 and not a plugin:** the registry is part of the execution contract, not a feature built on top of it. Putting it in Level-1 removes the parent/child plugin hierarchy, keeps the parser frozen (it resolves tool names against `BrudTools.getTool(toolName)`), and guarantees 100% API parity: an official tool and a community tool register through the exact same `registerTool` call and are dispatched through the exact same path. `brud.tools.catalog` survives as a convenience plugin layered on top (see §4.3), not as the storage of record.
+
+**Registration and dispatch rules:**
+
+- Registration is instance-scoped and disposable: `registerTool` returns an `IPluginDisposable` that removes the entry when the plugin deactivates or its subscription is disposed.
+- The `pluginId` and `isOfficial` arguments of the service method are supplied by the kernel: `PluginManager` owns the caller identity and derives `isOfficial` from `OFFICIAL_PLUGIN_BRAND`. `context.registerTool(options)` passes them on the plugin's behalf, so plugin code can never assert official status.
+- Duplicate tool names are rejected with a structured conflict error; a later registration never silently shadows an earlier one.
+- `getTool`/`listTools` are read-only projections; no caller receives the raw handler or the mutable table.
+- `executeTool` re-validates the payload and applies the caller's permission set; it never trusts validation performed by a transport or by the calling plugin.
+- Deleting a plugin removes its tools from the routing table atomically, so the parser can never dispatch to a handler whose owner is deactivating.
+
+```typescript
+export interface ToolRegistrationOptions {
+  readonly name: string;
+  readonly description: string;
+  readonly parametersSchema: Record<string, unknown>;
+  readonly requiredPermissions?: readonly string[];
+  readonly execute: (
+    input: Record<string, unknown>,
+    context: IPluginExecutionContext
+  ) => Promise<OperationResult>;
+}
+
+export interface RegisteredToolInfo extends ToolRegistrationOptions {
+  readonly ownerPluginId: string;
+  readonly isOfficial: boolean; // Derived from OFFICIAL_PLUGIN_BRAND
+}
+
+export interface IBrudToolsService {
+  registerTool(pluginId: string, isOfficial: boolean, options: ToolRegistrationOptions): IPluginDisposable;
+  getTool(name: string): RegisteredToolInfo | undefined;
+  listTools(filter?: { officialOnly?: boolean }): readonly RegisteredToolInfo[];
+  executeTool(name: string, rawInput: unknown, callerContext: IPluginExecutionContext): Promise<OperationResult>;
+}
+```
+
+**Exit criteria:** the parser resolves every tool through `BrudTools.getTool` with zero plugin awareness; an official and a third-party tool register through the same API and appear in `listTools`; an invalid payload is rejected by `ValidationService` before the handler runs; deactivating a plugin removes its tools and no stale route survives; two kernels in one process have independent registries.
+
 ### 3.2 Missing `IPluginContext` Capabilities
 
 The permission union already declares `tools:register`, `tools:execute`, and `telemetry:emit`, but no capability handle exists and `PluginCapability` only lists filesystem/history. `settings:read` and `terminal:execute` are not even declared. Phase 5 closes both the type and the runtime gap.
 
 | Capability | Permission required | Handle | Backing service | Denial behaviour |
 |---|---|---|---|---|
-| Tool registration | `tools:register` | `registerTool(descriptor): IPluginDisposable` | Kernel `OperationRegistry` + per-kernel tool catalog | `PluginPermissionError` |
-| Tool execution | `tools:execute` | `executeTool(kind, input, options?): Promise<OperationResult>` | Kernel execution pipeline | `PluginPermissionError`; recursion depth still enforced |
+| Tool registration | `tools:register` | `registerTool(options: ToolRegistrationOptions): IPluginDisposable` | `BrudTools` (`brud.core.tools`) live registry | `PluginPermissionError` |
+| Tool execution | `tools:execute` | `executeTool(name, input, options?): Promise<OperationResult>` | `BrudTools.executeTool` → `ValidationService` → kernel execution pipeline | `PluginPermissionError`; recursion depth still enforced |
 | Settings read | `settings:read` | `getSettings(): SettingsView` | `ISettingsService` frozen snapshot | `PluginPermissionError` |
 | Terminal execution | `terminal:execute` | `getTerminal(): ITerminalHandle` | `ITerminalService` scoped handle | `PluginPermissionError` |
 | Telemetry emit | `telemetry:emit` | `emitTelemetry(event: TelemetryEvent): void` | Telemetry sink | `PluginPermissionError` |
@@ -694,7 +774,7 @@ The permission union already declares `tools:register`, `tools:execute`, and `te
 
 **Permission union additions:** `settings:read`, `terminal:execute`. Adding members is a manifest schema change; it must be reflected in `PLUGIN_PERMISSIONS`, `CAPABILITY_PERMISSION_REQUIREMENTS`, and the official plugin manifests in the same change.
 
-**Tool execution is not a back door.** `executeTool` must go through the same `ExecutionPipeline` as external calls: validation, capability verification, call-depth limit, abort signal, and history semantics. A plugin may not invoke an operation while holding an ungranted capability, and it may not use its own registration to bypass validation.
+**Tool execution is not a back door.** `executeTool` must go through the same `ExecutionPipeline` as external calls: the payload is schema-validated by `ValidationService` inside `BrudTools.executeTool`, then capability verification, call-depth limit, abort signal, and history semantics apply unchanged. A plugin may not invoke an operation while holding an ungranted capability, and it may not use its own registration to bypass validation.
 
 ### 3.3 Path Translation Adapter
 
@@ -789,8 +869,8 @@ These are not optional; each blocks a phase even though it was not in the origin
 
 | ID | Gap | Evidence | Consequence | Phase |
 |---|---|---|---|---|
-| **G-5** | No `tools:register` / `tools:execute` contract | `IPluginContext.ts`; `PluginCapability` | Plugins cannot own operation kinds | 5 |
-| **G-6** | No per-kernel tool catalog | `globalToolRegistry` singleton | Two kernels share tools; registration cannot be disposed | 5, 7 |
+| **G-5** | No `tools:register` / `tools:execute` contract | `IPluginContext.ts`; `PluginCapability` | Plugins cannot own operation kinds; closed by G-18 | 5 |
+| **G-6** | No per-kernel tool catalog | `globalToolRegistry` singleton | Two kernels share tools; registration cannot be disposed; closed by G-18 | 5, 7 |
 | **G-7** | `IBrudFileSystem` lacks directory/rename/copy primitives | `IBrudFileSystem.ts` (8 methods) | `brud.tools.filesystem` cannot implement 12 kinds | 5 |
 | **G-8** | No read-only history projection | `UniversalHistory` exposes full service | `history:read` is effectively `history:write` | 5 |
 | **G-9** | Boot-time grant deadlock | `PluginManagerService.initialize()` vs broker `RUNNING` gate | Any real plugin requesting a facade fails at boot | 5 |
@@ -812,17 +892,18 @@ flowchart TD
     W["G-2 WorkspaceService"]
     V["G-3 ValidationService"]
     T["G-4 TerminalService"]
-    PR["Phase 5: plugin runtime completion<br/>G-5, G-6, G-7, G-8, G-9, G-14"]
+    BT["G-18 BrudToolsService<br/>brud.core.tools"]
+    PR["Phase 5: plugin runtime completion<br/>G-5, G-6, G-7, G-8, G-9, G-14, G-18"]
     PA["Path translation adapter<br/>(uses G-2 + G-3)"]
     HI["History import bridge<br/>(G-10, G-15)"]
     LEAF["Phase 6: leaf plugins"]
-    CAT["Phase 7: tool catalog"]
+    CAT["Phase 7: get_tool_info / docs"]
     READ["Phase 8: reader"]
     FS["Phase 9: filesystem mutations"]
     TERM["Phase 10: terminal + MCP bridge"]
     DEC["Phase 11: decommission"]
 
-    P0 --> S --> W --> V --> T --> PR
+    P0 --> S --> W --> V --> T --> BT --> PR
     W --> PA
     V --> PA
     PR --> LEAF
@@ -850,6 +931,7 @@ flowchart TD
 5. **No singletons.** Every registry is kernel-scoped and disposable. Module-level mutable state is a review blocker.
 6. **Official by brand.** All eleven are first-party, certified with the kernel symbol, and use the reserved `brud.` namespace.
 7. **Pure where possible.** Parsing and prompt libraries take bytes/strings and return values; they never touch a filesystem.
+8. **Tools register into Level-1.** Every plugin publishes its tools into `BrudTools` (`brud.core.tools`) through `context.registerTool(...)`. No plugin owns tool storage, and no plugin needs a parent/child relationship with another plugin to expose a descriptor.
 
 ### 4.2 Catalog Overview
 
@@ -861,11 +943,13 @@ flowchart TD
 | 4 | `brud.codebase.structure` | AST/structure and metadata extraction | `structure-extractor/`, `metadata-extractor/` | `fs:read`, `tools:register` | — | 6 |
 | 5 | `brud.prompts.library` | Static prompt library | `prompt-library/` | — | — | 6 |
 | 6 | `brud.prompts.user` | User prompt cascade and persistence | `prompts/`, adapter prompt stores | `fs:read`, `fs:write` | `brud.prompts.library` | 6 |
-| 7 | `brud.tools.catalog` | Tool documentation and discovery | `tool-registry/`, `get_tool_info` branch | `tools:register`, `tools:execute` | — | 7 |
+| 7 | `brud.tools.catalog` | `get_tool_info` and documentation export over the Level-1 registry | `tool-registry/`, `get_tool_info` branch | `tools:register`, `tools:execute` | `brud.core.tools` (L1 service) | 7 |
 | 8 | `brud.tools.reader` | Bounded batch read engine | `read-engine/`, read branches | `fs:read`, `tools:register`, `tools:execute` | `brud.search`, `brud.codebase.imports` | 8 |
-| 9 | `brud.tools.filesystem` | Mutating file operations | mutation branches of `file-operations/`, patch application | `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register` | `brud.patchblocks`, `brud.tools.catalog`, `brud.search` | 9 |
+| 9 | `brud.tools.filesystem` | Mutating file operations | mutation branches of `file-operations/`, patch application | `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register` | `brud.patchblocks`, `brud.search` | 9 |
 | 10 | `brud.terminal` | Command execution adapter | `terminal/`, terminal branches | `terminal:execute`, `settings:read`, `tools:register` | — | 10 |
-| 11 | `brud.mcp.bridge` | MCP transport and JSON-RPC adapter | `packages/mcp` | `tools:execute`, `fs:read`, `telemetry:emit` | `brud.tools.catalog` | 10 |
+| 11 | `brud.mcp.bridge` | MCP transport and JSON-RPC adapter | `packages/mcp` | `tools:execute`, `fs:read`, `telemetry:emit` | `brud.core.tools` (L1 service), `brud.tools.catalog` | 10 |
+
+**The registry is not a plugin.** The table lists eleven plugins; the live tool registry is not one of them. `BrudTools` (`brud.core.tools`) is a Level-1 core service (G-18) that boots before `PluginManager`. Every operational plugin — `brud.tools.filesystem`, `brud.tools.reader`, `brud.terminal`, `brud.search`, `brud.codebase.structure`, and third-party packages such as `@vendor/git` — registers its tools into it through the exact same `context.registerTool(...)` API. There is no privileged registration path for official plugins; official status is a derived field, not a different contract.
 
 ### 4.3 Plugin Specifications
 
@@ -946,13 +1030,13 @@ flowchart TD
 
 | Field | Value |
 |---|---|
-| Purpose | Be the single source of tool documentation, discovery, and `get_tool_info` |
-| Source | `packages/core/src/tool-registry/` (`ToolDoc`, `ToolParameter`, registry, init), `get_tool_info` branch |
+| Purpose | Implement `get_tool_info` and documentation export/formatting on top of the Level-1 `BrudTools` registry |
+| Source | `packages/core/src/tool-registry/` (`ToolDoc`, `ToolParameter` formatting, init), `get_tool_info` branch |
 | Permissions | `tools:register`, `tools:execute` |
-| Operations | `get_tool_info`; registers documentation for every official tool |
-| Failure mode | Unknown tool returns `TOOL_NOT_FOUND`; duplicate registration is rejected |
-| Verify | Catalog parity: 20 client-exposed tools plus `get_tool_info`; schema determinism; registration disposal |
-| Notes | Replaces `globalToolRegistry`. One catalog per kernel. The MCP catalog is synthesized from this registry, not a second table. `tools:execute` is used only for conformance probes that verify a documented tool is executable |
+| Operations | `get_tool_info` |
+| Failure mode | Unknown tool returns `TOOL_NOT_FOUND`; malformed documentation is reported, not thrown during activation |
+| Verify | `get_tool_info` parity for all 20 client-exposed tools; deterministic rendering; unknown-tool path; works with a registry that already contains third-party tools |
+| Notes | **It no longer stores tool descriptors.** `BrudTools` (`brud.core.tools`) owns the live registry, certification status, validation gate, and dispatch table. This plugin is an official convenience layer: it answers `get_tool_info` from `listTools()`/`getTool()` and provides documentation export/formatting utilities for prompts and the Desktop palette. The MCP catalog is synthesized from `BrudTools`, not from this plugin and not from a second table. `tools:execute` is used only for conformance probes that verify a documented tool is executable |
 
 #### 8. `brud.tools.reader`
 
@@ -976,7 +1060,7 @@ flowchart TD
 | Operations | `search_replace`, `create_file`, `delete_file`, `rename_file`, `move_file`, `copy_file`, `append_file`, `create_directory`, `delete_directory`, `move_directory`, `append_file_multi`, `search_replace_multi` |
 | Failure mode | No partial writes; failed batch aborts the session and reverts applied operations; conflicts are reported before mutation |
 | Verify | Byte parity for all 12 kinds; reversal parity; crash recovery; symlink containment; failed-batch rollback |
-| Notes | Uses the `brud.patchblocks` SDK for matching, the `brud.tools.catalog` SDK for descriptors, and the `brud.search` SDK for glob expansion through its own `fs:read` handle. Requires G-7 filesystem primitives. Directory operations must be atomic enough to leave a recoverable state |
+| Notes | Uses the `brud.patchblocks` SDK for matching, the kernel `ToolRegistrationOptions` contract for descriptors, and the `brud.search` SDK for glob expansion through its own `fs:read` handle. Requires G-7 filesystem primitives. Directory operations must be atomic enough to leave a recoverable state |
 
 #### 10. `brud.terminal`
 
@@ -1026,7 +1110,7 @@ flowchart TD
 | 18 | `read_directory` | `brud.tools.reader` | read | Recursive option |
 | 19 | `terminal_interactive` | `brud.terminal` | execute | Answer feeding |
 | 20 | `terminal_command` | `brud.terminal` | execute | Single/sequential/parallel/conditional |
-| 21 | `get_tool_info` | `brud.tools.catalog` | read | Deliberately excluded from MCP client tools |
+| 21 | `get_tool_info` | `brud.tools.catalog` | read | Reads the `BrudTools` registry; deliberately excluded from MCP client tools |
 
 **Count check:** 12 mutating + 6 read-only code tools + 1 catalog + 2 terminal = 21.
 
@@ -1045,17 +1129,23 @@ flowchart LR
     FS["brud.tools.filesystem"]
     TERM["brud.terminal"]
     MCP["brud.mcp.bridge"]
+    BTOOLS["brud.core.tools (Level-1)"]
 
+    BTOOLS --> SRCH
+    BTOOLS --> STRUCT
+    BTOOLS --> CAT
+    BTOOLS --> READ
+    BTOOLS --> FS
+    BTOOLS --> TERM
     PLIB --> PUSER
     SRCH --> READ
     IMP --> READ
     PB --> FS
     SRCH --> FS
-    CAT --> FS
     CAT --> MCP
 ```
 
-**Rule:** arrows mean "must be active first". They do **not** mean "imports its code". The reader composes search/imports through `tools:execute` or through kernel capability contracts; it never imports their modules.
+**Rule:** arrows mean "must be active first". They do **not** mean "imports its code". `BTOOLS` is not a plugin: it is a Level-1 service that is constructed during kernel boot, before any plugin activates, so every arrow from it is satisfied by the time `PluginManager` runs. The reader composes search/imports through `tools:execute` or through kernel capability contracts; it never imports their modules. Tool descriptors come from the kernel `ToolRegistrationOptions` contract, which is why no plugin depends on `brud.tools.catalog` to register a tool.
 
 ### 4.6 Permission Matrix
 
@@ -1107,7 +1197,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 1. Dependencies activate first, in topological order.
 2. Activation is all-or-nothing for the plugin graph; failure rolls back activated plugins in reverse.
-3. A plugin registers tools through `context.registerTool`; registration returns a disposable added to `context.subscriptions`.
+3. A plugin registers tools into the live Level-1 `BrudTools` (`brud.core.tools`) instance through `context.registerTool(...)`; registration returns a disposable added to `context.subscriptions`, and disposal removes the tool from the routing table. This is the only registration path for official and third-party plugins alike.
 4. Deactivation runs in reverse order; subscriptions dispose after `deactivate()` resolves.
 5. A plugin must not resolve a capability it did not declare, even if the service exists.
 
@@ -1124,9 +1214,9 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 | **2** | WorkspaceService | Canonical root, containment, translation | 1 | Path parity matrix | Medium |
 | **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium |
 | **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium |
-| **5** | Plugin runtime completion | Full capability context, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix | Medium |
+| **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium |
 | **6** | Leaf plugins | Six leaf plugins (pure or narrowly scoped storage) live behind flags | 5 | 100% fixture parity per plugin | Low |
-| **7** | Tool catalog | Per-kernel catalog replaces global registry | 5, 6 | Catalog parity; no singleton | Medium |
+| **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium |
 | **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low |
 | **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** |
 | **10** | Terminal + MCP bridge | Terminal plugin; daemon and MCP on one standard kernel | 4, 7, 8, 9 | One kernel per workspace; all suites green | High |
@@ -1153,7 +1243,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 | Error vocabulary | Kernel `PathViolationRule`; legacy codes at the boundary | Mapping table §3.3 |
 | History identity | `BR-YYYYMMDD-NNN(N)`, statuses `active`, `committed`, `aborted`, `reverted` | Additive only |
 | Operation result | `OperationResult` envelope; 21 kind names unchanged | Additive fields only |
-| Tool documentation | `ToolDoc` / `ToolParameter` as the catalog input | Additive fields only |
+| Tool documentation | `ToolDoc` / `ToolParameter` as the documentation/export input; `BrudTools` entries use `ToolRegistrationOptions` | Additive fields only |
 
 **Housekeeping work items:**
 
@@ -1283,21 +1373,27 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 #### Phase 5 — Plugin Runtime Completion
 
-**Objective:** make `IPluginContext` sufficient for every plugin in §4 without leaking a raw service.
+**Objective:** make `IPluginContext` sufficient for every plugin in §4 without leaking a raw service, and stand up the Level-1 `BrudTools` registry that backs `context.registerTool()`.
 
 **Work items:**
 
 1. **Permissions:** add `settings:read` and `terminal:execute`; update `PluginCapability`, `CAPABILITY_PERMISSION_REQUIREMENTS`, manifest validation, and docs.
 2. **Context handles:**
-   - `registerTool(descriptor): IPluginDisposable` (per-kernel catalog)
-   - `executeTool(kind, input, options?)` (pipeline-mediated)
+   - `registerTool(options: ToolRegistrationOptions): IPluginDisposable` (registers into the Level-1 `BrudTools` instance)
+   - `executeTool(name, input, options?)` (schema-validated by `BrudTools`, then pipeline-mediated)
    - `getSettings(): SettingsView` (frozen view)
    - `getTerminal(): ITerminalHandle` (scoped, cwd-pinned)
    - `emitTelemetry(event)` (sink; no console)
 3. **Boot grant fix (G-9):** add an optional `onRunning(broker)` lifecycle hook to `IServiceLifecycle`, invoked after `state = RUNNING` and before `boot()` resolves. Move plugin activation there. Keep `initialize()` for staging only.
 4. **Read-only history (G-8):** implement `ReadOnlyHistoryFacade`; project by tier and permission in the history descriptor.
 5. **Filesystem primitives (G-7):** add `rename`, `copy`, `createDirectory`, `deleteDirectory` to `IBrudFileSystem` with validation, mutex coverage, and tests. Define overwrite/recursive semantics explicitly.
-6. **Per-kernel catalog (G-6):** add a kernel-scoped tool registry service; remove the global registry from the plugin path.
+6. **`BrudToolsService` (G-6, G-18):** implement `packages/kernel/services/BrudTools/` — the `IBrudToolsService` contract, descriptor, live registry, official-certification derivation from `OFFICIAL_PLUGIN_BRAND`, schema-validation gate, and dispatch table.
+   - Register the descriptor in `createStandardKernel` after `ValidationService` and before `PluginManager`, so the routing table exists before activation.
+   - Implement `registerTool`, `getTool`, `listTools`, and `executeTool` exactly as specified in G-18; registration is instance-scoped and disposable.
+   - Make `IPluginContext.registerTool()` and `executeTool()` thin permission-checked handles over this one instance; no plugin receives the raw registry.
+   - Wire the stream block parser to resolve `<<<TOOL_NAME` … `>>>` through `BrudTools.getTool` only; the tokenizer stays frozen and plugin-unaware.
+   - Synthesize tool definitions for the AI prompt system, Brud Desktop palette, and MCP bridge from `listTools()`.
+   - Remove `globalToolRegistry` from the plugin path; the legacy registry may remain only behind the Phase 11 compatibility flag.
 7. **Telemetry sink (G-14):** define `TelemetryTokens.Service`; route plugin logger records through it; keep a no-op default.
 8. **Boundary enforcement:** extend `scripts/check-boundaries.mjs` to reject plugin imports of `@brud/core`, `@brud/mcp`, `apps/*`, adapters, `@brud/plugin-*` runtime entries, and `node:*` (except explicitly allowlisted host code). Pure `@brud/sdk-*` libraries are allowed.
 9. **Denial matrix tests:** for each capability, prove that a plugin without the permission cannot obtain a working handle.
@@ -1305,6 +1401,10 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 **Exit criteria:**
 
 - A plugin can register a tool, execute it, read settings, run a terminal command, emit telemetry, and read history read-only, each only with the declared permission.
+- `BrudTools` boots as `brud.core.tools` after `ValidationService` and before `PluginManager`; the stream parser routes every tool name through `getTool` with no plugin awareness.
+- An official tool and a third-party tool register through the same `registerTool(...)` API and appear in `listTools()` with a correctly derived `isOfficial` flag.
+- Deactivating a plugin removes its tools from the routing table; a payload that violates the declared JSON Schema is rejected before the handler runs.
+- Two kernels in one process expose independent tool registries; `globalToolRegistry` is no longer in the plugin path.
 - A plugin requesting a facade during activation succeeds after `boot()` resolves.
 - `history:read` cannot call `beginSession`, `commitSession`, or `executeReversal`.
 - Directory/rename/copy operations are atomic enough to be reversible and covered by tests.
@@ -1343,22 +1443,24 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 #### Phase 7 — Tool Catalog
 
-**Objective:** replace the global tool registry with a kernel-scoped catalog and make it the single source of tool truth.
+**Objective:** deliver `brud.tools.catalog` as an official convenience plugin over the Level-1 `BrudTools` registry — `get_tool_info` plus documentation export — consuming `IBrudToolsService` instead of owning tool storage.
 
 **Work items:**
 
-1. Implement `brud.tools.catalog` and its `get_tool_info` operation.
-2. Have every official plugin register its `ToolDoc`/prompt descriptor through `tools:register`.
-3. Delete the MCP hand-maintained parameter map as the source of truth; derive normalization from kernel descriptors where possible. Keep a guarded compatibility layer until Phase 11 if a descriptor gap remains.
-4. Make the MCP catalog and prompt surface synthesize from the registry.
-5. Ensure registration is disposed on plugin deactivation and that duplicate kinds are rejected.
-6. Keep `get_tool_info` out of the MCP client catalog, as today.
+1. Implement `brud.tools.catalog` against `IBrudToolsService`: it reads through `getTool`/`listTools` and keeps no private tool map.
+2. Implement `get_tool_info` and documentation export/formatting (prompt fragments, Desktop palette metadata) from the live registry.
+3. Confirm every official plugin registers its own tool definitions through `context.registerTool(...)` from Phase 5; the catalog plugin registers nothing on their behalf and is never a parent plugin in an activation hierarchy.
+4. Delete the MCP hand-maintained parameter map as the source of truth; derive normalization from `BrudTools` tool definitions. Keep a guarded compatibility layer until Phase 11 if a descriptor gap remains.
+5. Make the MCP catalog and prompt surface synthesize from `BrudTools.listTools()` (optionally formatted by the catalog plugin), not from a second table.
+6. Rely on `BrudTools` for disposal and duplicate rejection; the catalog must reflect a removed tool immediately and must not cache definitions across deactivation.
+7. Keep `get_tool_info` out of the MCP client catalog, as today.
 
 **Exit criteria:**
 
 - 20 client-exposed tools plus `get_tool_info`, with deterministic schemas.
-- Two kernels in one process have independent catalogs (concurrency test).
+- Two kernels in one process have independent registries (concurrency test).
 - No `globalToolRegistry` reference remains in runtime code.
+- `brud.tools.catalog` holds no mutable tool table of its own; removing a plugin removes its tools from `get_tool_info` output.
 - MCP catalog and normalization tests pass.
 
 **Rollback:** the legacy registry can be restored by flag; no user data is involved.
@@ -1429,7 +1531,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 3. Make the standalone MCP entry point a **thin client/proxy** to the daemon:
    - stdio: connect to the workspace daemon (starting it if absent) and forward framed requests; never boot a kernel in the MCP process.
    - HTTP: the daemon hosts the loopback listener through the bridge plugin.
-4. The daemon boots `createStandardKernel` with the Node storage driver, the full Level-1 set, and the official plugins. Settings come from `SettingsService`; history comes from UniversalHistory; the catalog comes from the kernel registry.
+4. The daemon boots `createStandardKernel` with the Node storage driver, the full Level-1 set, and the official plugins. Settings come from `SettingsService`; history comes from UniversalHistory; the tool routing table comes from `BrudTools` (`brud.core.tools`).
 5. Remove `@brud/core` from `packages/mcp` dependencies.
 6. Expose `tools.execute` over daemon JSON-RPC (additive; do not break existing fs/history methods).
 7. Rewire the VS Code adapter (`executeOperationsFromVSCode`) and the history UI to the daemon client instead of `bootCoreKernel` and the JSON history adapter. Keep a signed-off execution fallback for one release.
@@ -1491,7 +1593,7 @@ flowchart TD
     P4["4 Terminal"]
     P5["5 Plugin runtime"]
     P6["6 Leaf plugins"]
-    P7["7 Catalog"]
+    P7["7 Catalog (get_tool_info)"]
     P8["8 Reader"]
     P9["9 Filesystem mutations"]
     P10["10 Terminal + MCP bridge"]
@@ -1574,9 +1676,9 @@ npm run lint
 | 2 | Path parity matrix; multi-root tests; symlink escape tests; adapter error mapping |
 | 3 | Validation matrix for 21 kinds; legacy-code boundary tests; frozen-policy test |
 | 4 | No-orphan tests; no spawn imports; terminal mode parity |
-| 5 | Capability denial matrix; read-only history tests; boot-grant test; FS primitive tests; boundary script |
+| 5 | Capability denial matrix; read-only history tests; boot-grant test; FS primitive tests; `BrudTools` registry/routing/schema-gate tests; boundary script |
 | 6 | Per-plugin fixture parity; no forbidden imports; clean deactivation |
-| 7 | Catalog schema parity; two-kernel isolation; no global registry |
+| 7 | Catalog schema parity; two-kernel isolation; no global registry; `get_tool_info` reads `BrudTools` only |
 | 8 | Read envelope/limit/binary/abort/stress parity |
 | 9 | 12-kind byte parity; reversal parity; crash recovery; import dry-run; zero data loss |
 | 10 | One-kernel-per-workspace test; MCP stdio/HTTP suites; daemon RPC; extension suite; terminal cleanup |
@@ -1613,7 +1715,8 @@ The rollout is complete when all of the following are true:
 
 - [ ] Brud Desktop ships on the plugin path, not the legacy switch.
 - [ ] All 21 operation kinds are served by official plugins with parity evidence.
-- [ ] `createStandardKernel` boots Settings → Workspace → Filesystem → History → Validation → Terminal → Telemetry → PluginManager, deterministically, with reverse shutdown.
+- [ ] `createStandardKernel` boots Settings → Workspace → Filesystem → History → Validation → Terminal → BrudTools → Telemetry → PluginManager, deterministically, with reverse shutdown.
+- [ ] `BrudTools` (`brud.core.tools`) is the only tool registry and dispatch table; official and third-party tools register through the same `context.registerTool(...)` API and the stream parser routes by name against it.
 - [ ] Plugins can use all seven capabilities plus the two new permissions, only through scoped handles.
 - [ ] `history:read` is read-only by construction.
 - [ ] One kernel and one history writer exist per workspace.
@@ -1640,6 +1743,7 @@ The rollout is complete when all of the following are true:
 | History ids/status | `UniversalHistory/contracts/` | Phase 0 | Additive only |
 | Operation result | `@brud/kernel` `OperationResult` | Phase 0 | Additive fields only |
 | Tool docs | `ToolDoc`, `ToolParameter` | Phase 0 | Additive fields only |
+| Tool registry contract | `IBrudToolsService`, `ToolRegistrationOptions`, `RegisteredToolInfo` | Phase 5 (G-18) | `brud.core.tools`; `getTool` is the parser routing lookup |
 | Rollout flags | `SettingsSnapshot.plugins` | Phase 1 | `off`, `shadow`, `active` |
 
 ## Appendix B — Parity Test Matrix
@@ -1682,7 +1786,7 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 | Missing workspace root | `NO_WORKSPACE` | WorkspaceService reports absence explicitly |
 | Command cwd outside root or missing | `INVALID_CWD` / `CWD_ESCAPE` | ValidationService distinguishes escape from absence |
 | Dangerous command | `DANGEROUS_COMMAND` | ValidationService rule id is included |
-| Unknown tool kind | `TOOL_NOT_FOUND` | Catalog returns the kind |
+| Unknown tool kind | `TOOL_NOT_FOUND` | `BrudTools.getTool` returns no entry for the name; the adapter reports it |
 | Tool disabled by allowlist | `TOOL_DISABLED` | Settings snapshot supplies the decision |
 | Session or target not found | `FILE_NOT_FOUND` / `SESSION_NOT_FOUND` | Operation-specific legacy code |
 | Reversal digest mismatch | `EXECUTION_FAILED` (conflict detail) | Plan is rejected before mutation |
@@ -1696,6 +1800,7 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 | Term | Definition |
 |---|---|
 | **Level-1 service** | A privileged, boot-registered kernel service with a frozen contract and a descriptor projection. |
+| **`BrudTools` / tool fabric** | The Level-1 `brud.core.tools` service that owns the live tool registry, official certification status, schema-validation gate, dispatch table, and the parser's name→handler routing lookup. |
 | **Userland plugin** | A capability-gated extension that reaches services only through `IPluginContext`. |
 | **Descriptor** | A self-describing registration record: token, tier, dependencies, factory, optional projection. |
 | **Projection** | The per-caller narrowing of a service instance (tier, permissions, partition) performed by the broker. |
@@ -1721,6 +1826,7 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 | Incomplete plugin context | R6 | 5 | Capability denial matrix; official plugin activation |
 | Read-only history / boot grant | R7 | 5 | Read-only history tests; boot-grant test |
 | Missing Settings/Workspace/Validation/Terminal | G-1–G-4 | 1–4 | Cross-host parity; path and validation matrices; no-orphan tests |
+| Tool registry and routing absent from Level-1 | G-18 | 5, 7 | `BrudTools` boot-position test; parser routing test; official/third-party registration parity; two-kernel isolation |
 | Test fakes in production | G-11 | 0, 10 | Root export audit; MCP bootstrap uses standard kernel |
 | Debug leaks | G-13 | 0 | `rg DEBUG packages/core/src` is empty |
 | Token naming | G-12 | 11 | `brud.core.pluginManager` everywhere |
@@ -1775,6 +1881,7 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 | **D-8** | Kernel-relative paths are canonical | One containment model for every plugin and host | Absolute paths are handled only by adapters |
 | **D-9** | Plugins compose through SDK libraries and `tools:execute` | Prevents peer coupling while allowing shared pure logic | No plugin imports another plugin's runtime |
 | **D-10** | New tokens use `brud.core.*`; `PluginManager` is renamed last | Avoids churn during the migration | Token rename is a Phase 11 item |
+| **D-11** | Elevate the Tool Registry and Execution Fabric (`BrudTools`) to a Level-1 Kernel Core Service while tool implementations remain capability-gated plugins | Prevents coupling all tools into a monolithic core, avoids brittle "parent/child" plugin hierarchies, ensures 100% API parity between official and community tools, and provides a stable Level-1 routing table for the stream parser | The parser and AI prompts interact with a frozen Level-1 contract (`IBrudToolsService`); adding or updating tools requires zero changes to kernel internals. `brud.tools.catalog` becomes a convenience layer over `brud.core.tools` rather than the storage of record |
 
 
 
