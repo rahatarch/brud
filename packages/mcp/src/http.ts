@@ -1,6 +1,6 @@
 import * as http from 'http';
 import type { IncomingMessage, ServerResponse } from 'http';
-import { bootMcpWorkspace } from './bootstrap';
+import { bootMcpWorkspace, disposeMcpWorkspace } from './bootstrap';
 import { createBrudMcpServer, resolveServerIdentity } from './server';
 import { createConcurrencyLimiter } from './limits';
 import type { ServerIdentity } from './server';
@@ -171,6 +171,7 @@ export async function startHttpServer(
     refreshSettings: () => workspace.refreshSettings(),
     close: () =>
       new Promise<void>((resolve, reject) => {
+        disposeMcpWorkspace(workspace);
         httpServer.close((error) => {
           if (error) {
             reject(error);

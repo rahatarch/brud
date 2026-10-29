@@ -11,7 +11,7 @@ import { BrudGetStartedManager } from './providers/GetStartedPanelProvider';
 import { registerExecutePatchCommand } from './commands/executePatch';
 import { BrudLogger } from './utils/logger';
 import { WorkspaceHistoryStore, VSCodeFileSystem, getEffectiveSettings } from '@brud/vscode-adapter';
-import { initializeToolRegistry } from '@brud/core';
+import { initializeToolRegistry, killAllProcesses } from '@brud/core';
 import { startHttpServer } from '@brud/mcp';
 import { connectToDaemon } from '@brud/daemon';
 import type { DaemonClient } from '@brud/daemon';
@@ -225,6 +225,9 @@ export async function deactivate(): Promise<void> {
       await service.dispose();
     }
   } finally {
+    // Extension-host deactivation (window reload, shutdown) must not leave
+    // detached terminal children behind.
+    killAllProcesses();
     if (client) {
       await client.close();
     } else if (pending) {

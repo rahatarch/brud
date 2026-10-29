@@ -22,6 +22,11 @@ import {
   type UniversalHistoryDescriptorOptions,
 } from '../../services/UniversalHistory/descriptor/index.js';
 import {
+  createTerminalDescriptor,
+  pinTerminalPolicies,
+  type TerminalDescriptorOptions,
+} from '../../services/TerminalService/descriptor/TerminalDescriptor.js';
+import {
   createValidationDescriptor,
   pinBootPolicies,
   type ValidationDescriptorOptions,
@@ -85,6 +90,14 @@ export interface CreateStandardKernelOptions {
    */
   readonly validation?: ValidationDescriptorOptions;
   /**
+   * Terminal policy, validator and workspace overrides.
+   *
+   * By default the service freezes the standard policy, re-validates every
+   * command through `brud.core.validation`, and spawns under the boot
+   * workspace root. Overrides exist for standalone compositions and tests.
+   */
+  readonly terminal?: TerminalDescriptorOptions;
+  /**
    * Mutation journal the filesystem publishes pre/post descriptors to.
    *
    * Phase 4 (`UniversalHistory`) binds a listener here. When omitted, the
@@ -138,7 +151,7 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  * {@link BrudKernel.boot} is called.
  *
  * Boot order is structural: settings, settings reader, workspace, filesystem,
- * validation, history, then plugins. Workspace precedes the filesystem service so the
+ * validation, terminal, history, then plugins. Workspace precedes the filesystem service so the
  * canonical root identity exists before any content service initializes.
  *
  * @param options - Optional driver, workspace, history, and plugin overrides for testing or alternate backends.
@@ -146,11 +159,14 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  */
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
   // Validation freezes its policy from the settings snapshot and the workspace
-  // authority. Both are only readable once the broker serves requests, which
-  // is why the kernel runs the registered boot pinners at the end of boot.
+  // authority; terminal binds the validation gate it re-checks every command
+  // against. Both dependencies are only readable once the broker serves
+  // requests, which is why the kernel runs the registered boot pinners at the
+  // end of boot.
   const kernel = new BrudKernel({
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       await pinBootPolicies(instances);
+      pinTerminalPolicies(instances);
     },
   });
   const storageDriver = options?.storageDriver ?? new DurableNodeStorageDriver();
@@ -207,6 +223,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // terminal and plugin layers. Its policy is the boot settings snapshot, read
   // once at construction and never re-read.
   kernel.register(createValidationDescriptor(options?.validation));
+  // Terminal sits immediately after validation: it re-validates every command
+  // (including conditional branches) through the frozen gate before spawning,
+  // and owns the only process-spawn site in the kernel.
+  kernel.register(createTerminalDescriptor(options?.terminal));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
   kernel.register(createHistoryDescriptor({
     ...historyJournalOptions,

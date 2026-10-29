@@ -5,11 +5,8 @@ import {
   NodeFileSystem,
   NodeHistoryStore,
   bootCoreKernel,
-  executeCommand,
-  executeConditional,
-  executeParallel,
-  executeSequential,
-  executeTerminalCommand,
+  createTerminalExecutor,
+  killAllProcesses,
 } from '@brud/core';
 import type { BrudSettings, FileSystem, HistoryStore, TerminalExecutor } from '@brud/core';
 import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
@@ -74,18 +71,17 @@ export function loadWorkspaceSettings(workspaceRoot: string): BrudSettings {
   }
 }
 
-function createTerminalExecutor(): TerminalExecutor {
-  return {
-    execute: executeTerminalCommand,
-    executeCommand: (command, cwd, timeout, env, onChunk, signal) =>
-      executeCommand(command, cwd, timeout, env, onChunk, signal),
-    executeSequential: (commands, cwd, timeout, env, stopOnFailure, onChunk, signal) =>
-      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
-    executeParallel: (commands, cwd, timeout, env, onChunk, signal) =>
-      executeParallel(commands, cwd, timeout, env, onChunk, signal),
-    executeConditional: (conditional, cwd, timeout, env, onChunk, signal) =>
-      executeConditional(conditional, cwd, timeout, env, onChunk, signal),
-  } as TerminalExecutor;
+/**
+ * Kills every terminal session the MCP workspace spawned.
+ *
+ * The MCP host may be killed by SIGINT/SIGTERM; without this the detached
+ * children of an in-flight command outlive the server and are unreachable.
+ *
+ * @param workspace - Booted MCP workspace.
+ */
+export function disposeMcpWorkspace(workspace: McpWorkspace): void {
+  killAllProcesses();
+  void workspace.kernel.shutdown().catch(() => undefined);
 }
 
 export async function bootMcpWorkspace(workspaceCandidate: string): Promise<McpWorkspace> {

@@ -28,6 +28,9 @@ import {
   toolDisabledError,
   executionFailedError,
   commandFailedError,
+  terminalInterruptedError,
+  terminalOutputLimitError,
+  terminalTimeoutError,
   isBrudError,
 } from '../api/errors';
 import type { BrudSettings } from '../settings/types';
@@ -41,7 +44,8 @@ import type { ReadResult } from '../read-engine/index.js';
 import type { FileSearchQuery } from '../search/types';
 import type { HistoryStore, SnapshotData } from '../history/index.js';
 import { createSnapshot, recordAndSaveSession, generateSessionId, getNextSequenceNumber } from '../history/index.js';
-import type { TerminalExecutor, GroupResult, ConditionalCommand } from '../terminal/types';
+import type { TerminalExecutor, TerminalResult, GroupResult, ConditionalCommand } from '../terminal/types';
+import { createTerminalExecutor, hasTerminalAuthority } from '../terminal/bridge';
 import { globalToolRegistry } from '../tool-registry/registry.js';
 import { initializeToolRegistry } from '../tool-registry/init.js';
 
@@ -261,6 +265,37 @@ function checkProtectedTarget(
   return undefined;
 }
 
+/**
+ * Maps a terminal result onto the legacy error factories.
+ *
+ * Timeouts and cancellations are now distinguishable results, so they get
+ * their own codes instead of a fabricated `exit -1` `EXECUTION_FAILED`.
+ * Every other non-zero exit keeps emitting `EXECUTION_FAILED`.
+ */
+function terminalResultError(command: string, result: TerminalResult): BrudError | undefined {
+  if (result.success) {
+    return undefined;
+  }
+
+  if (result.status === 'interrupted') {
+    return terminalInterruptedError(command);
+  }
+
+  if (result.failure === 'TERMINAL_TIMEOUT') {
+    return terminalTimeoutError(command, result.duration);
+  }
+
+  if (result.failure === 'TERMINAL_OUTPUT_LIMIT') {
+    return terminalOutputLimitError(command);
+  }
+
+  if (result.failure === 'TERMINAL_SPAWN_FAILED') {
+    return commandFailedError(command, result.exitCode ?? -1, result.output);
+  }
+
+  return commandFailedError(command, result.exitCode ?? -1, result.output);
+}
+
 export async function executeFileOperations(
   operations: FileOperation[],
   fs: FileSystem,
@@ -279,6 +314,14 @@ export async function executeFileOperations(
 
   const errors: BrudError[] = [];
   const pathCache = createPathCache();
+  // Terminal execution is a kernel authority. When a host bound one, every
+  // terminal operation runs through it, so the injected `TerminalExecutor`
+  // cannot be a second, unvalidated execution path. Standalone compositions
+  // that never bound an authority keep using the injected executor.
+  const kernelTerminal: TerminalExecutor | undefined = hasTerminalAuthority()
+    ? createTerminalExecutor()
+    : undefined;
+  terminalExecutor = kernelTerminal ?? terminalExecutor;
 
   function validatePath(
     inputPath: string,
@@ -1404,9 +1447,7 @@ operationResults.push({
             continue;
           }
           const termResult = await terminalExecutor.execute(termOp.command, termOp.answers, cwdValidation.resolvedCwd, (termOp.timeout ?? 120) * 1000);
-          const interactiveError = !termResult.success && termResult.status !== 'interrupted'
-            ? commandFailedError(termOp.command, termResult.exitCode ?? -1, termResult.output)
-            : undefined;
+          const interactiveError = terminalResultError(termOp.command, termResult);
           if (interactiveError) {
             errors.push(interactiveError);
           }
@@ -1503,9 +1544,12 @@ operationResults.push({
             }
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
-            const failedGroupResult = groupResult.results.find(r => !r.success && r.status !== 'interrupted');
+            const groupInterrupted = groupResult.results.some(r => r.status === 'interrupted');
+            const failedGroupResult = groupResult.results.find(
+              r => !r.success && (r.status !== 'interrupted' || !groupInterrupted),
+            );
             const groupError = !groupResult.success && failedGroupResult
-              ? commandFailedError(failedGroupResult.command, failedGroupResult.exitCode ?? -1, failedGroupResult.output)
+              ? terminalResultError(failedGroupResult.command, failedGroupResult)
               : undefined;
             if (groupError) {
               errors.push(groupError);
@@ -1556,9 +1600,12 @@ operationResults.push({
             const groupResult = await terminalExecutor.executeConditional(conditional, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
             const succeeded = groupResult.results.filter(r => r.success).length;
             const failed = groupResult.results.filter(r => !r.success).length;
-            const failedConditionalResult = groupResult.results.find(r => !r.success && r.status !== 'interrupted');
+            const conditionalInterrupted = groupResult.results.some(r => r.status === 'interrupted');
+            const failedConditionalResult = groupResult.results.find(
+              r => !r.success && (r.status !== 'interrupted' || !conditionalInterrupted),
+            );
             const conditionalError = !groupResult.success && failedConditionalResult
-              ? commandFailedError(failedConditionalResult.command, failedConditionalResult.exitCode ?? -1, failedConditionalResult.output)
+              ? terminalResultError(failedConditionalResult.command, failedConditionalResult)
               : undefined;
             if (conditionalError) {
               errors.push(conditionalError);
@@ -1582,9 +1629,7 @@ operationResults.push({
             break;
           }
           const termCmdResult = await terminalExecutor.executeCommand(termCmdOp.command, cwdValidation.resolvedCwd, termCmdTimeout, termCmdOp.env, undefined, signal);
-          const termCmdError = !termCmdResult.success && termCmdResult.status !== 'interrupted'
-            ? commandFailedError(termCmdOp.command, termCmdResult.exitCode ?? -1, termCmdResult.output)
-            : undefined;
+          const termCmdError = terminalResultError(termCmdOp.command, termCmdResult);
           if (termCmdError) {
             errors.push(termCmdError);
           }
@@ -1595,7 +1640,9 @@ operationResults.push({
             status: termCmdResult.status === 'interrupted' ? 'interrupted' : (termCmdResult.success ? 'success' : 'failed'),
             message: termCmdResult.success
               ? `Terminal command executed successfully.\nOutput:\n${termCmdResult.output}`
-              : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
+              : termCmdError !== undefined && termCmdError.code === 'TERMINAL_TIMEOUT'
+                ? `${termCmdError.friendly}\n${termCmdError.details}\nOutput:\n${termCmdResult.output}`
+                : `Terminal command failed (exit code: ${termCmdResult.exitCode})\nOutput:\n${termCmdResult.output}`,
             ...(termCmdError ? { code: termCmdError.code, details: termCmdError.details } : {}),
             path: termCmdOp.command,
             data: {

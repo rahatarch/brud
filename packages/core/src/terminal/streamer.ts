@@ -1,105 +1,79 @@
-import { spawn } from 'child_process';
 import type { ChildProcess } from 'child_process';
-import { ChunkCallback } from './types';
+import type { ChunkCallback } from './types';
+import { terminalAuthority } from './binding';
 
-interface RegisteredProcess {
-  processId: string;
-  child: ChildProcess;
-  abortController: AbortController;
-  onChunk?: ChunkCallback;
-}
+/**
+ * Legacy process registry facade over the kernel session registry.
+ *
+ * The legacy signatures are frozen because the VS Code coordinator and the
+ * execution handler depend on them. Registration now records into
+ * `brud.core.terminal`, so `getActiveProcessIds` on the UI side sees the
+ * sessions the executor registered, and `killProcess` reaches them through
+ * the kernel's process manager.
+ */
 
-let processCounter = 0;
-const activeProcesses = new Map<string, RegisteredProcess>();
-
-function generateProcessId(): string {
-  processCounter++;
-  const now = Date.now();
-  return `proc-${now}-${processCounter}`;
-}
-
-function forceKillChild(child: ChildProcess): void {
-  if (typeof process === 'undefined') return;
-  if (child.pid === undefined) {
-    try { child.kill('SIGKILL'); } catch {}
-    return;
-  }
-  if (process.platform === 'win32') {
-    try {
-      spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
-    } catch {
-      try { child.kill(); } catch {}
-    }
-  } else {
-    try {
-      process.kill(-child.pid, 'SIGKILL');
-    } catch {
-      try { child.kill('SIGKILL'); } catch {}
-    }
-  }
-}
-
+/**
+ * Registers a child spawned outside the kernel.
+ *
+ * @param child - Spawned child process.
+ * @param onChunk - Stream receiver of the session.
+ */
 export function registerProcess(
   child: ChildProcess,
   onChunk?: ChunkCallback,
 ): { processId: string; abortController: AbortController } {
-  const processId = generateProcessId();
-  const abortController = new AbortController();
+  const service = terminalAuthority();
+  const processId = service.registerChild(child, onChunk);
 
-  const abortHandler = () => {
-    forceKillChild(child);
-  };
-  abortController.signal.addEventListener('abort', abortHandler, { once: true });
-
-  activeProcesses.set(processId, { processId, child, abortController, onChunk });
-
-  const cleanup = () => {
-    activeProcesses.delete(processId);
-    try {
-      abortController.signal.removeEventListener('abort', abortHandler);
-    } catch {}
-  };
-
-  child.on('close', cleanup);
-  child.on('error', cleanup);
-
-  return { processId, abortController };
+  return { processId, abortController: new AbortController() };
 }
 
+/**
+ * Detaches a session from the registry without killing it.
+ *
+ * @param processId - Session id.
+ */
 export function unregisterProcess(processId: string): void {
-  activeProcesses.delete(processId);
+  terminalAuthority().unregister(processId);
 }
 
+/**
+ * Kills one registered session.
+ *
+ * @param processId - Session id.
+ */
 export function killProcess(processId: string): boolean {
-  const entry = activeProcesses.get(processId);
-  if (!entry) return false;
-
-  try {
-    entry.abortController.abort();
-  } catch {}
-  forceKillChild(entry.child);
-  activeProcesses.delete(processId);
-  return true;
+  return terminalAuthority().kill(processId);
 }
 
+/**
+ * Kills every registered session.
+ */
 export function killAllProcesses(): number {
-  let count = 0;
-  for (const [processId] of activeProcesses) {
-    if (killProcess(processId)) count++;
-  }
-  return count;
+  return terminalAuthority().killAll();
 }
 
+/** Registered session ids, in creation order. */
 export function getActiveProcessIds(): string[] {
-  return Array.from(activeProcesses.keys());
+  return terminalAuthority().activeSessions().map((session) => session.processId);
 }
 
+/**
+ * Reports whether a session id is registered.
+ *
+ * @param processId - Session id.
+ */
 export function hasActiveProcess(processId: string): boolean {
-  return activeProcesses.has(processId);
+  return terminalAuthority().hasSession(processId);
 }
 
+/**
+ * Stream receiver of one session.
+ *
+ * @param processId - Session id.
+ */
 export function getProcessOnChunk(processId: string): ChunkCallback | undefined {
-  return activeProcesses.get(processId)?.onChunk;
+  return terminalAuthority().chunkCallback(processId);
 }
 
-export { ChunkCallback } from './types';
+export type { ChunkCallback } from './types';

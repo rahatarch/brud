@@ -8,6 +8,18 @@ import type { BrudSettings } from '../settings/types.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
 import type { FileOperation } from '../types/patch.js';
 import { StructureService } from '../services/structureService.js';
+import type { ITerminalService, TerminalPolicy } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import { bindTerminalAuthority, createTerminalExecutor } from '../terminal/bridge.js';
+import { CoreTerminalToken } from './tokens.js';
+
+/** Terminal constructors the kernel entry point exports. */
+interface KernelTerminalModule {
+  readonly TerminalService: new (options?: {
+    readonly workspaceRoot?: string;
+    readonly policy?: TerminalPolicy;
+  }) => ITerminalService & { dispose?(): Promise<void> };
+  readonly DEFAULT_TERMINAL_POLICY: TerminalPolicy;
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -95,13 +107,24 @@ export async function bootCoreKernel(options: {
   history?: HistoryStore;
   settings?: BrudSettings;
 }): Promise<BrudKernel> {
-  const mod: { BrudKernel: new (options?: { maxCallDepth?: number }) => BrudKernel } = await import('@brud/kernel');
+  const mod: {
+    BrudKernel: new (options?: { maxCallDepth?: number }) => BrudKernel;
+  } = await import('@brud/kernel');
+  const modTyped: KernelTerminalModule = mod as unknown as KernelTerminalModule;
   const kernel = new mod.BrudKernel();
 
+  // Terminal execution is a kernel authority. It is bound process-wide so the
+  // legacy function surface and the UI kill registry share one session
+  // registry; the host-supplied executor (or the transported facade) stays
+  // the frozen `TerminalExecutor` the operation dispatcher resolves.
+  const terminalAuthority = new modTyped.TerminalService({
+    policy: modTyped.DEFAULT_TERMINAL_POLICY,
+  });
+  bindTerminalAuthority(terminalAuthority);
+
   kernel.services.register(CoreTokens.FileSystem, options.fs);
-  if (options.terminal) {
-    kernel.services.register(CoreTokens.TerminalExecutor, options.terminal);
-  }
+  kernel.services.register(CoreTokens.TerminalExecutor, options.terminal ?? createTerminalExecutor());
+  kernel.services.register(CoreTerminalToken, terminalAuthority);
   if (options.history) {
     kernel.services.register(CoreTokens.HistoryStore, options.history);
   }
@@ -114,6 +137,16 @@ export async function bootCoreKernel(options: {
   registerCoreOperations(kernel);
 
   kernel.services.freeze();
+
+  const shutdown = kernel.shutdown.bind(kernel);
+  kernel.shutdown = async (): Promise<void> => {
+    try {
+      await shutdown();
+    } finally {
+      await terminalAuthority.dispose?.();
+      bindTerminalAuthority(undefined);
+    }
+  };
 
   return kernel;
 }

@@ -15,7 +15,7 @@ import {
   BrudError,
   DEFAULT_SETTINGS,
   executeCommand,
-  executeConditional,
+  createTerminalExecutor,
   executeFileOperations,
   executeParallel,
   executeSequential,
@@ -55,20 +55,6 @@ function isMutationOperation(operation: FileOperation): boolean {
   }
 
   return !READ_ONLY_OPERATION_KINDS.has(operation.kind);
-}
-
-function createTerminalExecutor(onChunk?: ChunkCallback): TerminalExecutor {
-  return {
-    execute: executeTerminalCommand,
-    executeCommand: (command, cwd, timeout, env, _onChunk, signal) =>
-      executeCommand(command, cwd, timeout, env, onChunk, signal),
-    executeSequential: (commands, cwd, timeout, env, stopOnFailure, _onChunk, signal) =>
-      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
-    executeParallel: (commands, cwd, timeout, env, _onChunk, signal) =>
-      executeParallel(commands, cwd, timeout, env, onChunk, signal),
-    executeConditional: (conditional, cwd, timeout, env, _onChunk, signal) =>
-      executeConditional(conditional, cwd, timeout, env, onChunk, signal),
-  };
 }
 
 export interface DaemonExecutionHandlerOptions {

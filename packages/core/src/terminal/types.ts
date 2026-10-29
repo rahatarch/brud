@@ -2,12 +2,34 @@ import { ChildProcess } from 'child_process';
 
 export type TerminalStatus = 'success' | 'failed' | 'interrupted';
 
+/**
+ * Why a terminal command failed.
+ *
+ * Mirrors the kernel's `TerminalErrorCode` vocabulary: every pre-existing
+ * field keeps its meaning, a timeout or spawn failure is now reported as
+ * itself rather than collapsed into `exitCode: null`, and a gate rejection
+ * (`UNAVAILABLE`, `INVALID_REQUEST`, `BLOCKED`, `INTERNAL`) has its own code
+ * instead of masquerading as an execution failure.
+ */
+export type TerminalFailureCause =
+  | 'TERMINAL_UNAVAILABLE'
+  | 'TERMINAL_INVALID_REQUEST'
+  | 'TERMINAL_BLOCKED'
+  | 'TERMINAL_SPAWN_FAILED'
+  | 'TERMINAL_EXIT_NONZERO'
+  | 'TERMINAL_TIMEOUT'
+  | 'TERMINAL_INTERRUPTED'
+  | 'TERMINAL_OUTPUT_LIMIT'
+  | 'TERMINAL_INTERNAL';
+
 export interface TerminalResult {
   success: boolean;
   output: string;
   exitCode: number | null;
   duration: number;
   status: TerminalStatus;
+  /** Failure classification, absent for success and interruption. */
+  failure?: TerminalFailureCause;
 }
 
 export interface TerminalCommand {
@@ -37,6 +59,8 @@ export interface ExecutedCommand {
   exitCode: number | null;
   duration: number;
   status: TerminalStatus;
+  /** Failure classification, absent for success and interruption. */
+  failure?: TerminalFailureCause;
 }
 
 export interface GroupResult {

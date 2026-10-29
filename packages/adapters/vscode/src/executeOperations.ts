@@ -1,7 +1,7 @@
 import { bootCoreKernel, noWorkspaceError, isBrudError } from '@brud/core';
 import type { FileOperation, FileOperationResult, OperationResult, SessionMetadata, BrudSettings, ChunkCallback, HistoryStore } from '@brud/core';
 import { DEFAULT_SETTINGS } from '@brud/core';
-import { executeTerminalCommand, executeCommand, executeSequential, executeParallel, executeConditional } from '@brud/core';
+import { createTerminalExecutor } from '@brud/core';
 import type { TerminalExecutor } from '@brud/core';
 import { VSCodeFileSystem } from './filesystem';
 import { getWorkspaceFolders } from './workspace';
@@ -77,17 +77,10 @@ export async function executeOperationsFromVSCode(
     };
   }
 
-  const terminalExecutor: TerminalExecutor = {
-    execute: executeTerminalCommand,
-    executeCommand: (command, cwd, timeout, env, _onChunk, signal) =>
-      executeCommand(command, cwd, timeout, env, onChunk, signal),
-    executeSequential: (commands, cwd, timeout, env, stopOnFailure, _onChunk, signal) =>
-      executeSequential(commands, cwd, timeout, env, stopOnFailure, onChunk, signal),
-    executeParallel: (commands, cwd, timeout, env, _onChunk, signal) =>
-      executeParallel(commands, cwd, timeout, env, onChunk, signal),
-    executeConditional: (conditional, cwd, timeout, env, _onChunk, signal) =>
-      executeConditional(conditional, cwd, timeout, env, onChunk, signal),
-  };
+  // The executor is a facade over the kernel terminal authority; the stream
+  // sink of this transport is bound once, and `bootCoreKernel` binds the
+  // authority the facade and the UI kill registry share.
+  const terminalExecutor: TerminalExecutor = createTerminalExecutor(onChunk);
 
   const kernel = await bootCoreKernel({
     fs,

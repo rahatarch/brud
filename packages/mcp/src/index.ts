@@ -1,4 +1,9 @@
-export { bootMcpWorkspace, resolveWorkspaceRoot, loadWorkspaceSettings } from './bootstrap';
+export {
+  bootMcpWorkspace,
+  disposeMcpWorkspace,
+  resolveWorkspaceRoot,
+  loadWorkspaceSettings,
+} from './bootstrap';
 export type { McpWorkspace } from './bootstrap';
 export { normalizeArguments, getToolParameterNames } from './normalize';
 export type { NormalizeResult, NormalizeFailure, NormalizeFailureCode } from './normalize';

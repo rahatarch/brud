@@ -57,6 +57,8 @@ async function main(): Promise<void> {
       });
       process.stderr.write(`Brud MCP server listening on ${server.url}\n`);
       const shutdown = () => {
+        // `server.close()` now disposes the workspace, which kills every
+        // terminal session; `exit` is deferred until that completed.
         void server.close().finally(() => process.exit(0));
       };
       process.once('SIGINT', shutdown);

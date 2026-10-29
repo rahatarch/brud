@@ -1,43 +1,224 @@
-import { spawn, ChildProcess } from 'child_process';
-import type { TerminalExecutor, TerminalResult, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup, ChunkCallback } from './types';
-import { registerProcess, killProcess } from './streamer';
+import type {
+  ITerminalService,
+  TerminalDecision,
+  TerminalErrorCode,
+  TerminalResult as KernelResult,
+  TerminalExecutedCommand,
+  TerminalGroupOutcome,
+  TerminalRunOutcome,
+  TerminalRunRequest,
+} from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { TerminalExecutor, TerminalResult, TerminalFailureCause, GroupResult, ExecutedCommand, ConditionalCommand, CommandGroup, ChunkCallback } from './types';
+import { terminalAuthority } from './binding';
 
-function stripAnsiCodes(str: string): string {
-  return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\x1B\][0-9;]*\x07/g, '')
-    .replace(/\x1B\].*?\x1B\\/g, '')
-    .replace(/\x1B\[[0-9;]*[a-zA-Z]/g, '')
-    .replace(/\x08/g, '')
-    .replace(/\x1B\[K/g, '')
-    .replace(/\r/g, '');
+/**
+ * Legacy `TerminalExecutor` facade over `brud.core.terminal`.
+ *
+ * The public signatures are frozen: every transport (VS Code extension,
+ * daemon adapter, MCP server, kernel legacy bridge) composes this module and
+ * must keep working unchanged. Execution, validation, environment sanitation
+ * and streaming are kernel responsibilities; this façade only adapts shapes.
+ */
+
+/** The legacy facade surface, resolved from the process-wide kernel binding. */
+function service(): ITerminalService {
+  return terminalAuthority();
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+/** The kernel decision arm the facade consumes. */
+type TerminalFailureDecision = Extract<TerminalDecision, { readonly ok: false }>;
 
-function forceKillProcess(child: ChildProcess): void {
-  if (typeof process === 'undefined') return;
-  if (child.pid === undefined) {
-    try { child.kill('SIGKILL'); } catch {}
-    return;
+/**
+ * Maps a kernel failure code onto the legacy failure classification.
+ *
+ * The legacy `TerminalResult` has no error channel, so a gate rejection is
+ * reported as a failed result that also carries the kernel code: a caller can
+ * still tell "the service is unbound" or "the command was refused" from a
+ * command that actually ran and failed.
+ *
+ * @param code - Kernel failure code.
+ */
+function failureCauseOf(code: TerminalErrorCode): TerminalFailureCause {
+  switch (code) {
+    case 'TERMINAL_UNAVAILABLE':
+      return 'TERMINAL_UNAVAILABLE';
+    case 'TERMINAL_INVALID_REQUEST':
+      return 'TERMINAL_INVALID_REQUEST';
+    case 'TERMINAL_BLOCKED':
+      return 'TERMINAL_BLOCKED';
+    case 'TERMINAL_SPAWN_FAILED':
+      return 'TERMINAL_SPAWN_FAILED';
+    case 'TERMINAL_TIMEOUT':
+      return 'TERMINAL_TIMEOUT';
+    case 'TERMINAL_INTERRUPTED':
+      return 'TERMINAL_INTERRUPTED';
+    case 'TERMINAL_OUTPUT_LIMIT':
+      return 'TERMINAL_OUTPUT_LIMIT';
+    case 'TERMINAL_EXIT_NONZERO':
+      return 'TERMINAL_EXIT_NONZERO';
+    case 'TERMINAL_INTERNAL':
+    default:
+      return 'TERMINAL_INTERNAL';
   }
-  if (process.platform === 'win32') {
-    try {
-      spawn('taskkill', ['/F', '/T', '/PID', String(child.pid)], { stdio: 'ignore' });
-    } catch {
-      try { child.kill(); } catch {}
-    }
-  } else {
-    try {
-      process.kill(-child.pid, 'SIGKILL');
-    } catch {
-      try { child.kill('SIGKILL'); } catch {}
-    }
-  }
 }
 
-const isWindows = typeof process !== 'undefined' && process.platform === 'win32';
+/**
+ * Maps a kernel failure onto the legacy result shape.
+ *
+ * An interrupted command reports `status: 'interrupted'` with no exit code,
+ * exactly like a command the caller cancelled; every other rejection is a
+ * `failed` result whose output carries the user-facing message.
+ *
+ * @param decision - Failed decision.
+ */
+function failedResult(decision: TerminalFailureDecision): TerminalResult {
+  const failure = failureCauseOf(decision.code);
+  const interrupted = failure === 'TERMINAL_INTERRUPTED';
+
+  return {
+    success: false,
+    output: decision.details,
+    exitCode: interrupted ? null : decision.exitCode,
+    duration: 0,
+    status: interrupted ? 'interrupted' : 'failed',
+    failure,
+  };
+}
+
+/**
+ * Converts a kernel run outcome into the legacy result.
+ *
+ * @param outcome - Measured outcome.
+ */
+function toResult(outcome: TerminalRunOutcome): TerminalResult {
+  return {
+    success: outcome.success,
+    output: outcome.output,
+    exitCode: outcome.exitCode,
+    duration: outcome.duration,
+    status: outcome.status,
+    ...(outcome.failure === undefined ? {} : { failure: outcome.failure }),
+  };
+}
+
+/**
+ * Converts a kernel group outcome into the legacy group result.
+ *
+ * @param outcome - Measured group outcome.
+ */
+function toGroupResult(outcome: TerminalGroupOutcome): GroupResult {
+  return {
+    success: outcome.success,
+    results: outcome.results.map(toExecuted),
+    totalDuration: outcome.totalDuration,
+  };
+}
+
+/**
+ * Converts one executed command.
+ *
+ * @param executed - Kernel executed command.
+ */
+function toExecuted(executed: TerminalExecutedCommand): ExecutedCommand {
+  return {
+    command: executed.command,
+    success: executed.success,
+    output: executed.output,
+    exitCode: executed.exitCode,
+    duration: executed.duration,
+    status: executed.status,
+    ...(executed.failure === undefined ? {} : { failure: executed.failure }),
+  };
+}
+
+/**
+ * Builds the request envelope shared by every facade entry point.
+ *
+ * @param cwd - Working directory.
+ * @param timeout - Legacy timeout in milliseconds.
+ * @param env - Extra environment variables.
+ */
+function baseRequest(
+  cwd: string | undefined,
+  timeout: number | undefined,
+  env: Record<string, string> | undefined,
+): Pick<TerminalRunRequest, 'cwd' | 'timeoutMs' | 'env'> {
+  return {
+    ...(cwd === undefined ? {} : { cwd }),
+    ...(timeout === undefined ? {} : { timeoutMs: timeout }),
+    ...(env === undefined ? {} : { env }),
+  };
+}
+
+/**
+ * Reads the measured outcome of a decision.
+ *
+ * The kernel's `decide()` returns a failure decision for a command that ran
+ * and failed or was interrupted, so the measured outcome is not reachable
+ * through the success arm alone: an execution failure attaches it as
+ * `result`. A gate rejection (`TERMINAL_BLOCKED`, `TERMINAL_INVALID_REQUEST`,
+ * `TERMINAL_UNAVAILABLE`, ...) carries no outcome at all, which is how the two
+ * are told apart.
+ *
+ * @param decision - Kernel decision.
+ */
+function measuredOf(decision: TerminalDecision): KernelResult | undefined {
+  return decision.result;
+}
+
+/**
+ * Resolves a legacy result union into a single-command result.
+ *
+ * @param decision - Kernel decision.
+ */
+function singleFrom(decision: TerminalDecision): TerminalResult {
+  const measured = measuredOf(decision);
+
+  if (measured === undefined) {
+    return failedResult(decision as TerminalFailureDecision);
+  }
+
+  const result = measured as unknown as TerminalResult;
+  const candidate = result as unknown as GroupResult;
+
+  if (Array.isArray(candidate.results)) {
+    const first = candidate.results[0];
+
+    return first === undefined
+      ? { success: false, output: '', exitCode: null, duration: 0, status: 'failed' }
+      : first;
+  }
+
+  return toResult(result as unknown as TerminalRunOutcome);
+}
+
+/**
+ * Resolves a legacy result union into a group result.
+ *
+ * @param decision - Kernel decision.
+ */
+function groupFrom(decision: TerminalDecision): GroupResult {
+  const measured = measuredOf(decision);
+
+  if (measured === undefined) {
+    return { success: false, results: [], totalDuration: 0 };
+  }
+
+  const result = measured as unknown as TerminalResult;
+  const candidate = result as unknown as GroupResult;
+
+  if (Array.isArray(candidate.results)) {
+    return candidate;
+  }
+
+  const single = result as unknown as TerminalRunOutcome;
+
+  return {
+    success: single.success,
+    results: [toExecuted({ command: '', ...single })],
+    totalDuration: single.duration,
+  };
+}
 
 export const executeCommand: TerminalExecutor['executeCommand'] = async (
   command: string,
@@ -47,115 +228,12 @@ export const executeCommand: TerminalExecutor['executeCommand'] = async (
   onChunk?: ChunkCallback,
   signal?: AbortSignal,
 ): Promise<TerminalResult> => {
-  const startTime = Date.now();
-  const child = spawn(command, [], {
-    shell: true,
-    cwd: cwd || (() => { console.warn('Warning: cwd not resolved for executeCommand, falling back to process.cwd()'); return process.cwd(); })(),
-    detached: !isWindows,
-    stdio: ['pipe', 'pipe', 'pipe'],
-    env: env ? { ...process.env, ...env } : undefined,
-  });
+  const decision = await service().run(
+    { ...baseRequest(cwd, timeout, env), command, mode: 'single' },
+    { ...(onChunk === undefined ? {} : { onChunk }), ...(signal === undefined ? {} : { signal }) },
+  );
 
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-  let interrupted = false;
-  let chunkIndex = 0;
-
-  const { processId, abortController } = registerProcess(child, onChunk);
-
-  if (signal) {
-    if (signal.aborted) {
-      killProcess(processId);
-      interrupted = true;
-    } else {
-      const onAbort = () => {
-        interrupted = true;
-        killProcess(processId);
-      };
-      signal.addEventListener('abort', onAbort, { once: true });
-      child.on('close', () => {
-        try { signal.removeEventListener('abort', onAbort); } catch {}
-      });
-    }
-  }
-
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-
-    try {
-      if (isWindows) {
-        child.kill();
-      } else {
-        child.kill('SIGTERM');
-      }
-    } catch {}
-
-    setTimeout(() => {
-      forceKillProcess(child);
-    }, 5000).unref();
-
-  }, timeout);
-
-  child.stdout?.on('data', (data: Buffer) => {
-    const chunk = data.toString();
-    stdout += chunk;
-    if (onChunk && !interrupted) {
-      onChunk(chunk, chunkIndex++);
-    }
-  });
-
-  child.stderr?.on('data', (data: Buffer) => {
-    const chunk = data.toString();
-    stderr += chunk;
-    if (onChunk && !interrupted) {
-      onChunk(chunk, chunkIndex++);
-    }
-  });
-
-  let resolved = false;
-  let safetyTimeout: NodeJS.Timeout | undefined;
-
-  const result = await new Promise<TerminalResult>((resolve) => {
-    child.on('close', (exitCode) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeoutHandle);
-      clearTimeout(safetyTimeout);
-      const duration = Date.now() - startTime;
-      const combinedOutput = stripAnsiCodes(stdout + stderr);
-      if (interrupted) {
-        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'interrupted' });
-      } else if (timedOut) {
-        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
-      } else {
-        const status = exitCode === 0 ? 'success' : 'failed';
-        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration, status });
-      }
-    });
-
-    child.on('error', () => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeoutHandle);
-      clearTimeout(safetyTimeout);
-      const duration = Date.now() - startTime;
-      const combinedOutput = stripAnsiCodes(stdout + stderr);
-      resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
-    });
-  });
-
-  if (!resolved) {
-    safetyTimeout = setTimeout(() => {
-      if (!resolved) {
-        timedOut = true;
-        forceKillProcess(child);
-      }
-    }, timeout + 10000);
-    safetyTimeout.unref();
-  }
-
-  return result;
+  return singleFrom(decision);
 };
 
 export const executeTerminalCommand: TerminalExecutor['execute'] = async (
@@ -163,97 +241,22 @@ export const executeTerminalCommand: TerminalExecutor['execute'] = async (
   answers: string[],
   cwd?: string,
   timeout: number = 120000,
+  env?: Record<string, string>,
+  onChunk?: ChunkCallback,
+  signal?: AbortSignal,
 ): Promise<TerminalResult> => {
-  const startTime = Date.now();
-  const child = spawn(command, [], {
-    shell: true,
-    cwd: cwd || (() => { console.warn('Warning: cwd not resolved for execute, falling back to process.cwd()'); return process.cwd(); })(),
-    detached: !isWindows,
-    stdio: ['pipe', 'pipe', 'pipe'],
+  const request: TerminalRunRequest = {
+    ...baseRequest(cwd, timeout, env),
+    command,
+    mode: 'interactive',
+    answers,
+  };
+  const decision = await service().run(request, {
+    ...(onChunk === undefined ? {} : { onChunk }),
+    ...(signal === undefined ? {} : { signal }),
   });
 
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-
-  const timeoutHandle = setTimeout(() => {
-    timedOut = true;
-
-    try {
-      if (isWindows) {
-        child.kill();
-      } else {
-        child.kill('SIGTERM');
-      }
-    } catch {}
-
-    setTimeout(() => {
-      forceKillProcess(child);
-    }, 5000).unref();
-
-  }, timeout);
-
-  child.stdout?.on('data', (data: Buffer) => {
-    stdout += data.toString();
-  });
-
-  child.stderr?.on('data', (data: Buffer) => {
-    stderr += data.toString();
-  });
-
-  let resolved = false;
-
-  const processDone = new Promise<TerminalResult>((resolve) => {
-    child.on('close', (exitCode) => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeoutHandle);
-      clearTimeout(safetyTimeout);
-      const duration = Date.now() - startTime;
-      const combinedOutput = stripAnsiCodes(stdout + stderr);
-      if (timedOut) {
-        resolve({ success: false, output: combinedOutput, exitCode: null, duration, status: 'failed' });
-      } else {
-        const status = exitCode === 0 ? 'success' : 'failed';
-        resolve({ success: exitCode === 0, output: combinedOutput, exitCode, duration, status });
-      }
-    });
-
-    child.on('error', () => {
-      if (resolved) return;
-      resolved = true;
-      clearTimeout(timeoutHandle);
-      clearTimeout(safetyTimeout);
-      const duration = Date.now() - startTime;
-      resolve({ success: false, output: stripAnsiCodes(stdout + stderr), exitCode: null, duration, status: 'failed' });
-    });
-  });
-
-  const safetyTimeout = setTimeout(() => {
-    if (!resolved) {
-      timedOut = true;
-      forceKillProcess(child);
-    }
-  }, timeout + 10000);
-
-  safetyTimeout.unref();
-
-  await delay(1000);
-
-  for (const answer of answers) {
-    try {
-      child.stdin?.write(answer + '\n');
-    } catch {
-    }
-    await delay(500);
-  }
-
-  try {
-    child.stdin?.end();
-  } catch {
-  }
-
-  return processDone;
+  return singleFrom(decision);
 };
 
 export const executeSequential: TerminalExecutor['executeSequential'] = async (
@@ -265,31 +268,18 @@ export const executeSequential: TerminalExecutor['executeSequential'] = async (
   onChunk?: ChunkCallback,
   signal?: AbortSignal,
 ): Promise<GroupResult> => {
-  const results: ExecutedCommand[] = [];
-  let overallSuccess = true;
+  const request: TerminalRunRequest = {
+    ...baseRequest(cwd, timeout, env),
+    commands,
+    mode: 'sequential',
+    stopOnFailure: stopOnFailure === true,
+  };
+  const decision = await service().run(request, {
+    ...(onChunk === undefined ? {} : { onChunk }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 
-  for (const command of commands) {
-    if (signal?.aborted) break;
-    const result = await executeCommand(command, cwd, timeout, env, onChunk, signal);
-    results.push({
-      command,
-      success: result.success,
-      output: result.output,
-      exitCode: result.exitCode,
-      duration: result.duration,
-      status: result.status,
-    });
-
-    if (!result.success && stopOnFailure) {
-      overallSuccess = false;
-      break;
-    }
-  }
-
-  const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
-  const success = results.every(r => r.success) && overallSuccess;
-
-  return { success, results, totalDuration };
+  return groupFrom(decision);
 };
 
 export const executeParallel: TerminalExecutor['executeParallel'] = async (
@@ -300,24 +290,17 @@ export const executeParallel: TerminalExecutor['executeParallel'] = async (
   onChunk?: ChunkCallback,
   signal?: AbortSignal,
 ): Promise<GroupResult> => {
-  const results = await Promise.all(
-    commands.map(async (command) => {
-      const result = await executeCommand(command, cwd, timeout, env, onChunk, signal);
-      return {
-        command,
-        success: result.success,
-        output: result.output,
-        exitCode: result.exitCode,
-        duration: result.duration,
-        status: result.status,
-      };
-    }),
-  );
+  const request: TerminalRunRequest = {
+    ...baseRequest(cwd, timeout, env),
+    commands,
+    mode: 'parallel',
+  };
+  const decision = await service().run(request, {
+    ...(onChunk === undefined ? {} : { onChunk }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 
-  const totalDuration = Math.max(...results.map(r => r.duration));
-  const success = results.every(r => r.success);
-
-  return { success, results, totalDuration };
+  return groupFrom(decision);
 };
 
 export async function executeCommandGroup(
@@ -328,52 +311,53 @@ export async function executeCommandGroup(
   onChunk?: ChunkCallback,
   signal?: AbortSignal,
 ): Promise<GroupResult> {
-  const stringCommands: string[] = [];
-  const subGroups: { group: CommandGroup; index: number }[] = [];
+  const links: string[] = [];
+  const subGroups: Array<{ group: CommandGroup; index: number }> = [];
 
-  for (let i = 0; i < group.commands.length; i++) {
-    const cmd = group.commands[i];
-    if (typeof cmd === 'string') {
-      stringCommands.push(cmd);
+  for (let index = 0; index < group.commands.length; index++) {
+    const entry = group.commands[index];
+
+    if (typeof entry === 'string') {
+      links.push(entry);
     } else {
-      subGroups.push({ group: cmd, index: i });
+      subGroups.push({ group: entry, index });
     }
   }
 
-  const allResults: { index: number; result: ExecutedCommand }[] = [];
-  let overallSuccess = true;
+  const stringResults: ExecutedCommand[] = [];
 
-  if (stringCommands.length > 0) {
-    let groupResult: GroupResult;
-    if (group.type === 'parallel') {
-      groupResult = await executeParallel(stringCommands, cwd, timeout, env, onChunk, signal);
-    } else {
-      groupResult = await executeSequential(stringCommands, cwd, timeout, env, group.stopOnFailure, onChunk, signal);
-    }
-    groupResult.results.forEach((r, idx) => {
-      allResults.push({ index: idx, result: r });
+  if (links.length > 0) {
+    const request: TerminalRunRequest = {
+      ...baseRequest(cwd, timeout, env),
+      commands: links,
+      mode: group.type === 'parallel' ? 'parallel' : 'sequential',
+      stopOnFailure: group.stopOnFailure === true,
+    };
+    const decision = await service().run(request, {
+      ...(onChunk === undefined ? {} : { onChunk }),
+      ...(signal === undefined ? {} : { signal }),
     });
-    if (!groupResult.success) {
-      overallSuccess = false;
-    }
+    stringResults.push(...groupFrom(decision).results);
   }
 
-  for (const sg of subGroups) {
-    const subResult = await executeCommandGroup(sg.group, cwd, timeout, env, onChunk, signal);
-    subResult.results.forEach((r) => {
-      allResults.push({ index: sg.index, result: r });
-    });
-    if (!subResult.success) {
-      overallSuccess = false;
-    }
+  const nested: ExecutedCommand[] = [];
+
+  for (const subGroup of subGroups) {
+    const subResult = await executeCommandGroup(subGroup.group, cwd, timeout, env, onChunk, signal);
+    nested.push(...subResult.results);
   }
 
-  allResults.sort((a, b) => a.index - b.index);
-  const results = allResults.map(r => r.result);
-  const totalDuration = results.reduce((sum, r) => sum + r.duration, 0);
-  const success = results.every(r => r.success) && overallSuccess;
+  // Flat commands keep their declaration order and nested groups contribute
+  // their results after them, matching the legacy assembly: the legacy test
+  // asserts `[outer_first, outer_last]` precede the nested parallel pair.
+  const results: ExecutedCommand[] = [...stringResults, ...nested];
+  const success = results.every((result) => result.success);
 
-  return { success, results, totalDuration };
+  return {
+    success,
+    results,
+    totalDuration: results.reduce((sum, result) => sum + result.duration, 0),
+  };
 }
 
 export const executeConditional: TerminalExecutor['executeConditional'] = async (
@@ -384,31 +368,18 @@ export const executeConditional: TerminalExecutor['executeConditional'] = async 
   onChunk?: ChunkCallback,
   signal?: AbortSignal,
 ): Promise<GroupResult> => {
-  const primaryResult = await executeCommand(conditional.command, cwd, timeout, env, onChunk, signal);
-  const allResults: ExecutedCommand[] = [
-    {
-      command: conditional.command,
-      success: primaryResult.success,
-      output: primaryResult.output,
-      exitCode: primaryResult.exitCode,
-      duration: primaryResult.duration,
-      status: primaryResult.status,
-    },
-  ];
+  const request: TerminalRunRequest = {
+    ...baseRequest(cwd, timeout, env),
+    command: conditional.command,
+    mode: 'conditional',
+    ...(conditional.onSuccess === undefined ? {} : { onSuccess: conditional.onSuccess }),
+    ...(conditional.onFailure === undefined ? {} : { onFailure: conditional.onFailure }),
+  };
+  const decision = await service().run(request, {
+    ...(onChunk === undefined ? {} : { onChunk }),
+    ...(signal === undefined ? {} : { signal }),
+  });
 
-  let conditionalResults: ExecutedCommand[] = [];
-
-  if (primaryResult.success && conditional.onSuccess) {
-    const gr = await executeCommandGroup(conditional.onSuccess, cwd, timeout, env, onChunk, signal);
-    conditionalResults = gr.results;
-  } else if (!primaryResult.success && conditional.onFailure) {
-    const gr = await executeCommandGroup(conditional.onFailure, cwd, timeout, env, onChunk, signal);
-    conditionalResults = gr.results;
-  }
-
-  allResults.push(...conditionalResults);
-  const totalDuration = allResults.reduce((sum, r) => sum + r.duration, 0);
-  const success = allResults.every(r => r.success);
-
-  return { success, results: allResults, totalDuration };
+  return groupFrom(decision);
 };
+

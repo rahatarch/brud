@@ -269,6 +269,33 @@ export function executionFailedError(message: string): BrudError {
   });
 }
 
+export function terminalTimeoutError(command: string, timeoutMs: number): BrudError {
+  return brudError({
+    code: 'TERMINAL_TIMEOUT',
+    friendly: 'Command timed out.',
+    details: `The command "${command}" did not finish within ${Math.round(timeoutMs / 1000)} seconds and was terminated.`,
+    path: command,
+  });
+}
+
+export function terminalInterruptedError(command: string): BrudError {
+  return brudError({
+    code: 'TERMINAL_INTERRUPTED',
+    friendly: 'Command was interrupted.',
+    details: `The command "${command}" did not complete because the operation was cancelled.`,
+    path: command,
+  });
+}
+
+export function terminalOutputLimitError(command: string): BrudError {
+  return brudError({
+    code: 'TERMINAL_OUTPUT_LIMIT',
+    friendly: 'Command output exceeded the retention ceiling.',
+    details: `The command "${command}" produced more output than the terminal retains; the transcript was truncated.`,
+    path: command,
+  });
+}
+
 export function commandFailedError(command: string, exitCode: number, output?: string): BrudError {
   const excerpt = (output ?? '').trim();
   const summary = excerpt.length > 0 ? `\nOutput:\n${excerpt}` : '';
