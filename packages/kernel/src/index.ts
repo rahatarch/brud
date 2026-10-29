@@ -2,6 +2,7 @@ export * from './contracts/index.js';
 export * from './bootstrap/index.js';
 export * from '../drivers/index.js';
 export * from '../services/BrudFileSystem/index.js';
+export * from '../services/BrudTools/index.js';
 export * from '../services/UniversalHistory/index.js';
 export * from '../services/PluginManager/index.js';
 export * from '../services/SettingsService/index.js';

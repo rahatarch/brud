@@ -5,6 +5,10 @@ import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/
 import { createFileMutationJournal } from '../../services/BrudFileSystem/events/FileMutationJournal.js';
 import type { IFileMutationJournal } from '../../services/BrudFileSystem/events/types.js';
 import { HISTORY_TRUSTED_SCOPE } from '../../services/BrudFileSystem/security/protectedPaths.js';
+import {
+  createBrudToolsDescriptor,
+  type BrudToolsDescriptorOptions,
+} from '../../services/BrudTools/descriptor/BrudToolsDescriptor.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { createPluginManagerDescriptor } from '../../services/PluginManager/descriptor/index.js';
 import {
@@ -97,6 +101,13 @@ export interface CreateStandardKernelOptions {
    * workspace root. Overrides exist for standalone compositions and tests.
    */
   readonly terminal?: TerminalDescriptorOptions;
+  /**
+   * BrudTools validator and logger overrides.
+   *
+   * By default the service resolves `brud.core.validation` lazily on first
+   * dispatch. Overrides exist for standalone compositions and tests only.
+   */
+  readonly tools?: BrudToolsDescriptorOptions;
   /**
    * Mutation journal the filesystem publishes pre/post descriptors to.
    *
@@ -227,6 +238,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // (including conditional branches) through the frozen gate before spawning,
   // and owns the only process-spawn site in the kernel.
   kernel.register(createTerminalDescriptor(options?.terminal));
+  // BrudTools (brud.core.tools) is the Level-1 tool routing table. It boots
+  // after validation (its schema gate) and before the plugin manager, so the
+  // registry is RUNNING before any plugin activates and registers into it.
+  kernel.register(createBrudToolsDescriptor(options?.tools));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
   kernel.register(createHistoryDescriptor({
     ...historyJournalOptions,
