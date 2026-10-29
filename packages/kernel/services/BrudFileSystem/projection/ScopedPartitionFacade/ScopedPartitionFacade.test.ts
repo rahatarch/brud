@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
 import { BrudFileSystem } from '../../orchestrator/BrudFileSystem.js';
 import { PathTraversalViolationError } from '../../validation/PathValidator/PathValidator.js';
-import { ScopedPartitionFacade } from './ScopedPartitionFacade.js';
+import { ReadOnlyProjectionViolationError, ScopedPartitionFacade } from './ScopedPartitionFacade.js';
 
 function isTraversalViolation(error: unknown): boolean {
   return error instanceof PathTraversalViolationError
@@ -18,6 +18,12 @@ async function createFacade(): Promise<{
   await service.initialize();
   const facade = new ScopedPartitionFacade(service, '.brud/work');
   return { facade, service };
+}
+
+function isReadOnlyViolation(error: unknown): boolean {
+  return error instanceof ReadOnlyProjectionViolationError
+    && error.rule === 'INPUT.READ_ONLY_PROJECTION'
+    && error.code === 'VALIDATION_ERROR';
 }
 
 describe('ScopedPartitionFacade', () => {
@@ -86,5 +92,56 @@ describe('ScopedPartitionFacade', () => {
     assert.throws(() => new ScopedPartitionFacade(facade, '\\\\server\\share'), isTraversalViolation);
     assert.throws(() => new ScopedPartitionFacade(facade, '.'), isTraversalViolation);
     assert.throws(() => new ScopedPartitionFacade(facade, ''), isTraversalViolation);
+  });
+
+  it('serves reads through a read-only projection', async () => {
+    const { service } = await createFacade();
+    await service.createFile('.brud/work/sessions/one.json', '{"id":1}');
+
+    const readOnly = new ScopedPartitionFacade(service, '.brud/work', { readOnly: true });
+
+    assert.equal(readOnly.isReadOnly, true);
+    assert.equal(await readOnly.readText('sessions/one.json'), '{"id":1}');
+    assert.equal(await readOnly.exists('sessions/one.json'), true);
+    assert.deepEqual(await readOnly.readDirectory('sessions'), [
+      { name: 'one.json', isFile: true, isDirectory: false },
+    ]);
+  });
+
+  it('rejects every mutation on a read-only projection with INPUT.READ_ONLY_PROJECTION', async () => {
+    const { service } = await createFacade();
+    await service.createFile('.brud/work/existing.txt', 'keep');
+
+    const readOnly = new ScopedPartitionFacade(service, '.brud/work', { readOnly: true });
+
+    await assert.rejects(readOnly.writeAtomic('existing.txt', 'changed'), isReadOnlyViolation);
+    await assert.rejects(readOnly.createFile('new.txt', 'new'), isReadOnlyViolation);
+    await assert.rejects(readOnly.deleteFile('existing.txt'), isReadOnlyViolation);
+
+    assert.equal(await readOnly.readText('existing.txt'), 'keep');
+    assert.equal(await readOnly.exists('new.txt'), false);
+  });
+
+  it('names the attempted mutation and target in the projection failure', async () => {
+    const { facade } = await createFacade();
+    const readOnly = new ScopedPartitionFacade(facade, '.brud/work', { readOnly: true });
+
+    await assert.rejects(readOnly.createFile('reports/a.json', 'x'), (error: unknown) => {
+      assert.ok(error instanceof ReadOnlyProjectionViolationError);
+      assert.equal(error.operationKind, 'createFile');
+      assert.equal(error.path, 'reports/a.json');
+      assert.match(error.message, /cannot mutate a read-only projection/);
+      return true;
+    });
+  });
+
+  it('leaves a writable projection unaffected by the projection gate', async () => {
+    const { facade, service } = await createFacade();
+
+    assert.equal(facade.isReadOnly, false);
+
+    await facade.createFile('writable.txt', 'ok');
+
+    assert.equal(await service.readText('.brud/work/writable.txt'), 'ok');
   });
 });

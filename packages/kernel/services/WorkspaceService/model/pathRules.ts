@@ -1,34 +1,57 @@
-import { posix, win32 } from 'node:path';
+import { win32 } from 'node:path';
 import type { PlatformPath } from 'node:path';
+import { PathViolationError } from '../../ValidationService/contracts/errors.js';
 import {
-  PathTraversalViolationError,
+  DRIVE_QUALIFIER_PATTERN,
+  DRIVE_RELATIVE_PATTERN,
+  NT_OBJECT_PREFIX_PATTERN,
+  NULL_BYTE_PATTERN,
+  UNC_PATTERN,
   assertSafeRelativePath,
   defaultPathFlavor,
-} from '../../BrudFileSystem/validation/PathValidator/PathValidator.js';
+  isContainedInRoot,
+  pathApiFor,
+} from '../../ValidationService/engine/pathLexicon.js';
 import type { WorkspacePathFlavor } from '../contracts/IWorkspaceService.js';
 import {
   WorkspaceConfigurationError,
   WorkspaceViolationError,
 } from '../contracts/errors.js';
 
-const NULL_BYTE_PATTERN = /\0/;
-const UNC_OR_DEVICE_PREFIX_PATTERN = /^[\\/]{2}/;
-const NT_OBJECT_PREFIX_PATTERN = /^[\\/]\?\?[\\/]/;
-const DRIVE_LETTER_PATTERN = /^[A-Za-z]:/;
-const DRIVE_RELATIVE_PATTERN = /^[A-Za-z]:(?![\\/])/;
+/**
+ * Root-registry helpers.
+ *
+ * Every path predicate below is imported from
+ * `ValidationService/engine/pathLexicon.ts`; this module owns only root
+ * identity, routing and kernel-separator translation. It previously redeclared
+ * four of those regexes, which is the duplication Phase 3 removes.
+ */
+
+/**
+ * Matches a Windows-only ambiguous absolute form.
+ *
+ * UNC shares, DOS device paths and NT object paths are ambiguous on every
+ * flavor; a drive-relative path is only ambiguous when evaluated as Windows.
+ *
+ * @param input - Candidate absolute path.
+ * @param flavor - Path flavor the input is interpreted with.
+ */
+export function isAmbiguousWindowsAbsolute(input: string, flavor: WorkspacePathFlavor): boolean {
+  return flavor === 'win32' && DRIVE_RELATIVE_PATTERN.test(input);
+}
 
 /**
  * Returns the path implementation for a flavor.
  *
- * `win32` treats both `'\\'` and `'/'` as separators and compares
- * case-insensitively; `posix` compares case-sensitively and treats `'\\'` as
- * a literal filename character. Selecting this once per call keeps Windows
+ * `win32` treats both `'\'` and `'/'` as separators and compares
+ * case-insensitively; `posix` compares case-sensitively and treats `'\'` as a
+ * literal filename character. Selecting this once per call keeps Windows
  * semantics testable on POSIX hosts.
  *
  * @param flavor - Path flavor to materialize.
  */
-export function pathApiFor(flavor: WorkspacePathFlavor): PlatformPath {
-  return flavor === 'win32' ? win32 : posix;
+export function pathApiForFlavor(flavor: WorkspacePathFlavor): PlatformPath {
+  return pathApiFor(flavor);
 }
 
 /**
@@ -54,7 +77,7 @@ export function isAbsolutePath(input: string, flavor: WorkspacePathFlavor): bool
  * Normalizes a declared root into the canonical lexical form.
  *
  * Trailing separators are removed and, on Windows, the drive letter is
- * upper-cased so `c:\\ws` and `C:\\ws` share one identity.
+ * upper-cased so `c:\ws` and `C:\ws` share one identity.
  *
  * @param root - Declared root path.
  * @param flavor - Path flavor to normalize with.
@@ -77,7 +100,7 @@ export function normalizeRootPath(root: string, flavor: WorkspacePathFlavor): st
 
   const resolved = api.resolve(root);
 
-  if (flavor === 'win32' && DRIVE_LETTER_PATTERN.test(resolved)) {
+  if (flavor === 'win32' && DRIVE_QUALIFIER_PATTERN.test(resolved)) {
     return `${resolved.slice(0, 1).toUpperCase()}${resolved.slice(1)}`;
   }
 
@@ -105,7 +128,7 @@ export function isFilesystemRootPath(root: string, flavor: WorkspacePathFlavor):
  * @param root - Declared root path.
  */
 export function isDeviceOrNetworkRoot(root: string): boolean {
-  return UNC_OR_DEVICE_PREFIX_PATTERN.test(root) || NT_OBJECT_PREFIX_PATTERN.test(root);
+  return UNC_PATTERN.test(root) || NT_OBJECT_PREFIX_PATTERN.test(root);
 }
 
 /**
@@ -118,11 +141,11 @@ export function isDeviceOrNetworkRoot(root: string): boolean {
  * @param flavor - Path flavor the input is interpreted with.
  */
 export function isAmbiguousAbsolutePath(input: string, flavor: WorkspacePathFlavor): boolean {
-  if (UNC_OR_DEVICE_PREFIX_PATTERN.test(input) || NT_OBJECT_PREFIX_PATTERN.test(input)) {
+  if (UNC_PATTERN.test(input) || NT_OBJECT_PREFIX_PATTERN.test(input)) {
     return true;
   }
 
-  return flavor === 'win32' && DRIVE_RELATIVE_PATTERN.test(input);
+  return isAmbiguousWindowsAbsolute(input, flavor);
 }
 
 /**
@@ -146,9 +169,9 @@ export function assertSafeWorkspaceRelativePath(
   try {
     return assertSafeRelativePath(relativePath, flavor, root ?? '');
   } catch (error: unknown) {
-    if (error instanceof PathTraversalViolationError) {
+    if (error instanceof PathViolationError) {
       throw new WorkspaceViolationError(
-        error.rule,
+        toWorkspaceRule(error.rule as Parameters<typeof toWorkspaceRule>[0]),
         relativePath,
         error.reason,
         root,
@@ -156,6 +179,60 @@ export function assertSafeWorkspaceRelativePath(
     }
 
     throw error;
+  }
+}
+
+/**
+ * Translates a kernel path rule into the legacy workspace rule vocabulary.
+ *
+ * The two vocabularies overlap on the containment rules and differ on the
+ * finer-grained lexical ones; telemetry aggregates on the workspace names.
+ *
+ * @param rule - Kernel path rule.
+ */
+export function toWorkspaceRule(
+  rule: import('../../ValidationService/contracts/rules.js').PathRule,
+): import('../contracts/errors.js').WorkspaceViolationRule {
+  switch (rule) {
+    case 'PATH.NULL_BYTE':
+      return 'NULL_BYTE';
+    case 'PATH.WIN_RESERVED_DEVICE':
+      return 'RESERVED_DEVICE';
+    case 'PATH.WIN_ALT_DATA_STREAM':
+      return 'ALTERNATE_DATA_STREAM';
+    case 'PATH.PROTECTED_DENY':
+      return 'PROTECTED_PATH_DENIED';
+    case 'PATH.ROOT_NOT_MUTABLE':
+      return 'PATH_VIOLATION';
+    case 'PATH.SIBLING_PREFIX':
+      return 'SIBLING_PREFIX';
+    case 'PATH.SYMLINK_ESCAPE':
+      return 'SYMLINK_ESCAPE';
+    case 'PATH.AMBIGUOUS_ROOT':
+      return 'AMBIGUOUS_ROOT';
+    case 'PATH.UNVERIFIABLE_LINEAGE':
+      return 'UNVERIFIABLE_LINEAGE';
+    case 'PATH.UNKNOWN_ROOT':
+      return 'UNKNOWN_ROOT';
+    case 'PATH.INVALID_ROOT':
+      return 'FILESYSTEM_ROOT';
+    case 'PATH.NON_STRING':
+      return 'INVALID_INPUT';
+    case 'PATH.PARENT_SEGMENT':
+    case 'PATH.UNC_OR_DEVICE':
+    case 'PATH.DRIVE_QUALIFIED':
+    case 'PATH.DRIVE_RELATIVE':
+    case 'PATH.ABSOLUTE':
+    case 'PATH.WIN_TRAILING_DOT_OR_SPACE':
+    case 'PATH.WIN_TRAILING_ALIAS_TRAVERSAL':
+    case 'PATH.OUTSIDE_ROOT':
+    case 'PATH.NO_WORKSPACE':
+    case 'PATH.CWD_ESCAPE':
+    case 'PATH.CWD_DYNAMIC':
+    case 'PATH.CWD_INVALID':
+    case 'PATH.LISTING_OUTSIDE':
+    default:
+      return 'TRAVERSAL';
   }
 }
 
@@ -176,29 +253,6 @@ export function relativeWithinRoot(
   flavor: WorkspacePathFlavor,
 ): string {
   return pathApiFor(flavor).relative(root, candidate);
-}
-
-/**
- * Reports whether a candidate is contained by a root using segment awareness.
- *
- * @param root - Canonical root.
- * @param candidate - Absolute candidate path.
- * @param flavor - Path flavor to compare with.
- */
-export function isContainedInRoot(
-  root: string,
-  candidate: string,
-  flavor: WorkspacePathFlavor,
-): boolean {
-  const api = pathApiFor(flavor);
-  const relativePath = api.relative(root, candidate);
-
-  return relativePath === ''
-    || (
-      relativePath !== '..'
-      && !relativePath.startsWith(`..${api.sep}`)
-      && !api.isAbsolute(relativePath)
-    );
 }
 
 /**
@@ -257,3 +311,7 @@ export function toKernelSeparators(
 export function hasNullByte(input: string): boolean {
   return NULL_BYTE_PATTERN.test(input);
 }
+
+// Path predicates re-exported from the engine so the workspace contract keeps
+// its long-standing surface without owning a second implementation.
+export { assertSafeRelativePath, defaultPathFlavor, isContainedInRoot, pathApiFor };

@@ -60,6 +60,39 @@ describe('Terminal Validation - Dangerous Commands', () => {
   });
 });
 
+describe('Terminal Validation - isDangerousCommand rule semantics', () => {
+  it('does NOT classify a CWD escape as dangerous', () => {
+    assert.strictEqual(isDangerousCommand('cd /outside && ls'), false);
+  });
+
+  it('does NOT classify a dynamic home expansion as dangerous', () => {
+    assert.strictEqual(isDangerousCommand('cd $HOME'), false);
+  });
+
+  it('does NOT classify a ~ escape as dangerous', () => {
+    assert.strictEqual(isDangerousCommand('cd ~/other-project && ls'), false);
+  });
+
+  it('does NOT classify a pushd escape as dangerous', () => {
+    assert.strictEqual(isDangerousCommand('pushd /outside && ls'), false);
+  });
+
+  it('still classifies banned patterns as dangerous', () => {
+    assert.strictEqual(isDangerousCommand('sudo rm -rf'), true);
+    assert.strictEqual(isDangerousCommand('sudo rm -rf /'), true);
+    assert.strictEqual(isDangerousCommand('rm -rf /*'), true);
+    assert.strictEqual(isDangerousCommand('chmod -R 777 /etc'), true);
+  });
+
+  it('distinguishes containment failures from dangerous verdicts on the same input', () => {
+    const result = validateTerminalCommand('cd /outside && ls', '/workspace', ['/workspace']);
+
+    assert.strictEqual(result.success, false);
+    assert.strictEqual(result.code, 'CWD_ESCAPE');
+    assert.strictEqual(isDangerousCommand('cd /outside && ls'), false);
+  });
+});
+
 describe('Terminal Validation - CD Escape Detection', () => {
   const workspaceFolders = ['/workspace', '/workspace/sub'];
 

@@ -1,18 +1,52 @@
 import { SessionMetadata } from '../types/patch';
-import {
-  metadataWrapperCaseError,
-  duplicateMetadataError,
-  invalidMetadataFieldError,
-  metadataPositionError,
-  unterminatedMetadataError,
-} from '../api/errors';
 import { BrudError } from '../api/index';
+import { validateMetadata } from '../api/validationFacade';
+import type { MetadataRule } from '@brud/kernel' with { 'resolution-mode': 'import' };
+
+/**
+ * Builds the legacy `E_*` metadata error through the kernel member-check.
+ *
+ * The parser owns the detection order (it sees the document); the kernel owns
+ * the rule id, traits and exact legacy text, so every metadata failure has one
+ * definition instead of a second bespoke factory (audit F-3).
+ *
+ * @param rule - Metadata rule being reported.
+ * @param values - Wrapper, operation index or offending field.
+ * @param reason - Explanation surfaced verbatim.
+ */
+function metadataError(
+  rule: MetadataRule,
+  values: { readonly wrapper?: string; readonly index?: string; readonly field?: string },
+  reason: string,
+): BrudError {
+  const result = validateMetadata(rule, values, reason);
+
+  return new BrudError({
+    code: result.code ?? 'VALIDATION_ERROR',
+    friendly: result.friendly ?? reason,
+    details: result.details ?? reason,
+  });
+}
 
 const SESSION_OPEN = '<session_metadata>';
 const SESSION_CLOSE = '</session_metadata>';
 const OPERATION_OPEN = '<operation_metadata>';
 const OPERATION_CLOSE = '</operation_metadata>';
 const VALID_FIELDS = new Set(['title:', 'description:']);
+
+/**
+ * Classifies an offending field name as a case error or an unknown field.
+ *
+ * @param field - Field token as written by the author.
+ */
+function metadataFieldError(field: string): BrudError {
+  const stripped = field.endsWith(':') ? field.slice(0, -1) : field;
+  const lower = stripped.toLowerCase();
+
+  return lower === 'title' || lower === 'description'
+    ? metadataError('INPUT.METADATA_FIELD_CASE', { field }, `metadata field "${field}" must be lowercase`)
+    : metadataError('INPUT.METADATA_UNKNOWN_FIELD', { field }, `unknown metadata field "${field}"`);
+}
 
 function parseKeyValueLines(content: string): SessionMetadata {
   const result: SessionMetadata = {};
@@ -51,14 +85,14 @@ function parseKeyValueLines(content: string): SessionMetadata {
     const colonIdx = line.indexOf(':');
     if (colonIdx === -1) {
       const firstWord = line.split(/\s+/)[0] || line;
-      throw new BrudError(invalidMetadataFieldError(firstWord));
+      throw metadataFieldError(firstWord);
     }
 
     const fieldName = line.slice(0, colonIdx + 1);
     let fieldValue = line.slice(colonIdx + 1);
 
     if (!VALID_FIELDS.has(fieldName)) {
-      throw new BrudError(invalidMetadataFieldError(fieldName));
+      throw metadataFieldError(fieldName);
     }
 
     fieldValue = fieldValue.trimStart();
@@ -153,15 +187,15 @@ export function extractMetadata(input: string): {
         const correctTag = trimmed === SESSION_OPEN || trimmed === SESSION_CLOSE ||
                            trimmed === OPERATION_OPEN || trimmed === OPERATION_CLOSE;
         if (!correctTag) {
-          throw new BrudError(metadataWrapperCaseError(trimmed.slice(1, -1)));
+          throw metadataError('INPUT.METADATA_WRONG_CASE', { wrapper: trimmed.slice(1, -1) }, 'metadata wrapper must be lowercase');
         }
 
         if (isSessionOpen) {
           if (sessionMetadataFound) {
-            throw new BrudError(duplicateMetadataError('session'));
+            throw metadataError('INPUT.DUPLICATE_SESSION_METADATA', {}, 'duplicate session metadata block');
           }
           if (i !== 0) {
-            throw new BrudError(metadataPositionError('session_metadata'));
+            throw metadataError('INPUT.SESSION_METADATA_POSITION', { wrapper: 'session_metadata' }, 'session metadata is out of position');
           }
           sessionMetadataFound = true;
           i++;
@@ -180,19 +214,19 @@ export function extractMetadata(input: string): {
             }
             if (innerTrimmed.startsWith('<') && innerTrimmed.endsWith('>') &&
                 innerTrimmed.toLowerCase() === SESSION_CLOSE && innerTrimmed !== SESSION_CLOSE) {
-              throw new BrudError(metadataWrapperCaseError(innerTrimmed.slice(1, -1)));
+              throw metadataError('INPUT.METADATA_WRONG_CASE', { wrapper: innerTrimmed.slice(1, -1) }, 'metadata wrapper must be lowercase');
             }
             contentLines.push(innerLine);
             i++;
           }
           if (!closed) {
-            throw new BrudError(unterminatedMetadataError('session_metadata'));
+            throw metadataError('INPUT.METADATA_UNCLOSED', { wrapper: 'session_metadata' }, 'unclosed session metadata wrapper');
           }
           continue;
         }
 
         if (isSessionClose && !sessionMetadataFound) {
-          throw new BrudError(unterminatedMetadataError('session_metadata'));
+          throw metadataError('INPUT.METADATA_UNCLOSED', { wrapper: 'session_metadata' }, 'unclosed session metadata wrapper');
         }
 
         if (isOpOpen) {
@@ -200,7 +234,7 @@ export function extractMetadata(input: string): {
           const key = opIndex || String(operationMetadata.size + 1);
 
           if (operationMetadata.has(key)) {
-            throw new BrudError(duplicateMetadataError('operation', key));
+            throw metadataError('INPUT.DUPLICATE_OPERATION_METADATA', { index: key }, 'duplicate operation metadata block');
           }
 
           i++;
@@ -219,13 +253,13 @@ export function extractMetadata(input: string): {
             }
             if (innerTrimmed.startsWith('<') && innerTrimmed.endsWith('>') &&
                 innerTrimmed.toLowerCase() === OPERATION_CLOSE && innerTrimmed !== OPERATION_CLOSE) {
-              throw new BrudError(metadataWrapperCaseError(innerTrimmed.slice(1, -1)));
+              throw metadataError('INPUT.METADATA_WRONG_CASE', { wrapper: innerTrimmed.slice(1, -1) }, 'metadata wrapper must be lowercase');
             }
             contentLines.push(innerLine);
             i++;
           }
           if (!closed) {
-            throw new BrudError(unterminatedMetadataError('operation_metadata'));
+            throw metadataError('INPUT.METADATA_UNCLOSED', { wrapper: 'operation_metadata' }, 'unclosed operation metadata wrapper');
           }
           continue;
         }

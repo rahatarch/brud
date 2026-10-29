@@ -1,7 +1,23 @@
-import * as pathModule from 'path';
 import type { FileSystem } from '../types/filesystem';
 import type { FileOperation } from '../types/patch';
 import { getWorkspaceRootForPath } from '../utils/workspacePath';
+import {
+  boundaryPolicy,
+  validateBatchDecision,
+  validateCommand,
+  validateCommandDecision,
+  validateCwd,
+  validateExtractOperations,
+  validateFormat,
+  validateKnownOperation,
+  validateKnownTool,
+  validateLineRange,
+  validateOperations,
+  validatePath,
+  validatePreview,
+  validateReadOnlyProjectionDecision,
+  validateRevertRequest,
+} from './validationFacade';
 import type { PathCache } from '../utils/workspacePath';
 import type { ValidationResult } from './types';
 import {
@@ -102,73 +118,13 @@ export interface TerminalAvailabilityConfig {
   terminalExecutor?: unknown;
 }
 
-const DANGEROUS_PATTERNS: RegExp[] = [
-  /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
-  /\brm\s+-(?:rf|fr)\s+\*\s*$/,
-  /\bsudo\b/,
-  /\bsu\b/,
-  /\bpkexec\b/,
-  /\bmkfs\b/,
-  /\bfdisk\b/,
-  /\bdd\s+if=/,
-  /curl\s+.*\|\s*(bash|sh)\b/,
-  /wget\s+.*\|\s*(bash|sh)\b/,
-  /\bchmod\s+-R\s+777\b/,
-  /\bchown\s+-R\b/,
-  />\s+\/dev\/sd/,
-  />\s+\/dev\/nvme/,
-  /:\s*\(\)\s*\{[^}]*:\s*:\s*\(\)\s*\|/,
-  /\bapt-get\s+--force-yes\b/,
-  /\bnpm\s+--unsafe-perm\b/,
-];
+// Dangerous-command patterns moved to the kernel `ValidationService`; the
+// legacy scanner is reached through `validationFacade` so there is exactly one
+// copy of the rule set.
 
-const KNOWN_OPERATIONS = [
-  'search_replace',
-  'create_file',
-  'delete_file',
-  'rename_file',
-  'move_file',
-  'copy_file',
-  'append_file',
-  'append_file_multi',
-  'search_replace_multi',
-  'create_directory',
-  'delete_directory',
-  'move_directory',
-  'extract_structure',
-  'codebase_metadata',
-  'search_files',
-  'read_file',
-  'read_files',
-  'read_directory',
-  'terminal_interactive',
-  'terminal_command',
-  'get_tool_info',
-] as const;
-
-const KNOWN_TOOLS = [
-  'search_replace',
-  'create_file',
-  'delete_file',
-  'rename_file',
-  'move_file',
-  'copy_file',
-  'append_file',
-  'append_file_multi',
-  'search_replace_multi',
-  'create_directory',
-  'delete_directory',
-  'move_directory',
-  'extract_structure',
-  'codebase_metadata',
-  'search_files',
-  'read_file',
-  'read_files',
-  'read_directory',
-  'terminal_interactive',
-  'terminal_command',
-  'get_tool_info',
-] as const;
+// Operation-kind and dangerous-command vocabularies live in the kernel
+// `ValidationService` (`engine/kindMatrix.ts`, `engine/commandPatterns.ts`);
+// the legacy boundary reaches them through `validationFacade`.
 
 function success(data?: unknown): ValidationResult {
   return { success: true, data };
@@ -182,65 +138,6 @@ function fail(error: { code: string; friendly: string; details: string; path?: s
     details: error.details,
     data: error.path,
   };
-}
-
-function validateCdInCommand(command: string, cwd?: string, workspaceFolders?: string[]): ValidationResult {
-  const initialCwd = cwd || (workspaceFolders?.[0] ?? '');
-  const cdCommands = ['cd', 'pushd', 'chdir'];
-  const parts = command.split(/\s*(?:&&|\|\||;|\||\(|\))\s*/);
-
-  let currentCwd = initialCwd;
-
-  for (const part of parts) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-
-    for (const cmd of cdCommands) {
-      const cmdPattern = new RegExp(`^${cmd}(?:\\s+(.+))?$`);
-      const match = trimmed.match(cmdPattern);
-      if (match) {
-        const target = match[1]?.trim();
-        if (!target || target === '') continue;
-
-        if (/\$\{?\w+\}?/.test(target)) {
-          if (/^\$HOME(?:\/|$)/.test(target) || /^\$\{HOME\}(?:\/|$)/.test(target)) {
-            const relativePart = target.replace(/^\$HOME/, '').replace(/^\$\{HOME\}/, '');
-            const expandedPath = '~' + relativePart;
-            const cdResult = validateCdTarget(command, expandedPath, currentCwd, workspaceFolders);
-            if (!cdResult.success) return cdResult;
-            currentCwd = pathModule.resolve(currentCwd, target);
-          } else {
-            return fail(dynamicPathError(command, target));
-          }
-        } else {
-          const cdResult = validateCdTarget(command, target, currentCwd, workspaceFolders);
-          if (!cdResult.success) return cdResult;
-          currentCwd = pathModule.resolve(currentCwd, target);
-        }
-        continue;
-      }
-    }
-  }
-
-  return success(null);
-}
-
-function validateCdTarget(command: string, target: string, currentCwd: string, workspaceFolders?: string[]): ValidationResult {
-  let resolvedTarget: string;
-
-  if (target.startsWith('~')) {
-    const homedir = process.env.HOME || '/home';
-    const relativePart = target.slice(1);
-    resolvedTarget = pathModule.resolve(homedir + relativePart);
-  } else {
-    resolvedTarget = pathModule.resolve(currentCwd, target);
-  }
-
-  const root = getWorkspaceRootForPath(resolvedTarget, workspaceFolders!);
-  if (!root) {
-    return fail(cwdEscapeError(command, resolvedTarget));
-  }
-  return success(null);
 }
 
 export const BrudAPI = {
@@ -262,50 +159,48 @@ export const BrudAPI = {
         return wsResult;
       }
 
-      const root = getWorkspaceRootForPath(path, workspaceFolders, options?.cache);
-      if (!root) {
-        return fail(pathOutsideWorkspaceError(path));
-      }
-
-      const resolvedPath = pathModule.isAbsolute(path)
-        ? pathModule.resolve(path)
-        : pathModule.resolve(root, path);
-
-      return success({ resolvedPath, path, root, operationKind: options?.operationKind });
+      // `boundaryPolicy()` is the frozen policy of the execution boundary; the
+      // per-call `options` shape predates Phase 3 and cannot carry policy.
+      return validatePath(path, workspaceFolders, boundaryPolicy(), options);
     },
 
-    command(command: string, cwd?: string, workspaceFolders?: string[], options?: { workspaceBoundaryEnabled?: boolean; commandValidationEnabled?: boolean }): ValidationResult {
-      const boundaryEnabled = options?.workspaceBoundaryEnabled ?? true;
-      const validationEnabled = options?.commandValidationEnabled ?? true;
+    command(command: string, cwd?: string, workspaceFolders?: string[]): ValidationResult {
+      // No per-call policy flags: command safety and the workspace boundary are
+      // frozen at the execution boundary (see `validation/terminal.ts`).
+      return validateCommand(command, cwd, workspaceFolders);
+    },
 
-      if (validationEnabled && DANGEROUS_PATTERNS.some((pattern) => pattern.test(command))) {
-        return fail(dangerousCommandError(command));
-      }
+    /**
+     * Structured command decision, exposing the violated rule.
+     *
+     * `command` flattens the kernel decision to legacy codes; callers that
+     * must tell a dangerous-command verdict apart from a containment failure
+     * read the `rule` here.
+     */
+    commandDecision(command: string, cwd?: string, workspaceFolders?: string[]) {
+      return validateCommandDecision(command, cwd, workspaceFolders);
+    },
 
-      if (workspaceFolders && workspaceFolders.length > 0 && boundaryEnabled) {
-        const cdResult = validateCdInCommand(command, cwd, workspaceFolders);
-        if (!cdResult.success) {
-          return cdResult;
-        }
-      }
+    /**
+     * Structured batch decision used by the pre-execution read pipeline.
+     *
+     * Rejects a batch that exceeds the frozen file ceiling through
+     * `INPUT.BATCH_LIMIT` or the frozen aggregate budget through
+     * `POLICY.AGGREGATE_BYTES`.
+     */
+    batch(fileCount: number, totalBytes: number, isImportRead = false) {
+      return validateBatchDecision(fileCount, totalBytes, isImportRead);
+    },
 
-      return success({ command });
+    /**
+     * Structured read-only projection decision used by the write router.
+     */
+    readOnlyProjection(operationKind: string, projectionPath?: string) {
+      return validateReadOnlyProjectionDecision(operationKind, projectionPath);
     },
 
     cwd(cwd: string | undefined, workspaceFolders: string[]): ValidationResult {
-      if (!cwd || cwd.trim() === '') {
-        const wsResult = this.workspace(workspaceFolders);
-        if (!wsResult.success) {
-          return wsResult;
-        }
-        return success({ resolvedCwd: workspaceFolders[0] });
-      }
-      const pathResult = this.path(cwd, workspaceFolders);
-      if (!pathResult.success) {
-        return fail(invalidCwdError(cwd));
-      }
-      const data = pathResult.data as { resolvedPath?: string } | undefined;
-      return success({ resolvedCwd: data?.resolvedPath });
+      return validateCwd(cwd, workspaceFolders);
     },
 
     async fileExists(fs: FileSystem, path: string): Promise<ValidationResult> {
@@ -408,10 +303,7 @@ export const BrudAPI = {
     },
 
     knownOperation(operation: string): ValidationResult {
-      if (!KNOWN_OPERATIONS.includes(operation as typeof KNOWN_OPERATIONS[number])) {
-        return fail(unknownOperationError(operation));
-      }
-      return success({ operation });
+      return validateKnownOperation(operation);
     },
 
     hasIndex(index: string | undefined): ValidationResult {
@@ -449,18 +341,13 @@ export const BrudAPI = {
     },
 
     hasPreview(operationType: string): ValidationResult {
-      const previewOps = ['search_replace', 'create_file', 'append_file'];
-      if (!previewOps.includes(operationType)) {
-        return fail(previewNotAvailableError());
-      }
-      return success({ operationType });
+      return validatePreview(operationType);
     },
 
     hasValidOperations(operations: FileOperation[]): ValidationResult {
-      if (!operations || operations.length === 0) {
-        return fail(noValidOperationsError());
-      }
-      return success({ operations });
+      const result = validateOperations(operations);
+
+      return result.success ? success({ operations }) : result;
     },
 
     canGeneratePreview(files: unknown[]): ValidationResult {
@@ -471,19 +358,15 @@ export const BrudAPI = {
     },
 
     hasExtractOperations(operations: FileOperation[]): ValidationResult {
-      const hasExtract = operations?.some((op) => op.kind === 'extract_structure');
-      if (!hasExtract) {
-        return fail(noExtractOperationsError());
-      }
-      return success({ operations });
+      const result = validateExtractOperations(operations);
+
+      return result.success ? success({ operations }) : result;
     },
 
     validFormat(message: string): ValidationResult {
-      const hasBlockMarkers = message.includes('<<<<<<<') && message.includes('=======') && message.includes('>>>>>>>');
-      if (!hasBlockMarkers) {
-        return fail(parseError());
-      }
-      return success({ message });
+      const result = validateFormat(message);
+
+      return result.success ? success({ message }) : result;
     },
 
     async canDelete(fs: FileSystem, path: string): Promise<ValidationResult> {
@@ -509,10 +392,7 @@ export const BrudAPI = {
     },
 
     knownTool(toolKind: string): ValidationResult {
-      if (!KNOWN_TOOLS.includes(toolKind as typeof KNOWN_TOOLS[number])) {
-        return fail(toolNotFoundError(toolKind));
-      }
-      return success({ toolKind });
+      return validateKnownTool(toolKind);
     },
 
     terminalAvailable(config: TerminalAvailabilityConfig | null | undefined): ValidationResult {
@@ -542,10 +422,7 @@ export const BrudAPI = {
     },
 
     validRevertRequest(sessionId: string | undefined, targetState: string | undefined): ValidationResult {
-      if (!sessionId || !targetState) {
-        return fail(invalidRevertRequestError());
-      }
-      return success({ sessionId, targetState });
+      return validateRevertRequest(sessionId, targetState);
     },
 
     lineRange(
@@ -554,24 +431,9 @@ export const BrudAPI = {
       totalLines: number,
       operation?: string,
     ): ValidationResult {
-      const start = startLine ?? 1;
-      const end = endLine ?? totalLines;
+      void operation;
 
-      if (start < 1 || start > totalLines) {
-        return fail(invalidLineRangeError(startLine, endLine, totalLines));
-      }
-
-      const clampedEnd = Math.min(end, totalLines);
-
-      if (start > clampedEnd) {
-        return fail(invalidLineRangeError(startLine, endLine, totalLines));
-      }
-
-      return success({
-        startLine: start,
-        endLine: clampedEnd,
-        totalLines,
-      });
+      return validateLineRange(startLine, endLine, totalLines);
     },
   },
-};
+} as const;

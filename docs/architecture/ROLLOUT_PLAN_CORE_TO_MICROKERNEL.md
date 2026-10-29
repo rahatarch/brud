@@ -1334,7 +1334,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 4. Define the error catalog: code, rule, friendly message, details template, retryability, and whether it is user-actionable.
 5. Make `tools:execute` (Phase 5) and external transports call this service before handler execution.
 6. Make legacy `BrudAPI.validate` a facade over the service; preserve all legacy codes at the boundary.
-7. Add the validation parity matrix across all 21 kinds and command cases.
+7. Add the validation parity matrix across all 21 kinds and command cases. **Done:** `.internal_docs/verifications/2026-10-29_21_kind_parity_matrix.md`, machine-checked by `packages/kernel/src/__tests__/validationParity.test.ts` (kind set **and** order pinned to the legacy `KNOWN_OPERATIONS` literal).
 
 **Exit criteria:**
 
@@ -1780,8 +1780,13 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 
 | Kernel / service condition | Legacy code | Boundary rule |
 |---|---|---|
-| `PATH_TRAVERSAL_DETECTED` with `TRAVERSAL`, `OUTSIDE_ROOT`, or `SYMLINK_ESCAPE` | `PATH_OUTSIDE_WORKSPACE` | Adapter maps all containment failures |
+| `PATH_TRAVERSAL_DETECTED` with `PATH.OUTSIDE_ROOT` (legacy `OUTSIDE_ROOT`) | `PATH_OUTSIDE_WORKSPACE` | Fixed row: a root escape is **always** `PATH_OUTSIDE_WORKSPACE`. The core facade's kernel-decision arm and its "no owning root" arm both build the failure through `outsideRootResult` in `packages/core/src/api/validationFacade.ts` |
+| Remaining containment escapes (`PATH.SIBLING_PREFIX`, `PATH.SYMLINK_ESCAPE`, `PATH.LISTING_OUTSIDE`, and the other containment rules) | `PATH_OUTSIDE_WORKSPACE` | `PATH_BOUNDARY_CODE` in `ValidationService.ts`; the legacy workspace adapter uses the same containment set |
+| Lexical-integrity failures (`PATH.NULL_BYTE`, `PATH.WIN_RESERVED_DEVICE`, `PATH.WIN_ALT_DATA_STREAM`) | `VALIDATION_ERROR` | The rule is appended to the details |
 | `PATH_TRAVERSAL_DETECTED` with `NULL_BYTE`, `RESERVED_DEVICE`, or `ALTERNATE_DATA_STREAM` | `VALIDATION_ERROR` | Adapter adds the violated rule to details |
+| `WORKSPACE_PATH_VIOLATION` with `PROTECTED_PATH_DENIED` | `VALIDATION_ERROR` | A10 protected-path write or delete; the rule id is appended to details |
+| `WORKSPACE_PATH_VIOLATION` with `INVALID_INPUT` (non-string path) | `VALIDATION_ERROR` | Input-shape failures never carry a path |
+| Any other `WORKSPACE_PATH_VIOLATION` (`SIBLING_PREFIX`, `AMBIGUOUS_ROOT`, `UNKNOWN_ROOT`, `UNVERIFIABLE_LINEAGE`) | `VALIDATION_ERROR` | Non-containment workspace failures; containment escapes use `PATH_OUTSIDE_WORKSPACE` above |
 | `READ_ONLY_VIOLATION` | `VALIDATION_ERROR` | A mutation attempt through a read-only projection |
 | Missing workspace root | `NO_WORKSPACE` | WorkspaceService reports absence explicitly |
 | Command cwd outside root or missing | `INVALID_CWD` / `CWD_ESCAPE` | ValidationService distinguishes escape from absence |
@@ -1789,11 +1794,26 @@ Each cell must be covered by a named test before the owning plugin can be `activ
 | Unknown tool kind | `TOOL_NOT_FOUND` | `BrudTools.getTool` returns no entry for the name; the adapter reports it |
 | Tool disabled by allowlist | `TOOL_DISABLED` | Settings snapshot supplies the decision |
 | Session or target not found | `FILE_NOT_FOUND` / `SESSION_NOT_FOUND` | Operation-specific legacy code |
+| `CANNOT_WRITE_DIRECTORY` (write target is a directory) | `CANNOT_WRITE_DIRECTORY` | Identity: the orchestrator rule is already the legacy code |
+| `CANNOT_DELETE_DIRECTORY` (`delete_file` on a directory) | `CANNOT_DELETE_DIRECTORY` | Identity |
+| `STAGING_CONFLICT` | `VALIDATION_ERROR` | A staging or commit target could not be claimed |
 | Reversal digest mismatch | `EXECUTION_FAILED` (conflict detail) | Plan is rejected before mutation |
-| Batch file cap exceeded | `BATCH_LIMIT_EXCEEDED` | Reader governor |
-| Unhandled kernel fault | `EXECUTION_ERROR` | No stack or workspace path is exposed |
+| `COMMITTED_WITH_DURABILITY_WARNING` | `EXECUTION_FAILED` with `committed: true` | The write is durable enough to keep, but the durability proof degraded (V-7) |
+| Batch file cap exceeded (`INPUT.BATCH_LIMIT`) | `BATCH_LIMIT_EXCEEDED` | Reader governor, enforced pre-execution through `validateBatch` |
+| Aggregate byte budget exceeded (`POLICY.AGGREGATE_BYTES`) | `BATCH_LIMIT_EXCEEDED` | Same gate; the batch is rejected before any read |
+| Mutation through a read-only projection (`INPUT.READ_ONLY_PROJECTION`) | `VALIDATION_ERROR` | `READ_ONLY_VIOLATION` from `ValidationService.validateReadOnlyProjection`; the scoped partition facade raises it before routing the write |
+| Unhandled kernel fault | `UNEXPECTED_ERROR` | Legacy emits `UNEXPECTED_ERROR` (`packages/core/src/api/errors.ts:316-322`); no stack or workspace path is exposed |
 
 **Rule:** the kernel never emits a legacy code directly. The adapter maps; the kernel stays structured. Adding a legacy code requires a row here.
+
+**Root escapes (`OUTSIDE_ROOT`):** the containment escape is one condition with one code. `OUTSIDE_ROOT` names the same failure at every layer — the legacy `WorkspaceViolationRule`, the `PathValidator` rule, and the kernel `PATH.OUTSIDE_ROOT` it maps to — and the distinction from the `VALIDATION_ERROR` family is *containment*, not exit point (a symlink that leaves the root is still a containment escape). Two adapters render it:
+
+- The **legacy workspace-boundary adapter** (`packages/kernel/services/WorkspaceService/legacy/LegacyPathAdapter.ts`) maps every containment rule — `OUTSIDE_ROOT`, `SIBLING_PREFIX`, `SYMLINK_ESCAPE`, `TRAVERSAL`, `FILESYSTEM_ROOT`, `UNKNOWN_ROOT`, `UNVERIFIABLE_LINEAGE` — to `PATH_OUTSIDE_WORKSPACE`.
+- The **synchronous core facade** (`packages/core/src/api/validationFacade.ts`) renders the kernel `PATH.OUTSIDE_ROOT` decision, and the "no owning root" arm of `validatePath`, through the single `outsideRootResult` builder, so both boundary calls produce `PATH_OUTSIDE_WORKSPACE` with identical text.
+
+Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved devices, alternate data streams) and the workspace-state failures that are not containment escapes keep their own rows above. When the two adapters disagree, the workspace-boundary adapter is authoritative.
+
+**Reconciliation (W-10, audit §6.1–§6.2):** the six rows added above are `PROTECTED_PATH_DENIED`, `INVALID_INPUT`, `CANNOT_WRITE_DIRECTORY`, `CANNOT_DELETE_DIRECTORY`, `STAGING_CONFLICT`, and `COMMITTED_WITH_DURABILITY_WARNING`, plus the `EXECUTION_ERROR` → `UNEXPECTED_ERROR` correction on the unhandled-fault row. `packages/kernel/services/ValidationService/orchestrator/ValidationService.ts` derives its boundary table from this appendix.
 
 ## Appendix D — Glossary
 

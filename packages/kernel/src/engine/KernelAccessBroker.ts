@@ -17,14 +17,37 @@ export class KernelAccessBroker implements IKernelAccessBroker {
 
   private readonly readState: KernelStateChecker;
 
+  private paused = false;
+
   constructor(registry: KernelRegistry, readState: KernelStateChecker) {
     this.registry = registry;
     this.readState = readState;
   }
 
+  /**
+   * Suspends the lifecycle gate for a bounded internal operation.
+   *
+   * The kernel composition uses this exactly once, at the end of boot, to let
+   * a service ingest its frozen boot snapshot before the kernel announces
+   * RUNNING. Access policies, denial lists and allowlists still apply, so a
+   * pause cannot widen anyone's authority; it only removes the
+   * "broker is idle" guard.
+   *
+   * @param operation - Work performed while the gate is suspended.
+   */
+  async withLifecycleGateSuspended<T>(operation: () => Promise<T>): Promise<T> {
+    this.paused = true;
+
+    try {
+      return await operation();
+    } finally {
+      this.paused = false;
+    }
+  }
+
   requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {
     const state = this.readState();
-    if (state !== 'RUNNING') {
+    if (state !== 'RUNNING' && !this.paused) {
       throw new LifecycleStateError('requestAccess', state, 'RUNNING');
     }
 

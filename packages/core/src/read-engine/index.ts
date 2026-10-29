@@ -14,6 +14,7 @@ import {
   MAX_READ_CONCURRENCY,
 } from '../settings/types.js';
 import type { PathCache } from '../utils/workspacePath.js';
+import { policyFromSettings, validateBatchDecision } from '../api/validationFacade';
 
 export interface ReadFileEntry {
   path: string;
@@ -327,6 +328,84 @@ async function readDirectEntry(
   }
 }
 
+/**
+ * Enforces the hard batch ceilings through the validation gate.
+ *
+ * Two different aggregate limits are in play and they must not be confused:
+ *
+ * - The **configured budget** (`readMaxAggregateBytes`, default 8 MiB) is soft.
+ *   The reader admits files up to it and reports `truncated`/`limitHit`, which
+ *   is the long-standing behaviour callers rely on.
+ * - The **hard ceiling** (`HARD_MAX_AGGREGATE_BYTES`, 32 MiB) is a refusal. A
+ *   batch that as a whole would exceed it is rejected before any read, through
+ *   the kernel gate, which emits `POLICY.BATCH_LIMIT` / `POLICY.AGGREGATE_BYTES`.
+ *
+ * File count is a refusal at its ceiling; the reader never truncates it.
+ *
+ * @param fileCount - Files the batch would read.
+ * @param projectedBytes - Bytes the whole batch would demand (`0` while unknown).
+ * @param isImportRead - Import reads are exempt from both ceilings.
+ * @param settings - Batch settings snapshot supplying the boundary policy.
+ */
+function enforceBatchCeilings(
+  fileCount: number,
+  projectedBytes: number,
+  isImportRead: boolean,
+  settings: BrudSettings | undefined,
+): void {
+  const policy = policyFromSettings({
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    readMaxAggregateBytes: Math.max(
+      resolveAggregateByteLimit(settings),
+      DEFAULT_SETTINGS.readMaxAggregateBytes ?? HARD_MAX_AGGREGATE_BYTES,
+    ),
+  });
+  const decision = validateBatchDecision(fileCount, projectedBytes, isImportRead, policy);
+
+  if (decision.ok) {
+    return;
+  }
+
+  const limit = decision.rule === 'POLICY.AGGREGATE_BYTES'
+    ? HARD_MAX_AGGREGATE_BYTES
+    : resolveBatchLimit(settings);
+
+  const error = BrudAPI.errors.batchLimitExceededError(fileCount, limit);
+
+  throw new BrudError({
+    ...error,
+    code: 'BATCH_LIMIT_EXCEEDED',
+    details: decision.details,
+  });
+}
+
+/**
+ * Sums the sizes of the candidates, treating an unreadable size as zero.
+ *
+ * The projected total is what the batch *asks* for, before the reader admits
+ * any of it, so the hard-ceiling gate can reject the request as a whole.
+ *
+ * @param fs - Port exposing only the size probe.
+ * @param candidates - Candidate paths.
+ */
+async function projectBatchBytes(
+  fs: { stat(path: string): Promise<{ size: number }> },
+  candidates: readonly string[],
+): Promise<number> {
+  let total = 0;
+
+  for (const filePath of candidates) {
+    try {
+      total += (await fs.stat(filePath)).size;
+    } catch {
+      // An unreadable target contributes nothing: it becomes a skip entry.
+    }
+  }
+
+  return total;
+}
+
 export async function readFiles(
   fs: FileSystem,
   filePaths: string[],
@@ -338,13 +417,12 @@ export async function readFiles(
   endLine?: number,
   options?: ReadFilesOptions,
 ): Promise<ReadResult> {
-  const maxBatchFiles = resolveBatchLimit(options?.settings);
   const maxAggregateBytes = resolveAggregateByteLimit(options?.settings);
   const concurrency = resolveConcurrency(options?.settings);
 
-  if (!isImportRead && filePaths.length > maxBatchFiles) {
-    throw BrudAPI.errors.batchLimitExceededError(filePaths.length, maxBatchFiles);
-  }
+  // Pre-execution gate: file count and (when stat is unavailable) nothing more
+  // than the count is known yet, so bytes are checked once sizes are resolved.
+  enforceBatchCeilings(filePaths.length, 0, isImportRead, options?.settings);
 
   const skips: ReadSkipEntry[] = [];
   const candidates: string[] = [];
@@ -361,13 +439,25 @@ export async function readFiles(
   let truncated = false;
   let limitHit: ReadLimitHit | undefined;
 
-  if (typeof fs.stat === 'function') {
+  const stat = fs.stat;
+
+  if (typeof stat === 'function') {
+    // Refuse a batch whose whole requested footprint breaches the hard
+    // ceiling before admitting or reading anything.
+    enforceBatchCeilings(
+      candidates.length,
+      await projectBatchBytes({ stat }, candidates),
+      isImportRead,
+      options?.settings,
+    );
+
+    const statFile = stat;
     admitted = [];
     let admittedBytes = 0;
     for (const filePath of candidates) {
       let fileSize: number;
       try {
-        fileSize = (await fs.stat(filePath)).size;
+        fileSize = (await statFile(filePath)).size;
       } catch {
         admitted.push(filePath);
         continue;

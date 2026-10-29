@@ -44,4 +44,15 @@ export interface IKernelAccessBroker {
 
   /** Lists metadata for every registered service. */
   listServices(): readonly ServiceInfo[];
+
+  /**
+   * Suspends the lifecycle gate for a bounded internal boot operation.
+   *
+   * Optional: only the kernel composition implements it, and it is used once
+   * at the end of boot so a service can ingest its boot snapshot before the
+   * kernel reports `RUNNING`. Access policies still apply while suspended.
+   *
+   * @param operation - Work performed while the gate is suspended.
+   */
+  withLifecycleGateSuspended?<T>(operation: () => Promise<T>): Promise<T>;
 }

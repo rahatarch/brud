@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { readFiles } from './index.js';
+import { BrudAPI } from '../api/index.js';
 import type { FileSystem } from '../types/filesystem.js';
 import type { BrudSettings } from '../settings/types.js';
 
@@ -131,6 +132,67 @@ describe('readFiles governor', () => {
     );
 
     assert.strictEqual(fs.reads.length, 0);
+  });
+
+  it('rejects an over-limit batch through the pre-execution validation gate', async () => {
+    const filePaths = Array.from({ length: 101 }, (_, i) => `/virtual/gate-${i}.txt`);
+    const fs = createMemoryFs(new Map());
+
+    await assert.rejects(
+      () => readFiles(fs, filePaths, false, 0),
+      (err: unknown) => {
+        assert.strictEqual((err as { code?: string }).code, 'BATCH_LIMIT_EXCEEDED');
+        assert.match((err as { details?: string }).details ?? '', /limit is 100/);
+        return true;
+      },
+    );
+
+    assert.strictEqual(fs.reads.length, 0);
+  });
+
+  it('rejects a batch above the hard aggregate ceiling before reading anything', async () => {
+    const hardCeiling = 32 * 1024 * 1024;
+    const chunk = new Uint8Array(hardCeiling / 2 + 1);
+    const filePaths = ['/virtual/hard-a.txt', '/virtual/hard-b.txt'];
+    const files = new Map<string, Uint8Array>(filePaths.map(filePath => [filePath, chunk]));
+    const fs = createMemoryFs(files, { withStat: true });
+
+    await assert.rejects(
+      () => readFiles(fs, filePaths, false, 0, undefined, undefined, undefined, undefined, {
+        settings: { readMaxAggregateBytes: hardCeiling } as BrudSettings,
+      }),
+      (err: unknown) => {
+        assert.strictEqual((err as { code?: string }).code, 'BATCH_LIMIT_EXCEEDED');
+        assert.match((err as { details?: string }).details ?? '', /limit is 33554432 bytes/);
+        return true;
+      },
+    );
+
+    assert.strictEqual(fs.reads.length, 0);
+  });
+
+  it('emits POLICY.AGGREGATE_BYTES through the gate for the hard ceiling', async () => {
+    const fileCount = 2;
+    const projected = 32 * 1024 * 1024 + 1;
+    const decision = BrudAPI.validate.batch(fileCount, projected);
+
+    assert.strictEqual(decision.ok, false);
+    assert.strictEqual(decision.ok ? '' : decision.rule, 'POLICY.AGGREGATE_BYTES');
+  });
+
+  it('admits a batch inside the configured aggregate budget', async () => {
+    const filePaths = ['/virtual/budget-ok-a.txt', '/virtual/budget-ok-b.txt'];
+    const files = new Map<string, Uint8Array>(
+      filePaths.map(filePath => [filePath, new Uint8Array(Buffer.from('abcd'))]),
+    );
+    const fs = createMemoryFs(files, { withStat: true });
+
+    const result = await readFiles(fs, filePaths, false, 0, undefined, undefined, undefined, undefined, {
+      settings: { readMaxAggregateBytes: 4096 } as BrudSettings,
+    });
+
+    assert.strictEqual(result.totalFiles, 2);
+    assert.notStrictEqual(result.truncated, true);
   });
 
   it('preserves original input order regardless of completion order', async () => {

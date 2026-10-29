@@ -47,8 +47,10 @@ export class BrudKernel implements IBrudKernel {
   private readonly accessBroker: KernelAccessBroker;
   private readonly initializedServices: InitializedService[] = [];
   private state: KernelLifecycleState = 'UNINITIALIZED';
+  private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
 
-  constructor(options?: { maxCallDepth?: number }) {
+  constructor(options?: { maxCallDepth?: number; bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void> }) {
+    this.bootPinner = options?.bootPinner;
     this.services = new ServiceContainer();
     this.operations = new OperationRegistry();
     this.pipeline = new ExecutionPipeline(this.services);
@@ -99,6 +101,18 @@ export class BrudKernel implements IBrudKernel {
         }
 
         this.initializedServices.push({ tokenId: descriptor.token.id, instance });
+      }
+
+      // Boot snapshot pinning. Services whose policy must be frozen from
+      // another service's state (validation) register a pinner; it runs here,
+      // while the broker's lifecycle gate is suspended for this one bounded
+      // operation, so the frozen policy exists before any caller can resolve
+      // the token. The hook is a no-op when no pinner was registered.
+      const pinner = this.bootPinner;
+      if (pinner !== undefined) {
+        await this.accessBroker.withLifecycleGateSuspended(async (): Promise<void> => {
+          await pinner(this.initializedServices.map((entry) => entry.instance));
+        });
       }
 
       this.state = 'RUNNING';

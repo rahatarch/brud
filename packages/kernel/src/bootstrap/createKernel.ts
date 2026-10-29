@@ -21,12 +21,18 @@ import {
   createUniversalHistoryDescriptor,
   type UniversalHistoryDescriptorOptions,
 } from '../../services/UniversalHistory/descriptor/index.js';
+import {
+  createValidationDescriptor,
+  pinBootPolicies,
+  type ValidationDescriptorOptions,
+} from '../../services/ValidationService/descriptor/ValidationDescriptor.js';
 import type { WorkspaceService } from '../../services/WorkspaceService/orchestrator/WorkspaceService.js';
 import {
   createWorkspaceDescriptor,
   type WorkspaceDescriptorOptions,
 } from '../../services/WorkspaceService/descriptor/descriptor.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
+import type { IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { KernelLogger } from '../contracts/lifecycle.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
 
@@ -70,6 +76,14 @@ export interface CreateStandardKernelOptions {
    * and the canonical `realpath` of that root resolved at boot.
    */
   readonly workspace?: WorkspaceDescriptorOptions;
+  /**
+   * Validation policy, workspace, flavor and home overrides.
+   *
+   * By default the service ingests the frozen boot settings snapshot and the
+   * `brud.core.workspace` authority. Overrides exist for standalone
+   * compositions and tests only.
+   */
+  readonly validation?: ValidationDescriptorOptions;
   /**
    * Mutation journal the filesystem publishes pre/post descriptors to.
    *
@@ -124,14 +138,21 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  * {@link BrudKernel.boot} is called.
  *
  * Boot order is structural: settings, settings reader, workspace, filesystem,
- * history, then plugins. Workspace precedes the filesystem service so the
+ * validation, history, then plugins. Workspace precedes the filesystem service so the
  * canonical root identity exists before any content service initializes.
  *
  * @param options - Optional driver, workspace, history, and plugin overrides for testing or alternate backends.
  * @returns A kernel instance ready to boot.
  */
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
-  const kernel = new BrudKernel();
+  // Validation freezes its policy from the settings snapshot and the workspace
+  // authority. Both are only readable once the broker serves requests, which
+  // is why the kernel runs the registered boot pinners at the end of boot.
+  const kernel = new BrudKernel({
+    bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
+      await pinBootPolicies(instances);
+    },
+  });
   const storageDriver = options?.storageDriver ?? new DurableNodeStorageDriver();
   // One journal instance is shared by the filesystem and the journal-driven
   // history service. When the host does not provide one, the bootstrap owns it
@@ -182,6 +203,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
       return instance;
     },
   }));
+  // Validation sits after workspace (its containment authority) and before the
+  // terminal and plugin layers. Its policy is the boot settings snapshot, read
+  // once at construction and never re-read.
+  kernel.register(createValidationDescriptor(options?.validation));
   kernel.register(createUniversalHistoryDescriptor(options?.history));
   kernel.register(createHistoryDescriptor({
     ...historyJournalOptions,

@@ -5,6 +5,17 @@ export * from '../services/BrudFileSystem/index.js';
 export * from '../services/UniversalHistory/index.js';
 export * from '../services/PluginManager/index.js';
 export * from '../services/SettingsService/index.js';
+export * from '../services/ValidationService/index.js';
+
+// Path semantics are owned by the validation engine and re-exported under the
+// pre-Phase-3 names. The workspace registry keeps only its root-routing
+// helpers, so these three names resolve to one implementation.
+export {
+  assertSafeRelativePath,
+  defaultPathFlavor,
+  isContainedInRoot,
+  pathApiFor,
+} from '../services/ValidationService/engine/pathLexicon.js';
 export * from '../services/WorkspaceService/index.js';
 
 // Phase 3 filesystem surface: canonical token, contract, scoped-driver

@@ -2,8 +2,9 @@ import path from 'path';
 import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
 import { FileSystem } from '../types/filesystem';
 import { createPathCache, isWithinWorkspaceFolder } from '../utils/workspacePath';
-import { isDangerousCommand, validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
+import { validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
 import { BrudAPI, BrudError as BrudErrorClass } from '../api/index';
+import { isProtectedWritePath } from '../api/validationFacade';
 import type { BrudError } from '../api/types';
 import {
   searchNotFoundError,
@@ -183,6 +184,83 @@ function recordOperationFailure(
   });
 }
 
+/** Kinds that mutate the workspace and are therefore A10-gated. */
+const MUTATING_KINDS: ReadonlySet<FileOperation['kind']> = new Set([
+  'search_replace',
+  'create_file',
+  'delete_file',
+  'rename_file',
+  'move_file',
+  'copy_file',
+  'append_file',
+  'create_directory',
+  'delete_directory',
+  'move_directory',
+  'append_file_multi',
+  'search_replace_multi',
+]);
+
+/**
+ * Applies the A10 protected-path denylist to one operation.
+ *
+ * The kernel filesystem already denies `.brud/settings.json`,
+ * `.brud/history/**` and `.git/**` for file mutations, but `create_directory`
+ * and `delete_directory` execute through the legacy `FileSystem` surface with
+ * no denylist check at all (audit §5.4). This gate closes that bypass for every
+ * mutating kind by checking each path the operation targets, before any
+ * handler runs.
+ *
+ * @param operation - Operation about to execute.
+ * @param workspaceFolders - Registered workspace folders.
+ * @returns A `VALIDATION_ERROR` when a target is protected, otherwise `undefined`.
+ */
+function checkProtectedTarget(
+  operation: FileOperation,
+  workspaceFolders: readonly string[],
+): BrudError | undefined {
+  if (!MUTATING_KINDS.has(operation.kind) || workspaceFolders.length === 0) {
+    return undefined;
+  }
+
+  const root = workspaceFolders[0];
+  const candidates = new Set<string>();
+  const primary = getOperationTargetPath(operation);
+  const secondary = getOperationSecondaryTargetPath(operation);
+
+  if (primary.length > 0) {
+    candidates.add(primary);
+  }
+
+  if (secondary !== undefined) {
+    candidates.add(secondary);
+  }
+
+  if (operation.kind === 'create_directory') {
+    for (const file of operation.files ?? []) {
+      candidates.add(path.join(operation.directoryPath, file));
+    }
+  }
+
+  for (const candidate of candidates) {
+    const absolute = path.isAbsolute(candidate) ? path.resolve(candidate) : path.resolve(root, candidate);
+    const relative = path.relative(path.resolve(root), absolute);
+
+    if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+      continue;
+    }
+
+    const kernelRelative = relative.split(path.sep).join('/');
+
+    if (isProtectedWritePath(kernelRelative)) {
+      return validationError(
+        `The path "${candidate}" is on the kernel protected-path denylist and cannot be modified.`,
+      );
+    }
+  }
+
+  return undefined;
+}
+
 export async function executeFileOperations(
   operations: FileOperation[],
   fs: FileSystem,
@@ -350,6 +428,14 @@ export async function executeFileOperations(
       const disabledError = toolDisabledError(operation.kind);
       recordOperationFailure(operationResults, errors, i, operation, disabledError, {
         message: disabledError.friendly,
+      });
+      continue;
+    }
+
+    const protectedFailure = checkProtectedTarget(operation, workspaceFolders);
+    if (protectedFailure !== undefined) {
+      recordOperationFailure(operationResults, errors, i, operation, protectedFailure, {
+        message: protectedFailure.friendly,
       });
       continue;
     }
@@ -822,10 +908,7 @@ operationResults.push({
         }
 
         case 'extract_structure': {
-          console.error('DEBUG extract_structure: directoryPath=' + operation.directoryPath + ', depth=' + operation.depth);
-          console.error('DEBUG extract_structure: workspaceFolders=' + JSON.stringify(workspaceFolders));
           const result = validatePath(operation.directoryPath, workspaceFolders);
-          console.error('DEBUG extract_structure: validateWorkspacePath result=' + JSON.stringify(result));
           if (!result.valid) {
             recordOperationFailure(operationResults, errors, i, operation, result.brudError, {
               message: result.error,
@@ -835,8 +918,6 @@ operationResults.push({
           }
 
           const directoryPath = result.resolvedPath;
-          const exists = await fs.exists(directoryPath);
-          console.error('DEBUG extract_structure: fs.exists result=' + exists);
           const dirExistsResult = await BrudAPI.validate.directoryExists(fs, directoryPath);
           if (!dirExistsResult.success) {
             recordOperationFailure(operationResults, errors, i, operation, directoryNotFoundError(operation.directoryPath), {
