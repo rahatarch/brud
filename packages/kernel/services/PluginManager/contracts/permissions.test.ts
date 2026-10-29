@@ -55,7 +55,7 @@ describe('permission catalog', () => {
   });
 
   it('requires at least one valid permission for every capability', () => {
-    const capabilities: readonly PluginCapability[] = ['fileSystem', 'universalHistory'];
+    const capabilities: readonly PluginCapability[] = ['fileSystem', 'universalHistory', 'tools'];
 
     for (const capability of capabilities) {
       const required = CAPABILITY_PERMISSION_REQUIREMENTS[capability];

@@ -1,3 +1,4 @@
+import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
@@ -449,6 +450,7 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
       pluginId,
       workspaceRoot: this.dependencies.workspaceRoot,
       permissions,
+      official: record.official,
       logger: new PluginManagerLogger(pluginId),
       capabilities: {
         fileSystem: (): IBrudFileSystem => {
@@ -463,6 +465,15 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
             throw new Error(
               `Universal history service is unavailable for plugin "${pluginId}"`,
             );
+          }
+
+          return accessor();
+        },
+        brudTools: (): IBrudToolsService => {
+          const accessor = this.dependencies.brudTools;
+
+          if (accessor === undefined) {
+            throw new Error(`Tools service is unavailable for plugin "${record.manifest.id}"`);
           }
 
           return accessor();

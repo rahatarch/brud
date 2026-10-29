@@ -1,8 +1,15 @@
+import type {
+  IBrudToolsService,
+  IPluginExecutionContext,
+  ToolRegistrationOptions,
+} from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { OperationResult } from '../../../src/contracts/handler.js';
 import { PluginPermissionError } from './errors.js';
 import type {
   IPluginContext,
+  IPluginDisposable,
   IPluginLogger,
   IPluginSubscriptions,
 } from './IPluginContext.js';
@@ -22,6 +29,9 @@ export interface PluginCapabilityProviders {
 
   /** Builds the universal history facade scoped to the owning plugin. */
   readonly universalHistory: () => IUniversalHistoryService;
+
+  /** Resolves the live `brud.core.tools` registry. */
+  readonly brudTools?: () => IBrudToolsService;
 }
 
 /** Construction options for {@link PluginContext}. */
@@ -37,6 +47,14 @@ export interface PluginContextOptions {
 
   /** Plugin-scoped logger supplied by the manager. */
   readonly logger: IPluginLogger;
+
+  /**
+   * Official certification status derived by the kernel from the plugin brand.
+   *
+   * Defaults to `false`, so a plugin cannot claim certification by
+   * constructing its own context.
+   */
+  readonly official?: boolean;
 
   /** Scoped capability providers supplied by the manager. */
   readonly capabilities: PluginCapabilityProviders;
@@ -62,6 +80,8 @@ export class PluginContext implements IPluginContext {
 
   public readonly logger: IPluginLogger;
 
+  private readonly official: boolean;
+
   private readonly capabilities: PluginCapabilityProviders;
 
   private fileSystem: IBrudFileSystem | undefined;
@@ -74,6 +94,7 @@ export class PluginContext implements IPluginContext {
     this.permissions = new Set(options.permissions);
     this.logger = options.logger;
     this.subscriptions = options.subscriptions ?? new PluginSubscriptions();
+    this.official = options.official ?? false;
     this.capabilities = options.capabilities;
   }
 
@@ -95,6 +116,61 @@ export class PluginContext implements IPluginContext {
     this.universalHistory ??= this.capabilities.universalHistory();
 
     return this.universalHistory;
+  }
+
+  public registerTool(options: ToolRegistrationOptions): IPluginDisposable {
+    this.assertPermission('registerTool', 'tools:register');
+
+    const disposable = this.resolveBrudTools().registerTool(
+      this.pluginId,
+      this.official,
+      options,
+    );
+
+    this.subscriptions.add(disposable);
+
+    return disposable;
+  }
+
+  public async executeTool(
+    name: string,
+    rawInput: unknown,
+    contextOverride?: Partial<IPluginExecutionContext>,
+  ): Promise<OperationResult> {
+    this.assertPermission('executeTool', 'tools:execute');
+
+    const context: IPluginExecutionContext = {
+      workspaceRoot: this.workspaceRoot,
+      callerId: this.pluginId,
+      signal: contextOverride?.signal,
+    };
+
+    return this.resolveBrudTools().executeTool(name, rawInput, context);
+  }
+
+  private resolveBrudTools(): IBrudToolsService {
+    const brudTools = this.capabilities.brudTools;
+
+    if (brudTools === undefined) {
+      throw new Error('Tools capability is not available in this context');
+    }
+
+    return brudTools();
+  }
+
+  /**
+   * Enforces one specific permission for an operation whose grant is not
+   * interchangeable with its sibling.
+   *
+   * Registering and executing tools are distinct authorities: holding
+   * `tools:register` must never authorize execution and vice versa, so these
+   * checks require the exact permission instead of the capability's "any of"
+   * set.
+   */
+  private assertPermission(operation: string, permission: PluginPermission): void {
+    if (!this.permissions.has(permission)) {
+      throw new PluginPermissionError(this.pluginId, operation, [permission]);
+    }
   }
 
   private assertCapability(operation: string, capability: PluginCapability): void {

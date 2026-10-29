@@ -1,10 +1,12 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import type { OperationResult } from '../../../src/contracts/handler.js';
+import type { ToolRegistrationOptions } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import { PluginPermissionError } from './errors.js';
 import type { IBrudPlugin } from './IBrudPlugin.js';
-import type { IPluginContext } from './IPluginContext.js';
+import type { IPluginContext, IPluginDisposable } from './IPluginContext.js';
 import { validatePluginManifest } from './manifest.js';
 import type { PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';
@@ -47,6 +49,12 @@ function createContext(pluginId: string): IPluginContext {
         'history:read',
         'history:write',
       ]);
+    },
+    registerTool: (): IPluginDisposable => {
+      throw new PluginPermissionError(pluginId, 'registerTool', ['tools:register', 'tools:execute']);
+    },
+    executeTool: (): Promise<OperationResult> => {
+      throw new PluginPermissionError(pluginId, 'executeTool', ['tools:register', 'tools:execute']);
     },
   };
 }

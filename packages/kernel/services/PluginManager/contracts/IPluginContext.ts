@@ -1,5 +1,10 @@
+import type {
+  IPluginExecutionContext,
+  ToolRegistrationOptions,
+} from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { PluginPermission } from './permissions.js';
 
 /**
@@ -116,4 +121,39 @@ export interface IPluginContext {
    * @throws PluginPermissionError when neither permission was declared.
    */
   getUniversalHistory(): IUniversalHistoryService;
+
+  /**
+   * Registers a tool into the live `brud.core.tools` registry on behalf of
+   * this plugin.
+   *
+   * Requires `tools:register`. The owning plugin identifier and the official
+   * certification status are supplied by the kernel; neither can be asserted
+   * by the caller. The returned disposable is added to
+   * {@link IPluginContext.subscriptions} so the tool leaves the registry when
+   * the plugin deactivates.
+   *
+   * @param options - Tool definition and handler.
+   * @returns Disposable that removes the tool exactly once.
+   * @throws PluginPermissionError when `tools:register` was not declared.
+   */
+  registerTool(options: ToolRegistrationOptions): IPluginDisposable;
+
+  /**
+   * Validates and dispatches a registered tool through `brud.core.tools`.
+   *
+   * Requires `tools:execute`. The payload is schema-validated by the service
+   * before the handler runs; lookup and validation failures resolve to a
+   * `failed` result rather than throwing.
+   *
+   * @param name - Dispatch name of the tool.
+   * @param rawInput - Untrusted payload supplied by the plugin.
+   * @param contextOverride - Optional cancellation signal and caller override.
+   * @returns The tool's operation result.
+   * @throws PluginPermissionError when `tools:execute` was not declared.
+   */
+  executeTool(
+    name: string,
+    rawInput: unknown,
+    contextOverride?: Partial<IPluginExecutionContext>,
+  ): Promise<OperationResult>;
 }

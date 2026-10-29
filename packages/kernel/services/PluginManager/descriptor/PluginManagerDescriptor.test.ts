@@ -8,6 +8,9 @@ import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
+import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
+import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
+import { BrudToolsService } from '../../BrudTools/orchestrator/BrudToolsService.js';
 import { BrudFileSystem } from '../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { createFileSystemDescriptor } from '../../BrudFileSystem/descriptor/descriptor.js';
@@ -120,6 +123,7 @@ class CountingBroker implements IKernelAccessBroker {
 
 interface HarnessOptions {
   readonly withHistory?: boolean;
+  readonly withTools?: boolean;
 }
 
 interface Harness {
@@ -147,6 +151,18 @@ function createHarness(options?: HarnessOptions): Harness {
 
     registry.register(historyDescriptor);
     registry.setInstance(UniversalHistoryToken.id, universalHistory);
+  }
+
+  if (options?.withTools === true) {
+    const toolsDescriptor: ServiceDescriptor<IBrudToolsService> = {
+      token: BrudToolsToken,
+      tier: 'core',
+      dependencies: [],
+      factory: (): BrudToolsService => new BrudToolsService(),
+    };
+
+    registry.register(toolsDescriptor);
+    registry.setInstance(BrudToolsToken.id, new BrudToolsService());
   }
 
   return {
@@ -269,5 +285,61 @@ describe('createPluginManagerDescriptor', () => {
     assert.equal(harness.broker.historyRequests, 0);
     assert.equal(state.universalHistory, undefined);
     assert.equal(manager.getPlugin('acme.tools.history')?.state, 'failed');
+  });
+});
+
+describe('createPluginManagerDescriptor tool composition', () => {
+  it('omits the tools dependency unless the composition opts in', () => {
+    const descriptor = createPluginManagerDescriptor({ withUniversalHistory: true });
+
+    assert.deepEqual(
+      descriptor.dependencies.map((token) => token.id),
+      [FileSystemToken.id, UniversalHistoryToken.id],
+    );
+  });
+
+  it('declares the tools dependency when the composition opts in', () => {
+    const descriptor = createPluginManagerDescriptor({
+      withUniversalHistory: true,
+      withTools: true,
+    });
+
+    assert.deepEqual(
+      descriptor.dependencies.map((token) => token.id),
+      [FileSystemToken.id, UniversalHistoryToken.id, BrudToolsToken.id],
+    );
+  });
+
+  it('registers and executes plugin tools against the brokered registry', async () => {
+    const harness = createHarness({ withTools: true });
+    const plugin = createProbePlugin(
+      'acme.tools.brokered',
+      ['tools:register', 'tools:execute'],
+      {},
+    );
+    const pluginWithTools: IBrudPlugin = {
+      manifest: plugin.manifest,
+      activate: async (context: IPluginContext): Promise<void> => {
+        context.registerTool({
+          name: 'acme_brokered',
+          description: 'Brokered',
+          parametersSchema: {},
+          execute: async (): Promise<{ status: 'success' }> => ({ status: 'success' }),
+        });
+        const result = await context.executeTool('acme_brokered', {});
+        assert.equal(result.status, 'success');
+      },
+    };
+    const descriptor = createPluginManagerDescriptor({
+      initialPlugins: [pluginWithTools],
+      withTools: true,
+    });
+    const manager = descriptor.factory(createCaller(), harness.broker);
+
+    await manager.initialize();
+
+    assert.equal(manager.getPlugin('acme.tools.brokered')?.state, 'active');
+
+    await manager.dispose();
   });
 });

@@ -250,6 +250,7 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   kernel.register(createPluginManagerDescriptor({
     initialPlugins: options?.initialPlugins,
     withUniversalHistory: true,
+    withTools: true,
   }));
 
   const boot = kernel.boot.bind(kernel);

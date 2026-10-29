@@ -33,7 +33,7 @@ export const PLUGIN_PERMISSIONS: readonly PluginPermission[] = [
 /**
  * Capability handles a plugin context can expose.
  */
-export type PluginCapability = 'fileSystem' | 'universalHistory';
+export type PluginCapability = 'fileSystem' | 'universalHistory' | 'tools';
 
 /**
  * Permissions that unlock each capability handle.
@@ -47,6 +47,7 @@ export const CAPABILITY_PERMISSION_REQUIREMENTS: Readonly<
 > = {
   fileSystem: ['fs:read', 'fs:write'],
   universalHistory: ['history:read', 'history:write'],
+  tools: ['tools:register', 'tools:execute'],
 };
 
 /**
