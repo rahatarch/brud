@@ -17,3 +17,7 @@ export {
   HistoryAccessDeniedError,
   ReadOnlyHistoryFacade,
 } from './ReadOnlyHistoryFacade.js';
+export {
+  ReadOnlyUniversalHistoryFacade,
+  UniversalHistoryReadOnlyViolationError,
+} from './ReadOnlyUniversalHistoryFacade.js';

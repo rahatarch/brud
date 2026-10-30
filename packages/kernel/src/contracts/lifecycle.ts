@@ -47,6 +47,19 @@ export interface IServiceLifecycle {
    */
   initialize?(broker: IKernelAccessBroker): Promise<void> | void;
 
+  /**
+   * Starts work that needs other services through the broker. Called once,
+   * after the kernel enters `RUNNING` and before `boot()` resolves, in the same
+   * dependency order as {@link IServiceLifecycle.initialize}.
+   *
+   * The broker grants access here, unlike during `initialize()`. If this hook
+   * throws, the kernel disposes every initialized service in reverse order,
+   * ends `DISPOSED`, and `boot()` rejects with the original error.
+   *
+   * @param broker - Mediated access broker for resolving dependencies.
+   */
+  onRunning?(broker: IKernelAccessBroker): Promise<void> | void;
+
   /** Releases resources held by the service. Called once during shutdown. */
   dispose?(): Promise<void> | void;
 }

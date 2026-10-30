@@ -2,6 +2,7 @@ import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import { resolveActivationOrder, resolveDeactivationOrder } from '../contracts/activationOrder.js';
 import { hasOfficialPluginBrand } from '../contracts/branding.js';
@@ -294,7 +295,22 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
     await this.deactivateAll();
   }
 
+  /**
+   * Boot staging only. Plugins are not activated here: the kernel is still
+   * `BOOTING`, so the broker would refuse every capability a plugin requests.
+   * Activation happens in {@link PluginManagerService.onRunning}.
+   */
   public async initialize(): Promise<void> {
+    return;
+  }
+
+  /**
+   * Activates every registered plugin once the kernel is `RUNNING`, so plugins
+   * can request capability handles inside `activate()`. A failure rolls back
+   * the plugins activated so far and rejects, which makes the kernel roll back
+   * its own boot.
+   */
+  public async onRunning(): Promise<void> {
     await this.activateAll();
   }
 
@@ -467,7 +483,14 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
             );
           }
 
-          return accessor();
+          // Write authority needs both a declared `history:write` and the
+          // kernel-derived official brand. Every other plugin, including a
+          // third party declaring `history:write`, gets the read-only facade.
+          const history = accessor();
+
+          return permissions.includes('history:write') && record.official
+            ? history
+            : new ReadOnlyUniversalHistoryFacade(history);
         },
         brudTools: (): IBrudToolsService => {
           const accessor = this.dependencies.brudTools;

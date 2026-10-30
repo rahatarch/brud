@@ -31,7 +31,10 @@ export interface PluginRecord {
  * Manifest-driven plugin registry and lifecycle supervisor.
  *
  * Registration is passive: plugins are stored exactly as declared and only
- * activated once {@link IPluginManagerService.activateAll} runs. Activation
+ * activated once {@link IPluginManagerService.activateAll} runs. Inside the
+ * kernel this happens in the `onRunning` lifecycle hook, after the kernel is
+ * `RUNNING` and before `boot()` resolves, so plugins can request capability
+ * handles during `activate()`. Activation
  * follows a deterministic topological order derived from
  * `manifest.dependencies`; deactivation disposes plugins in the reverse order.
  */

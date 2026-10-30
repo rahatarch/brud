@@ -35,6 +35,7 @@ import {
   pinBootPolicies,
   type ValidationDescriptorOptions,
 } from '../../services/ValidationService/descriptor/ValidationDescriptor.js';
+import { createUnifiedHistoryDescriptors } from '../../services/UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.js';
 import type { WorkspaceService } from '../../services/WorkspaceService/orchestrator/WorkspaceService.js';
 import {
   createWorkspaceDescriptor,
@@ -63,6 +64,13 @@ export interface CreateStandardKernelOptions {
    * the boot workspace.
    */
   readonly history?: UniversalHistoryDescriptorOptions;
+  /**
+   * History engine. `'legacy'` (default) keeps the session ledger and the
+   * journal as two engines. `'unified'` serves both history tokens from the
+   * unified polymorphic engine (D-15). Until the Switch increment the default
+   * stays `'legacy'`; `'unified'` is opt-in.
+   */
+  readonly historyEngine?: 'legacy' | 'unified';
   /**
    * Journal-driven history overrides. Defaults to `.brud/history/history.db`
    * inside the boot workspace and consumes the shared mutation journal.
@@ -242,11 +250,21 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // after validation (its schema gate) and before the plugin manager, so the
   // registry is RUNNING before any plugin activates and registers into it.
   kernel.register(createBrudToolsDescriptor(options?.tools));
-  kernel.register(createUniversalHistoryDescriptor(options?.history));
-  kernel.register(createHistoryDescriptor({
-    ...historyJournalOptions,
-    journal: mutationJournal,
-  }));
+  if (options?.historyEngine === 'unified') {
+    const unified = createUnifiedHistoryDescriptors({
+      driver: storageDriver,
+      journal: mutationJournal,
+      ...(options.history?.inMemory === true ? { inMemory: true } : {}),
+    });
+    kernel.register(unified.session);
+    kernel.register(unified.journal);
+  } else {
+    kernel.register(createUniversalHistoryDescriptor(options?.history));
+    kernel.register(createHistoryDescriptor({
+      ...historyJournalOptions,
+      journal: mutationJournal,
+    }));
+  }
   kernel.register(createPluginManagerDescriptor({
     initialPlugins: options?.initialPlugins,
     withUniversalHistory: true,

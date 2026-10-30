@@ -59,7 +59,8 @@ export interface PluginManagerDescriptorOptions {
  * Dependencies are resolved lazily through the access broker. Descriptor
  * factories and `initialize` hooks run while the kernel is `BOOTING`, and the
  * broker refuses access until the kernel reaches `RUNNING`, so eager
- * resolution here would break boot.
+ * resolution here would break boot. Plugins activate in the manager's
+ * `onRunning` hook, after `RUNNING`, which is when these accessors first run.
  *
  * @param options - Initial plugins and boot dependency composition.
  * @returns A descriptor exposing {@link IPluginManagerService} at core tier.

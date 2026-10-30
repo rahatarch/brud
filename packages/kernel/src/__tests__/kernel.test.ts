@@ -14,6 +14,7 @@ import { createServiceToken } from '../contracts/serviceToken.js';
 import type { ExecutionContext } from '../contracts/context.js';
 import type { OperationHandler, OperationResult } from '../contracts/handler.js';
 import type { Token } from '../contracts/container.js';
+import type { IKernelAccessBroker } from '../contracts/accessBroker.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../contracts/serviceToken.js';
@@ -734,6 +735,161 @@ describe('BrudKernel lifecycle orchestrator', () => {
     await assert.rejects(() => kernel.shutdown(), /dispose failed: b/);
 
     assert.deepStrictEqual(disposed, ['a']);
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
+  });
+});
+
+// ── onRunning lifecycle hook (Phase 5 C-1, G-9) ─────────────────
+
+interface RunningProbeOptions {
+  readonly token: ServiceToken<ProbeService>;
+  readonly dependencies?: readonly ServiceToken<unknown>[];
+  readonly events: string[];
+  readonly onRunning?: (broker: IKernelAccessBroker) => Promise<void> | void;
+}
+
+function runningProbeDescriptor(options: RunningProbeOptions): ServiceDescriptor<ProbeService> {
+  const id = options.token.id;
+
+  return {
+    token: options.token,
+    tier: 'core',
+    dependencies: options.dependencies ?? [],
+    factory: () => ({
+      id,
+      initialize: () => {
+        options.events.push(`init:${id}`);
+      },
+      onRunning: async (broker: IKernelAccessBroker) => {
+        options.events.push(`running:${id}`);
+        await options.onRunning?.(broker);
+      },
+      dispose: () => {
+        options.events.push(`dispose:${id}`);
+      },
+    }),
+  };
+}
+
+describe('BrudKernel onRunning hook', () => {
+  const workspaceRoot = '/tmp/brud-kernel-running';
+  const hookCaller: ServiceContext = { callerId: 'hook', tier: 'core', workspaceRoot };
+
+  it('runs once per service, in dependency order, after every initialize, while RUNNING with broker access', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const b = probeToken('b');
+    const events: string[] = [];
+    const observedStates: string[] = [];
+    let resolvedDependency: string | undefined;
+
+    kernel.register(runningProbeDescriptor({
+      token: b,
+      dependencies: [a],
+      events,
+      onRunning: (broker) => {
+        observedStates.push(kernel.lifecycleState);
+        resolvedDependency = broker.requestAccess(hookCaller, a).id;
+      },
+    }));
+    kernel.register(runningProbeDescriptor({
+      token: a,
+      events,
+      onRunning: () => {
+        observedStates.push(kernel.lifecycleState);
+      },
+    }));
+
+    await kernel.boot({ workspaceRoot });
+
+    assert.deepStrictEqual(events, ['init:a', 'init:b', 'running:a', 'running:b']);
+    assert.deepStrictEqual(observedStates, ['RUNNING', 'RUNNING']);
+    assert.strictEqual(resolvedDependency, 'a');
+    assert.strictEqual(kernel.lifecycleState, 'RUNNING');
+
+    await kernel.shutdown();
+
+    assert.deepStrictEqual(events, [
+      'init:a', 'init:b', 'running:a', 'running:b', 'dispose:b', 'dispose:a',
+    ]);
+  });
+
+  it('rolls back to DISPOSED, disposing in reverse order, when an onRunning hook throws', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const b = probeToken('b');
+    const c = probeToken('c');
+    const events: string[] = [];
+
+    kernel.register(runningProbeDescriptor({ token: a, events }));
+    kernel.register(runningProbeDescriptor({
+      token: b,
+      dependencies: [a],
+      events,
+      onRunning: () => {
+        throw new Error('running failed: b');
+      },
+    }));
+    kernel.register(runningProbeDescriptor({ token: c, dependencies: [b], events }));
+
+    await assert.rejects(
+      () => kernel.boot({ workspaceRoot }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.strictEqual(error.message, 'running failed: b');
+        return true;
+      },
+    );
+
+    assert.deepStrictEqual(events, [
+      'init:a', 'init:b', 'init:c',
+      'running:a', 'running:b',
+      'dispose:c', 'dispose:b', 'dispose:a',
+    ]);
+    assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
+    assert.throws(
+      () => kernel.requestAccess(hookCaller, a),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+    await assert.rejects(
+      () => kernel.shutdown(),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+  });
+
+  it('rejects shutdown while an onRunning hook is still pending', async () => {
+    const kernel = new BrudKernel();
+    const a = probeToken('a');
+    const events: string[] = [];
+    let release: () => void = () => undefined;
+    let hookEntered: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const entered = new Promise<void>((resolve) => { hookEntered = resolve; });
+
+    kernel.register(runningProbeDescriptor({
+      token: a,
+      events,
+      onRunning: async () => {
+        hookEntered();
+        await gate;
+      },
+    }));
+
+    const booting = kernel.boot({ workspaceRoot });
+    await entered;
+
+    await assert.rejects(
+      () => kernel.shutdown(),
+      isLifecycleError('INVALID_LIFECYCLE_STATE'),
+    );
+    assert.deepStrictEqual(events, ['init:a', 'running:a']);
+
+    release();
+    await booting;
+
+    assert.strictEqual(kernel.lifecycleState, 'RUNNING');
+    await kernel.shutdown();
+    assert.deepStrictEqual(events, ['init:a', 'running:a', 'dispose:a']);
     assert.strictEqual(kernel.lifecycleState, 'DISPOSED');
   });
 });

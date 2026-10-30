@@ -12,6 +12,7 @@ export * from './engine/commandPatterns.js';
 export * from './engine/errorCatalog.js';
 export * from './engine/kindMatrix.js';
 export * from './engine/lineRange.js';
+export * from './engine/jsonSchema/index.js';
 export {
   NULL_BYTE_PATTERN,
   NT_OBJECT_PREFIX_PATTERN,

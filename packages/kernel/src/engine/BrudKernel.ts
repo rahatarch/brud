@@ -47,6 +47,7 @@ export class BrudKernel implements IBrudKernel {
   private readonly accessBroker: KernelAccessBroker;
   private readonly initializedServices: InitializedService[] = [];
   private state: KernelLifecycleState = 'UNINITIALIZED';
+  private runningHooksPending = false;
   private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
 
   constructor(options?: { maxCallDepth?: number; bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void> }) {
@@ -121,9 +122,37 @@ export class BrudKernel implements IBrudKernel {
       this.state = 'DISPOSED';
       throw error;
     }
+
+    // Post-boot start. The broker now grants access, so services can resolve
+    // their dependencies (the plugin manager activates plugins here). Hooks run
+    // one at a time in initialization order. Any failure rolls the whole
+    // kernel back: the broker stops granting, every initialized service is
+    // disposed in reverse order, and boot() rejects with the original error.
+    this.runningHooksPending = true;
+
+    try {
+      for (const { instance } of this.initializedServices) {
+        if (typeof instance.onRunning === 'function') {
+          await instance.onRunning(this.accessBroker);
+        }
+      }
+    } catch (error: unknown) {
+      this.state = 'SHUTTING_DOWN';
+      await this.rollbackInitialized();
+      this.state = 'DISPOSED';
+      throw error;
+    } finally {
+      this.runningHooksPending = false;
+    }
   }
 
   async shutdown(): Promise<void> {
+    if (this.runningHooksPending) {
+      // Disposing services while onRunning hooks are still starting them would
+      // tear down dependencies underneath an in-flight activation.
+      throw new LifecycleStateError('shutdown while onRunning hooks are pending', this.state);
+    }
+
     if (this.state !== 'RUNNING') {
       throw new LifecycleStateError('shutdown', this.state, 'RUNNING');
     }

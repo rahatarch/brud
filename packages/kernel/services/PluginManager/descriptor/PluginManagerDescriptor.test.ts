@@ -16,6 +16,7 @@ import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { createFileSystemDescriptor } from '../../BrudFileSystem/descriptor/descriptor.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
 import { PluginLifecycleError } from '../contracts/errors.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
@@ -235,7 +236,7 @@ describe('createPluginManagerDescriptor', () => {
     const descriptor = createPluginManagerDescriptor({ initialPlugins: [plugin] });
     const manager = descriptor.factory(createCaller(), harness.broker);
 
-    await manager.initialize();
+    await manager.onRunning();
 
     assert.equal(harness.broker.fileSystemRequests, 1);
     assert.equal(state.fileSystem, harness.fileSystem);
@@ -252,10 +253,10 @@ describe('createPluginManagerDescriptor', () => {
     const descriptor = createPluginManagerDescriptor({ initialPlugins: [plugin] });
     const manager = descriptor.factory(createCaller(), harness.broker);
 
-    await manager.initialize();
+    await manager.onRunning();
 
     assert.equal(harness.broker.historyRequests, 1);
-    assert.equal(state.universalHistory, harness.universalHistory);
+    assert.ok(state.universalHistory instanceof ReadOnlyUniversalHistoryFacade);
     assert.equal(manager.getPlugin('acme.tools.history')?.state, 'active');
 
     await manager.dispose();
@@ -272,7 +273,7 @@ describe('createPluginManagerDescriptor', () => {
     const manager = descriptor.factory(createCaller(), harness.broker);
 
     await assert.rejects(
-      () => manager.initialize(),
+      () => manager.onRunning(),
       (error: unknown) => {
         assert.ok(error instanceof PluginLifecycleError);
         assert.equal(error.code, 'PLUGIN_LIFECYCLE');
@@ -336,7 +337,7 @@ describe('createPluginManagerDescriptor tool composition', () => {
     });
     const manager = descriptor.factory(createCaller(), harness.broker);
 
-    await manager.initialize();
+    await manager.onRunning();
 
     assert.equal(manager.getPlugin('acme.tools.brokered')?.state, 'active');
 

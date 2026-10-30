@@ -14,6 +14,7 @@
   "scripts": {
     "build": "tsc",
     "test": "node --import tsx --test \"src/__tests__/*.test.ts\" \"drivers/**/*.test.ts\" \"services/**/*.test.ts\"",
+    "test:history-scale": "node --expose-gc --import tsx --test \"services/UniversalHistory/unified/__tests__/*.scale.ts\"",
     "clean": "rimraf dist tsconfig.tsbuildinfo"
   },
   "dependencies": {}

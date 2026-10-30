@@ -1,7 +1,7 @@
 import * as Protocol from '@brud/protocol';
 import type { JsonRpcId, RpcErrorData, RpcErrorDetails, RpcErrorResponse } from '@brud/protocol';
 
-type ErrorField = 'rule' | 'root' | 'path' | 'reason' | 'operation' | 'syscall';
+type ErrorField = 'rule' | 'root' | 'path' | 'candidatePath' | 'reason' | 'operation' | 'syscall';
 
 const LIFECYCLE_ERROR_CODES: ReadonlySet<string> = new Set(['INVALID_LIFECYCLE_STATE']);
 
@@ -36,6 +36,10 @@ function readField(error: Error, field: ErrorField): string | undefined {
       return 'root' in error && typeof error.root === 'string' ? error.root : undefined;
     case 'path':
       return 'path' in error && typeof error.path === 'string' ? error.path : undefined;
+    case 'candidatePath':
+      return 'candidatePath' in error && typeof error.candidatePath === 'string'
+        ? error.candidatePath
+        : undefined;
     case 'reason':
       return 'reason' in error && typeof error.reason === 'string' ? error.reason : undefined;
     case 'operation':
@@ -87,6 +91,23 @@ export function toRpcErrorData(error: unknown): RpcErrorData {
         rule: readField(error, 'rule'),
         root: readField(error, 'root'),
         path: readField(error, 'path'),
+        reason: readField(error, 'reason'),
+      },
+    };
+  }
+
+  // Kernel WorkspaceService containment failures (`WorkspaceViolationError`).
+  // Every rule is a path violation on the wire; `rule` tells clients which one.
+  // `errorCode` keeps the frozen wire value so existing clients are unaffected.
+  if (code === 'WORKSPACE_PATH_VIOLATION' && error instanceof Error) {
+    return {
+      code: Protocol.PATH_VIOLATION,
+      message,
+      data: {
+        errorCode: 'PATH_TRAVERSAL_DETECTED',
+        rule: readField(error, 'rule'),
+        root: readField(error, 'root'),
+        path: readField(error, 'candidatePath') ?? readField(error, 'path'),
         reason: readField(error, 'reason'),
       },
     };

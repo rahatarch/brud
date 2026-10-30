@@ -533,6 +533,40 @@ describe('DaemonServer dispatch', () => {
     assert.equal(response.error.data.rule, 'TRAVERSAL');
   });
 
+  it('translates an absolute path outside the workspace into PATH_VIOLATION', async (t) => {
+    const client = await openHandshakenClient();
+    t.after(async () => {
+      await client.close();
+    });
+
+    const response = await client.call(
+      createRequest(Protocol.FS_READ_FILE, { path: '/etc/passwd' }),
+    );
+    assert.ok(Protocol.isRpcErrorResponse(response));
+    assert.equal(response.error.code, Protocol.PATH_VIOLATION);
+    assert.ok(response.error.data !== undefined);
+    assert.equal(response.error.data.errorCode, 'PATH_TRAVERSAL_DETECTED');
+    assert.equal(response.error.data.rule, 'OUTSIDE_ROOT');
+    assert.equal(response.error.data.path, '/etc/passwd');
+  });
+
+  it('translates a protected-path write into PATH_VIOLATION', async (t) => {
+    const client = await openHandshakenClient();
+    t.after(async () => {
+      await client.close();
+    });
+
+    const response = await client.call(
+      createRequest(Protocol.FS_WRITE_ATOMIC, { path: '.brud/settings.json', data: '{}' }),
+    );
+    assert.ok(Protocol.isRpcErrorResponse(response));
+    assert.equal(response.error.code, Protocol.PATH_VIOLATION);
+    assert.ok(response.error.data !== undefined);
+    assert.equal(response.error.data.errorCode, 'PATH_TRAVERSAL_DETECTED');
+    assert.equal(response.error.data.rule, 'PROTECTED_PATH_DENIED');
+    assert.equal(response.error.data.path, '.brud/settings.json');
+  });
+
   it('reports file metadata through fs.stat', async (t) => {
     const client = await openHandshakenClient();
     t.after(async () => {

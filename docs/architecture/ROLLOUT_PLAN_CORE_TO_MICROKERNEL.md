@@ -12,6 +12,7 @@
 | Depends on | [BEAS-0001](./ENGINE_ARCHITECTURE_STANDARD.md), [Microkernel Architecture Specification](./microkernel-architecture-spec.md), [MCP Subsystem Design](./mcp-subsystem-design.md), [BrudHistory Specification](./BRUD_HISTORY_ENGINE_SPEC.md) |
 | Review cadence | Re-read at the start of every phase; update the phase status table in §5.1 when a phase gate passes |
 | Change rule | A behavioural change that contradicts this document must update this document in the same change, citing code and tests. Silent divergence is a defect. |
+| Last revised | 2026-10-30: phase status refreshed (§2.3, §2.6, §5.1, Appendix F); strategy changed to rollout-before-release with legacy quarantine (D-12, D-13, D-14) |
 
 ### Status vocabulary
 
@@ -51,28 +52,31 @@
 
 ### 1.1 The Core Decision
 
-**Brud will ship user-facing value through Brud Desktop first, and migrate the engine to a contract-first microkernel in parallel, incrementally, without a big-bang monolith rewrite.**
+**Brud will complete the migration of the engine to a contract-first microkernel before any consumer app ships again. No consumer app ships on the legacy monolith. The migration is still incremental, without a big-bang monolith rewrite.** (Strategy revised 2026-10-30; see D-12, D-13, D-14.)
 
-The decision is deliberately asymmetric:
+The decision has four parts:
 
-- **Product first.** Brud Desktop is the next user-facing surface. It must be able to ship while the engine is still carrying legacy code. No engine purity milestone is allowed to become a release blocker for Desktop.
-- **Compatibility first.** Existing surfaces keep working throughout: the VS Code extension, the MCP transports, the daemon JSON-RPC protocol, the `.brud/` on-disk data, and deployments with no third-party plugins.
-- **Contracts before plugins.** Work proceeds *outward-in*: harden kernel contracts and Level-1 services, complete the plugin runtime, move features into official plugins, and only then delete legacy code.
+- **Architecture first, then product.** The whole rollout (Phases 0–11) completes before the next consumer app, Brud Desktop, ships. Desktop may be developed in parallel against the protocol and kernel contracts, but it is released only on the microkernel path. No consumer release is allowed to depend on legacy execution code.
+- **Release freeze for existing apps.** The VS Code extension makes no new release until the rollout is complete; the published version (0.1.6) stays as-is (D-13). Existing installations keep working against today's behaviour.
+- **Contracts before plugins.** Work proceeds *outward-in*: harden kernel contracts and Level-1 services, complete the plugin runtime, move features into official plugins, and only then quarantine the legacy code in `deprecated/` (D-14).
 - **No mid-session engine swap.** A running workspace keeps one live execution plane. Migration changes are additive registrations behind boot-time flags; cutover happens at a declared boundary (kernel boot or plugin reload), never in the middle of a user session.
+
+Compatibility obligations are unchanged: the MCP transports, the daemon JSON-RPC protocol, the `.brud/` on-disk data, and deployments with no third-party plugins must behave the same when the next release ships.
 
 In one sentence:
 
-> Brud Desktop is built on today's behaviour; the engine is replaced underneath it one contract at a time, with the legacy path remaining the fallback until parity is proven.
+> The engine is replaced one contract at a time, the legacy path stays the internal fallback until parity is proven, and the next consumer app ships only after the legacy monolith is quarantined and unused.
 
 ### 1.2 The Product Constraint: Brud Desktop
 
-Brud Desktop is the driver for this plan, not an afterthought. It requires the same capabilities the current hosts need — file reads, file mutations, history and undo, terminal execution, and tool discovery — but with stricter expectations around workspace identity, process lifetime, and multiple open workspaces.
+Brud Desktop is the next consumer app and the reason the rollout must be complete, not an afterthought. It requires the same capabilities the current hosts need — file reads, file mutations, history and undo, terminal execution, and tool discovery — but with stricter expectations around workspace identity, process lifetime, and multiple open workspaces.
 
 That creates a sequencing rule:
 
 | Requirement | Consequence for the migration |
 |---|---|
-| Desktop must ship without waiting for a full engine rewrite | The legacy `executeFileOperations` path stays available until Phase 11. |
+| Desktop ships only on the microkernel path | Desktop's release is gated on Phase 11. The legacy `executeFileOperations` path stays available internally as a fallback until Phase 11, and is never part of a consumer release. |
+| No consumer release during the rollout | The VS Code extension is frozen at its published version until Phase 11 passes (D-13). |
 | Desktop owns a long-lived process | The kernel and Level-1 services must be host-neutral and bootable in the daemon, not only inside VS Code. |
 | Desktop may open more than one workspace | Workspace identity must become a first-class Level-1 concern before plugins are trusted with paths. |
 | Desktop must not regress existing users | Every phase must preserve operation semantics, error codes, and on-disk history compatibility. |
@@ -135,7 +139,7 @@ The principle has five binding rules.
 
 **Zero-downtime execution** in this document means the operational property implied by R1–R5: the workspace kernel and its state stay alive while surfaces attach, detach, or change transport. It does **not** promise hot-patching a running process. A migration cutover is a controlled boot or plugin reload; it is never a mid-operation replacement of the execution engine.
 
-**Avoiding legacy lock-in without a rewrite:** the legacy core is treated as an *implementation detail behind a compatibility facade*. The facade translates legacy absolute paths and result envelopes into kernel-relative calls and back. When the last plugin owns the last operation kind, the facade and the code behind it are deleted. At no point does a plugin depend on the facade.
+**Avoiding legacy lock-in without a rewrite:** the legacy core is treated as an *implementation detail behind a compatibility facade*. The facade translates legacy absolute paths and result envelopes into kernel-relative calls and back. When the last plugin owns the last operation kind, the facade and the code behind it are moved into the `deprecated/` quarantine directory, where lint rules forbid any import of them (D-14). At no point does a plugin depend on the facade.
 
 ### 1.4 Why Phased Migration Over Immediate Cutover
 
@@ -157,7 +161,7 @@ A big-bang cutover was evaluated and rejected. The audit trail exposes seven blo
 
 | Criterion | Big-bang cutover | Phased migration (chosen) |
 |---|---|---|
-| Time to Desktop value | Blocks until the entire engine is replaced | Desktop ships on the stable legacy path while contracts harden |
+| Path to the Desktop release | One large, high-risk replacement before Desktop can ship | Desktop ships after a sequence of small, independently verified phases; each phase is reversible until Phase 11 |
 | Failure locality | Any defect can affect all 21 kinds simultaneously | One plugin/phase at a time; flags isolate blast radius |
 | Path/security regression risk | High: two path models change atomically | Managed by WorkspaceService + translation adapter + parity suite |
 | History data safety | High: two stores must be reconciled in one step | One-way idempotent import, legacy files retained through Phase 11 |
@@ -165,20 +169,20 @@ A big-bang cutover was evaluated and rejected. The audit trail exposes seven blo
 | Testability | Requires a complete new test matrix before any merge | Parity fixtures accrue per plugin; each phase has its own gate |
 | Cognitive load on contributors | Must understand the entire old and new engine at once | One contract or one plugin per phase |
 
-**Conclusion:** the phased path is slower only in calendar time; it is faster to a safe Desktop release, and it is the only path that keeps the MCP and VS Code surfaces trustworthy during the transition.
+**Conclusion:** both options deliver Desktop only after the engine is replaced (D-12). The phased path gets there with failure confined to one phase at a time, and it is the only path that keeps the MCP and VS Code behaviour verifiable throughout the transition.
 
 ### 1.5 Success Criteria
 
 | Dimension | Criterion | Measured by |
 |---|---|---|
-| Product | Brud Desktop ships without waiting for Phase 11 | Release independent of migration status |
+| Product | No consumer app ships on the legacy monolith; Brud Desktop ships only after Phase 11 passes | Release checklist requires the Phase 11 verification record; VS Code extension frozen until then |
 | Behavioural parity | All 21 operation kinds produce equivalent results and error codes through the plugin path | Golden fixture suite (§5.5, Appendix B) |
 | Data safety | No loss of `.brud/history` sessions; every reverted session resolves to its original bytes | Reversal parity tests; import dry-run |
 | Security | No plugin reaches a service or driver without a declared permission; no absolute path reaches a driver | Capability denial matrix; path parity matrix |
 | Isolation | No shared mutable singleton across kernels | Static check + concurrent kernel tests |
 | Host neutrality | The same kernel boots in daemon, MCP, Desktop, and test hosts | Bootstrap suite |
 | Operability | Every phase is reversible by configuration until Phase 11 | Rollback table in §5.6 |
-| Decommission | Zero references to legacy execution symbols after Phase 11 | `rg` gate + boundary check |
+| Decommission | Legacy monolith source lives only in `deprecated/` and nothing imports it after Phase 11 | ESLint `no-restricted-imports` gate + `rg` gate + boundary check |
 
 ### 1.6 Non-Goals
 
@@ -190,7 +194,7 @@ The following are explicitly out of scope for this rollout. They must not be smu
 - Changing user-visible operation semantics (for example, making `create_file` overwrite by default).
 - Multi-user or remote-server execution.
 - A telemetry vendor decision. Phase 5 defines a sink contract only.
-- Rewriting the history engine. UniversalHistory is adopted; the legacy history is retired, not merged feature-for-feature.
+- ~~Rewriting the history engine.~~ **Overridden 2026-10-30 by D-15.** The kernel's two history engines (session ledger `brud.core.universalHistory` and journal `brud.core.history`) are unified into one polymorphic history service. The *legacy core* JSON history is still retired, not merged feature-for-feature.
 - Deleting `.brud/history/sessions` or rewriting user files during import.
 
 ---
@@ -264,22 +268,25 @@ DISPOSED
 Two consequences matter for the rollout:
 
 1. **Deterministic order is structural.** It comes from descriptor `dependencies` plus `topologicalSort`, not from registration order. Adding Settings/Workspace/Validation/Terminal/Tools changes the graph, not the boot mechanism.
-2. **Grant timing is currently wrong for plugins.** `PluginManagerService.initialize()` calls `activateAll()` while the kernel is still `BOOTING`, but `KernelAccessBroker.requestAccess()` refuses anything except `RUNNING`. A plugin that calls `context.getFileSystem()` during `activate()` fails at boot. The current bootstrap test plugins do not request a facade, so the defect is latent. Phase 5 fixes it.
+2. **Plugin grant timing (G-9, closed 2026-10-30).** Plugins activate in the `onRunning` lifecycle hook, which `BrudKernel.boot()` calls after the state becomes `RUNNING` and before `boot()` resolves, so capability requests inside `activate()` are granted. A failing `onRunning` hook disposes every service in reverse order and leaves the kernel `DISPOSED`; `shutdown()` is rejected while hooks run. Tests: `BrudKernel onRunning hook` (`src/__tests__/kernel.test.ts`) and `plugin capabilities requested during activation at boot` (`src/__tests__/bootstrapPlugins.test.ts`).
 
 ### 2.3 Hardened Kernel Services (Level-1)
 
 #### Level-1 register
 
+Status as of 2026-10-30. Evidence: `packages/kernel/services/*/descriptor/tokens.ts`, `packages/kernel/src/bootstrap/createKernel.ts`, and the `.internal_docs/verifications/` records cited in §5.1.
+
 | Service | Token | Tier | Contract | Status |
 |---|---|---|---|---|
-| Filesystem | `brud.core.filesystem` | core | `IBrudFileSystem` | Enforced |
-| Universal history | `brud.core.universalHistory` | core | `IUniversalHistoryService` | Enforced |
+| Filesystem | `brud.core.filesystem` | core | `IBrudFileSystem` | Enforced (G-7 primitives still missing) |
+| Universal history | `brud.core.universalHistory` | core | `IUniversalHistoryService` | Enforced. Plugins without write authority receive `ReadOnlyUniversalHistoryFacade` (G-8 closed for the plugin path, 2026-10-30). The older `ReadOnlyHistoryFacade` projects the journal contract `brud.core.history`, not this one |
+| History journal | `brud.core.history` | core | `IUniversalHistory` | Enforced |
 | Plugin manager | `PluginManager` | core | `IPluginManagerService` | Enforced (token naming is legacy) |
-| Settings | — | — | — | Missing (Phase 1) |
-| Workspace | — | — | — | Missing (Phase 2) |
-| Validation | — | — | — | Missing (Phase 3) |
-| Terminal | — | — | — | Missing (Phase 4) |
-| Tools (`BrudTools`) | `brud.core.tools` | core | `IBrudToolsService` | Missing (Phase 5) |
+| Settings | `brud.core.settings` (+ `brud.core.settings.reader`) | core | `ISettingsService` / `ISettingsReader` | Implemented (Phase 1); gate not ratified |
+| Workspace | `brud.core.workspace` | core | `IWorkspaceService` | Implemented (Phase 2); gate not ratified |
+| Validation | `brud.core.validation` | core | `IValidationService` | Enforced (Phase 3 gate passed) |
+| Terminal | `brud.core.terminal` | core | `ITerminalService` | Implemented (Phase 4); gate not ratified |
+| Tools (`BrudTools`) | `brud.core.tools` | core | `IBrudToolsService` | Enforced (verified 2026-10-29) |
 | Telemetry | — | — | — | Missing (Phase 5, sink only) |
 
 #### 2.3.1 `BrudFileSystem` (`brud.core.filesystem`)
@@ -333,6 +340,8 @@ The threshold is exported as `INLINE_SNAPSHOT_LIMIT_BYTES`. Blob bytes are re-ha
 - No operation metadata on errors; the adapter supplies `operationKind` when mapping to legacy results.
 
 #### 2.3.2 `UniversalHistory` (`brud.core.universalHistory`)
+
+> **Scheduled replacement (D-15, Phase 5.H).** This section and the journal ledger notes below describe the two engines as they exist today. Both are being unified into one service: polymorphic JSON entries, schema-at-registration, files as the built-in `brud.core.file` type, one database `.brud/history/universal.db`, and one reversal engine for session revert and undo/redo. Plan: `.internal_docs/plans/2026-10-30_universal_history_unification.md`. Existing `ledger.db` and `history.db` files are imported and never modified. Until increment U-6 passes, the text below is authoritative.
 
 **Contract:** `IUniversalHistoryService` exposes `beginSession`, `commitSession`, `planReversal`, `executeReversal`, `getSession`, `listSessions`.
 
@@ -405,9 +414,9 @@ The `OFFICIAL_PLUGIN_BRAND` symbol is declared only in kernel source and is abse
 
 | Property | Current behaviour | Target behaviour |
 |---|---|---|
-| Registered services | Filesystem, History, PluginManager | Settings → Workspace → Filesystem → History → Validation → Terminal → Tools → Telemetry → PluginManager |
-| Operation handlers | None | All official plugin tools registered |
-| Plugin activation | During `PluginManager.initialize()` while `BOOTING` | After `RUNNING` via an explicit post-boot hook |
+| Registered services | Settings, SettingsReader, Workspace, Filesystem, Validation, Terminal, BrudTools, UniversalHistory, History journal, PluginManager (`createKernel.ts:190-254`); order resolved by descriptor dependencies | Settings → Workspace → Filesystem → History → Validation → Terminal → Tools → Telemetry → PluginManager |
+| Operation handlers | `BrudTools` routing table is live; plugins register tools through `context.registerTool(...)`. No official plugin tools exist yet | All official plugin tools registered |
+| Plugin activation | In `PluginManagerService.onRunning()`, after `RUNNING` and before `boot()` resolves; failure rolls the kernel back to `DISPOSED` (G-9 closed 2026-10-30) | After `RUNNING` via an explicit post-boot hook |
 | Shutdown | Reverse order, all disposals attempted, first error surfaced | Same, plus plugin deactivation before filesystem disposal (already enforced by tests) |
 | Workspace root | Passed to `boot()`; used by descriptors | Canonicalized by WorkspaceService before descriptors consume it |
 | History degraded boot | Read-only `.brud/history` degrades the journal ledger: boot succeeds, ingestion is a no-op, reversals throw `HistoryDegradedError`, and a `HISTORY_DEGRADED` warning reaches the logger | Same |
@@ -471,8 +480,8 @@ Workspace scope wins over user scope so a project can enforce its own safety pol
 | Module | Responsibility | Host coupling | Target owner |
 |---|---|---|---|
 | `file-operations/index.ts` | 1,719-line execution switch for 21 kinds plus validation, pre-snapshot, history merge, read/search/metadata aggregation | Node `path`, `process.cwd()` fallback, terminal, JSON history | Split across `brud.tools.filesystem`, `brud.tools.reader`, `brud.tools.catalog`, `brud.terminal`, `brud.codebase.structure`, `brud.search` |
-| `bridge/legacyBridge.ts` | Wraps `executeFileOperations` as one generic operation per kind; boots a raw service container | Resolves raw services; swallows resolution failures | Deleted in Phase 11 |
-| `bridge/tokens.ts` | Module-local `Symbol` tokens with an unchecked generic cast | No identifier or description; undiscoverable | Deleted in Phase 11 |
+| `bridge/legacyBridge.ts` | Wraps `executeFileOperations` as one generic operation per kind; boots a raw service container | Resolves raw services; swallows resolution failures | Quarantined in `deprecated/` in Phase 11 |
+| `bridge/tokens.ts` | Module-local `Symbol` tokens with an unchecked generic cast | No identifier or description; undiscoverable | Quarantined in `deprecated/` in Phase 11 |
 | `history/` | JSON session folders, pre/post snapshots, revert, trash, retention | Node `fs` via adapter; local-time ID sequence | Retired; UniversalHistory is authoritative after Phase 9 |
 | `terminal/` | `child_process.spawn`, stream handling, process group logic | Node `child_process` directly in core | `brud.terminal` plugin over TerminalService |
 | `search/`, `read-engine/`, `import-resolver/` | File search, bounded reads, import following | `process.cwd()` fallback in `fileSearch` | `brud.search`, `brud.tools.reader`, `brud.codebase.imports` |
@@ -481,7 +490,7 @@ Workspace scope wins over user scope so a project can enforce its own safety pol
 | `tool-registry/` | Global tool documentation registry | Module singleton | `BrudTools` (`brud.core.tools`) for registration/routing; `brud.tools.catalog` keeps `get_tool_info` and documentation formatting |
 | `settings/` | Types, merge, read governors | Adapter loads files | `SettingsService` |
 | `validation/terminal.ts`, `api/` | Dangerous command detection, path/line/field validation, error catalog | `process.cwd()` fallback | `ValidationService`; legacy API becomes a facade |
-| `utils/workspacePath.ts`, `utils/pathResolver.ts` | Realpath containment, multi-root selection, path cache | Node `fs` directly | `WorkspaceService`; then deleted |
+| `utils/workspacePath.ts`, `utils/pathResolver.ts` | Realpath containment, multi-root selection, path cache | Node `fs` directly | `WorkspaceService`; then quarantined in `deprecated/` |
 | `testing/nodeFileSystem.ts`, `testing/testHistoryStore.ts` | Node implementations used as production dependencies by MCP | Exported from the package root | Explicit `@brud/core/testing` subpath, then removed from production |
 
 **Anatomy of the 21-kind switch.** `executeFileOperations` is not just a dispatcher; it is a transaction coordinator with hidden coupling:
@@ -539,8 +548,9 @@ The daemon is the right long-lived host, but it currently cannot execute a tool.
 | Kernel history can plan and execute a conflict-checked reversal | Enforced | `planReversal`, `executeReversal` tests |
 | Plugin branding cannot be forged by a manifest | Enforced | `branding.test.ts`, `manifest` authorization tests |
 | Plugin activation rolls back on failure | Enforced | `PluginManagerService` tests |
-| Plugins can request filesystem/history capabilities | Partial | Facades exist, but boot-time grants fail and history is not read-only |
-| Plugins can register or execute tools | Missing | No context handles; global registry is the only catalog. `BrudTools` (`brud.core.tools`) is scheduled in Phase 5 (G-18) |
+| Plugins can request filesystem/history capabilities | Enforced | Granted during `activate()` via `onRunning` (G-9). History is read-only unless the plugin is official and declares `history:write` (G-8); tests in `src/__tests__/bootstrapPlugins.test.ts` and `services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.test.ts` |
+| Plugins can register or execute tools | Enforced | `IPluginContext.registerTool` / `executeTool` over `brud.core.tools`; `.internal_docs/verifications/2026-10-29_phase5b_plugin_manager_tools.md` (PASS) |
+| Plugins can read settings, run terminal commands, or emit telemetry | Missing | `settings:read` and `terminal:execute` are not in the permission union; no `getSettings`, `getTerminal`, or `emitTelemetry` handle (Phase 5) |
 | MCP executes through the microkernel | Missing | `bootCoreKernel` raw container |
 | One kernel per workspace | Missing | Three execution surfaces, two kernel constructions |
 | Legacy and new history agree | Missing | JSON vs SQLite stores |
@@ -709,7 +719,7 @@ export interface ITerminalService {
 | Dependencies | `SettingsService`, `ValidationService` |
 | Boot position | After `ValidationService`, before `PluginManager` |
 | Responsibilities | Registry and dispatch table; plugin registration surface; official certification status; schema validation gate; parser routing table; tool-definition synthesis |
-| Status | Missing (Phase 5) |
+| Status | Enforced as of 2026-10-29 (`packages/kernel/services/BrudTools/`; `.internal_docs/verifications/2026-10-29_brud_tools_level_1_service.md`, PASS after B-1). Parser routing and tool-definition synthesis are wired in later phases |
 
 **Responsibilities (normative):**
 
@@ -778,7 +788,7 @@ The permission union already declares `tools:register`, `tools:execute`, and `te
 
 ### 3.3 Path Translation Adapter
 
-The single largest compatibility risk is that legacy callers speak absolute, multi-root paths and the kernel speaks canonical, single-root relative paths. The adapter is a **temporary boundary component**, deleted in Phase 11.
+The single largest compatibility risk is that legacy callers speak absolute, multi-root paths and the kernel speaks canonical, single-root relative paths. The adapter is a **temporary boundary component**, removed from every live path and quarantined in `deprecated/` in Phase 11.
 
 **Location:** `packages/adapters/*` or the legacy bridge only. It must never be imported by a plugin or by the kernel.
 
@@ -1207,20 +1217,24 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 ### 5.1 Phase Overview
 
-| Phase | Name | Primary outcome | Depends on | Exit gate | User-visible risk |
-|---|---|---|---|---|---|
-| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None |
-| **1** | SettingsService | One frozen policy snapshot across hosts | 0 | Cross-host settings parity | Low |
-| **2** | WorkspaceService | Canonical root, containment, translation | 1 | Path parity matrix | Medium |
-| **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium |
-| **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium |
-| **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium |
-| **6** | Leaf plugins | Six leaf plugins (pure or narrowly scoped storage) live behind flags | 5 | 100% fixture parity per plugin | Low |
-| **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium |
-| **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low |
-| **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** |
-| **10** | Terminal + MCP bridge | Terminal plugin; daemon and MCP on one standard kernel | 4, 7, 8, 9 | One kernel per workspace; all suites green | High |
-| **11** | Decommission legacy Core | Delete legacy execution, bridge, tokens, globals | 10 | Zero legacy references; full CI | **Irreversible** |
+| Phase | Name | Primary outcome | Depends on | Exit gate | User-visible risk | Status (2026-10-30) |
+|---|---|---|---|---|---|---|
+| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None | **Partial.** H1 done (no `DEBUG` in `packages/core/src`). Open: H2 (`packages/core/src/index.ts:26-27` still export test fakes), H4 (no golden fixtures), H6 (no root `typecheck` script); H3, H5, H7 unrecorded |
+| **1** | SettingsService | One frozen policy snapshot across hosts | 0 | Cross-host settings parity | Low | **Implemented, gate not ratified.** `services/SettingsService/`; no verification record |
+| **2** | WorkspaceService | Canonical root, containment, translation | 1 | Path parity matrix | Medium | **Implemented, gate not ratified.** `services/WorkspaceService/`; no verification record |
+| **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium | **Gate passed.** `.internal_docs/verifications/2026-10-29_validation_service_remediation.md` |
+| **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium | **Implemented, gate not ratified.** Independent audit "Substantially Compliant" with open remediation items (`.internal_docs/audits/2026-10-29_terminal_service_independent_verification_audit.md`); fixes in commit `00422f1` not re-verified |
+| **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium | **In progress.** Done: `BrudTools`, `registerTool`/`executeTool`, `onRunning` boot grant (G-9), read-only universal history for plugins (G-8). Open: `settings:read`/`terminal:execute` + handles, telemetry sink, FS primitives (G-7), boundary script, denial matrix |
+| **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **Build complete (U-0…U-5), Switch pending.** Unified engine built and verified: oracle 25/25 incl. R4 on `createStandardKernel({ historyEngine: 'unified' })`; legacy importer verified; scale gates green. Production default remains `'legacy'` until the Switch approval (U-6 cutover, U-7 removal, U-8 retention). C-3/C-4 paused until 5.H completes |
+| **6** | Leaf plugins | Six leaf plugins (pure or narrowly scoped storage) live behind flags | 5 | 100% fixture parity per plugin | Low | Not started |
+| **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium | Not started |
+| **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low | Not started |
+| **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** | Not started |
+| **10** | Terminal + MCP bridge | Terminal plugin; daemon and MCP on one standard kernel | 4, 7, 8, 9 | One kernel per workspace; all suites green | High | Not started |
+| **11** | Quarantine legacy Core | Move the legacy monolith into `deprecated/`; ESLint forbids any import of it | 10 | Zero live imports of `deprecated/`; full CI | **High** (code-only reversal; source kept) | Not started |
+| **Release** | Next consumer app | Brud Desktop ships on the microkernel path; VS Code release freeze lifts | 11 | Phase 11 verification record | — | Blocked on Phase 11 |
+
+"Implemented, gate not ratified" means the code is merged but no verification record in `.internal_docs/verifications/` shows the phase's exit gate passing. Such a phase is not complete until that record exists.
 
 **Phase discipline:** no phase starts before its dependency gate passes. Within a phase, changes land as small, independently testable increments. A phase may ship behind a flag before its gate; it may not declare the gate passed without the evidence listed in §5.5.
 
@@ -1534,7 +1548,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 4. The daemon boots `createStandardKernel` with the Node storage driver, the full Level-1 set, and the official plugins. Settings come from `SettingsService`; history comes from UniversalHistory; the tool routing table comes from `BrudTools` (`brud.core.tools`).
 5. Remove `@brud/core` from `packages/mcp` dependencies.
 6. Expose `tools.execute` over daemon JSON-RPC (additive; do not break existing fs/history methods).
-7. Rewire the VS Code adapter (`executeOperationsFromVSCode`) and the history UI to the daemon client instead of `bootCoreKernel` and the JSON history adapter. Keep a signed-off execution fallback for one release.
+7. Rewire the VS Code adapter (`executeOperationsFromVSCode`) and the history UI to the daemon client instead of `bootCoreKernel` and the JSON history adapter. Keep the legacy execution fallback available behind the rollout flag in internal builds until Phase 11; it is never part of a consumer release (D-12, D-13).
 8. Enforce one daemon/kernel per workspace; reject a second live kernel in the same root.
 9. Update MCP status register divergences (D1, D2, D6, and related) in `mcp-subsystem-design.md`.
 
@@ -1547,40 +1561,53 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - Terminal plugin cleans up all children on stop.
 - Tool listing and execution over stdio and HTTP are unchanged.
 
-**Rollback:** the daemon can boot with the legacy plugin set off; MCP can revert to the previous bootstrap only if the legacy package is still present (it is, until Phase 11).
+**Rollback:** the daemon can boot with the legacy plugin set off; MCP can revert to the previous bootstrap only while the legacy package is still live (it is, until Phase 11 quarantines it).
 
 ---
 
-#### Phase 11 — Decommission Legacy Core Debt
+#### Phase 11 — Quarantine Legacy Core (`deprecated/`)
 
-**Objective:** remove the legacy execution engine so the microkernel is the only path.
+**Objective:** take the legacy monolith out of every live path so the microkernel is the only execution path, while keeping its source files intact in one quarantine directory (D-14). Nothing is deleted.
 
-**Precondition (hard gate):** the plugin path has been `active` by default for at least two consecutive releases with no P0/P1 regressions, and the history import bridge has been run and verified in production-like conditions.
+**Quarantine model:**
+
+| Aspect | Rule |
+|---|---|
+| Location | A single top-level `deprecated/` directory at the repository root. Moved code keeps its original relative layout (for example `deprecated/packages/core/src/file-operations/index.ts`) so its origin stays obvious |
+| Scope | All of `packages/core`, plus every other legacy-only execution path: the legacy JSON history adapter paths in `packages/adapters/vscode`, the legacy MCP bootstrap (`bootCoreKernel` usage), and the `LegacyPathAdapter` once no live caller remains |
+| Unused by construction | `deprecated/` is not an npm workspace, not part of any `tsconfig` project, build, bundle, test run, or packaging manifest (`.vscodeignore`, daemon staging) |
+| ESLint enforcement | A repository-wide `no-restricted-imports` (or equivalent path-restriction) rule rejects any import that resolves into `deprecated/**` or imports the `@brud/core` package name. The rule is an error, not a warning, and applies to every live package and app |
+| Source preservation | Files are moved, never deleted or rewritten. Git history is retained through the move (`git mv`) |
+| Not maintained | `deprecated/` itself is excluded from lint, type checking, and tests; it receives no fixes and is not a supported fallback |
+
+**Precondition (hard gate):** Phase 10 has passed; all 21 kinds are served by official plugins with complete Appendix B parity evidence; the plugin path is `active` by default in every internal build; the history import bridge has been run and verified on production-like data; and the Architect has signed off on the evidence. No consumer release is required or permitted before this gate (D-12).
 
 **Work items:**
 
-1. Delete `packages/core/src/file-operations/index.ts` and its tests once no importer remains.
-2. Delete `packages/core/src/bridge/` (`legacyBridge.ts`, `tokens.ts`, bridge tests).
-3. Delete the legacy JSON history implementation and its adapter paths once UniversalHistory is the only writer/reader. Keep historical files on disk; do not migrate or delete user data as part of the code change.
-4. Delete duplicate path utilities (`utils/workspacePath.ts`, `utils/pathResolver.ts`) once the adapter and legacy core are gone.
-5. Remove `globalToolRegistry`, `initializeToolRegistry`, and the test-root exports.
-6. Remove debug output, test-fake subpaths, and any remaining `process.cwd()` fallbacks.
-7. Rename `PluginManagerToken` id to `brud.core.pluginManager` and update tests/docs.
-8. Decide the residual role of `@brud/core`: either a deprecated compatibility package with no runtime logic or deletion, based on the remaining import graph. Record the decision in this document.
-9. Update BEAS-0001, the microkernel spec, the MCP design status register, `ARCHITECTURE.md`, and package READMEs.
-10. Add a CI gate that fails on any reintroduction of the removed symbols (`file-operations`, `legacyBridge`, `globalToolRegistry`, `bootCoreKernel`, `CoreTokens`).
+1. Create `deprecated/` and move `packages/core` and the other legacy-only paths listed above into it with `git mv`, preserving relative layout.
+2. Remove `@brud/core` from every `package.json` dependency list, the root workspaces list, and every `tsconfig` reference.
+3. Add the ESLint import restriction for `deprecated/**` and `@brud/core`; exclude `deprecated/` from ESLint's own lint targets.
+4. Exclude `deprecated/` from build scripts, test globs, bundling, and packaging manifests.
+5. Remove `globalToolRegistry`, `initializeToolRegistry`, test-fake exports, and any remaining `process.cwd()` fallbacks from live code (they leave with the quarantined package).
+6. Rename `PluginManagerToken` id to `brud.core.pluginManager` and update tests/docs.
+7. Update BEAS-0001, the microkernel spec, the MCP design status register, `ARCHITECTURE.md`, and package READMEs to describe `deprecated/` as quarantined and unsupported.
+8. Add a CI gate that fails on any live reference to the quarantined symbols (`file-operations`, `legacyBridge`, `globalToolRegistry`, `bootCoreKernel`, `CoreTokens`) outside `deprecated/`.
+
+User data is out of scope: historical `.brud/history/sessions` files stay on disk untouched.
 
 **Exit criteria:**
 
-- `rg` finds zero references to removed legacy symbols outside changelog/history docs.
-- `npm run build:all`, every test suite, `npm run check:boundaries`, and `npm run lint` are green from clean.
+- ESLint reports zero violations of the `deprecated/` import restriction; a planted test import is rejected (negative test).
+- `rg` finds zero references to quarantined legacy symbols outside `deprecated/` and changelog/history docs.
+- `npm run build:all`, every test suite, `npm run check:boundaries`, and `npm run lint` are green from clean with `deprecated/` excluded.
+- Every moved file exists byte-identical under `deprecated/` (checksum comparison against the pre-move tree).
 - One execution plane per workspace; no dual kernel construction.
 - All 21 kinds are served by official plugins.
 - History has one writer (UniversalHistory) and one reader.
 - No test fake is importable from a production entry point.
-- This document's status is updated to "Complete" with the release tag and date.
+- This document's status is updated to "Complete" with the date, which unblocks the next consumer release.
 
-**Rollback:** none. This phase is only entered after the two-release gate. Keep the last legacy release tag for emergency reversion.
+**Rollback:** code-only. Because the source is preserved, restoring it means moving the files back and lifting the ESLint restriction; no user data is affected. Rollback re-opens the release block.
 
 ### 5.3 Phase Dependency Graph
 
@@ -1597,22 +1624,23 @@ flowchart TD
     P8["8 Reader"]
     P9["9 Filesystem mutations"]
     P10["10 Terminal + MCP bridge"]
-    P11["11 Decommission"]
+    P11["11 Quarantine (deprecated/)"]
+    REL["Next consumer release (Brud Desktop)"]
 
     P0 --> P1 --> P2 --> P3 --> P4 --> P5
-    P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11
+    P5 --> P6 --> P7 --> P8 --> P9 --> P10 --> P11 --> REL
     P2 --> P5
     P3 --> P5
 ```
 
-**Critical path:** 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11.
+**Critical path:** 0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10 → 11 → next consumer release.
 
 **Parallelizable work (respecting the graph):**
 
 - After Phase 2, the path adapter and its parity matrix can proceed alongside Phase 3.
 - After Phase 5, leaf plugins (Phase 6) can be built in parallel by independent owners, provided each has its own fixtures and no shared package.
 - The history import bridge can be developed during Phase 8 and integrated at Phase 9.
-- Desktop shell work proceeds independently and consumes the protocol; it does not block on Phases 6–11.
+- Desktop shell development may proceed in parallel and consumes only the protocol and kernel contracts; it never calls legacy execution code. Its **release** is blocked until Phase 11 passes (D-12).
 
 #### Phase 3 filesystem remediation parity (V-1–V-11)
 
@@ -1682,7 +1710,7 @@ npm run lint
 | 8 | Read envelope/limit/binary/abort/stress parity |
 | 9 | 12-kind byte parity; reversal parity; crash recovery; import dry-run; zero data loss |
 | 10 | One-kernel-per-workspace test; MCP stdio/HTTP suites; daemon RPC; extension suite; terminal cleanup |
-| 11 | Zero legacy references; clean build; all suites; single execution plane; doc updates |
+| 11 | Legacy source moved byte-identical into `deprecated/`; ESLint import restriction with a negative test; zero live legacy references; clean build; all suites; single execution plane; doc updates |
 
 **Parity definition:** for a given input, the normalized result must match on status, code, error kind, target paths (after path translation), file bytes, and history effect. Message wording may differ only where this document records an approved change. Timing is not a parity dimension, but a regression beyond an agreed budget fails the performance gate.
 
@@ -1690,11 +1718,12 @@ npm run lint
 
 | Surface | Guarantee | How it is preserved |
 |---|---|---|
+| Consumer releases | No consumer app ships on the legacy monolith | VS Code extension frozen at its published version; Desktop release gated on Phase 11 (D-12, D-13) |
 | `.brud/history/sessions` | Never deleted or rewritten by the rollout | Import is copy-only; Phase 11 leaves files on disk |
 | `.brud/history/ledger.db` | Never deleted or downgraded | Forward-only schema migrations; idempotent importer |
 | MCP tools | Names, schemas, and behaviour preserved | Catalog parity gate; bridge tests |
 | Daemon protocol | Existing methods preserved; new methods additive | Protocol versioning; contract tests |
-| VS Code commands | Same operation semantics and result rendering | Adapter parity + one-release fallback |
+| VS Code commands | Same operation semantics and result rendering when the freeze lifts | Adapter parity; legacy fallback behind the rollout flag in internal builds until Phase 11 |
 | Settings JSON | Readable by both old and new code during the transition | Additive keys; unknown keys preserved |
 | Plugins | Third-party manifests remain valid for the frozen 7 permissions | Additive permission versioning |
 | Error codes | Legacy codes at the boundary | Explicit mapping table |
@@ -1707,13 +1736,13 @@ npm run lint
 | 5–8 | `plugins.* = off` | None (read-only or shadow only) |
 | 9 | Mutation flags off; ignore imported ledger rows | Legacy files untouched; imported rows are additive |
 | 10 | Legacy bridge retained; daemon flag off | None; dual run only during the declared window |
-| 11 | Last legacy release tag | Code-only revert; user data already compatible |
+| 11 | Move files back out of `deprecated/` and lift the ESLint restriction | Code-only; source preserved; user data already compatible |
 
 ### 5.7 Definition of Done
 
 The rollout is complete when all of the following are true:
 
-- [ ] Brud Desktop ships on the plugin path, not the legacy switch.
+- [ ] No consumer app has shipped on the legacy monolith during the rollout; the VS Code extension stayed frozen.
 - [ ] All 21 operation kinds are served by official plugins with parity evidence.
 - [ ] `createStandardKernel` boots Settings → Workspace → Filesystem → History → Validation → Terminal → BrudTools → Telemetry → PluginManager, deterministically, with reverse shutdown.
 - [ ] `BrudTools` (`brud.core.tools`) is the only tool registry and dispatch table; official and third-party tools register through the same `context.registerTool(...)` API and the stream parser routes by name against it.
@@ -1722,9 +1751,11 @@ The rollout is complete when all of the following are true:
 - [ ] One kernel and one history writer exist per workspace.
 - [ ] No global mutable registry, module counter, or mutable settings `Proxy` remains in a runtime path.
 - [ ] No production entry point imports a test fake.
-- [ ] Legacy execution symbols are deleted and guarded by CI.
+- [ ] The legacy monolith source lives only in `deprecated/`, is unused, and is guarded by an ESLint import restriction plus a CI symbol gate.
 - [ ] All verification commands pass from clean.
 - [ ] This document, BEAS-0001, the microkernel spec, and the MCP status register agree with the code.
+
+When every item above is checked, the next consumer app (Brud Desktop) may ship on the microkernel path and the VS Code release freeze lifts.
 
 ---
 
@@ -1863,7 +1894,8 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 3. **Adding a plugin:** requires an owner, a permission-minimal manifest, a parity plan, a phase assignment, and an entry in §4.2 and §4.4.
 4. **Changing a phase gate:** requires recorded evidence that the previous gate cannot be met as written, plus an explicit re-scope in this document. Do not lower a gate quietly.
 5. **Renaming a token:** only in Phase 11 for existing ids; new ids must be namespaced from the start.
-6. **Deleting legacy code:** only in Phase 11, only after the two-release precondition, and only with the CI guard in place.
+6. **Quarantining legacy code:** only in Phase 11, only after its precondition, and only with the ESLint restriction and CI guard in place. Legacy source is moved into `deprecated/`, never deleted.
+7. **Shipping a consumer release:** not permitted until Phase 11 passes (D-12, D-13). Lifting or narrowing the freeze requires a new decision in Appendix G.
 
 ### Normative references
 
@@ -1875,7 +1907,7 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 - `.internal_docs/audits/2026-10-24_history_engine_spec_public_rules_audit.md` — history specification rule audit.
 - `.internal_docs/plans/2026-10-23_read_file_concurrency_and_resource_limits.md` — read governor and batch limits referenced by Phase 8.
 - `packages/kernel/services/BrudFileSystem/`, `UniversalHistory/`, `PluginManager/` — the hardened baseline.
-- `packages/core/src/file-operations/index.ts`, `packages/core/src/bridge/legacyBridge.ts` — the legacy path to be deleted.
+- `packages/core/src/file-operations/index.ts`, `packages/core/src/bridge/legacyBridge.ts` — the legacy path to be quarantined in `deprecated/`.
 
 ### Current status
 
@@ -1883,25 +1915,33 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 |---|---|
 | Document status | Active |
 | Baseline captured | 2026-10-25 |
-| Phase 0 | Not started |
-| Phases 1–11 | Not started |
-| Next action | Execute Phase 0 contract freeze and housekeeping; record baseline verification evidence |
+| Status updated | 2026-10-30 (`.internal_docs/audits/2026-10-30_rollout_plan_status_and_strategy.md`) |
+| Phase 0 | Partial (H1 done; H2, H4, H6 open) |
+| Phases 1, 2, 4 | Implemented; exit gates not ratified |
+| Phase 3 | Gate passed |
+| Phase 5 | In progress |
+| Phases 6–11 | Not started |
+| Next action | Close the Phase 0 items and the Phase 5 open items, and record verification evidence for Phases 1, 2, and 4, before Phase 6 begins |
 
 ## Appendix G — Decision Register
 
 | ID | Decision | Rationale | Consequence |
 |---|---|---|---|
-| **D-1** | Phased migration over big-bang cutover | Preserves Desktop delivery and isolates failure to one plugin/phase | Legacy fallback remains until Phase 11 |
+| **D-1** | Phased migration over big-bang cutover | Isolates failure to one plugin/phase and keeps every step verifiable (rationale revised 2026-10-30 by D-12) | Legacy fallback remains internal until Phase 11 |
 | **D-2** | Raw JSON settings as a Level-1 service (user + workspace scopes) | Human-editable, git-versionable, concurrency-safe, simple for Desktop UI | Frozen boot snapshot; no SQL policy store |
 | **D-3** | One kernel per workspace root; WorkspaceService routes roots | Avoids ambiguous containment and cross-root transactions | No single session spans roots in v1 |
 | **D-4** | MCP bridge is daemon-hosted; stdio entry is a client/proxy | Guarantees one execution plane and one ledger | MCP process never boots a kernel |
 | **D-5** | Sandbox means capability projection, not process isolation | Matches the plugin contract that exists and can ship | OS-level isolation is a future ADR |
 | **D-6** | UniversalHistory is the sole writer after Phase 9 | Removes dual-history divergence and undo ambiguity | JSON history is retired; files remain on disk |
-| **D-7** | Legacy execution remains the fallback until Phase 11 | Every cutover is reversible until the final gate | Decommission needs two clean releases |
+| **D-7** | Legacy execution remains the internal fallback until Phase 11 | Every cutover is reversible until the final gate | The two-release decommission gate is replaced by the Phase 11 evidence gate (D-12, D-14) |
 | **D-8** | Kernel-relative paths are canonical | One containment model for every plugin and host | Absolute paths are handled only by adapters |
 | **D-9** | Plugins compose through SDK libraries and `tools:execute` | Prevents peer coupling while allowing shared pure logic | No plugin imports another plugin's runtime |
 | **D-10** | New tokens use `brud.core.*`; `PluginManager` is renamed last | Avoids churn during the migration | Token rename is a Phase 11 item |
 | **D-11** | Elevate the Tool Registry and Execution Fabric (`BrudTools`) to a Level-1 Kernel Core Service while tool implementations remain capability-gated plugins | Prevents coupling all tools into a monolithic core, avoids brittle "parent/child" plugin hierarchies, ensures 100% API parity between official and community tools, and provides a stable Level-1 routing table for the stream parser | The parser and AI prompts interact with a frozen Level-1 contract (`IBrudToolsService`); adding or updating tools requires zero changes to kernel internals. `brud.tools.catalog` becomes a convenience layer over `brud.core.tools` rather than the storage of record |
+| **D-12** | Roll out the whole architecture before shipping the next consumer app; no consumer app ships on the legacy monolith (2026-10-30) | A consumer release on legacy code would create users and support obligations on the engine being replaced, and would turn every later phase into a live migration | Brud Desktop's release is gated on Phase 11; Desktop development may proceed against contracts only; supersedes the Desktop-first rationale in D-1 |
+| **D-13** | Freeze VS Code extension releases until the rollout is complete (2026-10-30) | Applies D-12 to the existing consumer app; avoids shipping new behaviour on the legacy path | Published version (0.1.6) stays as-is; the "one-release fallback" is replaced by an internal flag-gated fallback until Phase 11 |
+| **D-14** | Quarantine the legacy monolith in `deprecated/` instead of deleting it (2026-10-30) | Keeps the original source files while guaranteeing they are unused | Phase 11 moves legacy source into `deprecated/` with `git mv`; ESLint rejects any import of it; the phase becomes code-reversible; replaces the two-release decommission gate |
+| **D-15** | Unify the kernel's two history engines into one polymorphic history service (2026-10-30) | Two ledgers (session ledger and mutation journal) recorded the same file changes in different models, with two reversal engines and two blob layouts; plugins need typed, schema-validated history beyond files before any plugin is written against the contract | One service on `brud.core.universalHistory` and one database `.brud/history/universal.db`; `brud.core.history` is removed; entries are `{ namespace, type, schemaVersion, payload }` validated by a zero-dependency in-kernel JSON Schema subset validator (D7); files are the built-in `brud.core.file` type; reversal modes `none` / `inverse-payload` / `handler` (handlers run last, timed, owner must be active); plugins are confined to their own namespace and cannot see `brud.core.file` (D3, D10); file writes outside an explicit session go to one implicit session per boot (D9); old `ledger.db` and `history.db` are imported, never modified; delivered as increments U-0 to U-8; D11 amended 2026-10-30: two approvals, Build (U-2–U-5) and Switch (U-6–U-8), with hard gates and stop-on-fail inside each run; overrides the §1.6 non-goal on rewriting the history engine |
 
 
 
