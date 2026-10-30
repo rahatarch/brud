@@ -75,3 +75,107 @@ export interface SessionManifest {
   deletedAt?: string;
   expiresAt?: string;
 }
+
+// ── Shared contract types (moved from the legacy engine modules, D-15 U-6) ──
+
+/** File state targeted by a reversal. */
+export type ReversalTargetState = 'pre' | 'post';
+
+/** One blob written to content-addressed storage during a commit. */
+export interface CasBlobWrite {
+  readonly sha256: string;
+  /** Workspace-relative CAS path. */
+  readonly relativePath: string;
+}
+
+/** Result of a successful atomic session commit. */
+export interface CommitReceipt {
+  readonly sessionId: string;
+  readonly committedFileCount: number;
+  /** ISO 8601 UTC timestamp. */
+  readonly committedAt: string;
+  readonly blobs: readonly CasBlobWrite[];
+}
+
+/** Audit record emitted by a successful reversal. */
+export interface ReversalReceipt {
+  readonly reversalId: string;
+  readonly sessionId: string;
+  readonly targetState: ReversalTargetState;
+  /** ISO 8601 UTC timestamp. */
+  readonly executedAt: string;
+  readonly filesRestored: number;
+  readonly filesDeleted: number;
+}
+
+/** Mutation applied to one workspace target during a reversal. */
+export type FileReversalActionKind = 'restore' | 'delete';
+
+/** Reasons a planned reversal cannot run against the current disk state. */
+export type ReversalConflictCode = 'STALE_BASELINE_CONFLICT' | 'BLOB_NOT_FOUND';
+
+/** One workspace mutation planned by a reversal. */
+export interface FileReversalAction {
+  /** Workspace-relative path. */
+  readonly relativePath: string;
+  readonly action: FileReversalActionKind;
+  /** Bytes written when the action is `'restore'`; `null` for `'delete'`. */
+  readonly targetBytes: Uint8Array | null;
+  /** Digest the file must currently have for the action to be safe. */
+  readonly expectedCurrentSha256: string;
+  /** Digest observed on disk, or `null` when the target is absent. */
+  readonly actualCurrentSha256: string | null;
+}
+
+/** Blocking issue discovered while inspecting the current disk state. */
+export interface ReversalConflict {
+  readonly relativePath: string;
+  readonly code: ReversalConflictCode;
+  readonly message: string;
+  /** Digest the disk was expected to match. */
+  readonly expectedSha256: string;
+  /** Digest observed on disk, or `null` when the target is absent. */
+  readonly actualSha256: string | null;
+}
+
+/** Deterministic, side-effect-free description of a reversal. */
+export interface ReversalPlan {
+  readonly sessionId: string;
+  readonly targetState: ReversalTargetState;
+  readonly actions: readonly FileReversalAction[];
+  readonly conflicts: readonly ReversalConflict[];
+  /** `true` only when no conflicts were found. */
+  readonly isExecutable: boolean;
+}
+
+/** Optional tuning for planning a reversal. */
+export interface PlanReversalOptions {
+  /** State to restore; defaults to `'pre'`. */
+  readonly targetState?: ReversalTargetState;
+}
+
+/** One session row as listed through the history contract. */
+export interface SessionRow {
+  readonly session_id: string;
+  /** ISO 8601 UTC timestamp. */
+  readonly created_at: string;
+  readonly prompt: string;
+  readonly status: SessionStatus;
+  /** Serialized JSON array of workspace-relative paths. */
+  readonly files_affected: string;
+  /** `0` or `1`. */
+  readonly is_deleted: number;
+  readonly deleted_at: string | null;
+  readonly expires_at: string | null;
+}
+
+/** Filters accepted by `listSessions`. */
+export interface LedgerQueryFilter {
+  /** When `true`, soft-deleted sessions are included. Defaults to `false`. */
+  readonly includeDeleted?: boolean;
+  readonly limit?: number;
+  readonly offset?: number;
+  readonly status?: SessionStatus;
+  /** Inclusive lower bound over `sessions.created_at`. */
+  readonly since?: string;
+}

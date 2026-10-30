@@ -2,12 +2,9 @@ import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFil
 import type { SqliteLedger } from '../../storage/SqliteLedger/SqliteLedger.js';
 import type { FileDelta } from '../compute_delta/types.js';
 
-/** One blob written to content-addressed storage during a commit. */
-export interface CasBlobWrite {
-  readonly sha256: string;
-  /** Workspace-relative CAS path. */
-  readonly relativePath: string;
-}
+import type { CasBlobWrite, CommitReceipt } from '../../contracts/IUniversalHistoryService/types.js';
+
+export type { CasBlobWrite, CommitReceipt };
 
 /** Input contract for {@link commitSession}. */
 export interface CommitSessionInput {
@@ -21,14 +18,6 @@ export interface CommitSessionInput {
   readonly committedAt?: string;
 }
 
-/** Result of a successful atomic session commit. */
-export interface CommitReceipt {
-  readonly sessionId: string;
-  readonly committedFileCount: number;
-  /** ISO 8601 UTC timestamp. */
-  readonly committedAt: string;
-  readonly blobs: readonly CasBlobWrite[];
-}
 
 /** Thrown when a binary delta has no payload to persist. */
 export class MissingBlobPayloadError extends Error {

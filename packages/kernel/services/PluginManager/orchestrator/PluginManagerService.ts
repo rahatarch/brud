@@ -3,6 +3,9 @@ import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
+import { namespaceHistoryFor } from '../../UniversalHistory/unified/compat/LegacySessionAdapter.js';
+import { createReadOnlyNamespaceHandle } from '../../UniversalHistory/unified/service/NamespaceHandle.js';
+import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import { resolveActivationOrder, resolveDeactivationOrder } from '../contracts/activationOrder.js';
 import { hasOfficialPluginBrand } from '../contracts/branding.js';
@@ -491,6 +494,25 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
           return permissions.includes('history:write') && record.official
             ? history
             : new ReadOnlyUniversalHistoryFacade(history);
+        },
+        history: (): NamespaceHistoryHandle => {
+          const accessor = this.dependencies.universalHistory;
+          const handle =
+            accessor === undefined
+              ? undefined
+              : namespaceHistoryFor(accessor(), pluginId, { official: record.official });
+
+          if (handle === undefined) {
+            throw new Error(
+              `Namespace history requires the unified history engine (plugin "${pluginId}")`,
+            );
+          }
+
+          // Writes stay inside the plugin's own namespace, so a declared
+          // `history:write` is enough here; `history:read` alone is read-only.
+          return permissions.includes('history:write')
+            ? handle
+            : createReadOnlyNamespaceHandle(handle);
         },
         brudTools: (): IBrudToolsService => {
           const accessor = this.dependencies.brudTools;

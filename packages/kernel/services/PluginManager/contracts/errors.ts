@@ -124,15 +124,21 @@ export class PluginPermissionError extends PluginError {
   /** Declared permissions that would have authorized the operation. */
   public readonly requiredPermissions: readonly PluginPermission[];
 
+  /**
+   * @param detail - Optional reason that replaces the "requires one of"
+   * suffix, for operations no declared permission can unlock.
+   */
   constructor(
     pluginId: string,
     operation: string,
     requiredPermissions: readonly PluginPermission[],
+    detail?: string,
   ) {
     super(
-      `Plugin "${pluginId}" cannot perform "${operation}": requires one of ${requiredPermissions
-        .map((permission) => `"${permission}"`)
-        .join(', ')}`,
+      `Plugin "${pluginId}" cannot perform "${operation}": ${
+        detail ??
+        `requires one of ${requiredPermissions.map((permission) => `"${permission}"`).join(', ')}`
+      }`,
     );
     this.name = 'PluginPermissionError';
     this.pluginId = pluginId;

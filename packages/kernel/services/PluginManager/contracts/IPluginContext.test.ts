@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import { PluginPermissionError } from './errors.js';
 import type { IPluginLogger, IPluginSubscriptions } from './IPluginContext.js';
 import { PluginContext } from './PluginContext.js';
@@ -88,7 +89,14 @@ class RecordingLogger implements IPluginLogger {
 interface ProviderCounts {
   fileSystem: number;
   universalHistory: number;
+  history?: number;
 }
+
+let disposedEntryTypes = 0;
+const UNUSED_NAMESPACE_HANDLE = Object.freeze({
+  namespace: 'brud.tools.core',
+  registerEntryType: () => ({ dispose: (): void => void (disposedEntryTypes += 1) }),
+}) as unknown as NamespaceHistoryHandle;
 
 function createProviders(counts: ProviderCounts): PluginCapabilityProviders {
   const fileSystem = new UnusedFileSystem();
@@ -103,17 +111,23 @@ function createProviders(counts: ProviderCounts): PluginCapabilityProviders {
       counts.universalHistory += 1;
       return universalHistory;
     },
+    history: (): NamespaceHistoryHandle => {
+      counts.history = (counts.history ?? 0) + 1;
+      return UNUSED_NAMESPACE_HANDLE;
+    },
   };
 }
 
 function createContext(
   permissions: readonly PluginPermission[],
   counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 },
+  official = false,
 ): PluginContext {
   return new PluginContext({
     pluginId: 'brud.tools.core',
     workspaceRoot: '/workspace',
     permissions,
+    official,
     logger: new RecordingLogger(),
     capabilities: createProviders(counts),
   });
@@ -207,7 +221,8 @@ describe('IPluginContext contract', () => {
 
   it('returns a memoized history facade for read or write permissions', () => {
     const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
-    const context = createContext(['history:read'], counts);
+    // Official since D-15 U-6: the core session history is official-only.
+    const context = createContext(['history:read'], counts, true);
 
     const first = context.getUniversalHistory();
     const second = context.getUniversalHistory();
@@ -215,5 +230,69 @@ describe('IPluginContext contract', () => {
     assert.ok(first instanceof UnusedUniversalHistory);
     assert.equal(first, second);
     assert.equal(counts.universalHistory, 1);
+  });
+
+  it('denies the core session history to a non-official plugin even with history permissions', () => {
+    const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
+    const context = createContext(['history:read', 'history:write'], counts, false);
+
+    assert.throws(
+      () => context.getUniversalHistory(),
+      (error: unknown) => {
+        assert.ok(error instanceof PluginPermissionError);
+        assert.equal(error.operation, 'getUniversalHistory');
+        assert.match(error.message, /reserved for official plugins; use getHistory\(\)/u);
+        return true;
+      },
+    );
+    assert.equal(counts.universalHistory, 0);
+  });
+
+  it('denies the namespace history when no history permission is declared', () => {
+    const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
+    const context = createContext(['fs:write'], counts);
+
+    assert.throws(
+      () => context.getHistory(),
+      (error: unknown) => {
+        assert.ok(error instanceof PluginPermissionError);
+        assert.equal(error.operation, 'getHistory');
+        assert.deepEqual(error.requiredPermissions, ['history:read', 'history:write']);
+        return true;
+      },
+    );
+    assert.equal(counts.history, undefined);
+  });
+
+  it('returns a memoized namespace history handle to official and non-official plugins', () => {
+    for (const official of [false, true]) {
+      const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
+      const context = createContext(['history:read'], counts, official);
+
+      const first = context.getHistory();
+      const second = context.getHistory();
+
+      assert.equal(first.namespace, UNUSED_NAMESPACE_HANDLE.namespace);
+      assert.ok(Object.isFrozen(first));
+      assert.equal(first, second);
+      assert.equal(counts.history, 1);
+    }
+  });
+
+  it('disposes entry types registered through getHistory() with the plugin subscriptions', async () => {
+    disposedEntryTypes = 0;
+    const context = createContext(['history:write']);
+
+    context.getHistory().registerEntryType({
+      type: 'note',
+      schemaVersion: 1,
+      payloadSchema: true,
+      reversal: { mode: 'none' },
+    });
+    assert.equal(disposedEntryTypes, 0);
+
+    await context.subscriptions.disposeAll();
+
+    assert.equal(disposedEntryTypes, 1);
   });
 });

@@ -65,10 +65,10 @@ export interface CreateStandardKernelOptions {
    */
   readonly history?: UniversalHistoryDescriptorOptions;
   /**
-   * History engine. `'legacy'` (default) keeps the session ledger and the
-   * journal as two engines. `'unified'` serves both history tokens from the
-   * unified polymorphic engine (D-15). Until the Switch increment the default
-   * stays `'legacy'`; `'unified'` is opt-in.
+   * History engine. `'unified'` (default since D-15 U-6) serves both history
+   * tokens from the unified polymorphic engine and imports legacy history on
+   * first boot. `'legacy'` keeps the session ledger and the journal as two
+   * engines; it remains selectable only as a rollback switch until U-7.
    */
   readonly historyEngine?: 'legacy' | 'unified';
   /**
@@ -250,11 +250,11 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // after validation (its schema gate) and before the plugin manager, so the
   // registry is RUNNING before any plugin activates and registers into it.
   kernel.register(createBrudToolsDescriptor(options?.tools));
-  if (options?.historyEngine === 'unified') {
+  if (options?.historyEngine !== 'legacy') {
     const unified = createUnifiedHistoryDescriptors({
       driver: storageDriver,
       journal: mutationJournal,
-      ...(options.history?.inMemory === true ? { inMemory: true } : {}),
+      ...(options?.history?.inMemory === true ? { inMemory: true } : {}),
     });
     kernel.register(unified.session);
     kernel.register(unified.journal);

@@ -67,7 +67,9 @@ describe('UniversalHistory bootstrap and access gating', () => {
       events.push(event);
     });
 
+    // Legacy-engine test (pinned since D-15 U-6; removed with the legacy engine in U-7).
     const kernel = createStandardKernel({
+      historyEngine: 'legacy',
       mutationJournal: journal,
       historyJournal: {},
     });

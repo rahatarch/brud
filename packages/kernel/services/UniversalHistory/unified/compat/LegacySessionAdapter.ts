@@ -7,20 +7,41 @@ import type {
   CommitOutcome,
   IUniversalHistoryService,
 } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import type { SessionManifest, TargetDigest } from '../../contracts/IUniversalHistoryService/types.js';
-import type { CommitReceipt } from '../../operations/commit_session/types.js';
-import type { ReversalReceipt } from '../../operations/execute_reversal/types.js';
 import type {
+  CommitReceipt,
   FileReversalAction,
+  LedgerQueryFilter,
   PlanReversalOptions,
   ReversalConflict,
   ReversalPlan,
-} from '../../operations/plan_reversal/types.js';
-import type { LedgerQueryFilter, SessionRow as LegacySessionRow } from '../../storage/SqliteLedger/types.js';
+  ReversalReceipt,
+  SessionManifest,
+  SessionRow as LegacySessionRow,
+  TargetDigest,
+} from '../../contracts/IUniversalHistoryService/types.js';
 import type { ReversalEngine, UnifiedReversalPlan } from '../engine/ReversalEngine.js';
 import type { SessionTargetPayload } from '../service/builtinTypes.js';
-import type { SessionMetadata, TargetBaseline } from '../service/types.js';
-import type { UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
+import type { NamespaceHistoryHandle, SessionMetadata, TargetBaseline } from '../service/types.js';
+import type { NamespaceHandleOptions, UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
+
+/**
+ * Adapters built by the unified engine, mapped to their service. Kept off the
+ * adapter's surface so `IUniversalHistoryService` (and the daemon contract)
+ * gain nothing; the plugin manager reaches it through `namespaceHistoryFor`.
+ */
+const UNIFIED_SERVICES = new WeakMap<object, UnifiedHistoryService>();
+
+/**
+ * Returns a namespace-bound handle when `history` is backed by the unified
+ * engine, or `undefined` on the legacy engine (rollback switch until U-7).
+ */
+export function namespaceHistoryFor(
+  history: IUniversalHistoryService,
+  namespace: string,
+  options: NamespaceHandleOptions = {},
+): NamespaceHistoryHandle | undefined {
+  return UNIFIED_SERVICES.get(history)?.forNamespace(namespace, options);
+}
 
 /** Plans handed out by this adapter, mapped to the full native plan. */
 const NATIVE_PLANS = new WeakMap<object, UnifiedReversalPlan>();
@@ -51,7 +72,9 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
   constructor(
     private readonly service: UnifiedHistoryService,
     private readonly engine: ReversalEngine,
-  ) {}
+  ) {
+    UNIFIED_SERVICES.set(this, service);
+  }
 
   beginSession(prompt: string, declaredTargets?: readonly string[]): Promise<string> {
     return this.service.beginSession(prompt, declaredTargets === undefined ? {} : { declaredTargets });

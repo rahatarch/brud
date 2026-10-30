@@ -4,6 +4,7 @@ import type {
 } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { PluginPermission } from './permissions.js';
 
@@ -113,14 +114,29 @@ export interface IPluginContext {
   getFileSystem(): IBrudFileSystem;
 
   /**
-   * Returns a workspace-scoped universal history facade.
+   * Returns the core session history service. Official plugins only.
    *
-   * Requires `history:read` or `history:write`; mutation operations remain
-   * gated by the facade projection.
+   * Requires `history:read` or `history:write` and the kernel-derived official
+   * brand. `history:write` gives the full service; `history:read` gives the
+   * read-only facade. Third-party plugins use {@link getHistory} instead, so
+   * they never see human sessions or `brud.core.*` entries (D-15 D3, D10).
+   *
+   * @throws PluginPermissionError when neither permission was declared, or the
+   * plugin is not official.
+   */
+  getUniversalHistory(): IUniversalHistoryService;
+
+  /**
+   * Returns a history handle bound to this plugin's own namespace (its id).
+   *
+   * Requires `history:read` or `history:write`. `history:write` gives a
+   * writable handle; `history:read` gives a read-only one whose writes reject
+   * with `READ_ONLY_VIOLATION`. Reads only ever return this plugin's sessions
+   * and entries.
    *
    * @throws PluginPermissionError when neither permission was declared.
    */
-  getUniversalHistory(): IUniversalHistoryService;
+  getHistory(): NamespaceHistoryHandle;
 
   /**
    * Registers a tool into the live `brud.core.tools` registry on behalf of

@@ -1,11 +1,12 @@
-import type { CommitReceipt } from '../../operations/commit_session/types.js';
-import type { ReversalReceipt } from '../../operations/execute_reversal/types.js';
 import type {
+  CommitReceipt,
+  LedgerQueryFilter,
   PlanReversalOptions,
   ReversalPlan,
-} from '../../operations/plan_reversal/types.js';
-import type { LedgerQueryFilter, SessionRow } from '../../storage/SqliteLedger/types.js';
-import type { SessionManifest } from './types.js';
+  ReversalReceipt,
+  SessionManifest,
+  SessionRow,
+} from './types.js';
 
 /** Outcome accepted when finalizing a session. */
 export type CommitOutcome = 'completed' | 'aborted';

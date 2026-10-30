@@ -5,6 +5,7 @@ import type {
 } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import { PluginPermissionError } from './errors.js';
 import type {
@@ -29,6 +30,9 @@ export interface PluginCapabilityProviders {
 
   /** Builds the universal history facade scoped to the owning plugin. */
   readonly universalHistory: () => IUniversalHistoryService;
+
+  /** Builds the namespace-bound history handle for the owning plugin. */
+  readonly history?: () => NamespaceHistoryHandle;
 
   /** Resolves the live `brud.core.tools` registry. */
   readonly brudTools?: () => IBrudToolsService;
@@ -88,6 +92,8 @@ export class PluginContext implements IPluginContext {
 
   private universalHistory: IUniversalHistoryService | undefined;
 
+  private history: NamespaceHistoryHandle | undefined;
+
   constructor(options: PluginContextOptions) {
     this.pluginId = options.pluginId;
     this.workspaceRoot = options.workspaceRoot;
@@ -113,9 +119,44 @@ export class PluginContext implements IPluginContext {
   public getUniversalHistory(): IUniversalHistoryService {
     this.assertCapability('getUniversalHistory', 'universalHistory');
 
+    if (!this.official) {
+      throw new PluginPermissionError(
+        this.pluginId,
+        'getUniversalHistory',
+        CAPABILITY_PERMISSION_REQUIREMENTS.universalHistory,
+        'the core session history is reserved for official plugins; use getHistory()',
+      );
+    }
+
     this.universalHistory ??= this.capabilities.universalHistory();
 
     return this.universalHistory;
+  }
+
+  public getHistory(): NamespaceHistoryHandle {
+    this.assertCapability('getHistory', 'universalHistory');
+
+    const history = this.capabilities.history;
+
+    if (history === undefined) {
+      throw new Error('Namespace history capability is not available in this context');
+    }
+
+    if (this.history === undefined) {
+      const inner = history();
+      // Entry types live as long as the plugin: their disposables join the
+      // plugin's subscriptions, so deactivation unregisters reversal handlers.
+      this.history = Object.freeze({
+        ...inner,
+        registerEntryType: (registration: Parameters<NamespaceHistoryHandle['registerEntryType']>[0]) => {
+          const disposable = inner.registerEntryType(registration);
+          this.subscriptions.add(disposable);
+          return disposable;
+        },
+      });
+    }
+
+    return this.history;
   }
 
   public registerTool(options: ToolRegistrationOptions): IPluginDisposable {

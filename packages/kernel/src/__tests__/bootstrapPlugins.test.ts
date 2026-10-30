@@ -7,7 +7,7 @@ import { BrudFileSystem } from '../../services/BrudFileSystem/orchestrator/BrudF
 import { FileSystemToken } from '../../services/BrudFileSystem/descriptor/tokens.js';
 import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import { PluginLifecycleError } from '../../services/PluginManager/contracts/errors.js';
+import { PluginLifecycleError, PluginPermissionError } from '../../services/PluginManager/contracts/errors.js';
 import type { IPluginContext } from '../../services/PluginManager/contracts/IPluginContext.js';
 import type { PluginManifest } from '../../services/PluginManager/contracts/manifest.js';
 import type { PluginPermission } from '../../services/PluginManager/contracts/permissions.js';
@@ -21,6 +21,8 @@ import {
   UniversalHistoryReadOnlyViolationError,
   createUniversalHistoryDescriptor,
 } from '../../services/UniversalHistory/descriptor/index.js';
+import { UniversalHistoryToken } from '../../services/UniversalHistory/descriptor/tokens.js';
+import type { NamespaceHistoryHandle } from '../../services/UniversalHistory/unified/service/types.js';
 import { createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
@@ -257,7 +259,8 @@ describe('plugin capabilities requested during activation at boot', () => {
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.boot.history', ['history:read'], (context) => {
-          historyResolved = context.getUniversalHistory() !== undefined;
+          // Third-party plugins use the namespace handle since D-15 U-6.
+          historyResolved = context.getHistory() !== undefined;
         }),
       ],
     });
@@ -325,14 +328,20 @@ describe('plugin capabilities requested during activation at boot', () => {
     );
   });
 
-  it('gives a history:read plugin a read-only universal history', async () => {
-    let history: IUniversalHistoryService | undefined;
+  it('gives a third-party history:read plugin a read-only namespace handle and no core history', async () => {
+    let handle: NamespaceHistoryHandle | undefined;
+    let coreDenied: unknown;
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.history.reader', ['history:read'], (context) => {
-          history = context.getUniversalHistory();
+          try {
+            context.getUniversalHistory();
+          } catch (error) {
+            coreDenied = error;
+          }
+          handle = context.getHistory();
         }),
       ],
     });
@@ -340,9 +349,13 @@ describe('plugin capabilities requested during activation at boot', () => {
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
 
     try {
-      assert.ok(history instanceof ReadOnlyUniversalHistoryFacade);
+      assert.ok(coreDenied instanceof PluginPermissionError);
+      assert.equal(coreDenied.operation, 'getUniversalHistory');
+      assert.ok(handle !== undefined);
+      assert.equal(handle.namespace, 'acme.history.reader');
+      assert.ok(Object.isFrozen(handle));
       await assert.rejects(
-        () => history!.beginSession('plugin write attempt', []),
+        () => handle!.beginSession('plugin write attempt'),
         (error: unknown) => {
           assert.ok(error instanceof UniversalHistoryReadOnlyViolationError);
           assert.equal(error.code, 'READ_ONLY_VIOLATION');
@@ -350,20 +363,44 @@ describe('plugin capabilities requested during activation at boot', () => {
           return true;
         },
       );
-      assert.ok(Array.isArray(await history.listSessions()));
+      assert.throws(
+        () => handle!.registerEntryType({
+          type: 'note',
+          schemaVersion: 1,
+          payloadSchema: { type: 'object' },
+          reversal: { mode: 'none' },
+        }),
+        (error: unknown) => error instanceof UniversalHistoryReadOnlyViolationError,
+      );
+
+      // A human session exists, but the plugin cannot see it (D3, D10).
+      const core = kernel.requestAccess(
+        { callerId: 'test.plugins', tier: 'core', workspaceRoot: WORKSPACE_ROOT },
+        UniversalHistoryToken,
+      );
+      const human = await core.beginSession('human edit', []);
+      assert.equal(handle.getSession(human), undefined);
+      assert.deepEqual(handle.listSessions(), []);
+      assert.deepEqual(handle.listEntries().rows, []);
     } finally {
       await kernel.shutdown();
     }
   });
 
-  it('keeps a third-party plugin declaring history:write read-only', async () => {
-    let history: IUniversalHistoryService | undefined;
+  it('gives a third-party history:write plugin a writable handle confined to its namespace', async () => {
+    let handle: NamespaceHistoryHandle | undefined;
+    let coreDenied: unknown;
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.history.writer', ['history:read', 'history:write'], (context) => {
-          history = context.getUniversalHistory();
+          try {
+            context.getUniversalHistory();
+          } catch (error) {
+            coreDenied = error;
+          }
+          handle = context.getHistory();
         }),
       ],
     });
@@ -371,15 +408,86 @@ describe('plugin capabilities requested during activation at boot', () => {
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
 
     try {
-      assert.ok(history instanceof ReadOnlyUniversalHistoryFacade);
-      await assert.rejects(
-        () => history!.beginSession('third-party write attempt', []),
-        (error: unknown) => {
-          assert.ok(error instanceof UniversalHistoryReadOnlyViolationError);
-          assert.equal(error.code, 'READ_ONLY_VIOLATION');
-          return true;
-        },
+      assert.ok(coreDenied instanceof PluginPermissionError);
+      assert.ok(handle !== undefined);
+      handle.registerEntryType({
+        type: 'note',
+        schemaVersion: 1,
+        payloadSchema: { type: 'object', properties: { text: { type: 'string' } }, required: ['text'] },
+        reversal: { mode: 'none' },
+      });
+      const own = await handle.beginSession('plugin work');
+      await handle.recordEntry(own, { type: 'note', schemaVersion: 1, payload: { text: 'hello' } });
+      await handle.commitSession(own, 'completed');
+
+      const core = kernel.requestAccess(
+        { callerId: 'test.plugins', tier: 'core', workspaceRoot: WORKSPACE_ROOT },
+        UniversalHistoryToken,
       );
+      const human = await core.beginSession('human edit', []);
+
+      assert.deepEqual(handle.listSessions().map((row) => row.sessionId), [own]);
+      assert.equal(handle.getSession(human), undefined);
+      const entries = handle.listEntries().rows;
+      assert.equal(entries.length, 1);
+      assert.equal(entries[0]?.namespace, 'acme.history.writer');
+      await assert.rejects(() => handle!.recordEntry(human, { type: 'note', schemaVersion: 1, payload: { text: 'x' } }));
+    } finally {
+      await kernel.shutdown();
+    }
+  });
+
+  it('gives an official history:read plugin the C-2 facade and its own brud namespace', async () => {
+    let history: IUniversalHistoryService | undefined;
+    let handle: NamespaceHistoryHandle | undefined;
+    const official = certifyOfficialPlugin(
+      createCapabilityPlugin('brud.probe.reader', ['history:read'], (context) => {
+        history = context.getUniversalHistory();
+        handle = context.getHistory();
+      }),
+    );
+    const kernel = createStandardKernel({
+      storageDriver: new InMemoryStorageDriver(),
+      history: { inMemory: true },
+      initialPlugins: [official],
+    });
+
+    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+
+    try {
+      assert.ok(history instanceof ReadOnlyUniversalHistoryFacade);
+      assert.equal(handle?.namespace, 'brud.probe.reader');
+      await assert.rejects(
+        () => handle!.beginSession('read-only'),
+        (error: unknown) => error instanceof UniversalHistoryReadOnlyViolationError,
+      );
+    } finally {
+      await kernel.shutdown();
+    }
+  });
+
+  it('refuses the namespace handle on the legacy engine rollback switch', async () => {
+    let denied: unknown;
+    const kernel = createStandardKernel({
+      storageDriver: new InMemoryStorageDriver(),
+      historyEngine: 'legacy',
+      history: { inMemory: true },
+      initialPlugins: [
+        createCapabilityPlugin('acme.history.legacy', ['history:read'], (context) => {
+          try {
+            context.getHistory();
+          } catch (error) {
+            denied = error;
+          }
+        }),
+      ],
+    });
+
+    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+
+    try {
+      assert.ok(denied instanceof Error);
+      assert.match(denied.message, /requires the unified history engine/u);
     } finally {
       await kernel.shutdown();
     }

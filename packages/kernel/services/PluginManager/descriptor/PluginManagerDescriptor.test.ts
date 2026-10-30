@@ -18,6 +18,7 @@ import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
+import { certifyOfficialPlugin } from '../contracts/branding.js';
 import { PluginLifecycleError } from '../contracts/errors.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../contracts/IPluginContext.js';
@@ -249,7 +250,8 @@ describe('createPluginManagerDescriptor', () => {
   it('exposes the history facade when the history token is registered', async () => {
     const harness = createHarness({ withHistory: true });
     const state: ProbeState = {};
-    const plugin = createProbePlugin('acme.tools.history', ['history:read'], state);
+    // Official since D-15 U-6: the core session history is official-only.
+    const plugin = certifyOfficialPlugin(createProbePlugin('brud.probe.history', ['history:read'], state));
     const descriptor = createPluginManagerDescriptor({ initialPlugins: [plugin] });
     const manager = descriptor.factory(createCaller(), harness.broker);
 
@@ -257,7 +259,7 @@ describe('createPluginManagerDescriptor', () => {
 
     assert.equal(harness.broker.historyRequests, 1);
     assert.ok(state.universalHistory instanceof ReadOnlyUniversalHistoryFacade);
-    assert.equal(manager.getPlugin('acme.tools.history')?.state, 'active');
+    assert.equal(manager.getPlugin('brud.probe.history')?.state, 'active');
 
     await manager.dispose();
   });
@@ -265,7 +267,8 @@ describe('createPluginManagerDescriptor', () => {
   it('omits the history facade when the history token is absent', async () => {
     const harness = createHarness({ withHistory: false });
     const state: ProbeState = {};
-    const plugin = createProbePlugin('acme.tools.history', ['history:read'], state);
+    // Official since D-15 U-6: the core session history is official-only.
+    const plugin = certifyOfficialPlugin(createProbePlugin('brud.probe.history', ['history:read'], state));
     const descriptor = createPluginManagerDescriptor({
       initialPlugins: [plugin],
       withUniversalHistory: false,
@@ -277,7 +280,7 @@ describe('createPluginManagerDescriptor', () => {
       (error: unknown) => {
         assert.ok(error instanceof PluginLifecycleError);
         assert.equal(error.code, 'PLUGIN_LIFECYCLE');
-        assert.equal(error.pluginId, 'acme.tools.history');
+        assert.equal(error.pluginId, 'brud.probe.history');
         assert.match(error.message, /Universal history service is unavailable/u);
         return true;
       },
@@ -285,7 +288,7 @@ describe('createPluginManagerDescriptor', () => {
 
     assert.equal(harness.broker.historyRequests, 0);
     assert.equal(state.universalHistory, undefined);
-    assert.equal(manager.getPlugin('acme.tools.history')?.state, 'failed');
+    assert.equal(manager.getPlugin('brud.probe.history')?.state, 'failed');
   });
 });
 

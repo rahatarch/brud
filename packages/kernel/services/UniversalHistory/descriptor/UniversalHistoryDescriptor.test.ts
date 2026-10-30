@@ -39,7 +39,8 @@ describe('createUniversalHistoryDescriptor', () => {
       await rm(workspaceRoot, { recursive: true, force: true });
     });
 
-    const kernel = createStandardKernel();
+    // Legacy-engine test (pinned since D-15 U-6; removed with the legacy engine in U-7).
+    const kernel = createStandardKernel({ historyEngine: 'legacy' });
     await kernel.boot({ workspaceRoot });
 
     try {

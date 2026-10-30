@@ -5,6 +5,7 @@
  * property leads back to the service.
  */
 import type { EntryPage, EntryQuery, EntryRow, SessionRow } from '../store/types.js';
+import { UniversalHistoryReadOnlyViolationError } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { UnifiedNamespaceError } from './errors.js';
 import type { UnifiedHistoryService } from './UnifiedHistoryService.js';
 import type { Disposable, EntryRecordInput, EntryTypeRegistration, NamespaceHistoryHandle } from './types.js';
@@ -65,4 +66,28 @@ export function createNamespaceHandle(service: UnifiedHistoryService, namespace:
   };
 
   return Object.freeze(handle);
+}
+
+/**
+ * Read-only variant of a namespace handle (`history:read`). Reads delegate to
+ * `inner`; every write is rejected with `READ_ONLY_VIOLATION` and never
+ * reaches the service. Frozen, and `inner` is held only in this closure.
+ */
+export function createReadOnlyNamespaceHandle(inner: NamespaceHistoryHandle): NamespaceHistoryHandle {
+  const reject = (operation: string): Promise<never> =>
+    Promise.reject(new UniversalHistoryReadOnlyViolationError(operation));
+
+  return Object.freeze({
+    namespace: inner.namespace,
+    registerEntryType: (_registration: EntryTypeRegistration): Disposable => {
+      throw new UniversalHistoryReadOnlyViolationError('registerEntryType');
+    },
+    beginSession: (_prompt: string): Promise<string> => reject('beginSession'),
+    recordEntry: (_sessionId: string, _entry: EntryRecordInput): Promise<number> => reject('recordEntry'),
+    commitSession: (_sessionId: string, _outcome: 'completed' | 'aborted'): Promise<void> => reject('commitSession'),
+    getSession: (sessionId: string): SessionRow | undefined => inner.getSession(sessionId),
+    listSessions: (limit?: number): readonly SessionRow[] => inner.listSessions(limit),
+    listEntries: (query?: Omit<EntryQuery, 'namespace' | 'path'>): EntryPage => inner.listEntries(query),
+    resolvePayload: (entry: EntryRow): Promise<unknown> => inner.resolvePayload(entry),
+  });
 }

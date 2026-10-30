@@ -517,6 +517,25 @@ describe('DaemonServer dispatch', () => {
     assert.equal(conflicts[0]?.relativePath, path);
   });
 
+  it('reports an unknown history session with a machine-readable errorCode', async (t) => {
+    const client = await openHandshakenClient();
+    t.after(async () => {
+      await client.close();
+    });
+
+    const sessionId = 'BR-20000101-999';
+
+    const getResponse = await client.call(createRequest(Protocol.HISTORY_GET, { sessionId }));
+    assert.ok(Protocol.isRpcSuccessResponse(getResponse));
+    assert.equal(expectRecord(getResponse.result).session, null);
+
+    const revertResponse = await client.call(createRequest(Protocol.HISTORY_REVERT, { sessionId }));
+    assert.ok(Protocol.isRpcErrorResponse(revertResponse));
+    assert.equal(revertResponse.error.code, Protocol.INTERNAL_ERROR);
+    assert.ok(revertResponse.error.data !== undefined);
+    assert.equal(revertResponse.error.data.errorCode, 'SESSION_NOT_FOUND');
+  });
+
   it('translates kernel path violations into JSON-RPC errors', async (t) => {
     const client = await openHandshakenClient();
     t.after(async () => {

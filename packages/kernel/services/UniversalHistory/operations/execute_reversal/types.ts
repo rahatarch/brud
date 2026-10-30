@@ -6,16 +6,9 @@ import type {
   ReversalTargetState,
 } from '../plan_reversal/types.js';
 
-/** Audit record emitted by a successful reversal. */
-export interface ReversalReceipt {
-  readonly reversalId: string;
-  readonly sessionId: string;
-  readonly targetState: ReversalTargetState;
-  /** ISO 8601 UTC timestamp. */
-  readonly executedAt: string;
-  readonly filesRestored: number;
-  readonly filesDeleted: number;
-}
+import type { ReversalReceipt } from '../../contracts/IUniversalHistoryService/types.js';
+
+export type { ReversalReceipt };
 
 /** Input contract for {@link executeReversal}. */
 export interface ExecuteReversalInput {

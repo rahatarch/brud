@@ -52,6 +52,25 @@ export function isReservedNamespace(namespace: string): boolean {
   return namespace === 'brud' || namespace.startsWith('brud.') || namespace.startsWith('@brud/');
 }
 
+/** Kernel-owned namespaces. Never handed to any plugin, official or not (D10). */
+export function isCoreNamespace(namespace: string): boolean {
+  return (
+    namespace === 'brud' ||
+    namespace === 'brud.core' ||
+    namespace.startsWith('brud.core.') ||
+    namespace.startsWith('@brud/')
+  );
+}
+
+/** Options for {@link UnifiedHistoryService.forNamespace}. */
+export interface NamespaceHandleOptions {
+  /**
+   * The caller is a kernel-branded official plugin. Its own `brud.<name>`
+   * namespace is then allowed; `brud.core*` stays refused.
+   */
+  readonly official?: boolean;
+}
+
 export interface UnifiedHistoryServiceOptions {
   readonly store: UnifiedHistoryStore;
   /** Lazily resolved kernel filesystem (reads only). */
@@ -410,9 +429,13 @@ export class UnifiedHistoryService {
     return this.options.store.resolvePayload(entry);
   }
 
-  /** A handle confined to one namespace (plugins). Reserved namespaces are refused. */
-  forNamespace(namespace: string): NamespaceHistoryHandle {
-    if (!NAMESPACE_PATTERN.test(namespace) || isReservedNamespace(namespace)) {
+  /**
+   * A handle confined to one namespace (plugins). Reserved namespaces are
+   * refused, except an official plugin's own non-core `brud.<name>` namespace.
+   */
+  forNamespace(namespace: string, options: NamespaceHandleOptions = {}): NamespaceHistoryHandle {
+    const reserved = options.official === true ? isCoreNamespace(namespace) : isReservedNamespace(namespace);
+    if (!NAMESPACE_PATTERN.test(namespace) || reserved) {
       throw new UnifiedNamespaceError(`Namespace "${namespace}" is reserved or invalid`);
     }
     return createNamespaceHandle(this, namespace);

@@ -276,6 +276,20 @@ describe('UnifiedHistoryService — registration and validation', () => {
 });
 
 describe('UnifiedHistoryService — namespace isolation (D3, D10)', () => {
+  it('lets an official caller use its own brud namespace but never brud.core (D-15 U-6)', async (context) => {
+    const h = await harness(context);
+    for (const core of ['brud', 'brud.core', 'brud.core.file', '@brud/x', 'Bad']) {
+      assert.throws(() => h.service.forNamespace(core, { official: true }), UnifiedNamespaceError, core);
+    }
+    assert.throws(() => h.service.forNamespace('brud.tools.fs', { official: false }), UnifiedNamespaceError);
+    const official = h.service.forNamespace('brud.tools.fs', { official: true });
+    assert.equal(official.namespace, 'brud.tools.fs');
+    official.registerEntryType({ type: 'note', schemaVersion: 1, payloadSchema: true, reversal: { mode: 'none' } });
+    const session = await official.beginSession('official');
+    await official.recordEntry(session, { type: 'note', schemaVersion: 1, payload: {} });
+    assert.deepEqual(official.listEntries().rows.map((r) => r.namespace), ['brud.tools.fs']);
+  });
+
   it('confines a handle to its namespace, even by cast', async (context) => {
     const h = await harness(context);
     for (const reserved of ['brud', 'brud.core', 'brud.tools.fs', '@brud/x', 'Bad']) {

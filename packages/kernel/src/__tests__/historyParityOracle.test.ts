@@ -5,7 +5,7 @@
  * surfaces on a real, booted, on-disk kernel. It must pass unchanged on the
  * legacy engines (today) and on the unified engine (U-4, U-6).
  *
- * Subject selection: BRUD_HISTORY_ORACLE_SUBJECT=legacy (default) | unified.
+ * Subject selection: BRUD_HISTORY_ORACLE_SUBJECT=unified (default since D-15 U-6) | legacy.
  *
  * Coverage outside this file, designated as part of the oracle:
  * - Wire contract: packages/daemon/src/__tests__/dispatch.test.ts
@@ -38,7 +38,7 @@ const SUBJECTS: Record<string, HistoryOracleSubjectFactory> = {
   unified: createUnifiedSubject,
 };
 
-const SUBJECT_NAME = process.env.BRUD_HISTORY_ORACLE_SUBJECT ?? 'legacy';
+const SUBJECT_NAME = process.env.BRUD_HISTORY_ORACLE_SUBJECT ?? 'unified';
 
 function factory(): HistoryOracleSubjectFactory {
   const selected = SUBJECTS[SUBJECT_NAME];
@@ -480,7 +480,7 @@ describe(`history parity oracle [${SUBJECT_NAME}] — recording, concurrency, de
 const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
 const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
 const [root, id, count] = process.argv.slice(2);
-const kernel = createStandardKernel({ historyEngine: process.env.BRUD_HISTORY_ORACLE_SUBJECT === 'unified' ? 'unified' : 'legacy' });
+const kernel = createStandardKernel({ historyEngine: process.env.BRUD_HISTORY_ORACLE_SUBJECT === 'legacy' ? 'legacy' : 'unified' });
 await kernel.boot({ workspaceRoot: root });
 const fs = kernel.requestAccess({ callerId: 'oracle.worker', tier: 'core', workspaceRoot: root }, FileSystemToken);
 for (let i = 0; i < Number(count); i += 1) await fs.writeAtomic(\`workers/\${id}-\${i}.txt\`, \`\${id}-\${i}\\n\`);

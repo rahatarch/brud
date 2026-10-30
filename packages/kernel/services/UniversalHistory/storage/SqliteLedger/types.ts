@@ -1,8 +1,6 @@
-/** Lifecycle status persisted in `sessions.status`. */
-export type SessionStatus = 'active' | 'committed' | 'aborted' | 'reverted';
+import type { LedgerQueryFilter, ReversalTargetState, SessionRow, SessionStatus } from '../../contracts/IUniversalHistoryService/types.js';
 
-/** File state targeted by a reversal record. */
-export type ReversalTargetState = 'pre' | 'post';
+export type { LedgerQueryFilter, ReversalTargetState, SessionRow, SessionStatus };
 
 /** Outcome persisted in `reversals.status`. */
 export type ReversalStatus = 'success' | 'failed' | 'aborted';
@@ -45,21 +43,6 @@ export function isReversalStatus(value: string): value is ReversalStatus {
   return REVERSAL_STATUSES.some((candidate) => candidate === value);
 }
 
-/** Durable row of the `sessions` table. */
-export interface SessionRow {
-  readonly session_id: string;
-  /** ISO 8601 UTC timestamp. */
-  readonly created_at: string;
-  readonly prompt: string;
-  readonly status: SessionStatus;
-  /** Serialized JSON array of workspace-relative paths. */
-  readonly files_affected: string;
-  /** `0` or `1`. */
-  readonly is_deleted: number;
-  readonly deleted_at: string | null;
-  readonly expires_at: string | null;
-}
-
 /** Durable row of the `session_files` table. */
 export interface SessionFileRow {
   readonly id?: number;
@@ -85,17 +68,6 @@ export interface ReversalRow {
   /** Serialized JSON array of reverted operation identifiers. */
   readonly reverted_operations: string;
   readonly error_message: string | null;
-}
-
-/** Filters accepted by {@link SqliteLedger.listSessions}. */
-export interface LedgerQueryFilter {
-  /** When `true`, soft-deleted sessions are included. Defaults to `false`. */
-  readonly includeDeleted?: boolean;
-  readonly limit?: number;
-  readonly offset?: number;
-  readonly status?: SessionStatus;
-  /** Inclusive lower bound over `sessions.created_at`. */
-  readonly since?: string;
 }
 
 /** Constructor options for {@link SqliteLedger}. */

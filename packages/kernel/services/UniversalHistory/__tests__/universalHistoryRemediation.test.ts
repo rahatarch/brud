@@ -385,7 +385,9 @@ describe('F6: degraded boot on read-only history storage', () => {
       },
     };
 
+    // Legacy-engine test (pinned since D-15 U-6; removed with the legacy engine in U-7).
     const kernel = createStandardKernel({
+      historyEngine: 'legacy',
       history: { inMemory: true },
       historyJournal: {},
       logger,
