@@ -1,5 +1,4 @@
 export {
-  HISTORY_TRUSTED_SCOPE,
   PROTECTED_PATH_PATTERNS,
   assertNotProtectedPath,
   isProtectedWritePath,

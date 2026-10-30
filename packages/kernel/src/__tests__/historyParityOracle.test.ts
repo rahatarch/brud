@@ -2,10 +2,9 @@
  * History parity oracle (D-15, increment U-P).
  *
  * Black-box behaviour of kernel history, exercised only through public
- * surfaces on a real, booted, on-disk kernel. It must pass unchanged on the
- * legacy engines (today) and on the unified engine (U-4, U-6).
- *
- * Subject selection: BRUD_HISTORY_ORACLE_SUBJECT=unified (default since D-15 U-6) | legacy.
+ * surfaces on a real, booted, on-disk kernel. It passed unchanged on the
+ * legacy engines and on the unified engine (U-4, U-6); since D-15 U-7 the
+ * unified engine is the only subject.
  *
  * Coverage outside this file, designated as part of the oracle:
  * - Wire contract: packages/daemon/src/__tests__/dispatch.test.ts
@@ -15,7 +14,7 @@
  *   "drives history sessions through the typed client helpers".
  * - Not black-box observable (internal only, re-specified for the new engine
  *   in U-3): background ingestion failures forwarded to the error sink
- *   (legacy F5, JournalSubscriber).
+ *   (legacy F5).
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -24,7 +23,6 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { createLegacySubject } from './historyOracle/legacySubject.js';
 import { createUnifiedSubject } from './historyOracle/unifiedSubject.js';
 import type {
   HistoryOracleSubject,
@@ -33,19 +31,10 @@ import type {
   OracleErrorKind,
 } from './historyOracle/subject.js';
 
-const SUBJECTS: Record<string, HistoryOracleSubjectFactory> = {
-  legacy: createLegacySubject,
-  unified: createUnifiedSubject,
-};
-
-const SUBJECT_NAME = process.env.BRUD_HISTORY_ORACLE_SUBJECT ?? 'unified';
+const SUBJECT_NAME = 'unified';
 
 function factory(): HistoryOracleSubjectFactory {
-  const selected = SUBJECTS[SUBJECT_NAME];
-  if (selected === undefined) {
-    throw new Error(`Unknown history oracle subject "${SUBJECT_NAME}"`);
-  }
-  return selected;
+  return createUnifiedSubject;
 }
 
 async function open(context: TestContext, options?: HistoryOracleSubjectOptions): Promise<HistoryOracleSubject> {
@@ -480,7 +469,7 @@ describe(`history parity oracle [${SUBJECT_NAME}] — recording, concurrency, de
 const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
 const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
 const [root, id, count] = process.argv.slice(2);
-const kernel = createStandardKernel({ historyEngine: process.env.BRUD_HISTORY_ORACLE_SUBJECT === 'legacy' ? 'legacy' : 'unified' });
+const kernel = createStandardKernel();
 await kernel.boot({ workspaceRoot: root });
 const fs = kernel.requestAccess({ callerId: 'oracle.worker', tier: 'core', workspaceRoot: root }, FileSystemToken);
 for (let i = 0; i < Number(count); i += 1) await fs.writeAtomic(\`workers/\${id}-\${i}.txt\`, \`\${id}-\${i}\\n\`);
@@ -516,17 +505,10 @@ await kernel.shutdown();
     await rejectsAs(h, () => h.fs.writeAtomic('.brud/history/forged.json', '{}'), 'PROTECTED_PATH_DENIED');
   });
 
-  // Contract from rollout plan §2.3.4 ("boot succeeds, ingestion is a no-op,
-  // reversals throw HistoryDegradedError"). Known legacy defect F-UP-1: with
-  // production defaults the session ledger opens ledger.db eagerly in its
-  // factory, so a read-only .brud/history fails boot (state DISPOSED). The
-  // legacy F6 test only passes because it moves the session ledger in memory.
-  // The unified engine must pass this scenario.
-  const r4Todo = SUBJECT_NAME === 'legacy'
-    ? 'F-UP-1: legacy session ledger fails boot on read-only .brud/history (unified engine must pass)'
-    : false;
-
-  it('R4 a read-only history directory boots degraded: no recording, reversals refused', { todo: r4Todo }, async (context) => {
+  // Contract from rollout plan §2.3.4: boot succeeds, ingestion is a no-op,
+  // reversals are refused. (The legacy engines failed this scenario, F-UP-1;
+  // they were removed in D-15 U-7.)
+  it('R4 a read-only history directory boots degraded: no recording, reversals refused', async (context) => {
     if (isRoot) {
       context.skip('filesystem permissions are not enforced for uid 0');
       return;

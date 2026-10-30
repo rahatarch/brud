@@ -19,8 +19,9 @@ import type { IUniversalHistoryService } from '../../services/UniversalHistory/c
 import {
   ReadOnlyUniversalHistoryFacade,
   UniversalHistoryReadOnlyViolationError,
-  createUniversalHistoryDescriptor,
 } from '../../services/UniversalHistory/descriptor/index.js';
+import { createFileMutationJournal } from '../../services/BrudFileSystem/events/FileMutationJournal.js';
+import { createUnifiedHistoryDescriptors } from '../../services/UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.js';
 import { UniversalHistoryToken } from '../../services/UniversalHistory/descriptor/tokens.js';
 import type { NamespaceHistoryHandle } from '../../services/UniversalHistory/unified/service/types.js';
 import { createStandardKernel } from '../bootstrap/index.js';
@@ -162,7 +163,7 @@ describe('createStandardKernel plugin integration', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
-    kernel.register(createUniversalHistoryDescriptor({ inMemory: true }));
+    kernel.register(createUnifiedHistoryDescriptors({ driver: new InMemoryStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [plugin] }));
 
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
@@ -297,7 +298,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
-    kernel.register(createUniversalHistoryDescriptor({ inMemory: true }));
+    kernel.register(createUnifiedHistoryDescriptors({ driver: new InMemoryStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [broken, stable] }));
 
     await assert.rejects(
@@ -461,33 +462,6 @@ describe('plugin capabilities requested during activation at boot', () => {
         () => handle!.beginSession('read-only'),
         (error: unknown) => error instanceof UniversalHistoryReadOnlyViolationError,
       );
-    } finally {
-      await kernel.shutdown();
-    }
-  });
-
-  it('refuses the namespace handle on the legacy engine rollback switch', async () => {
-    let denied: unknown;
-    const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
-      historyEngine: 'legacy',
-      history: { inMemory: true },
-      initialPlugins: [
-        createCapabilityPlugin('acme.history.legacy', ['history:read'], (context) => {
-          try {
-            context.getHistory();
-          } catch (error) {
-            denied = error;
-          }
-        }),
-      ],
-    });
-
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
-
-    try {
-      assert.ok(denied instanceof Error);
-      assert.match(denied.message, /requires the unified history engine/u);
     } finally {
       await kernel.shutdown();
     }

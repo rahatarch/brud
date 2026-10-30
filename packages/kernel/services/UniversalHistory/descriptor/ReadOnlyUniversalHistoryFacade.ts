@@ -2,11 +2,15 @@ import type {
   CommitOutcome,
   IUniversalHistoryService,
 } from '../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import type { SessionManifest } from '../contracts/IUniversalHistoryService/types.js';
-import type { CommitReceipt } from '../operations/commit_session/types.js';
-import type { ReversalReceipt } from '../operations/execute_reversal/types.js';
-import type { PlanReversalOptions, ReversalPlan } from '../operations/plan_reversal/types.js';
-import type { LedgerQueryFilter, SessionRow } from '../storage/SqliteLedger/types.js';
+import type {
+  CommitReceipt,
+  LedgerQueryFilter,
+  PlanReversalOptions,
+  ReversalPlan,
+  ReversalReceipt,
+  SessionManifest,
+  SessionRow,
+} from '../contracts/IUniversalHistoryService/types.js';
 
 /** Thrown when a read-only universal history projection receives a mutation. */
 export class UniversalHistoryReadOnlyViolationError extends Error {

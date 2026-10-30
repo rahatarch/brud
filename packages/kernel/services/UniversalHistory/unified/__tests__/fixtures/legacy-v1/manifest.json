@@ -1,0 +1,13 @@
+{
+  "generatedBy": "the legacy history engines at commit dc58452, before their removal in D-15 U-7",
+  "ids": {
+    "text": "BR-20261030-001",
+    "binary": "BR-20261030-002",
+    "large": "BR-20261030-003",
+    "reverted": "BR-20261030-004",
+    "aborted": "BR-20261030-005",
+    "active": "BR-20261030-006"
+  },
+  "checkpoint": "CP-85bf1460-664a-4a13-baaf-96d362445beb",
+  "maxLegacySequence": 6
+}

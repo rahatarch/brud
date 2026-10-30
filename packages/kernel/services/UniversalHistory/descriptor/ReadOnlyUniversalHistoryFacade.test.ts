@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IUniversalHistoryService } from '../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import type { ReversalPlan } from '../operations/plan_reversal/types.js';
+import type { ReversalPlan } from '../contracts/IUniversalHistoryService/types.js';
 import {
   ReadOnlyUniversalHistoryFacade,
   UniversalHistoryReadOnlyViolationError,

@@ -21,9 +21,17 @@ export class HistoryAccessDeniedError extends Error {
  *
  * Reads are delegated; rollback and session mutations are rejected so a
  * `history:read` capability cannot be escalated into `history:write`.
+ *
+ * The delegate lives in an ECMAScript private field, so it cannot be reached
+ * at runtime even by casting, and the instance is frozen (F-C2-1).
  */
 export class ReadOnlyHistoryFacade implements IUniversalHistory {
-  constructor(private readonly inner: IUniversalHistory) {}
+  readonly #inner: IUniversalHistory;
+
+  constructor(inner: IUniversalHistory) {
+    this.#inner = inner;
+    Object.freeze(this);
+  }
 
   beginSession(_sessionId: string, _metadata?: Record<string, unknown>): Promise<void> {
     return Promise.reject(new HistoryAccessDeniedError('beginSession'));
@@ -46,10 +54,10 @@ export class ReadOnlyHistoryFacade implements IUniversalHistory {
   }
 
   getHistory(filter?: HistoryQueryFilter): Promise<HistoryEntry[]> {
-    return this.inner.getHistory(filter);
+    return this.#inner.getHistory(filter);
   }
 
   getCheckpoints(sessionId?: string): Promise<Checkpoint[]> {
-    return this.inner.getCheckpoints(sessionId);
+    return this.#inner.getCheckpoints(sessionId);
   }
 }

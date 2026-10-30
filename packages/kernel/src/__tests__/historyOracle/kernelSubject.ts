@@ -5,8 +5,8 @@
  * - session history → `brud.core.universalHistory` (`IUniversalHistoryService`)
  * - mutation history → `brud.core.history` (`IUniversalHistory`)
  *
- * `engine` selects `createStandardKernel({ historyEngine })`. Only error
- * classification and disk-level fault injection are engine-aware.
+ * Since D-15 U-7 the unified engine is the only engine; error classification
+ * and disk-level fault injection target it.
  */
 import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -20,12 +20,7 @@ import type { IUniversalHistory } from '../../../services/UniversalHistory/contr
 import type { RollbackReport } from '../../../services/UniversalHistory/contracts/models.js';
 import type { IUniversalHistoryService } from '../../../services/UniversalHistory/contracts/IUniversalHistoryService/IUniversalHistoryService.js';
 import { HistoryToken, UniversalHistoryToken } from '../../../services/UniversalHistory/descriptor/tokens.js';
-import { InactiveSessionError } from '../../../services/UniversalHistory/operations/attach_execution/types.js';
-import { ReversalConflictError } from '../../../services/UniversalHistory/operations/execute_reversal/types.js';
-import type { ReversalPlan } from '../../../services/UniversalHistory/operations/plan_reversal/types.js';
-import { SessionNotRevertibleError } from '../../../services/UniversalHistory/operations/plan_reversal/types.js';
-import { HistoryDegradedError } from '../../../services/UniversalHistory/storage/SqliteHistoryStorage.js';
-import { SessionNotFoundError } from '../../../services/UniversalHistory/storage/SqliteLedger/SqliteLedger.js';
+import type { ReversalPlan } from '../../../services/UniversalHistory/contracts/IUniversalHistoryService/types.js';
 import {
   UnifiedReversalConflictError,
   UnifiedSessionNotRevertibleError,
@@ -86,10 +81,10 @@ async function listFilesRecursive(directory: string): Promise<string[]> {
   return found;
 }
 
-export function createKernelSubject(engine: 'legacy' | 'unified'): HistoryOracleSubjectFactory {
+export function createKernelSubject(): HistoryOracleSubjectFactory {
   return async (options) => {
     const workspaceRoot = options?.workspaceRoot
-      ?? await mkdtemp(join(tmpdir(), `brud-history-oracle-${engine}-`));
+      ?? await mkdtemp(join(tmpdir(), 'brud-history-oracle-'));
     const ownsWorkspace = options?.workspaceRoot === undefined;
     const historyDir = join(workspaceRoot, HISTORY_DIR);
 
@@ -100,7 +95,6 @@ export function createKernelSubject(engine: 'legacy' | 'unified'): HistoryOracle
 
     const warnings: OracleWarning[] = [];
     const kernel: BrudKernel = createStandardKernel({
-      historyEngine: engine,
       logger: {
         warn: (message, meta) => {
           warnings.push({
@@ -124,11 +118,8 @@ export function createKernelSubject(engine: 'legacy' | 'unified'): HistoryOracle
       return files.filter((path) => path.endsWith(sha256) && !DATABASE_SUFFIXES.some((suffix) => path.endsWith(suffix)));
     };
 
-    /** Unified engine only: content at or under 64 KiB lives inline in `universal.db`. */
+    /** Content at or under 64 KiB lives inline in `universal.db`. */
     const inlineRows = (sha256: string, mutate: 'delete' | 'corrupt'): number => {
-      if (engine !== 'unified') {
-        return 0;
-      }
       const db = new DatabaseSync(join(historyDir, 'universal.db'));
       try {
         db.exec('PRAGMA busy_timeout = 5000');
@@ -260,19 +251,19 @@ export function createKernelSubject(engine: 'legacy' | 'unified'): HistoryOracle
       },
 
       classifyError: (error): OracleErrorKind => {
-        if (error instanceof SessionNotFoundError || error instanceof UnifiedSessionNotFoundError) {
+        if (error instanceof UnifiedSessionNotFoundError) {
           return 'SESSION_NOT_FOUND';
         }
-        if (error instanceof SessionNotRevertibleError || error instanceof UnifiedSessionNotRevertibleError) {
+        if (error instanceof UnifiedSessionNotRevertibleError) {
           return 'SESSION_NOT_REVERTIBLE';
         }
-        if (error instanceof InactiveSessionError || error instanceof UnifiedSessionStateError) {
+        if (error instanceof UnifiedSessionStateError) {
           return 'SESSION_INACTIVE';
         }
-        if (error instanceof ReversalConflictError || error instanceof UnifiedReversalConflictError) {
+        if (error instanceof UnifiedReversalConflictError) {
           return 'PLAN_NOT_EXECUTABLE';
         }
-        if (error instanceof HistoryDegradedError || error instanceof UnifiedHistoryDegradedError) {
+        if (error instanceof UnifiedHistoryDegradedError) {
           return 'HISTORY_DEGRADED';
         }
         if (error instanceof Error && 'rule' in error && error.rule === 'PROTECTED_PATH_DENIED') {

@@ -12,7 +12,6 @@ describe('TerminalService bootstrap registration', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
@@ -32,7 +31,6 @@ describe('TerminalService bootstrap registration', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
@@ -62,7 +60,6 @@ describe('TerminalService bootstrap registration', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });

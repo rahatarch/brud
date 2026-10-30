@@ -2,7 +2,7 @@
  * Unified reversal engine (D-15, U-4).
  *
  * - Linear undo / redo / checkpoint rollback over recorded `brud.core.file`
- *   entries, with the legacy RollbackEngine semantics: per-path drift check,
+ *   entries, with the former journal engine's rollback semantics: per-path drift check,
  *   all-or-nothing payload pre-flight (re-hashed), compensation on a failed
  *   write, cursor moved only on success, recording suspended while writing.
  * - Session revert planned from `brud.core.session-target` entries (pure) plus

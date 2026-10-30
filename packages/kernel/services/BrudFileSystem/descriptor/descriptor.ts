@@ -46,16 +46,13 @@ export interface FileSystemDescriptorOptions {
   /**
    * Protected-prefix capabilities granted to specific core callers.
    *
-   * Only the owning subsystem is listed (history owns `.brud/history`), and
-   * the capability is applied to the caller-facing projection rather than to
-   * the shared instance.
+   * None are granted by default: the history engine writes `.brud/history`
+   * through the storage driver, never through this service (D-15 U-7). A
+   * capability is applied to the caller-facing projection rather than to the
+   * shared instance.
    */
   readonly trustedWriteScopesByCaller?: Readonly<Record<string, readonly string[]>>;
 }
-
-const DEFAULT_TRUSTED_WRITE_SCOPES: Readonly<Record<string, readonly string[]>> = {
-  'brud.core.universalHistory': ['.brud/history'],
-};
 
 /**
  * Builds the filesystem service descriptor.
@@ -75,10 +72,7 @@ export function createFileSystemDescriptor(
 ): ServiceDescriptor<IBrudFileSystem, BrudFileSystem> {
   const driver = options?.driver ?? new DurableNodeStorageDriver();
 
-  const trustedScopesByCaller = {
-    ...DEFAULT_TRUSTED_WRITE_SCOPES,
-    ...options?.trustedWriteScopesByCaller,
-  };
+  const trustedScopesByCaller = { ...options?.trustedWriteScopesByCaller };
 
   return {
     token: FileSystemToken,

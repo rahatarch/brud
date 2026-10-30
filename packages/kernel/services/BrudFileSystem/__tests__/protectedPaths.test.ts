@@ -62,8 +62,14 @@ describe('A10 protected-path denylist (V-9)', () => {
     await assert.rejects(facade.writeAtomic('hooks/pre-commit', '#!/bin/sh\n'), isProtected);
   });
 
-  it('grants the history capability only to the owning core caller', async () => {
+  it('grants no default write scope, and an explicit scope only to its caller', async () => {
+    // Since D-15 U-7 history writes through the storage driver, so no caller,
+    // the history service included, may write .brud/history by default.
     const descriptor = createFileSystemDescriptor({ driver: new InMemoryStorageDriver() });
+    const scoped = createFileSystemDescriptor({
+      driver: new InMemoryStorageDriver(),
+      trustedWriteScopesByCaller: { 'acme.owner': ['.brud/history'] },
+    });
     const instance = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
 
     await instance.initialize();
@@ -84,7 +90,12 @@ describe('A10 protected-path denylist (V-9)', () => {
     const historyProjection = descriptor.project(instance, historyCaller);
 
     await assert.rejects(coreProjection.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
-    await historyProjection.writeAtomic('.brud/history/seq.json', '{}');
+    await assert.rejects(historyProjection.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+
+    assert.ok(scoped.project);
+    const owner = scoped.project(instance, { ...coreCaller, callerId: 'acme.owner' });
+    await assert.rejects(scoped.project(instance, historyCaller).writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+    await owner.writeAtomic('.brud/history/seq.json', '{}');
   });
 
   it('projects kernel and userland callers away from the raw writable handle', async () => {

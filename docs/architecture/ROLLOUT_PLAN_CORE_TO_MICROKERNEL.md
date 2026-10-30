@@ -152,7 +152,7 @@ A big-bang cutover was evaluated and rejected. The audit trail exposes seven blo
 | **R1** | **21 entangled tool handlers.** All operation kinds share one 1,719-line switch and cross-cutting state (`pathCache`, pre-snapshots, batch read maps, metadata, search results, history session merge). | `packages/core/src/file-operations/index.ts` (`executeFileOperations` at line 186; dispatch switch begins line 242); `packages/core/src/bridge/legacyBridge.ts:15-21` enumerates 21 kinds. | Every tool breaks at once; a regression in one kind is indistinguishable from a regression in the dispatch layer. | Phases 6–10 |
 | **R2** | **Divergent path models.** Legacy core accepts absolute paths, supports multiple workspace folders, and canonicalizes with `realpath`. Kernel files are workspace-relative, single-root, and now reject absolute paths even when inside the root. | `packages/core/src/utils/workspacePath.ts`, `packages/core/src/utils/pathResolver.ts`, `packages/core/src/api/index.ts`; `packages/kernel/services/BrudFileSystem/validation/PathValidator/PathValidator.ts` (`resolveContained`, line 208); semantic audit `2026-10-24_kernel_pathvalidator_semantic_boundary_audit.md`. | Silent behaviour change for every MCP client and extension caller: paths that used to work become `PATH_TRAVERSAL_DETECTED`. | Phase 2 (WorkspaceService + path adapter) and Phase 3 (ValidationService) |
 | **R3** | **Dual kernels, one unbooted.** MCP builds a legacy kernel through `bootCoreKernel` without calling `boot()`; the daemon builds a standard kernel with no operation handlers. | `packages/mcp/src/bootstrap.ts:93-103`; `packages/core/src/bridge/legacyBridge.ts:92-118`; `packages/daemon/src/kernelRuntime.ts:17-25`; `packages/daemon/src/server/dispatch.ts` (fs/history methods only). | A third execution plane appears; security and history semantics differ by entry point. | Phase 10 |
-| **R4** | **Session history divergence.** Legacy history is JSON session folders; UniversalHistory is an SQLite ledger with CAS blobs, reversal plans, and different ID allocation. | `packages/core/src/history/store.ts`; `packages/adapters/vscode/src/historyStore.ts`; `packages/kernel/services/UniversalHistory/` (`SqliteLedger`, `commitSession.ts`, `planReversal.ts`). | Two ledgers record the same transaction differently; undo can point at the wrong store; retention diverges. | Phase 9 (with import bridge) |
+| **R4** | **Session history divergence.** Legacy history is JSON session folders; UniversalHistory is an SQLite ledger with CAS blobs, reversal plans, and different ID allocation. | `packages/core/src/history/store.ts`; `packages/adapters/vscode/src/historyStore.ts`; `packages/kernel/services/UniversalHistory/unified/` (`UnifiedHistoryStore`, `ReversalEngine`). | Two ledgers record the same transaction differently; undo can point at the wrong store; retention diverges. | Phase 9 (with import bridge) |
 | **R5** | **Global singletons and ambient state.** The tool catalog is a module singleton; operation IDs use a module counter; MCP wraps settings in a mutable `Proxy`; legacy tokens are module-local symbols. | `packages/core/src/tool-registry/registry.ts:17` (`globalToolRegistry`); `packages/core/src/file-operations/index.ts:43` (`operationIdCounter`); `packages/mcp/src/bootstrap.ts:26-44`; `packages/core/src/bridge/tokens.ts`. | Multiple Desktop workspaces or concurrent kernels share catalog and ID state; tests cannot isolate. | Phases 5–7 |
 | **R6** | **Incomplete plugin capability surface.** `IPluginContext` exposes only filesystem and history. Five target capabilities have no handle: three are declared permissions (`tools:register`, `tools:execute`, `telemetry:emit`) and two are not yet in the union (`settings:read`, `terminal:execute`). | `packages/kernel/services/PluginManager/contracts/IPluginContext.ts`; `permissions.ts` (`PluginCapability` lists only `fileSystem` and `universalHistory`). | Plugins cannot own tools, terminal, settings, or telemetry; extraction would leave half the logic in core. | Phase 5 |
 | **R7** | **Security projection gap.** Filesystem has `ReadOnlyFacade`; history has no read-only facade. Plugin activation also happens while the kernel is `BOOTING`, when the broker refuses grants. | `packages/kernel/services/BrudFileSystem/projection/ReadOnlyFacade/ReadOnlyFacade.ts`; `packages/kernel/src/engine/KernelAccessBroker.ts:29-32`; `PluginManagerService.initialize()` → `activateAll()`. | A `history:read` plugin receives the full mutation API; any plugin requesting a facade during boot fails. | Phase 5 |
@@ -237,7 +237,7 @@ flowchart LR
 | Order | Descriptor | Token | Dependencies | Lifecycle |
 |---|---|---|---|---|
 | 1 | `createFileSystemDescriptor` | `brud.core.filesystem` | none | `initialize()` creates the root directory; `dispose()` clears keyed write tails |
-| 2 | `createUniversalHistoryDescriptor` | `brud.core.universalHistory` | filesystem | Lazy filesystem access; SQLite ledger opened at first use |
+| 2 | `createUnifiedHistoryDescriptors` | `brud.core.universalHistory`, `brud.core.history` | filesystem | `initialize()` opens `universal.db` (degrading instead of failing) and imports legacy history once |
 | 3 | `createPluginManagerDescriptor` | `PluginManager` | filesystem, history (when `withUniversalHistory`) | `initialize()` activates plugins; `dispose()` deactivates in reverse |
 
 `BrudKernel.boot()` performs the sequence below (`packages/kernel/src/engine/BrudKernel.ts`):
@@ -306,30 +306,23 @@ Status as of 2026-10-30. Evidence: `packages/kernel/services/*/descriptor/tokens
 | Metadata preservation | Existing file `mode` is read before staging and applied with `chmod` before publication; new files default to `0o644` | Executable scripts stay executable across rewrites | `orchestrator/BrudFileSystem.ts`, `drivers/DurableNodeStorageDriver.ts` |
 | Mutation journal | Non-blocking journal: descriptors publish only after staging succeeds and before publication, and listeners run in a queued microtask. A post-rename `fsync` failure emits `committed_with_durability_warning` and throws an error with `committed: true` | No phantom history for failed writes; a slow or failing history sink cannot fail or delay a mutation; committed-but-not-durable is never reported as failure | `events/`, `orchestrator/BrudFileSystem.ts` |
 | Startup staging sweep | `initialize()` removes `.${basename}.${pid}.${uuid}.tmp` files whose owner is gone or older than one hour, reporting failures to the logger | Orphan temporary files cannot accumulate or be mistaken for user files | `operations/shared/staging.ts` |
-| Protected-path denylist (A10) | The A10 denylist gates **write, mutate, and delete** operations on `.brud/settings.json`, `.brud/history/**`, and `.git/**`; every such attempt fails with `PROTECTED_PATH_DENIED`. Only the history subsystem receives a `.brud/history` write capability through its descriptor projection. **Reading history entries is not denied by A10**: it is governed by the `HistoryToken` access policy (`AccessPolicy` + tier projection), which returns the full service to `tier: 'core'` callers and a read-only facade to everyone else | Plugins cannot rewrite policy, history, or git metadata, while history reads remain available through the audited contract rather than the raw filesystem | `security/protectedPaths.ts`, `descriptor/descriptor.ts`, `UniversalHistory/descriptor/HistoryDescriptor.ts` |
+| Protected-path denylist (A10) | The A10 denylist gates **write, mutate, and delete** operations on `.brud/settings.json`, `.brud/history/**`, and `.git/**`; every such attempt fails with `PROTECTED_PATH_DENIED`. No caller receives a `.brud/history` write capability; history writes go through the storage driver (D-15 U-7). **Reading history entries is not denied by A10**: it is governed by the `HistoryToken` access policy (`AccessPolicy` + tier projection), which returns the full service to `tier: 'core'` callers and a read-only facade to everyone else | Plugins cannot rewrite policy, history, or git metadata, while history reads remain available through the audited contract rather than the raw filesystem | `security/protectedPaths.ts`, `descriptor/descriptor.ts`, `UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.ts` |
 | Tier projection | Raw writable handles are reserved for `tier: 'core'`; kernel and userland callers receive a scoped or read-only projection. The descriptor declares an explicit `accessPolicy` | A lower-trust caller cannot obtain an unrestricted writable filesystem | `descriptor/descriptor.ts`, `projection/` |
-| CAS blob staging | UniversalHistory commits content-addressed blobs through this service's `writeAtomic` into the blob store under `.brud/history/blobs/` using its granted history scope (see the layout note below) | Blob commits inherit atomic staging and per-path serialization; duplicate digests are idempotent | `UniversalHistory/operations/commit_session/commitSession.ts`, `UniversalHistory/storage/SqliteHistoryStorage.ts` |
 | Per-path serialization | `KeyedWriteMutex` around every mutating call | Two writers in one instance cannot interleave on the same absolute path | `concurrency/KeyedWriteMutex/KeyedWriteMutex.ts` |
 | Driver portability | `IStorageDriver` implemented by the durable Node driver and the in-memory driver; optional exclusive-create, link, chmod, and flush capabilities | The service stays Node-free while the production driver provides POSIX guarantees | `drivers/contracts/IStorageDriver/`, `drivers/DurableNodeStorageDriver.ts` |
 
-**Clarification of terminology.** `BrudFileSystem` provides atomic *staged* writes. Content-addressed (CAS) blob commits are a **UniversalHistory** feature that stages blobs through `writeAtomic` into the history blob store. Do not describe `writeAtomic` as compare-and-swap: it is not.
+**Clarification of terminology.** `BrudFileSystem` provides atomic *staged* writes. Content-addressed (CAS) storage is a **UniversalHistory** feature; since D-15 U-7 it writes through `IStorageDriver` (flush, then rename), not through `BrudFileSystem`. Do not describe `writeAtomic` as compare-and-swap: it is not.
 
-**History blob layout and payload threshold.** The journal-driven ledger (`brud.core.history`) stores payloads under a flat, content-addressed layout:
+**History storage layout and payload threshold.** The unified history engine (D-15) stores everything under `.brud/history/`:
 
 ```
 .brud/history/
-  history.db            # SQLite ledger (WAL, busy_timeout = 5000 ms)
-  blobs/<sha256>        # offloaded payload, named by its lowercase hex digest
+  universal.db          # SQLite, STRICT tables (WAL, busy_timeout = 5000 ms)
+  cas/<aa>/<sha256>     # offloaded content, sharded by the first two hex digits
+  ledger.db, history.db, seq.json, blobs/   # legacy files: imported once, never modified
 ```
 
-The decision is size-based, not kind-based:
-
-| Payload size | Storage | Ledger reference |
-|---|---|---|
-| `<= 65,536` bytes (64 KiB) | Inlined in `mutations.inline_data` / `contents.inline_data` | `blob_ref` is `NULL` |
-| `> 65,536` bytes (64 KiB) | Offloaded to `.brud/history/blobs/<sha256>` | `blob_ref = '.brud/history/blobs/<sha256>'` |
-
-The threshold is exported as `INLINE_SNAPSHOT_LIMIT_BYTES`. Blob bytes are re-hashed on every read; a digest mismatch raises `BlobIntegrityError` (`BLOB_DIGEST_MISMATCH`) and the bytes are never replayed into the workspace. The legacy session ledger (`SqliteLedger` / `commitSession`) uses a sharded `<first-2>/<sha256>` layout; the journal-driven ledger documented here is flat.
+Content of up to 65,536 bytes (64 KiB) is stored inline in `contents.inline_data`; larger content is offloaded to `cas/<aa>/<sha256>`. Every read re-hashes the bytes, and tampered or missing content is never replayed into the workspace.
 
 **Known limits (target for later phases):**
 
@@ -339,46 +332,38 @@ The threshold is exported as `INLINE_SNAPSHOT_LIMIT_BYTES`. Blob bytes are re-ha
 - Caller-declared `tier` and `callerId` remain forgeable until the kernel mints `ServiceContext` (audit A5). Projection is therefore defense in depth, not caller authentication.
 - No operation metadata on errors; the adapter supplies `operationKind` when mapping to legacy results.
 
-#### 2.3.2 `UniversalHistory` (`brud.core.universalHistory`)
+#### 2.3.2 `UniversalHistory` (`brud.core.universalHistory`, `brud.core.history`)
 
-> **Scheduled replacement (D-15, Phase 5.H).** This section and the journal ledger notes below describe the two engines as they exist today. Both are being unified into one service: polymorphic JSON entries, schema-at-registration, files as the built-in `brud.core.file` type, one database `.brud/history/universal.db`, and one reversal engine for session revert and undo/redo. Plan: `.internal_docs/plans/2026-10-30_universal_history_unification.md`. Existing `ledger.db` and `history.db` files are imported and never modified. **Since U-6 (2026-10-30) the unified engine is the default**; the text below describes the legacy engines, which stay selectable as a rollback switch (`historyEngine: 'legacy'`) until U-7 removes them and this section is rewritten.
+> **Unified engine (D-15, Phase 5.H).** Since U-7 (2026-10-30) one engine serves both history tokens; the two legacy engines were removed. Plan: `.internal_docs/plans/2026-10-30_universal_history_unification.md` (Build) and `.internal_docs/plans/2026-10-30_universal_history_unification_switch.md` (Switch).
 
-**Contract:** `IUniversalHistoryService` exposes `beginSession`, `commitSession`, `planReversal`, `executeReversal`, `getSession`, `listSessions`.
+**Contracts (unchanged for callers):**
 
-**Implementation:** `UniversalHistoryService` composes a SQLite ledger, a lazily resolved `BrudFileSystem`, and an `IdAllocator`.
+- `IUniversalHistoryService` (`brud.core.universalHistory`): `beginSession`, `commitSession`, `planReversal`, `executeReversal`, `getSession`, `listSessions`. Served by `LegacySessionAdapter`.
+- `IUniversalHistory` (`brud.core.history`): undo, redo, checkpoints, history queries. Served by `LegacyJournalAdapter`. Non-core callers receive `ReadOnlyHistoryFacade`.
+- Plugins: `IPluginContext.getHistory()` returns a handle bound to the plugin's own namespace. `getUniversalHistory()` is reserved for official plugins.
+
+**Implementation:** `UnifiedHistoryService` (recording, sessions, schema-at-registration), `UnifiedHistoryStore` (`universal.db` + CAS), and `ReversalEngine` (session revert and undo/redo), under `services/UniversalHistory/unified/`.
 
 | Property | Implementation | Evidence |
 |---|---|---|
-| Durable state ledger | SQLite at `.brud/history/ledger.db`; WAL where supported; foreign keys ON; `synchronous = NORMAL` | `storage/SqliteLedger/schema.ts` |
-| ACID session commit | `BEGIN IMMEDIATE` transaction around session status and all file rows; rollback on error | `storage/SqliteLedger/SqliteLedger.ts` |
-| CAS blob store | SHA-256 content addressing at `.brud/history/blobs/<first-2>/<sha256>` for the session ledger, `.brud/history/blobs/<sha256>` for the journal ledger; digest verified before write and re-verified on every read | `operations/commit_session/commitSession.ts`, `storage/SqliteHistoryStorage.ts` |
-| Baseline capture | Declared targets are captured before mutation; digest + bytes/text; no whole-tree snapshot | `operations/capture_baseline/` |
-| Forward deltas | Only changed targets produce rows; binary payloads carry a blob digest | `operations/compute_delta/` |
-| Reversal planning | Pure plan with conflict detection against current SHA-256; `executeReversal` applies it | `operations/plan_reversal/`, `operations/execute_reversal/` |
-| Rollback journal | `reversals` table records target state, status, reverted operations, and error | `storage/SqliteLedger/schema.ts` |
-| Session identity | `BR-YYYYMMDD-NNN` with a per-day sequence persisted in `.brud/history/seq.json` (UTC) | `storage/IdAllocator/`, `contracts/IUniversalHistoryService/types.ts` |
-| Path scoping | All service paths are workspace-relative and flow through `IBrudFileSystem` | Descriptor wiring in `descriptor/UniversalHistoryDescriptor.ts` |
+| Polymorphic entries | Every entry is `{namespace, type, schemaVersion, payload}`. Files are the built-in `brud.core.file` type, and declared session targets are `brud.core.session-target` | `unified/service/builtinTypes.ts` |
+| Schema at registration | Producers register a JSON Schema (zero-dependency subset validator); every payload and inverse payload is validated before append. Schemas persist, so they stay enforceable after restart | `unified/service/UnifiedHistoryService.ts`, `ValidationService/engine/jsonSchema/` |
+| Durable store | SQLite `universal.db` with STRICT tables, FK-enforced type registry, JSON CHECKs, WAL, `busy_timeout = 5000`. Migration re-reads the schema version after `BEGIN IMMEDIATE` | `unified/store/schema.ts`, `unified/store/UnifiedHistoryStore.ts` |
+| Content addressing | SHA-256 digests; inline up to 64 KiB, otherwise `cas/<aa>/<sha256>`; bytes are verified before write and on every read | `unified/store/cas.ts` |
+| Session identity | `BR-YYYYMMDD-NNN`, allocated inside the session-creation transaction (UTC); 9,999 per day | `unified/store/UnifiedHistoryStore.ts` |
+| Attribution | A write belongs to the most recent active session that declared its path, otherwise to the per-boot implicit session | `unified/service/UnifiedHistoryService.ts` |
+| Reversal | Session revert restores files first, then inverse payloads, then producer handlers (timed). Undo/redo/checkpoints pre-flight every pre-image (all-or-nothing), freeze the cursor on failure, and abort on drift. The redo tail covers file entries only | `unified/engine/ReversalEngine.ts` |
+| Namespace isolation | Plugin handles are frozen and bound to one namespace. `brud.core*` is never handed out, and reads are filtered to the namespace | `unified/service/NamespaceHandle.ts` |
+| Degraded boot | A read-only `.brud/history` or a newer schema opens degraded: boot succeeds, recording is a no-op, writes and reversals are refused | `unified/store/UnifiedHistoryStore.ts` (oracle R4) |
+| Legacy import | On first boot, `ledger.db`, `history.db`, and `seq.json` are imported once (dry run, then one transaction per source, with an `imports` row and source SHA). Originals are never modified | `unified/import/LegacyImporter.ts` |
+| Protected storage | No `BrudFileSystem` caller can write `.brud/history`; the engine writes through `IStorageDriver` | `BrudFileSystem/descriptor/descriptor.ts` (no default trusted scope) |
 
 **Known limits:**
 
-- No invocation provenance. A machine-invoked write and a human-invoked write are indistinguishable (MCP divergence D6).
-- File-level model only. Directory rename/delete is represented as per-file operations; empty-directory state is not captured.
-- Retention is data-only (`expiresAt`, soft-delete flags); no background enforcement loop exists.
-- No read-only projection. Any caller that can resolve the token can mutate (G-8).
-- No abort-with-rollback path. `commitSession('aborted')` finalizes without file rows, so a partially applied batch has no ledger-based reversal plan (G-17).
-- Legacy JSON sessions are not imported. Phase 9 adds a one-way importer.
-
-**Journal ledger hardening (journal-driven `brud.core.history`).** The Phase 4 reversal engine adds the following guarantees to the store above:
-
-| Property | Implementation | Evidence |
-|---|---|---|
-| Content-addressed integrity | Every blob read re-computes SHA-256 and fails with `BlobIntegrityError` on mismatch; inline payloads are re-hashed before replay | `storage/SqliteHistoryStorage.ts` |
-| All-or-nothing reversal | Undo, redo, and checkpoint rollback pre-flight **every** pre-image in the batch before writing; a missing or corrupted payload returns `payload_missing` / `payload_corrupt` with zero disk writes | `engine/RollbackEngine.ts` |
-| Frozen cursor on failure | `undo_cursor` advances only when a batch ends `success`; `partial`, `drift_aborted`, `payload_*` leave it untouched | `engine/RollbackEngine.ts` |
-| Atomic ingestion | Content insert, redo-tail truncation, mutation insert, and cursor upsert share one `BEGIN IMMEDIATE` transaction | `storage/SqliteHistoryStorage.ts` |
-| Multi-process safety | `PRAGMA busy_timeout = 5000` so concurrent writers queue instead of failing with `database is locked` | `storage/SqliteHistoryStorage.ts` |
-| Degraded read-only boot | `SQLITE_READONLY` / `EACCES` / `EPERM` during open or WAL setup degrades the service: boot succeeds, ingestion is a no-op, reversals throw `HistoryDegradedError` | `storage/SqliteHistoryStorage.ts`, `descriptor/HistoryDescriptor.ts` |
-| Ingestion telemetry | Background journal failures are forwarded to `context.logger?.warn(...)` instead of being swallowed | `listener/JournalSubscriber.ts`, `descriptor/HistoryDescriptor.ts` |
+- Retention and garbage collection are not implemented yet (D-15 U-8).
+- File-level model only: directory rename/delete is represented as per-file entries; empty-directory state is not captured.
+- No abort-with-rollback path: `commitSession('aborted')` closes the session without reverting partial writes (G-17).
+- Legacy JSON session folders from `packages/core` are not imported (Phase 9).
 
 #### 2.3.3 `PluginManager` (`PluginManager`)
 
@@ -544,8 +529,8 @@ The daemon is the right long-lived host, but it currently cannot execute a tool.
 |---|---|---|
 | Kernel filesystem rejects lexical traversal and symlink escape | Enforced | `PathValidator` + `resolveContained`; kernel tests |
 | Kernel filesystem serializes writes per path | Enforced | `KeyedWriteMutex` tests |
-| Kernel history commits sessions transactionally with CAS blobs | Enforced | `SqliteLedger`, `commitSession` tests |
-| Kernel history can plan and execute a conflict-checked reversal | Enforced | `planReversal`, `executeReversal` tests |
+| Kernel history commits sessions transactionally with CAS blobs | Enforced | `unifiedStore.test.ts`, `unifiedService.test.ts`, history parity oracle S1–S14 |
+| Kernel history can plan and execute a conflict-checked reversal | Enforced | `unifiedEngine.test.ts`, history parity oracle S6–S13 |
 | Plugin branding cannot be forged by a manifest | Enforced | `branding.test.ts`, `manifest` authorization tests |
 | Plugin activation rolls back on failure | Enforced | `PluginManagerService` tests |
 | Plugins can request filesystem/history capabilities | Enforced | Granted during `activate()` via `onRunning` (G-9). History is read-only unless the plugin is official and declares `history:write` (G-8); tests in `src/__tests__/bootstrapPlugins.test.ts` and `services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.test.ts` |
@@ -1225,7 +1210,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 | **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium | **Gate passed.** `.internal_docs/verifications/2026-10-29_validation_service_remediation.md` |
 | **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium | **Implemented, gate not ratified.** Independent audit "Substantially Compliant" with open remediation items (`.internal_docs/audits/2026-10-29_terminal_service_independent_verification_audit.md`); fixes in commit `00422f1` not re-verified |
 | **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium | **In progress.** Done: `BrudTools`, `registerTool`/`executeTool`, `onRunning` boot grant (G-9), read-only universal history for plugins (G-8). Open: `settings:read`/`terminal:execute` + handles, telemetry sink, FS primitives (G-7), boundary script, denial matrix |
-| **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **U-6 cutover done; soak before U-7.** Build (U-0…U-5) verified. U-6: unified is the `createStandardKernel` default (daemon included); legacy kept as rollback switch; third-party plugins get only a namespace-bound `getHistory()`, the core session history is official-only; history errors carry additive `data.errorCode`; oracle 25/25 by default. Remaining: U-7 legacy removal, U-8 retention, after one working session on the unified default (S-D5). C-3/C-4 paused until 5.H completes |
+| **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **U-7 legacy removal done; U-8 retention pending.** Build (U-0…U-5) and U-6 cutover verified. U-7: both legacy engines removed (53 files), the `historyEngine` selector and legacy options are gone, the unified engine is the only engine, and `.brud/history` is unwritable for every `BrudFileSystem` caller; legacy import is tested against a frozen fixture produced by the legacy engines; oracle 25/25 with R4 as an ordinary scenario. Third-party plugins get only a namespace-bound `getHistory()`. Remaining: U-8 retention and garbage collection. C-3/C-4 paused until 5.H completes |
 | **6** | Leaf plugins | Six leaf plugins (pure or narrowly scoped storage) live behind flags | 5 | 100% fixture parity per plugin | Low | Not started |
 | **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium | Not started |
 | **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low | Not started |

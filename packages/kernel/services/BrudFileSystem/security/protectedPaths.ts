@@ -26,12 +26,6 @@ export interface TrustedWriteScope {
   readonly owner: string;
 }
 
-/** Canonical history write scope granted to `brud.core.universalHistory`. */
-export const HISTORY_TRUSTED_SCOPE: TrustedWriteScope = {
-  prefix: '.brud/history',
-  owner: 'brud.core.universalHistory',
-};
-
 function normalizeRelativePath(relativePath: string): string {
   return relativePath
     .replace(/\\/gu, '/')

@@ -5,7 +5,7 @@
  * - `brud.core.universalHistory` → `LegacySessionAdapter` (sessions, revert)
  * - `brud.core.history`          → `LegacyJournalAdapter` (undo/redo/checkpoints)
  *
- * Registered only when `createStandardKernel({ historyEngine: 'unified' })`.
+ * Registered by `createStandardKernel()`; the only history engine since D-15 U-7.
  */
 import { join } from 'node:path';
 import type { IStorageDriver } from '../../../../drivers/contracts/index.js';

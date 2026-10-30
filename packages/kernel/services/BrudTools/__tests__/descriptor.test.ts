@@ -42,7 +42,6 @@ describe('BrudTools descriptor', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
@@ -70,7 +69,6 @@ describe('BrudTools descriptor', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
@@ -92,7 +90,6 @@ describe('BrudTools descriptor', () => {
   it('rejects a payload the boot validation policy refuses', async () => {    const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
@@ -114,7 +111,6 @@ describe('BrudTools descriptor', () => {
     const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      historyJournal: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot: '/workspace' });
