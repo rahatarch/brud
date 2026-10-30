@@ -154,6 +154,12 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
 
   private workspaceRoot: string | undefined;
 
+  /**
+   * Set when the boot policy could not be read. The service then stays
+   * unbound for its lifetime and refuses every command (fail closed).
+   */
+  private policyError: string | undefined;
+
   private activeChildren = 0;
 
   /** Resolvers waiting for a concurrency slot, in arrival order. */
@@ -190,13 +196,31 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
    *
    * @param bindings - Policy, validator and workspace root.
    */
-  pinBootPolicy(bindings: {
-    readonly policy: TerminalPolicy;
-    readonly validator?: TerminalValidatorPort;
-    readonly workspaceRoot?: string;
-  }): void {
+  pinBootPolicy(
+    bindings:
+      | {
+          readonly policy: TerminalPolicy;
+          readonly validator?: TerminalValidatorPort;
+          readonly workspaceRoot?: string;
+        }
+      | {
+          /** The frozen policy could not be read: deny all execution. */
+          readonly policyError: string;
+        },
+  ): void {
+    if ('policyError' in bindings) {
+      this.policyError = bindings.policyError;
+      this.validator = undefined;
+
+      return;
+    }
+
     this.policy = bindings.policy;
-    this.workspaceRoot = bindings.workspaceRoot;
+
+    // Keep the construction-time root unless the pin supplies an override.
+    if (bindings.workspaceRoot !== undefined) {
+      this.workspaceRoot = bindings.workspaceRoot;
+    }
 
     if (bindings.validator !== undefined) {
       this.validator = bindings.validator;
@@ -324,7 +348,11 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
     }
 
     if (!this.isValidationAuthorityBound()) {
-      return terminalUnavailable(request.command ?? request.commands?.[0], request.cwd);
+      return terminalUnavailable(
+        request.command ?? request.commands?.[0],
+        request.cwd,
+        this.unavailableDetails(),
+      );
     }
 
     if (options?.signal?.aborted) {
@@ -468,7 +496,18 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
    * caller authorized to execute without one.
    */
   private isValidationAuthorityBound(): boolean {
+    if (this.policyError !== undefined) {
+      return false;
+    }
+
     return this.validator !== undefined || this.unsafeTestExecution;
+  }
+
+  /** Refusal details when the boot policy, not the validator, is missing. */
+  private unavailableDetails(): string | undefined {
+    return this.policyError === undefined
+      ? undefined
+      : `The terminal policy could not be read at boot (${this.policyError}); command execution is denied.`;
   }
 
   /**
@@ -483,12 +522,12 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
   validateCommand(command: string, cwd: string): TerminalDecision | undefined {
     const worker = this.validator;
 
-    if (worker === undefined) {
-      if (this.unsafeTestExecution) {
+    if (worker === undefined || this.policyError !== undefined) {
+      if (this.unsafeTestExecution && this.policyError === undefined) {
         return undefined;
       }
 
-      return terminalUnavailable(command, cwd);
+      return terminalUnavailable(command, cwd, this.unavailableDetails());
     }
 
     try {

@@ -127,8 +127,6 @@ export function createTerminalDescriptor(
       const injectedValidator = options?.validator;
       let validator: TerminalValidatorPort | undefined = injectedValidator;
       let workspace: ValidationWorkspacePort | undefined;
-      let settings: ISettingsReader | undefined;
-      let pinnedPolicy: TerminalPolicy | undefined;
 
       const resolveValidator = (): TerminalValidatorPort | undefined => {
         if (validator === undefined) {
@@ -142,36 +140,26 @@ export function createTerminalDescriptor(
 
         return workspace;
       };
-      // The frozen policy is derived once from the boot snapshot so an
+      // The frozen policy is derived once from the boot snapshot, inside the
+      // boot pinner (the broker serves, no caller holds the token yet), so an
       // in-flight session cannot observe a settings change between admission
-      // and spawn. An explicit override, or an unresolvable snapshot, falls
-      // back to the standalone defaults.
-      const resolvePolicy = (): TerminalPolicy => {
-        if (pinnedPolicy !== undefined) {
-          return pinnedPolicy;
-        }
-
+      // and spawn. An explicit override skips the read. There is no default
+      // fallback: an unreadable snapshot denies execution (fail closed).
+      const readPolicy = (): TerminalPolicy => {
         if (options?.policy !== undefined) {
-          pinnedPolicy = options.policy;
-
-          return pinnedPolicy;
+          return options.policy;
         }
 
-        try {
-          settings ??= broker.requestAccess<ISettingsReader>(kernelCaller, SettingsToken);
-          pinnedPolicy = toTerminalPolicy(settings.getSnapshot());
-        } catch (error) {
-          context.logger?.warn(
-            `TerminalService: settings snapshot could not be read (${error instanceof Error ? error.message : String(error)}); using default terminal policy.`,
-          );
-          pinnedPolicy = DEFAULT_TERMINAL_POLICY;
-        }
+        const settings = broker.requestAccess<ISettingsReader>(kernelCaller, SettingsToken);
 
-        return pinnedPolicy;
+        return toTerminalPolicy(settings.getSnapshot());
       };
 
+      // Construction runs while the kernel is BOOTING, when the broker refuses
+      // every request, so the service starts on a placeholder policy and stays
+      // unbound (fail closed) until the boot pinner binds it.
       const service = new TerminalService({
-        policy: resolvePolicy(),
+        policy: options?.policy ?? DEFAULT_TERMINAL_POLICY,
         ...(options?.validator === undefined ? {} : { validator: options.validator }),
         workspaceRoot: options?.workspaceRoot ?? context.workspaceRoot,
         processes: new ProcessManager(new ShellAdapter()),
@@ -179,6 +167,20 @@ export function createTerminalDescriptor(
       });
 
       registerTerminalBootPinner(service, (): void => {
+        let policy: TerminalPolicy;
+
+        try {
+          policy = readPolicy();
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          context.logger?.warn(
+            `TerminalService: settings snapshot could not be read (${message}); terminal execution is denied.`,
+          );
+          service.pinBootPolicy({ policyError: message });
+
+          return;
+        }
+
         // An unresolvable authority leaves the service unbound, so every
         // execution fails closed with `TERMINAL_UNAVAILABLE` instead of
         // hanging on a boot pin or admitting an unvalidated command.
@@ -196,7 +198,7 @@ export function createTerminalDescriptor(
         }
 
         service.pinBootPolicy({
-          policy: resolvePolicy(),
+          policy,
           ...(boundValidator === undefined ? {} : { validator: boundValidator }),
           ...(options?.workspaceRoot === undefined ? {} : { workspaceRoot: options.workspaceRoot }),
         });

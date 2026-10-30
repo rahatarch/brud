@@ -115,12 +115,12 @@ export function terminalFailure(details: TerminalFailureDetails): TerminalDecisi
  * @param command - Command the caller attempted.
  * @param cwd - Working directory of the attempt.
  */
-export function terminalUnavailable(command?: string, cwd?: string): TerminalDecision {
+export function terminalUnavailable(command?: string, cwd?: string, details?: string): TerminalDecision {
   return terminalFailure({
     code: 'TERMINAL_UNAVAILABLE',
     legacyCode: 'TERMINAL_UNAVAILABLE',
     friendly: 'Terminal execution unavailable: validation authority not bound',
-    details: 'The terminal service cannot execute commands without an active ValidationService.',
+    details: details ?? 'The terminal service cannot execute commands without an active ValidationService.',
     ...(command === undefined ? {} : { command }),
     ...(cwd === undefined ? {} : { cwd }),
     actionable: false,
