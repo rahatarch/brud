@@ -2,6 +2,7 @@ import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginCon
 import {
   ToolDuplicateError,
   ToolNotFoundError,
+  ToolQuotaExceededError,
 } from '../contracts/errors.js';
 import type {
   IPluginExecutionContext,
@@ -23,6 +24,14 @@ export interface RegisteredToolEntry extends RegisteredToolInfo {
 }
 
 /**
+ * Maximum number of live tools a single plugin may register.
+ *
+ * Bounds per-plugin memory growth so a malicious or buggy plugin cannot flood
+ * the registry and exhaust the host process heap (E-3.2).
+ */
+export const maxToolsPerPlugin = 100;
+
+/**
  * Instance-scoped, Map-backed tool registry.
  *
  * There is deliberately no module-level state (rollout plan §4.1 rule 5): two
@@ -40,6 +49,7 @@ export class ToolRegistry {
    * @param isOfficial - Certification status derived by the kernel.
    * @param options - Tool definition and handler.
    * @returns Disposable that removes the entry exactly once.
+   * @throws ToolQuotaExceededError when the plugin already owns the maximum.
    * @throws ToolDuplicateError when the name is already registered.
    */
   registerTool(
@@ -47,6 +57,10 @@ export class ToolRegistry {
     isOfficial: boolean,
     options: ToolRegistrationOptions,
   ): IPluginDisposable {
+    if (this.countByOwner(pluginId) >= maxToolsPerPlugin) {
+      throw new ToolQuotaExceededError(pluginId, maxToolsPerPlugin);
+    }
+
     const existing = this.entries.get(options.name);
 
     if (existing !== undefined) {
@@ -151,6 +165,23 @@ export class ToolRegistry {
   /** Removes every registration. */
   clear(): void {
     this.entries.clear();
+  }
+
+  /**
+   * Counts live registrations owned by a plugin.
+   *
+   * @param pluginId - Owning plugin identifier.
+   */
+  private countByOwner(pluginId: string): number {
+    let count = 0;
+
+    for (const entry of this.entries.values()) {
+      if (entry.ownerPluginId === pluginId) {
+        count += 1;
+      }
+    }
+
+    return count;
   }
 }
 

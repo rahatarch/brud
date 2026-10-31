@@ -10,6 +10,7 @@ export {
   ToolDisposedError,
   ToolDuplicateError,
   ToolNotFoundError,
+  ToolQuotaExceededError,
   ToolValidationError,
   toolFailureMessage,
 } from './errors.js';

@@ -3,7 +3,8 @@ export type BrudToolsErrorCode =
   | 'TOOL_DUPLICATE'
   | 'TOOL_NOT_FOUND'
   | 'TOOL_VALIDATION_ERROR'
-  | 'TOOL_DISPOSED';
+  | 'TOOL_DISPOSED'
+  | 'TOOL_QUOTA_EXCEEDED';
 
 /**
  * Base class for every BrudTools domain failure.
@@ -61,6 +62,28 @@ export class ToolNotFoundError extends BrudToolsError {
     super(`Tool "${toolName}" is not registered`);
     this.name = 'ToolNotFoundError';
     this.toolName = toolName;
+  }
+}
+
+/** Raised when a plugin tries to exceed its tool registration quota. */
+export class ToolQuotaExceededError extends BrudToolsError {
+  public readonly code = 'TOOL_QUOTA_EXCEEDED' as const;
+
+  /** Plugin that hit the quota. */
+  public readonly pluginId: string;
+
+  /** Maximum number of tools the plugin may own. */
+  public readonly limit: number;
+
+  /**
+   * @param pluginId - Plugin that hit the quota.
+   * @param limit - Maximum number of tools the plugin may own.
+   */
+  constructor(pluginId: string, limit: number) {
+    super(`Plugin "${pluginId}" exceeded the tool registration quota of ${String(limit)}`);
+    this.name = 'ToolQuotaExceededError';
+    this.pluginId = pluginId;
+    this.limit = limit;
   }
 }
 
