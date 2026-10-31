@@ -5,9 +5,15 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
+import { createStandardKernel } from '../../../../src/bootstrap/index.js';
+import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
+import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
+import { UniversalHistoryToken } from '../../descriptor/tokens.js';
+import { ReversalEngine } from '../engine/ReversalEngine.js';
 import {
   CORE_NAMESPACE,
   UnifiedEntrySchemaError,
@@ -59,6 +65,90 @@ async function fileEntries(h: Harness): Promise<{ row: EntryRow; payload: FileEn
   await h.service.flush();
   const rows = h.service.listEntries({ namespace: CORE_NAMESPACE, type: 'file', order: 'asc', limit: 1000 }).rows;
   return Promise.all(rows.map(async (row) => ({ row, payload: await h.service.resolvePayload(row) as FileEntryPayload })));
+}
+
+// ── file-backed real-kernel harness (D-15 verification stage) ──────────
+//
+// A1-A5 and A7 need "a second process": two kernels booting the same
+// on-disk workspace, a real SQLite file, and the real BrudFileSystem.
+// Each `boot()` runs the real createStandardKernel() (so the real
+// UnifiedHistoryService.start() path creates and commits its implicit row on
+// a real file), then opens a second real UnifiedHistoryService on the same
+// universal.db with the kernel's own filesystem, so the test can also drive
+// recording and read session/entry rows. Nothing is mocked or stubbed: the
+// database, driver, filesystem, store and service are all production types.
+
+interface Workspace {
+  readonly root: string;
+}
+
+interface KernelHandle {
+  readonly kernel: ReturnType<typeof createStandardKernel>;
+  readonly service: UnifiedHistoryService;
+  readonly engine: ReversalEngine;
+  readonly fs: IBrudFileSystem;
+  readonly codes: string[];
+  readonly warnings: string[];
+}
+
+async function workspace(context: TestContext): Promise<Workspace> {
+  const root = await mkdtemp(join(tmpdir(), 'brud-d15-service-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  return { root };
+}
+
+/** Boots one real standard kernel and attaches a real service on the same database. */
+async function boot(ws: Workspace): Promise<KernelHandle> {
+  const codes: string[] = [];
+  const warnings: string[] = [];
+  // One real journal shared by the filesystem and the history service, exactly
+  // as `createStandardKernel()` wires its own default.
+  const journal = createFileMutationJournal();
+  const kernel = createStandardKernel({
+    mutationJournal: journal,
+    logger: {
+      warn: (message, meta) => {
+        warnings.push(message);
+        if (typeof meta?.code === 'string') {
+          codes.push(meta.code);
+        }
+      },
+    },
+  });
+  await kernel.boot({ workspaceRoot: ws.root });
+  const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', workspaceRoot: ws.root };
+  const fs = kernel.requestAccess(caller, FileSystemToken);
+
+  const historyRoot = join(ws.root, '.brud', 'history');
+  const store = new UnifiedHistoryStore({
+    dbPath: join(historyRoot, 'universal.db'),
+    historyRoot,
+    driver: new DurableNodeStorageDriver(),
+  });
+  const service = new UnifiedHistoryService({
+    store,
+    fileSystem: () => fs,
+    journal,
+    onError: (_error, details) => {
+      // Mirror the descriptor's classification (unifiedHistoryDescriptors.ts:89-102)
+      // so an assertion can name the exact code the kernel would have logged.
+      codes.push(details.phase === 'session-recovered' ? 'HISTORY_SESSION_RECOVERED' : 'HISTORY_RECORDING_FAILED');
+    },
+  });
+  await service.start();
+  const engine = new ReversalEngine({ service, fileSystem: () => fs });
+  return { kernel, service, engine, fs, codes, warnings };
+}
+
+/** Every file entry attributed to `sessionId`, read through the service. */
+async function entriesIn(h: KernelHandle, sessionId: string): Promise<readonly EntryRow[]> {
+  await h.service.flush();
+  return h.service.listEntries({ sessionId, namespace: CORE_NAMESPACE, type: 'file', order: 'asc', limit: 1000 }).rows;
+}
+
+/** A session row as persisted in the real `universal.db`. */
+function sessionOf(h: KernelHandle, sessionId: string): { status: string; implicit: boolean } | undefined {
+  return h.service.store.getSession(sessionId);
 }
 
 describe('UnifiedHistoryService — start and built-ins', () => {
@@ -381,5 +471,194 @@ describe('UnifiedHistoryService — dispose', () => {
     await service.dispose();
     assert.equal(statusBefore, 'active');
     void context;
+  });
+});
+
+describe('UnifiedHistoryService — implicit attribution across processes (D-15 A1-A5, A7)', () => {
+  it('A1 a second service on a live database owns a distinct active implicit session and records into it', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    await a.fs.writeAtomic('a/first.txt', 'alpha\n');
+    await a.service.flush();
+    const aId = a.service.implicitSession;
+    assert.ok(aId, 'A must own an implicit session (INV-1)');
+    assert.equal(sessionOf(a, aId)?.status, 'active');
+
+    const b = await boot(ws);
+    context.after(async () => {
+      await b.service.dispose();
+      await b.kernel.shutdown();
+      await a.service.dispose();
+      await a.kernel.shutdown();
+    });
+    const bId = b.service.implicitSession;
+    assert.ok(bId, 'B must own an implicit session after boot (F1/INV-1)');
+    assert.notEqual(bId, aId, 'B must not adopt A\'s implicit row (F3)');
+    assert.equal(sessionOf(b, bId)?.status, 'active', 'B\'s own row is active');
+    assert.equal(sessionOf(b, bId)?.implicit, true);
+
+    // Drive mutations only through B's service/filesystem.
+    await b.fs.writeAtomic('b/one.txt', 'beta-1\n');
+    await b.fs.writeAtomic('b/two.txt', 'beta-2\n');
+    await b.service.flush();
+    const written = (await entriesIn(b, bId as string)).filter((row) => row.filePath?.startsWith('b/'));
+    assert.deepEqual(written.map((row) => row.filePath).sort(), ['b/one.txt', 'b/two.txt']);
+
+    // A's own session is untouched by B's activity.
+    assert.equal(a.service.implicitSession, aId);
+    assert.equal(sessionOf(a, aId as string)?.status, 'active');
+    assert.deepEqual(a.codes, [], `A reported: ${a.codes.join(', ')}`);
+    assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+  });
+
+  it('A2 a later service never adopts a committed implicit row from a disposed process (F3)', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    await a.fs.writeAtomic('a/before.txt', 'alpha\n');
+    await a.service.flush();
+    const aId = a.service.implicitSession as string;
+    await a.service.dispose();
+    await a.kernel.shutdown();
+    // A's row is committed and unowned; it is the only implicit row in the file.
+    const reader = new UnifiedHistoryStore({
+      dbPath: join(ws.root, '.brud', 'history', 'universal.db'),
+      historyRoot: join(ws.root, '.brud', 'history'),
+      driver: new DurableNodeStorageDriver(),
+    });
+    await reader.open();
+    assert.equal(reader.getSession(aId)?.status, 'committed');
+    reader.close();
+
+    const b = await boot(ws);
+    context.after(async () => {
+      await b.service.dispose();
+      await b.kernel.shutdown();
+    });
+    const bId = b.service.implicitSession;
+    assert.ok(bId);
+    assert.notEqual(bId, aId, 'B must create its own row, not adopt the committed one');
+    assert.equal(sessionOf(b, bId as string)?.status, 'active');
+    assert.equal(sessionOf(b, aId)?.status, 'committed', 'A\'s row is left untouched');
+
+    await b.fs.writeAtomic('b/after.txt', 'beta\n');
+    await b.service.flush();
+    assert.equal((await entriesIn(b, bId as string)).filter((row) => row.filePath === 'b/after.txt').length, 1);
+    assert.equal((await entriesIn(b, aId)).filter((row) => row.filePath === 'b/after.txt').length, 0);
+    assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+  });
+
+  it('A3 a lost implicit session is recovered once, loudly, and the mutation is still recorded (F2)', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    context.after(async () => {
+      await a.service.dispose();
+      await a.kernel.shutdown();
+    });
+    const original = a.service.implicitSession as string;
+
+    // Simulate S1 on the real database: the row this process owns stops being
+    // active. No mock — the store performs a real transition on the real file.
+    a.service.store.transitionSession(original, ['active'], 'committed', Date.now());
+    a.codes.length = 0;
+
+    await a.fs.writeAtomic('a/recovered.txt', 'after loss\n');
+    await a.service.flush();
+
+    const recovered = a.service.implicitSession as string;
+    assert.notEqual(recovered, original, 'the lost id must not be re-used');
+    assert.equal(sessionOf(a, recovered)?.status, 'active');
+    assert.equal(sessionOf(a, recovered)?.implicit, true);
+
+    const landed = (await entriesIn(a, recovered)).filter((row) => row.filePath === 'a/recovered.txt');
+    assert.equal(landed.length, 1, 'the mutation is recorded, not dropped');
+    assert.equal((await entriesIn(a, original)).length, 0);
+
+    assert.equal(a.codes.filter((code) => code === 'HISTORY_SESSION_RECOVERED').length, 1, `recovery reported exactly once: ${a.codes.join(', ')}`);
+    assert.equal(a.codes.includes('HISTORY_RECORDING_FAILED'), false, 'a recovery is not a recording failure');
+  });
+
+  it('A4 a session that closes after attribution is replaced at the append, never re-used (F2, S2 family)', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    context.after(async () => {
+      await a.service.dispose();
+      await a.kernel.shutdown();
+    });
+    const implicit = a.service.implicitSession as string;
+    const explicit = await a.service.beginSession('closed mid-write', { declaredTargets: ['a/mid-write.txt'] });
+    a.codes.length = 0;
+
+    // A real write: `attribute()` selects the declared explicit session, then
+    // the recording is queued. Closing the session before the queue drains
+    // makes the requested id non-active at the `recordMutation` liveness check
+    // — exactly the `:613-615` path A4 targets. No error may surface, and the
+    // entry must land in this process's live implicit session.
+    const write = a.fs.writeAtomic('a/mid-write.txt', 'between attribute and append\n');
+    await write;
+    await a.service.commitSession(explicit, 'completed');
+    await a.service.flush();
+
+    assert.equal(a.codes.includes('HISTORY_RECORDING_FAILED'), false, `recording failed: ${a.codes.join(', ')}`);
+    assert.deepEqual(a.codes, [], 'no failure and no foreign-attribution report');
+    assert.equal((await entriesIn(a, explicit)).filter((row) => row.filePath === 'a/mid-write.txt').length, 0);
+    assert.equal((await entriesIn(a, implicit)).filter((row) => row.filePath === 'a/mid-write.txt').length, 1, 'recorded, not dropped');
+    assert.equal(a.service.implicitSession, implicit, 'the live implicit session was stable');
+  });
+
+  it('A5 a second kernel booted while a foreign implicit row is active never registers it (F3, resolution site)', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    const aId = a.service.implicitSession as string;
+    // A stays alive and active while B boots: the worst case for adoption.
+    await a.fs.writeAtomic('a/live.txt', 'alpha\n');
+    await a.service.flush();
+    assert.equal(sessionOf(a, aId)?.status, 'active');
+
+    const b = await boot(ws);
+    context.after(async () => {
+      await b.service.dispose();
+      await b.kernel.shutdown();
+      await a.service.dispose();
+      await a.kernel.shutdown();
+    });
+    const bId = b.service.implicitSession as string;
+    assert.notEqual(bId, aId);
+    assert.equal(sessionOf(b, bId)?.status, 'active');
+
+    // At the resolution site: B writing an undeclared path must resolve to its
+    // own id, never to A's foreign active row.
+    await b.fs.writeAtomic('b/unattributed.txt', 'beta\n');
+    await b.service.flush();
+
+    const inB = (await entriesIn(b, bId)).filter((row) => row.filePath === 'b/unattributed.txt');
+    const inAFromB = (await entriesIn(b, aId)).filter((row) => row.filePath === 'b/unattributed.txt');
+    assert.equal(inB.length, 1, 'the mutation resolves to this process\'s own id');
+    assert.equal(inAFromB.length, 0, 'a foreign active implicit row is never used');
+
+    // And A, still holding its own row, accounted for nothing B wrote.
+    const aEntries = await entriesIn(a, aId);
+    assert.deepEqual(aEntries.map((row) => row.filePath), ['a', 'a/live.txt'], 'A recorded only its own mutations');
+    assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+  });
+
+  it('A7 a checkpoint on the boot-time implicit session has a real active session id (INV-2)', async (context) => {
+    const ws = await workspace(context);
+    const a = await boot(ws);
+    context.after(async () => {
+      await a.service.dispose();
+      await a.kernel.shutdown();
+    });
+    await a.fs.writeAtomic('a/checkpointed.txt', 'version one\n');
+    await a.service.flush();
+
+    // No openRecordingSession(): this is the boot-time implicit path the
+    // J2/J3/J6 oracle tests never take.
+    const checkpointId = await a.engine.recordCheckpoint('boot-time');
+
+    const stored = a.service.store.getCheckpoint(checkpointId);
+    assert.ok(stored, 'checkpoint row exists');
+    assert.equal(stored.sessionId, a.service.implicitSession);
+    assert.equal(sessionOf(a, stored.sessionId)?.status, 'active');
+    assert.equal(sessionOf(a, stored.sessionId)?.implicit, true);
   });
 });

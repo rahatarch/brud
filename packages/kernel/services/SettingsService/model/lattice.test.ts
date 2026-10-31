@@ -234,3 +234,47 @@ describe('applyLatticeToWorkspacePatch', () => {
     assert.deepEqual(result.warnings, []);
   });
 });
+
+describe('history retention lattice (D-15 U-8)', () => {
+  it('defaults to 90 days and a 10,000-entry undo floor', () => {
+    const { snapshot } = evaluateLattice();
+
+    assert.equal(snapshot.historyRetentionDays, 90);
+    assert.equal(snapshot.historyMinUndoEntries, 10_000);
+  });
+
+  it('takes the largest layer value, capped at the kernel ceiling', () => {
+    const { snapshot, warnings } = evaluateLattice({
+      user: { historyRetentionDays: 120, historyMinUndoEntries: 20_000 },
+      workspace: { historyRetentionDays: 365, historyMinUndoEntries: 5_000_000 },
+    });
+
+    assert.equal(snapshot.historyRetentionDays, 365);
+    assert.equal(snapshot.historyMinUndoEntries, 1_000_000);
+    assert.deepEqual(warnings, []);
+  });
+
+  it('ignores any layer that would shorten retention below the default', () => {
+    const { snapshot, warnings } = evaluateLattice({
+      user: { historyRetentionDays: 7 },
+      workspace: { historyMinUndoEntries: 10 },
+    });
+
+    assert.equal(snapshot.historyRetentionDays, 90);
+    assert.equal(snapshot.historyMinUndoEntries, 10_000);
+    const fields = warnings.map((warning) => `${warning.scope}:${warning.field}:${warning.code}`);
+    assert.deepEqual(fields.sort(), [
+      'user:historyRetentionDays:SAFETY_LOOSENING_IGNORED',
+      'workspace:historyMinUndoEntries:SAFETY_LOOSENING_IGNORED',
+    ]);
+  });
+
+  it('drops a shortening workspace patch before it is written', () => {
+    const result = applyLatticeToWorkspacePatch({ historyRetentionDays: 1, historyMinUndoEntries: 50_000 });
+
+    assert.equal(result.patch.historyRetentionDays, undefined);
+    assert.equal(result.patch.historyMinUndoEntries, 50_000);
+    assert.equal(result.warnings.length, 1);
+    assert.equal(result.warnings[0]?.field, 'historyRetentionDays');
+  });
+});

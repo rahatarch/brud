@@ -1,5 +1,10 @@
-export { UnifiedHistoryService, isCoreNamespace, isReservedNamespace } from './UnifiedHistoryService.js';
-export type { NamespaceHandleOptions, UnifiedHistoryServiceOptions } from './UnifiedHistoryService.js';
+export { HISTORY_GC_GRACE_MS, UnifiedHistoryService, isCoreNamespace, isReservedNamespace } from './UnifiedHistoryService.js';
+export type {
+  HistoryRetentionReport,
+  HistoryRetentionSettings,
+  NamespaceHandleOptions,
+  UnifiedHistoryServiceOptions,
+} from './UnifiedHistoryService.js';
 export { createReadOnlyNamespaceHandle } from './NamespaceHandle.js';
 export {
   BUILTIN_ENTRY_TYPES,

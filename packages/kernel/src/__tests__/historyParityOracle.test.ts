@@ -18,10 +18,13 @@
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import type { ChildProcess } from 'node:child_process';
 import type { TestContext } from 'node:test';
 import { createUnifiedSubject } from './historyOracle/unifiedSubject.js';
 import type {
@@ -66,6 +69,31 @@ const LARGE = 70 * 1024;
 const large = (seed: string): string => `${seed}:${'x'.repeat(LARGE)}`;
 
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+
+/** Session rows as persisted in the oracle workspace's real `universal.db`. */
+interface PersistedSession {
+  readonly sessionId: string;
+  readonly status: string;
+  readonly implicit: number;
+}
+
+async function readOracleSessions(workspaceRoot: string): Promise<PersistedSession[]> {
+  const db = new DatabaseSync(join(workspaceRoot, '.brud', 'history', 'universal.db'));
+  try {
+    db.exec('PRAGMA busy_timeout = 5000');
+    return db.prepare('SELECT session_id AS sessionId, status, implicit FROM sessions ORDER BY session_id')
+      .all() as unknown as PersistedSession[];
+  } finally {
+    db.close();
+  }
+}
+
+async function readOracleSession(workspaceRoot: string, sessionId: string): Promise<PersistedSession> {
+  const rows = await readOracleSessions(workspaceRoot);
+  const row = rows.find((candidate) => candidate.sessionId === sessionId);
+  assert.ok(row, `session ${sessionId} not persisted`);
+  return row as PersistedSession;
+}
 
 describe(`history parity oracle [${SUBJECT_NAME}] — sessions`, () => {
   it('S1 records, commits, and reverts a text, binary, and created file', async (context) => {
@@ -499,6 +527,141 @@ await kernel.shutdown();
     const recorded = (await h.listFileEntries({ operation: 'write' })).filter((e) => e.path.startsWith('workers/'));
     assert.equal(recorded.length, workers.length * 5);
   });
+
+  // D-15 §6.1 items 2-5: the defect (silent loss) passes the exit-code and
+  // lock assertions above, so R2 alone cannot name the reason it fails. These
+  // additions make the failure legible: the S2 signature on stderr, a
+  // per-worker breakdown, real session attribution, and determinism.
+  it('R2 additions separate processes: no recording failures, 5 per worker, 3 implicit sessions, 5/5 runs', async (context) => {
+    const attempts = 5;
+    const runs = Array.from({ length: attempts }, (_, index) => index + 1);
+
+    for (const run of runs) {
+      context.diagnostic(`R2 determinism run ${run}/${attempts}`);
+      const h = await open(context);
+      const workerPath = join(h.workspaceRoot, '..', `oracle-worker-run-${process.pid}-${Date.now()}-${run}.mjs`);
+      const bootstrapUrl = new URL('../bootstrap/index.ts', import.meta.url).href;
+      const tokensUrl = new URL('../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
+
+      await writeFile(workerPath, `
+const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
+const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
+const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
+const [root, id, count] = process.argv.slice(2);
+const kernel = createStandardKernel();
+await kernel.boot({ workspaceRoot: root });
+const db = new DatabaseSync(root + '/.brud/history/universal.db');
+db.exec('PRAGMA busy_timeout = 5000');
+const rows = db.prepare("SELECT session_id AS sessionId FROM sessions WHERE implicit = 1 AND status = 'active' AND prompt = 'automatic recording' ORDER BY session_id DESC LIMIT 1").all();
+db.close();
+const boot = rows.length > 0 ? String(rows[0].sessionId) : '';
+process.stdout.write('boot ' + boot + String.fromCharCode(10));
+const fs = kernel.requestAccess({ callerId: 'oracle.worker', tier: 'core', workspaceRoot: root }, FileSystemToken);
+for (let i = 0; i < Number(count); i += 1) await fs.writeAtomic(\`workers/\${id}-\${i}.txt\`, \`\${id}-\${i}\\n\`);
+await new Promise((resolve) => setTimeout(resolve, 200));
+await kernel.shutdown();
+`, 'utf8');
+      context.after(() => import('node:fs/promises').then(({ rm }) => rm(workerPath, { force: true })));
+
+      const workers = ['alpha', 'beta', 'gamma'];
+      const bootRows = new Map<string, string>();
+      const alive: ChildProcess[] = [];
+      context.after(() => { for (const child of alive) { child.kill('SIGKILL'); } });
+      const children = workers.map((id) => spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5'], {
+        cwd: process.cwd(),
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }));
+      alive.push(...children);
+      const streams = children.map((child) => {
+        const state = { stdout: '', stderr: '' };
+        child.stdout.setEncoding('utf8');
+        child.stdout.on('data', (chunk: string) => { state.stdout += chunk; });
+        child.stderr.setEncoding('utf8');
+        child.stderr.on('data', (chunk: string) => { state.stderr += chunk; });
+        return state;
+      });
+      const exits = children.map((child) => new Promise<number | null>((settle, reject) => {
+        child.on('error', reject);
+        child.on('close', (code) => { settle(code); });
+      }));
+
+      // Re-scoped acceptance (§5.4): the first read of the shared database is
+      // taken the moment every worker has booted — each worker reports the
+      // implicit row it created before it writes anything — and before any of
+      // them has appended. Every live worker's boot row must be there and active.
+      const deadline = Date.now() + 120_000;
+      for (const [index, id] of workers.entries()) {
+        for (;;) {
+          const match = /^boot (\S*)$/mu.exec(streams[index]?.stdout ?? '');
+          if (match !== null) {
+            bootRows.set(id, match[1] as string);
+            break;
+          }
+          if (Date.now() > deadline) {
+            throw new Error(`run ${run}: ${id} never reported its boot row: ${streams[index]?.stderr ?? ''}`);
+          }
+          await new Promise((resolve) => { setTimeout(resolve, 2); });
+        }
+      }
+      const beforeAppend = await readOracleSessions(h.workspaceRoot);
+      for (const id of workers) {
+        const boot = bootRows.get(id) as string;
+        assert.ok(boot.length > 0, `run ${run}: ${id} could not name the row it booted with; rows: ${JSON.stringify(beforeAppend)}`);
+        const row = beforeAppend.find((candidate) => candidate.sessionId === boot);
+        assert.ok(row, `run ${run}: ${id}'s boot row ${boot} was gone before it appended; rows: ${JSON.stringify(beforeAppend)}`);
+        assert.equal(row.status, 'active', `run ${run}: ${id}'s boot row ${boot} is ${row.status}, expected active`);
+        assert.equal(row.implicit, 1, `run ${run}: ${id}'s boot row ${boot} is not implicit`);
+      }
+
+      const codes = await Promise.all(exits);
+      const results = workers.map((id, index) => ({ id, code: codes[index] as number | null, stderr: streams[index]?.stderr ?? '' }));
+
+      // The frozen assertions (§12: :494-497 unchanged).
+      for (const result of results) {
+        assert.equal(result.code, 0, `run ${run}: ${result.id} failed: ${result.stderr}`);
+        assert.doesNotMatch(result.stderr, /database is locked|SQLITE_BUSY/u, `run ${run}: ${result.id} saw a lock error`);
+        // Re-scoped meaning: no live row was lost. Every worker stayed live
+        // until its own shutdown, so none may have recorded into a missing or
+        // foreign session. (Recovery reports HISTORY_SESSION_RECOVERED, which
+        // this never matches; D9'.)
+        assert.doesNotMatch(result.stderr, /HISTORY_RECORDING_FAILED|Session not found/u, `run ${run}: ${result.id} recording failure:\n${result.stderr}`);
+      }
+
+      const recorded = (await h.listFileEntries({ operation: 'write' })).filter((e) => e.path.startsWith('workers/'));
+      // Per-worker breakdown: 5 each, 15 distinct paths.
+      for (const id of workers) {
+        const own = recorded.filter((e) => e.path.startsWith(`workers/${id}-`));
+        assert.equal(own.length, 5, `run ${run}: ${id} recorded ${own.length}/5`);
+      }
+      assert.equal(recorded.length, 15, `run ${run}: ${recorded.length}/15 worker writes recorded`);
+      assert.equal(new Set(recorded.map((e) => e.path)).size, 15, `run ${run}: duplicate paths (double count)`);
+
+      // Session attribution: the 15 entries resolve to the three boot rows the
+      // workers reported (never a row they did not create), each implicit,
+      // each committed after the workers shut down.
+      const sessionIds = [...new Set(recorded.map((e) => e.sessionId))];
+      assert.equal(sessionIds.length, 3, `run ${run}: ${sessionIds.length} distinct sessions, expected 3`);
+      for (const id of workers) {
+        const boot = bootRows.get(id) as string;
+        assert.ok(sessionIds.includes(boot), `run ${run}: ${id}'s entries were not recorded in its boot row ${boot}: ${JSON.stringify(sessionIds)}`);
+      }
+      const allSessions = await readOracleSessions(h.workspaceRoot);
+      for (const sessionId of sessionIds) {
+        assert.ok(typeof sessionId === 'string' && sessionId.length > 0, `run ${run}: entry without a session id`);
+        const session = await readOracleSession(h.workspaceRoot, sessionId as string);
+        assert.equal(session.implicit, 1, `run ${run}: ${sessionId} is not implicit`);
+        assert.equal(session.status, 'committed', `run ${run}: ${sessionId} is ${session.status}, expected committed after shutdown`);
+        // No entry points at a session this run did not create.
+        assert.ok(allSessions.some((row) => row.sessionId === sessionId), `run ${run}: ${sessionId} does not exist`);
+      }
+      // Survivor count (diagnostic per D-RL4): 3 workers + the test's own boot row.
+      context.diagnostic(`run ${run}: ${allSessions.length} sessions survived`);
+      assert.equal(allSessions.length, 4, `run ${run}: the run created ${allSessions.length} sessions, expected 4 (3 workers + this kernel's boot row)`);
+
+      await h.dispose();
+    }
+  });
+
 
   it('R3 history storage is protected from ordinary writers', async (context) => {
     const h = await open(context);

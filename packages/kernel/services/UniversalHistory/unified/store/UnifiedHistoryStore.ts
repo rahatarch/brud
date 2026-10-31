@@ -13,7 +13,8 @@ import type { SQLInputValue } from 'node:sqlite';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { IStorageDriver } from '../../../../drivers/contracts/index.js';
-import { assertDigest, blobRef, readBlob, sha256Hex, writeBlob } from './cas.js';
+import { assertDigest, blobRef, readBlob, sha256Hex, sweepCas, writeBlob } from './cas.js';
+import type { CasSweepReport } from './cas.js';
 import { isReadOnlyStorageError } from './classify.js';
 import {
   UnifiedBlobIntegrityError,
@@ -25,8 +26,10 @@ import {
   UnifiedStoreConflictError,
 } from './errors.js';
 import { UNIFIED_SCHEMA_VERSION, applyMigrations, configureConnection, readSchemaVersion } from './schema.js';
+import { HISTORY_CLAIM_KEY } from './types.js';
 import type {
   AppendOptions,
+  ClaimLiveness,
   CheckpointRow,
   ContentRef,
   CreateSessionInput,
@@ -35,11 +38,14 @@ import type {
   EntryQuery,
   EntryRow,
   EntryTypeRow,
+  HistoryClaimInput,
   HistoryDegradedReason,
   HistoryStoreWarning,
   ImportRow,
   PersistedSessionStatus,
   PreparedEntry,
+  RetentionPolicy,
+  RetentionReport,
   ReversalRow,
   SessionPage,
   SessionQuery,
@@ -99,6 +105,89 @@ function clampLimit(limit: number | undefined): number {
 
 function parseJson(text: unknown): unknown {
   return typeof text === 'string' ? JSON.parse(text) : null;
+}
+
+/** A session row that currently holds a claim (any `alive`/`releasedAt`). */
+interface HeldClaim {
+  readonly sessionId: string;
+  readonly pid: number;
+  readonly helperPid: number | null;
+}
+
+/**
+ * True when the process behind a claim is provably gone. A named helper must
+ * also be gone: while the helper lives, the claimer's kernel may still be
+ * running under a reused pid (RL §3.3, rung 2).
+ */
+function claimOwnerGone(row: HeldClaim): boolean {
+  if (row.helperPid !== null && processAlive(row.helperPid)) {
+    return false;
+  }
+  return !processAlive(row.pid);
+}
+
+/**
+ * Claims still marked `alive = 1` with no release marker, read with the same
+ * structural guards the retention statements use. `pid` is `null` when the
+ * object is malformed; such a claim is never treated as live.
+ */
+function heldClaims(db: DatabaseSync): HeldClaim[] {
+  const claim = `'$.${HISTORY_CLAIM_KEY}'`;
+  const rows = db.prepare(`SELECT session_id AS sessionId,
+                                  json_extract(metadata, ${claim} || '.pid') AS pid,
+                                  json_extract(metadata, ${claim} || '.helperPid') AS helperPid
+                             FROM sessions
+                            WHERE json_type(metadata, ${claim}) = 'object'
+                              AND json_type(metadata, ${claim} || '.alive') = 'integer'
+                              AND json_extract(metadata, ${claim} || '.alive') = 1
+                              AND json_type(metadata, ${claim} || '.releasedAt') IS 'null'`)
+    .all() as { sessionId: string; pid: number | null; helperPid: number | null }[];
+  return rows.map((row) => ({
+    sessionId: row.sessionId,
+    pid: row.pid ?? Number.NaN,
+    helperPid: typeof row.helperPid === 'number' ? row.helperPid : null,
+  }));
+}
+
+/** True while `pid` names a process that still exists (never a guessed death). */
+function processAlive(pid: number): boolean {
+  if (!Number.isSafeInteger(pid) || pid <= 0) {
+    return false;
+  }
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    // EPERM: the process exists but belongs to someone else.
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+/**
+ * Liveness condition for the claim's owning pid, inside the deleting
+ * statement (RL §3.3). Without a reducer a claim is honoured as written.
+ */
+/**
+ * The caller's metadata with a published claim merged in, as the `INSERT`
+ * argument (RL §3.1/§3.2). The claim object is the only thing this function
+ * adds; every other key is preserved.
+ */
+function metadataWithClaim(metadata: unknown, claim: HistoryClaimInput | undefined): string | null {
+  if (claim === undefined) {
+    return metadata === undefined ? null : JSON.stringify(metadata);
+  }
+  const base = metadata !== null && typeof metadata === 'object' && !Array.isArray(metadata)
+    ? { ...(metadata as Record<string, unknown>) }
+    : {};
+  base[HISTORY_CLAIM_KEY] = {
+    pid: claim.pid,
+    nonce: claim.nonce,
+    createdAt: claim.createdAt,
+    ...(claim.helperPid === undefined ? {} : { helperPid: claim.helperPid }),
+    alive: 1,
+    releasedAt: null,
+  };
+  return JSON.stringify(base);
 }
 
 function toEntryType(row: Row): EntryTypeRow {
@@ -179,6 +268,9 @@ export class UnifiedHistoryStore {
 
   private readonly now: () => number;
 
+  /** Liveness the reducer should use; set by {@link configureClaimLiveness}. */
+  private liveness: ClaimLiveness | undefined;
+
   constructor(private readonly options: UnifiedHistoryStoreOptions) {
     this.inlineThreshold = options.inlineThresholdBytes ?? UNIFIED_INLINE_LIMIT_BYTES;
     this.now = options.now ?? Date.now;
@@ -213,6 +305,7 @@ export class UnifiedHistoryStore {
       applyMigrations(db, this.now());
       this.db = db;
       this.opened = { mode: 'writable' };
+      this.configureClaimLiveness(this.liveness);
       return this.opened;
     }
 
@@ -228,6 +321,7 @@ export class UnifiedHistoryStore {
       applyMigrations(candidate, this.now());
       this.db = candidate;
       this.opened = { mode: 'writable' };
+      this.configureClaimLiveness(this.liveness);
       return this.opened;
     } catch (error) {
       try {
@@ -294,7 +388,13 @@ export class UnifiedHistoryStore {
 
   // ── sessions ────────────────────────────────────────────────────────
 
-  /** Creates a session, allocating `BR-YYYYMMDD-NNN` inside the same transaction. */
+  /**
+   * Creates a session, allocating `BR-YYYYMMDD-NNN` inside the same transaction.
+   *
+   * An `input.claim` is merged into the row's metadata **by the same `INSERT`**
+   * (RL §3.2), so the row and its liveness bit become visible in one commit and
+   * no reader can ever observe a claimed row without its claim.
+   */
   createSession(input: CreateSessionInput): SessionRow {
     return this.mutate(() => this.immediate(() => {
       const db = this.writer();
@@ -315,7 +415,7 @@ export class UnifiedHistoryStore {
           input.prompt,
           input.origin ?? 'human',
           input.implicit === true ? 1 : 0,
-          input.metadata === undefined ? null : JSON.stringify(input.metadata),
+          metadataWithClaim(input.metadata, input.claim),
         );
       return toSession(db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId) as Row);
     }));
@@ -426,10 +526,14 @@ export class UnifiedHistoryStore {
         .prepare('SELECT size, inline_data FROM contents WHERE sha256 = ?')
         .get(sha256) as Row | undefined;
       if (existing !== undefined) {
+        // Reuse refreshes the row's timestamp ("last stored"), so garbage
+        // collection, which only removes rows past a grace period inside one
+        // write transaction, can never remove content that was just reused.
+        this.writer().prepare('UPDATE contents SET created_at = ? WHERE sha256 = ?').run(this.now(), sha256);
         return { sha256, size: existing.size as number, stored: existing.inline_data === null ? 'blob' : 'inline' };
       }
       if (bytes.byteLength > this.inlineThreshold) {
-        await writeBlob(this.options.driver, this.options.historyRoot, sha256, bytes);
+        await writeBlob(this.options.driver, this.options.historyRoot, sha256, bytes, { fresh: true });
         this.writer()
           .prepare('INSERT OR IGNORE INTO contents (sha256, size, inline_data, blob_ref, created_at) VALUES (?, ?, NULL, ?, ?)')
           .run(sha256, bytes.byteLength, blobRef(sha256), this.now());
@@ -567,6 +671,332 @@ export class UnifiedHistoryStore {
     }
     const bytes = await this.getContent(row.payloadSha256 as string);
     return JSON.parse(new TextDecoder().decode(bytes));
+  }
+
+  // ── retention and garbage collection (D-15 U-8) ─────────────────────
+
+  /**
+   * Removes history older than the policy cutoff, in bounded batches.
+   *
+   * File history is cut only as a contiguous oldest prefix below a cut `S`:
+   * the newest `minUndoEntries` file entries, file entries newer than the
+   * cutoff, and the redo tail above the undo cursor are never removed, and an
+   * explicit session is removed only as a whole (closed, older than the
+   * cutoff, entirely below `S`). `S` is recomputed inside every batch
+   * transaction, so a concurrent writer or undo in another process cannot
+   * move it under a running batch. Active sessions are never touched.
+   */
+  applyRetention(policy: RetentionPolicy): RetentionReport {
+    return this.mutate(() => {
+      const batchSize = Math.max(1, Math.trunc(policy.batchSize ?? 2_000));
+      const budget = Math.max(0, Math.trunc(policy.maxEntriesPerRun ?? 50_000));
+      let fileEntriesRemoved = 0;
+      let entriesRemoved = 0;
+      let sessionsRemoved = 0;
+      let cut = 0;
+      let truncated = false;
+
+      for (;;) {
+        if (fileEntriesRemoved >= budget) {
+          truncated = true;
+          break;
+        }
+        const step = this.immediate(() => {
+          const db = this.writer();
+          cut = this.retentionCutIn(db, policy);
+          const rows = db.prepare(`SELECT e.seq AS seq, e.session_id AS sessionId, s.implicit AS implicit
+                                     FROM entries e JOIN sessions s ON s.session_id = e.session_id
+                                    WHERE e.namespace = 'brud.core' AND e.type = 'file' AND e.seq < ?
+                                    ORDER BY e.seq LIMIT ?`)
+            .all(cut, Math.min(batchSize, budget - fileEntriesRemoved)) as { seq: number; sessionId: string; implicit: number }[];
+          let files = 0;
+          let entries = 0;
+          let sessions = 0;
+          const removedSessions = new Set<string>();
+          for (const row of rows) {
+            if (row.implicit === 1) {
+              entries += Number(db.prepare('DELETE FROM entries WHERE seq = ?').run(row.seq).changes);
+              files += 1;
+            } else if (!removedSessions.has(row.sessionId)) {
+              removedSessions.add(row.sessionId);
+              const counted = db.prepare("SELECT COUNT(*) AS n FROM entries WHERE session_id = ? AND namespace = 'brud.core' AND type = 'file'")
+                .get(row.sessionId) as { n: number };
+              files += counted.n;
+              entries += this.deleteSessionIn(db, row.sessionId);
+              sessions += 1;
+            }
+          }
+          return { files, entries, sessions, done: rows.length === 0 };
+        });
+        fileEntriesRemoved += step.files;
+        entriesRemoved += step.entries;
+        sessionsRemoved += step.sessions;
+        if (step.done) {
+          break;
+        }
+      }
+
+      const tail = this.immediate(() => {
+        const db = this.writer();
+        let entries = 0;
+        let sessions = 0;
+        // Inside the one tail transaction (RL F-2): release claims whose owner
+        // is provably gone, so the eligibility reads below see the result.
+        this.reduceClaimsIn(db, policy.claimLiveness ?? this.liveness);
+        // Closed explicit sessions past the cutoff without file history.
+        const empty = db.prepare(`SELECT session_id AS sessionId FROM sessions s
+                                   WHERE s.implicit = 0 AND s.status <> 'active'
+                                     AND COALESCE(s.closed_at, s.created_at) < ?
+                                     AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.session_id = s.session_id
+                                                       AND e.namespace = 'brud.core' AND e.type = 'file')
+                                   LIMIT ?`).all(policy.cutoffMs, batchSize) as { sessionId: string }[];
+        for (const row of empty) {
+          entries += this.deleteSessionIn(db, row.sessionId);
+          sessions += 1;
+        }
+        // Checkpoints whose rollback would need removed file history. A session
+        // a live process owns keeps its checkpoints (INV-RL-CK).
+        const lowest = db.prepare("SELECT MIN(seq) AS seq FROM entries WHERE namespace = 'brud.core' AND type = 'file'")
+          .get() as { seq: number | null };
+        // The session is named explicitly: this statement has no `FROM
+        // sessions` for the predicate's alias to refer to.
+        const claimed = this.claimedByLiveProcess('cs');
+        const checkpoints = lowest.seq === null
+          ? 0
+          : Number(db.prepare(`DELETE FROM checkpoints
+                                WHERE seq_offset < ?
+                                  AND NOT EXISTS (SELECT 1 FROM sessions AS cs
+                                                   WHERE cs.session_id = checkpoints.session_id
+                                                     AND ${claimed})`)
+            .run(lowest.seq - 1).changes);
+        // Undo/redo/checkpoint reversal logs past the cutoff, then emptied
+        // implicit sessions nobody is recording into. A live owner's reversals
+        // survive (INV-RL-RV).
+        const keep = policy.keepSessionId ?? '';
+        const reversals = Number(db.prepare(`DELETE FROM reversals
+                                              WHERE executed_at < ?
+                                                AND (session_id IS NULL OR session_id IN
+                                                     (SELECT session_id FROM sessions
+                                                       WHERE implicit = 1 AND session_id <> ?
+                                                         AND NOT ${this.claimedByLiveProcess()}))`)
+          .run(policy.cutoffMs, keep).changes);
+        sessions += Number(db.prepare(`DELETE FROM sessions
+                                        WHERE implicit = 1 AND session_id <> ?
+                                          AND NOT EXISTS (SELECT 1 FROM entries e WHERE e.session_id = sessions.session_id)
+                                          AND NOT EXISTS (SELECT 1 FROM checkpoints c WHERE c.session_id = sessions.session_id)
+                                          AND NOT EXISTS (SELECT 1 FROM reversals r WHERE r.session_id = sessions.session_id)
+                                          AND NOT ${this.claimedByLiveProcess()}`)
+          .run(keep).changes);
+        return { entries, sessions, checkpoints, reversals, more: empty.length === batchSize };
+      });
+
+      return {
+        fileEntriesRemoved,
+        entriesRemoved: entriesRemoved + tail.entries,
+        sessionsRemoved: sessionsRemoved + tail.sessions,
+        checkpointsRemoved: tail.checkpoints,
+        reversalsRemoved: tail.reversals,
+        cut,
+        truncated: truncated || tail.more,
+      };
+    });
+  }
+
+  /**
+   * Removes `contents` rows that nothing references and that are older than
+   * the grace period, in one write transaction (D-15 U-8).
+   *
+   * References are `entries.payload_sha256` plus every 64-hex token inside
+   * entry payloads, inverse payloads, session metadata and checkpoint
+   * metadata. The scan may keep more than needed; it never keeps less.
+   */
+  collectGarbage(options: { readonly now: number; readonly graceMs: number; readonly maxRows?: number }): { readonly contentsRemoved: number; readonly truncated: boolean } {
+    return this.mutate(() => this.immediate(() => {
+      const db = this.writer();
+      const maxRows = Math.max(0, Math.trunc(options.maxRows ?? 50_000));
+      db.exec('CREATE TEMP TABLE IF NOT EXISTS gc_refs (sha TEXT PRIMARY KEY) STRICT');
+      db.exec('DELETE FROM gc_refs');
+      try {
+        db.exec('INSERT OR IGNORE INTO gc_refs (sha) SELECT payload_sha256 FROM entries WHERE payload_sha256 IS NOT NULL');
+        const insert = db.prepare('INSERT OR IGNORE INTO gc_refs (sha) VALUES (?)');
+        const collect = (text: unknown): void => {
+          if (typeof text !== 'string') {
+            return;
+          }
+          for (const match of text.matchAll(/[0-9a-f]{64}/gu)) {
+            insert.run(match[0]);
+          }
+        };
+        let after = 0;
+        for (;;) {
+          const rows = db.prepare('SELECT seq, payload, inverse_payload FROM entries WHERE seq > ? ORDER BY seq LIMIT 5000')
+            .all(after) as { seq: number; payload: string | null; inverse_payload: string | null }[];
+          if (rows.length === 0) {
+            break;
+          }
+          for (const row of rows) {
+            collect(row.payload);
+            collect(row.inverse_payload);
+          }
+          after = (rows[rows.length - 1] as { seq: number }).seq;
+        }
+        for (const row of db.prepare('SELECT metadata FROM sessions WHERE metadata IS NOT NULL').all() as { metadata: string }[]) {
+          collect(row.metadata);
+        }
+        for (const row of db.prepare('SELECT metadata FROM checkpoints WHERE metadata IS NOT NULL').all() as { metadata: string }[]) {
+          collect(row.metadata);
+        }
+        const candidates = db.prepare(`SELECT sha256 FROM contents
+                                        WHERE created_at < ? AND sha256 NOT IN (SELECT sha FROM gc_refs)
+                                        LIMIT ?`)
+          .all(options.now - options.graceMs, maxRows) as { sha256: string }[];
+        const remove = db.prepare('DELETE FROM contents WHERE sha256 = ?');
+        for (const row of candidates) {
+          remove.run(row.sha256);
+        }
+        return { contentsRemoved: candidates.length, truncated: maxRows > 0 && candidates.length === maxRows };
+      } finally {
+        db.exec('DELETE FROM gc_refs');
+      }
+    }));
+  }
+
+  /** Removes `cas/` files without a `contents` row and stale staging files. */
+  async sweepBlobs(options: { readonly now: number; readonly graceMs: number; readonly maxRemovals?: number }): Promise<CasSweepReport> {
+    return this.mutateAsync(async () => sweepCas(this.options.driver, this.options.historyRoot, {
+      now: options.now,
+      graceMs: options.graceMs,
+      maxRemovals: Math.max(0, Math.trunc(options.maxRemovals ?? 10_000)),
+      isReferenced: (digest) => this.writer().prepare('SELECT 1 AS present FROM contents WHERE sha256 = ?').get(digest) !== undefined,
+    }));
+  }
+
+  // ── live-process claims (U-8 corrective, RL) ────────────────────────
+
+  /**
+   * Installs the reducer for claims owned by other processes (RL §3.3). A
+   * function liveness is registered on this store's own connection as
+   * `uh_claim_alive(pid)`, so eligibility is evaluated by the deleting
+   * statement itself and never by a read before its transaction (F-2).
+   */
+  configureClaimLiveness(liveness: ClaimLiveness | undefined): void {
+    this.liveness = liveness;
+    if (typeof liveness === 'function' && this.db !== undefined) {
+      const alive = liveness;
+      this.db.function('uh_claim_alive', { deterministic: false }, (pid: unknown) => (alive(Number(pid)) ? 1 : 0));
+    }
+  }
+
+  /**
+   * Releases the claim on `sessionId` (RL §3.4). Called by every close path
+   * with `releasedBy: 'close'`; one-way (`alive` 1 → 0), idempotent, and
+   * synchronous on the owner's own connection.
+   */
+  releaseClaim(sessionId: string): void {
+    this.mutate(() => {
+      this.immediate(() => {
+        this.releaseClaimIn(this.writer(), sessionId, 'close');
+      });
+    });
+  }
+
+  /**
+   * Boot sweep (RL §3.3, rung 3): releases claims whose owning process provably
+   * does not exist. Idempotent; a claim whose owner is alive is never touched.
+   */
+  reclaimOrphanedClaims(now: number): number {
+    return this.mutate(() => this.immediate(() => {
+      let released = 0;
+      for (const row of heldClaims(this.writer())) {
+        if (claimOwnerGone(row)) {
+          this.releaseClaimIn(this.writer(), row.sessionId, 'reducer', now);
+          released += 1;
+        }
+      }
+      return released;
+    }));
+  }
+
+  /**
+   * SQL condition that is true while the session row behind the `sessions`
+   * alias carries a claimed, live claim (RL §2.2).
+   *
+   * Five structural guards; a malformed object, a released claim, a non-1
+   * `alive` or a missing object all evaluate to *unclaimed* (reclaimable).
+   * Liveness of the owner is already folded into `alive` by `reduceClaimsIn`.
+   * `json_type` here returns `NULL` — not the string `'null'` — for a missing
+   * path, which is why the guards are `IS` comparisons.
+   */
+  private claimedByLiveProcess(table = 'sessions'): string {
+    const claim = `'$.${HISTORY_CLAIM_KEY}'`;
+    return `(json_type(${table}.metadata, ${claim}) = 'object'
+         AND json_type(${table}.metadata, ${claim} || '.alive') = 'integer'
+         AND json_extract(${table}.metadata, ${claim} || '.alive') = 1
+         AND json_type(${table}.metadata, ${claim} || '.releasedAt') IS 'null')`;
+  }
+
+  /**
+   * Flips `alive` 1 → 0 for claims whose owner is provably gone (RL §3.3 B),
+   * inside the caller's transaction, before the statements that read it.
+   */
+  private reduceClaimsIn(db: DatabaseSync, liveness: ClaimLiveness | undefined): void {
+    if (liveness === undefined) {
+      return;
+    }
+    for (const row of heldClaims(db)) {
+      if (claimOwnerGone(row)) {
+        this.releaseClaimIn(db, row.sessionId, 'reducer');
+      }
+    }
+  }
+
+  /** Writes the release marker on one row. Transaction-local (the caller owns the transaction). */
+  private releaseClaimIn(db: DatabaseSync, sessionId: string, releasedBy: 'close' | 'reducer', now = Date.now()): void {
+    const claim = `'$.${HISTORY_CLAIM_KEY}'`;
+    db.prepare(`UPDATE sessions
+                   SET metadata = json_set(metadata,
+                         ${claim} || '.alive', 0,
+                         ${claim} || '.releasedAt', ?,
+                         ${claim} || '.releasedBy', ?)
+                 WHERE session_id = ?
+                   AND json_type(metadata, ${claim}) = 'object'`)
+      .run(now, releasedBy, sessionId);
+  }
+
+  /** Lowest file seq retention may not cross (see {@link applyRetention}). */
+  private retentionCutIn(db: DatabaseSync, policy: RetentionPolicy): number {
+    const fileWhere = "namespace = 'brud.core' AND type = 'file'";
+    const minUndo = Math.max(1, Math.trunc(policy.minUndoEntries));
+    const floorRow = db.prepare(`SELECT seq FROM entries WHERE ${fileWhere} ORDER BY seq DESC LIMIT 1 OFFSET ?`)
+      .get(minUndo - 1) as { seq: number } | undefined;
+    if (floorRow === undefined) {
+      return 0;
+    }
+    const ageRow = db.prepare(`SELECT MIN(seq) AS seq FROM entries WHERE ${fileWhere} AND created_at >= ?`)
+      .get(policy.cutoffMs) as { seq: number | null };
+    let cut = Math.min(floorRow.seq, ageRow.seq ?? Number.MAX_SAFE_INTEGER, this.cursorIn(db) + 1);
+    const blocker = db.prepare(`SELECT MIN(e.seq) AS first FROM entries e JOIN sessions s ON s.session_id = e.session_id
+                                 WHERE e.namespace = 'brud.core' AND e.type = 'file' AND e.seq < ? AND s.implicit = 0
+                                   AND (s.status = 'active'
+                                        OR COALESCE(s.closed_at, s.created_at) >= ?
+                                        OR EXISTS (SELECT 1 FROM entries x WHERE x.session_id = s.session_id
+                                                     AND x.namespace = 'brud.core' AND x.type = 'file' AND x.seq >= ?))`);
+    for (;;) {
+      const row = blocker.get(cut, policy.cutoffMs, cut) as { first: number | null };
+      if (row.first === null || row.first >= cut) {
+        return cut;
+      }
+      cut = row.first;
+    }
+  }
+
+  /** Deletes one session with its entries, checkpoints and reversals. */
+  private deleteSessionIn(db: DatabaseSync, sessionId: string): number {
+    db.prepare('DELETE FROM reversals WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM checkpoints WHERE session_id = ?').run(sessionId);
+    const entries = Number(db.prepare('DELETE FROM entries WHERE session_id = ?').run(sessionId).changes);
+    db.prepare('DELETE FROM sessions WHERE session_id = ?').run(sessionId);
+    return entries;
   }
 
   // ── undo cursor ─────────────────────────────────────────────────────

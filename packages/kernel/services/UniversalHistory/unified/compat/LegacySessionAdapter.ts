@@ -72,6 +72,7 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
   constructor(
     private readonly service: UnifiedHistoryService,
     private readonly engine: ReversalEngine,
+    private readonly afterBoot?: () => Promise<void>,
   ) {
     UNIFIED_SERVICES.set(this, service);
   }
@@ -202,6 +203,11 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
   /** Lifecycle hooks used by the unified descriptor. */
   async initialize(): Promise<void> {
     await this.service.start();
+  }
+
+  /** Runs after the kernel is RUNNING: retention needs the settings snapshot (D-15 U-8). */
+  async onRunning(): Promise<void> {
+    await this.afterBoot?.();
   }
 
   async dispose(): Promise<void> {

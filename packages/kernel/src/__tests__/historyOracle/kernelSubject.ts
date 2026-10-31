@@ -215,6 +215,7 @@ export function createKernelSubject(): HistoryOracleSubjectFactory {
         });
 
         return entries.map((entry) => ({
+          sessionId: entry.sessionId,
           path: entry.targetPath,
           operation: entry.operationKind,
           previousHash: entry.previousHash,

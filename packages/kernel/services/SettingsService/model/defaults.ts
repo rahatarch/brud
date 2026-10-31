@@ -36,6 +36,18 @@ export const DEFAULT_READ_MAX_BATCH_FILES = 100;
 /** Default aggregate byte budget for a read operation. */
 export const DEFAULT_READ_MAX_AGGREGATE_BYTES = 8 * 1024 * 1024;
 
+/** Default history retention window in days (D-15 U-8, S-D4). */
+export const DEFAULT_HISTORY_RETENTION_DAYS = 90;
+
+/** Highest accepted history retention window in days (kernel ceiling). */
+export const HISTORY_RETENTION_DAYS_MAX = 3_650;
+
+/** Default number of newest file entries always kept for undo. */
+export const DEFAULT_HISTORY_MIN_UNDO_ENTRIES = 10_000;
+
+/** Highest accepted undo floor (kernel ceiling). */
+export const HISTORY_MIN_UNDO_ENTRIES_MAX = 1_000_000;
+
 /** Supported plugin rollout modes. */
 export const PLUGIN_ROLLOUT_MODES: readonly PluginRolloutMode[] = deepFreeze([
   'off',
@@ -75,6 +87,8 @@ export function createSettingsSnapshot(values: SettingsValues): SettingsSnapshot
     readMaxBatchFiles: values.readMaxBatchFiles,
     readMaxAggregateBytes: values.readMaxAggregateBytes,
     plugins: { ...values.plugins },
+    historyRetentionDays: values.historyRetentionDays,
+    historyMinUndoEntries: values.historyMinUndoEntries,
   });
 }
 
@@ -92,6 +106,8 @@ export const DEFAULT_SETTINGS: SettingsSnapshot = createSettingsSnapshot({
   readMaxBatchFiles: DEFAULT_READ_MAX_BATCH_FILES,
   readMaxAggregateBytes: DEFAULT_READ_MAX_AGGREGATE_BYTES,
   plugins: {},
+  historyRetentionDays: DEFAULT_HISTORY_RETENTION_DAYS,
+  historyMinUndoEntries: DEFAULT_HISTORY_MIN_UNDO_ENTRIES,
 });
 
 /** Result of sanitizing one scope document. */
@@ -261,6 +277,8 @@ export function sanitizeSettingsDocument(
     readMaxBatchFiles?: number;
     readMaxAggregateBytes?: number;
     plugins?: Readonly<Record<string, PluginRolloutMode>>;
+    historyRetentionDays?: number;
+    historyMinUndoEntries?: number;
   } = {};
 
   const schemaVersion = document.schemaVersion;
@@ -332,6 +350,32 @@ export function sanitizeSettingsDocument(
 
   if (plugins !== undefined) {
     values.plugins = plugins;
+  }
+
+  // Values below the default parse here; the lattice then ignores them as a
+  // retention loosening, so the warning names the right cause.
+  const retentionDays = readInteger(
+    document,
+    'historyRetentionDays',
+    scope,
+    { min: 1, max: HISTORY_RETENTION_DAYS_MAX },
+    warnings,
+  );
+
+  if (retentionDays !== undefined) {
+    values.historyRetentionDays = retentionDays;
+  }
+
+  const minUndoEntries = readInteger(
+    document,
+    'historyMinUndoEntries',
+    scope,
+    { min: 1, max: HISTORY_MIN_UNDO_ENTRIES_MAX },
+    warnings,
+  );
+
+  if (minUndoEntries !== undefined) {
+    values.historyMinUndoEntries = minUndoEntries;
   }
 
   return { values, warnings };

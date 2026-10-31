@@ -94,6 +94,8 @@ describe('PolicyGateEngine — frozen ingestion', () => {
       readMaxBatchFiles: 50,
       readMaxAggregateBytes: 1024,
       plugins: { 'x.plugin': 'active' },
+      historyRetentionDays: 90,
+      historyMinUndoEntries: 10_000,
     };
 
     const ingested = toValidationPolicy(snapshot);

@@ -136,6 +136,14 @@ function mergePatch(
     next.plugins = { ...readPluginMap(existing.plugins), ...patch.plugins };
   }
 
+  if (patch.historyRetentionDays !== undefined) {
+    next.historyRetentionDays = patch.historyRetentionDays;
+  }
+
+  if (patch.historyMinUndoEntries !== undefined) {
+    next.historyMinUndoEntries = patch.historyMinUndoEntries;
+  }
+
   if (next.schemaVersion === undefined) {
     next.schemaVersion = SETTINGS_SCHEMA_VERSION;
   }
@@ -525,6 +533,8 @@ export class SettingsService implements ISettingsService, IServiceLifecycle {
       readMaxBatchFiles: candidate.readMaxBatchFiles,
       readMaxAggregateBytes: candidate.readMaxAggregateBytes,
       plugins: candidate.plugins,
+      historyRetentionDays: candidate.historyRetentionDays,
+      historyMinUndoEntries: candidate.historyMinUndoEntries,
     };
     let loosened = false;
 

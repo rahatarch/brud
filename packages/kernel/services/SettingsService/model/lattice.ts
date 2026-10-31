@@ -14,8 +14,24 @@ import {
   READ_MAX_AGGREGATE_BYTES_MIN,
   READ_MAX_BATCH_FILES_MAX,
   READ_MAX_BATCH_FILES_MIN,
+  HISTORY_MIN_UNDO_ENTRIES_MAX,
+  HISTORY_RETENTION_DAYS_MAX,
   createSettingsSnapshot,
 } from './defaults.js';
+
+/**
+ * Retention keys. Their lattice is reversed: keeping more history is safer,
+ * so the join (maximum) wins and any value below the default is a loosening.
+ */
+export const RETENTION_KEYS = ['historyRetentionDays', 'historyMinUndoEntries'] as const;
+
+/** One of the retention keys. */
+export type RetentionKey = (typeof RETENTION_KEYS)[number];
+
+const RETENTION_CEILINGS: Readonly<Record<RetentionKey, number>> = {
+  historyRetentionDays: HISTORY_RETENTION_DAYS_MAX,
+  historyMinUndoEntries: HISTORY_MIN_UNDO_ENTRIES_MAX,
+};
 
 /** Policy keys that follow the monotonic safety lattice. */
 export const SAFETY_KEYS = [
@@ -67,6 +83,8 @@ interface EffectiveSettings {
   readMaxBatchFiles: number;
   readMaxAggregateBytes: number;
   plugins: Record<string, PluginRolloutMode>;
+  historyRetentionDays: number;
+  historyMinUndoEntries: number;
 }
 
 function clampGovernor(value: number, fallback: number, min: number, max: number): number {
@@ -188,7 +206,16 @@ export function evaluateLattice(input: LatticeInput = {}): LatticeResult {
       workspace.readMaxAggregateBytes,
     ),
     plugins: {},
+    historyRetentionDays: defaults.historyRetentionDays,
+    historyMinUndoEntries: defaults.historyMinUndoEntries,
   };
+
+  for (const key of RETENTION_KEYS) {
+    effective[key] = joinRetention(key, defaults[key], [
+      ['user', user[key]],
+      ['workspace', workspace[key]],
+    ], warnings);
+  }
 
   for (const key of SAFETY_KEYS) {
     const candidate = workspace[key];
@@ -314,6 +341,18 @@ export function applyLatticeToWorkspacePatch(
     }
   }
 
+  for (const key of RETENTION_KEYS) {
+    const candidate = next[key];
+
+    if (candidate !== undefined && candidate < defaults[key]) {
+      warnings.push(looseningWarning(
+        key,
+        `workspace value ${candidate} for "${key}" was ignored because history retention can only be raised (minimum ${defaults[key]})`,
+      ));
+      delete next[key];
+    }
+  }
+
   if (next.toolAllowList !== undefined) {
     const retained: Record<string, boolean> = {};
 
@@ -379,4 +418,43 @@ function meetGovernor(
   );
 
   return defined.length === 0 ? defaultValue : Math.min(...defined);
+}
+
+/**
+ * Join operator for the retention keys: the largest layer value wins, capped
+ * at the kernel ceiling. A layer value below the default would shorten
+ * retention, so it is ignored and reported as a loosening.
+ *
+ * @param key - Retention key.
+ * @param defaultValue - Base policy value (the floor).
+ * @param layers - Scope and value of each layer that may raise the floor.
+ * @param warnings - Sink for loosening warnings.
+ * @returns The effective value.
+ */
+function joinRetention(
+  key: RetentionKey,
+  defaultValue: number,
+  layers: readonly (readonly [ConfigScope, number | undefined])[],
+  warnings: SettingsWarning[],
+): number {
+  let effective = defaultValue;
+
+  for (const [scope, candidate] of layers) {
+    if (candidate === undefined || !Number.isFinite(candidate)) {
+      continue;
+    }
+
+    if (candidate < defaultValue) {
+      warnings.push(looseningWarning(
+        key,
+        `${scope} value ${candidate} for "${key}" was ignored because history retention can only be raised (minimum ${defaultValue})`,
+        scope,
+      ));
+      continue;
+    }
+
+    effective = Math.max(effective, Math.floor(candidate));
+  }
+
+  return Math.min(RETENTION_CEILINGS[key], effective);
 }

@@ -57,6 +57,8 @@ export interface OracleReversalReceipt {
 export type OracleFileOperation = 'write' | 'unlink' | 'mkdir';
 
 export interface OracleFileEntry {
+  /** Session the entry was recorded into (D-15 implicit-attribution proof). */
+  readonly sessionId?: string;
   readonly path: string;
   readonly operation: OracleFileOperation;
   /** '' when the file did not exist before the mutation. */

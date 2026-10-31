@@ -30,6 +30,16 @@ export interface SettingsSnapshot {
   readonly readMaxBatchFiles: number;
   readonly readMaxAggregateBytes: number;
   readonly plugins: Readonly<Record<string, PluginRolloutMode>>;
+  /**
+   * Days of history kept before retention may remove it (D-15 U-8). Layers can
+   * only raise it: the effective value is the maximum across layers, capped.
+   */
+  readonly historyRetentionDays: number;
+  /**
+   * Newest file entries always kept for undo, whatever their age (D-15 U-8).
+   * Layers can only raise it, like {@link historyRetentionDays}.
+   */
+  readonly historyMinUndoEntries: number;
 }
 
 /** Machine-readable classification of a non-fatal settings condition. */

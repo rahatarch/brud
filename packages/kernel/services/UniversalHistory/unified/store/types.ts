@@ -43,12 +43,46 @@ export interface SessionRow {
   readonly metadata: unknown;
 }
 
+/**
+ * Liveness of the process publishing an implicit session (U-8 corrective, RL).
+ *
+ * Carried in `sessions.metadata` under `$.brudHistoryClaim`: no schema change
+ * (D-RL1), and the retention predicate reads only `alive`/`releasedAt`
+ * structurally (never as text). `nonce` is 32 hex characters, never 64, so the
+ * GC's 64-hex content-reference scan never picks it up.
+ */
+export interface HistoryClaimInput {
+  /** Owning process id. A hint for the reducer; never matched by the predicate. */
+  readonly pid: number;
+  /** Random 32-hex identity of this claim. */
+  readonly nonce: string;
+  /** Publication time (diagnostic; eligibility never uses an age rule). */
+  readonly createdAt: number;
+  /**
+   * Pid of this kernel's chained liveness helper (RL §3.3, rung 2). Absent when
+   * the helper could not be spawned; the claim is then judged by `pid` alone.
+   */
+  readonly helperPid?: number;
+}
+
+/** Marker written to and removed from a row's claim. */
+export const HISTORY_CLAIM_KEY = 'brudHistoryClaim';
+
+/** How the deleting process decides that a claim's owner is gone. */
+export type ClaimLiveness =
+  /** Liveness is evaluated in SQL by the connection's own `uh_claim_alive(pid)` function. */
+  | 'native'
+  /** Liveness is supplied by the caller (the service's helper map). */
+  | ((pid: number) => boolean);
+
 export interface CreateSessionInput {
   readonly prompt: string;
   readonly origin?: string;
   readonly implicit?: boolean;
   readonly metadata?: unknown;
   readonly now: number;
+  /** Claim published atomically by the same `INSERT` (implicit rows only). */
+  readonly claim?: HistoryClaimInput;
 }
 
 export interface SessionQuery {
@@ -160,3 +194,36 @@ export interface ImportRow {
   readonly importedAt: number;
   readonly rows: number;
 }
+
+/** Retention policy for {@link UnifiedHistoryStore.applyRetention} (D-15 U-8). */
+export interface RetentionPolicy {
+  /** Epoch ms; history older than this may be removed. */
+  readonly cutoffMs: number;
+  /** Newest file entries always kept for undo. */
+  readonly minUndoEntries: number;
+  /** Implicit session of the running boot; its row is never removed. */
+  readonly keepSessionId?: string;
+  /** Most file entries removed per run (default 50,000). */
+  readonly maxEntriesPerRun?: number;
+  /** File entries per transaction (default 2,000). */
+  readonly batchSize?: number;
+  /**
+   * Reducer for claims owned by other processes (RL §3.3). Absent: a claim is
+   * honoured as written, so a killed owner's row waits for its own next boot.
+   */
+  readonly claimLiveness?: ClaimLiveness;
+}
+
+/** Outcome of one retention run. */
+export interface RetentionReport {
+  readonly fileEntriesRemoved: number;
+  readonly entriesRemoved: number;
+  readonly sessionsRemoved: number;
+  readonly checkpointsRemoved: number;
+  readonly reversalsRemoved: number;
+  /** File entries below this seq were eligible in the last batch. */
+  readonly cut: number;
+  /** `true` when the per-run budget left eligible history for the next run. */
+  readonly truncated: boolean;
+}
+

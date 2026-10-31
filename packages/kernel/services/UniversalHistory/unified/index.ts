@@ -13,6 +13,7 @@ export type { UnifiedHistoryDescriptorOptions } from './descriptor/unifiedHistor
 export {
   BUILTIN_ENTRY_TYPES,
   CORE_NAMESPACE,
+  HISTORY_GC_GRACE_MS,
   FILE_ENTRY_TYPE,
   SESSION_TARGET_ENTRY_TYPE,
   UnifiedHistoryService,
@@ -22,6 +23,8 @@ export {
 } from './service/index.js';
 export type {
   FileEntryPayload,
+  HistoryRetentionReport,
+  HistoryRetentionSettings,
   NamespaceHandleOptions,
   SessionTargetPayload,
   UnifiedHistoryServiceOptions,
@@ -39,7 +42,7 @@ export type {
 export * from './service/errors.js';
 export { UnifiedHistoryStore } from './store/UnifiedHistoryStore.js';
 export * from './store/errors.js';
-export type { EntryPage, EntryQuery, EntryRow, HistoryDegradedReason, ReversalMode } from './store/types.js';
+export type { EntryPage, EntryQuery, EntryRow, HistoryDegradedReason, RetentionPolicy, RetentionReport, ReversalMode } from './store/types.js';
 export { ReversalEngine } from './engine/ReversalEngine.js';
 export * from './engine/errors.js';
 export { ForeignReversalPlanError, namespaceHistoryFor } from './compat/LegacySessionAdapter.js';

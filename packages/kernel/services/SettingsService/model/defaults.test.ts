@@ -70,3 +70,20 @@ describe('sanitizeSettingsDocument', () => {
     assert.equal(Object.isFrozen(DEFAULT_SETTINGS.plugins), true);
   });
 });
+
+describe('sanitizeSettingsDocument — history retention (D-15 U-8)', () => {
+  it('parses retention integers and clamps them to the ceilings', () => {
+    const result = sanitizeSettingsDocument({ historyRetentionDays: 9_999, historyMinUndoEntries: 12_345.7 }, 'user');
+
+    assert.equal(result.values.historyRetentionDays, 3_650);
+    assert.equal(result.values.historyMinUndoEntries, 12_345);
+    assert.deepEqual(result.warnings.map((warning) => warning.code), ['VALUE_CLAMPED']);
+  });
+
+  it('rejects non-numeric retention values', () => {
+    const result = sanitizeSettingsDocument({ historyRetentionDays: '90' }, 'workspace');
+
+    assert.equal(result.values.historyRetentionDays, undefined);
+    assert.deepEqual(result.warnings.map((warning) => warning.code), ['INVALID_FIELD']);
+  });
+});

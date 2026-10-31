@@ -126,7 +126,14 @@ export class ReversalEngine {
   async recordCheckpoint(label: string, metadata?: Record<string, unknown>): Promise<string> {
     this.assertWritable();
     await this.service.flush();
-    const sessionId = this.service.implicitSession as string;
+    // Never an `as string` over a possibly-undefined field: writable and
+    // started, the service guarantees a live implicit session (D-15 D3/INV-2).
+    // Degraded mode is already refused above, so this is never `undefined` in
+    // practice; throwing keeps INV-2 total without an unchecked cast.
+    const sessionId = this.service.implicitSessionForRecording();
+    if (sessionId === undefined) {
+      throw new UnifiedHistoryDegradedError(this.service.store.degradedReason ?? 'READ_ONLY_STORAGE');
+    }
     const checkpointId = `CP-${randomUUID()}`;
     this.service.store.insertCheckpoint({
       checkpointId,

@@ -113,7 +113,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
 
     const db = new DatabaseSync(join(root, '.brud', 'history', 'universal.db'));
     const names = (db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
-    for (const expected of ['entry_types', 'sessions', 'session_sequence', 'contents', 'entries', 'checkpoints', 'reversals', 'history_state', 'imports', 'schema_migrations', 'idx_entries_path', 'idx_entries_session', 'idx_entries_type', 'idx_sessions_created']) {
+    for (const expected of ['entry_types', 'sessions', 'session_sequence', 'contents', 'entries', 'checkpoints', 'reversals', 'history_state', 'imports', 'schema_migrations', 'idx_entries_path', 'idx_entries_payload_sha256', 'idx_entries_session', 'idx_entries_type', 'idx_sessions_created']) {
       assert.ok(names.includes(expected), `missing ${expected}`);
     }
     assert.throws(() => db.exec("INSERT INTO history_state (state_key, value) VALUES ('x', 'not-an-integer')"), /cannot store TEXT value in INTEGER column/u);
@@ -122,6 +122,33 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     const again = fileStore(root);
     assert.deepEqual(await again.open(), { mode: 'writable' });
     again.close();
+  });
+
+  it('upgrades a version-1 database in place and indexes the content foreign key (D-15 U-8)', async (context) => {
+    const root = await tempRoot(context);
+    const first = fileStore(root);
+    await first.open();
+    const session = first.createSession({ prompt: 'v1 data', now: 1 }).sessionId;
+    first.close();
+
+    // Turn it back into a version-1 database that holds data.
+    const path = join(root, '.brud', 'history', 'universal.db');
+    const v1 = new DatabaseSync(path);
+    v1.exec('DROP INDEX idx_entries_payload_sha256');
+    v1.exec('DELETE FROM schema_migrations WHERE version = 2');
+    v1.close();
+
+    const upgraded = fileStore(root);
+    assert.deepEqual(await upgraded.open(), { mode: 'writable' });
+    assert.equal(upgraded.getSession(session)?.prompt, 'v1 data');
+    upgraded.close();
+
+    const db = new DatabaseSync(path);
+    const versions = (db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[]).map((r) => r.version);
+    const plan = (db.prepare('EXPLAIN QUERY PLAN SELECT 1 FROM entries WHERE payload_sha256 = ?').all('x') as { detail: string }[]).map((r) => r.detail);
+    db.close();
+    assert.deepEqual(versions, [1, 2]);
+    assert.ok(plan.some((detail) => /USING (COVERING )?INDEX idx_entries_payload_sha256/u.test(detail)), JSON.stringify(plan));
   });
 
   it('opens a database from a newer schema degraded (SCHEMA_TOO_NEW) and refuses writes', async (context) => {

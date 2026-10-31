@@ -93,6 +93,7 @@ export async function writeBlob(
   historyRoot: string,
   digest: string,
   bytes: Uint8Array,
+  options: { readonly fresh?: boolean } = {},
 ): Promise<void> {
   if (sha256Hex(bytes) !== digest) {
     throw new UnifiedBlobIntegrityError(digest, sha256Hex(bytes));
@@ -101,7 +102,10 @@ export async function writeBlob(
   const target = blobPath(historyRoot, digest);
   const directory = resolve(target, '..');
 
-  if (await driver.exists(target)) {
+  // `fresh` always replaces through temp + rename, giving the file a new mtime,
+  // so the orphan sweep's age check cannot claim a blob that is being stored
+  // again after its row was garbage-collected (D-15 U-8).
+  if (options.fresh !== true && await driver.exists(target)) {
     try {
       await readBlob(driver, historyRoot, digest);
       return;
@@ -134,4 +138,90 @@ export async function writeBlob(
     }
     throw error;
   }
+}
+
+/** Result of {@link sweepCas}. */
+export interface CasSweepReport {
+  readonly blobsRemoved: number;
+  readonly stagingRemoved: number;
+  /** `true` when the per-run budget stopped the sweep early. */
+  readonly truncated: boolean;
+}
+
+/** Options for {@link sweepCas}. */
+export interface CasSweepOptions {
+  /** Whether a `contents` row still references the digest (checked twice). */
+  readonly isReferenced: (digest: string) => boolean;
+  /** Current time in epoch milliseconds. */
+  readonly now: number;
+  /** Files younger than this are never removed. */
+  readonly graceMs: number;
+  /** Most files removed in one run. */
+  readonly maxRemovals: number;
+}
+
+const SHARD_PATTERN = /^[0-9a-f]{2}$/u;
+const STAGING_PATTERN = /^\.[0-9a-f]{64}\..+\.tmp$/u;
+
+/**
+ * Removes blob files no `contents` row references and abandoned staging files,
+ * both only when older than the grace period (D-15 U-8).
+ *
+ * Only `<historyRoot>/cas/<aa>/` is visited; legacy `blobs/` and every other
+ * path are never touched. A blob must be named by a valid digest inside its
+ * own shard, and its reference is re-checked immediately before deletion.
+ */
+export async function sweepCas(
+  driver: IStorageDriver,
+  historyRoot: string,
+  options: CasSweepOptions,
+): Promise<CasSweepReport> {
+  const root = join(resolve(historyRoot), CAS_DIRECTORY);
+  let blobsRemoved = 0;
+  let stagingRemoved = 0;
+
+  if (!(await driver.exists(root))) {
+    return { blobsRemoved, stagingRemoved, truncated: false };
+  }
+
+  const isOld = async (path: string): Promise<boolean> => {
+    const stats = await driver.stat(path);
+    return stats !== null && stats.isFile && options.now - stats.mtimeMs > options.graceMs;
+  };
+
+  for (const shard of await driver.readDir(root)) {
+    if (!shard.isDirectory || !SHARD_PATTERN.test(shard.name)) {
+      continue;
+    }
+    const directory = join(root, shard.name);
+
+    for (const entry of await driver.readDir(directory)) {
+      if (blobsRemoved + stagingRemoved >= options.maxRemovals) {
+        return { blobsRemoved, stagingRemoved, truncated: true };
+      }
+      if (!entry.isFile) {
+        continue;
+      }
+      const path = join(directory, entry.name);
+
+      if (STAGING_PATTERN.test(entry.name)) {
+        if (await isOld(path)) {
+          await driver.deleteFile(path);
+          stagingRemoved += 1;
+        }
+        continue;
+      }
+
+      if (!SHA256_PATTERN.test(entry.name) || entry.name.slice(0, 2) !== shard.name) {
+        continue;
+      }
+      if (options.isReferenced(entry.name) || !(await isOld(path)) || options.isReferenced(entry.name)) {
+        continue;
+      }
+      await driver.deleteFile(path);
+      blobsRemoved += 1;
+    }
+  }
+
+  return { blobsRemoved, stagingRemoved, truncated: false };
 }

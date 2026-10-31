@@ -6,7 +6,7 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 
-export const UNIFIED_SCHEMA_VERSION = 1;
+export const UNIFIED_SCHEMA_VERSION = 2;
 
 export const UNIFIED_BUSY_TIMEOUT_MS = 5_000;
 
@@ -101,6 +101,14 @@ const MIGRATIONS: readonly Migration[] = [
         imported_at   INTEGER NOT NULL,
         rows          INTEGER NOT NULL
       ) STRICT`,
+    ],
+  },
+  {
+    // D-15 U-8: deleting a `contents` row checks the `entries.payload_sha256`
+    // foreign key; without this index every delete scans all entries.
+    version: 2,
+    statements: [
+      'CREATE INDEX idx_entries_payload_sha256 ON entries(payload_sha256)',
     ],
   },
 ];

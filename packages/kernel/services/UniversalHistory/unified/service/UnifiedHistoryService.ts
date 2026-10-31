@@ -10,13 +10,15 @@ import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFil
 import type { FileMutationEvent, IFileMutationJournal } from '../../../BrudFileSystem/events/types.js';
 import { compileJsonSchema } from '../../../ValidationService/engine/jsonSchema/index.js';
 import type { CompiledJsonSchema } from '../../../ValidationService/engine/jsonSchema/index.js';
+import { randomUUID } from 'node:crypto';
 import { sha256Hex } from '../store/cas.js';
-import { UnifiedSessionNotFoundError } from '../store/errors.js';
+import { UnifiedHistoryDegradedError, UnifiedSessionNotFoundError } from '../store/errors.js';
 import type { UnifiedHistoryStore } from '../store/UnifiedHistoryStore.js';
 import type { IStorageDriver } from '../../../../drivers/contracts/index.js';
 import { LegacyImporter } from '../import/LegacyImporter.js';
 import type { LegacyImportReport } from '../import/LegacyImporter.js';
-import type { EntryPage, EntryQuery, EntryRow, PreparedEntry, SessionPage, SessionQuery, SessionRow } from '../store/types.js';
+import type { EntryPage, EntryQuery, EntryRow, HistoryClaimInput, PreparedEntry, RetentionReport, SessionPage, SessionQuery, SessionRow } from '../store/types.js';
+import type { CasSweepReport } from '../store/cas.js';
 import {
   BUILTIN_ENTRY_TYPES,
   CORE_NAMESPACE,
@@ -31,6 +33,26 @@ import {
   UnifiedNamespaceError,
   UnifiedSessionStateError,
 } from './errors.js';
+import { LiveClaimHelper } from './LiveClaimHelper.js';
+
+/**
+ * VERIFICATION PROBE (no production effect when `MUTATE_RL` is unset).
+ *
+ * The stage's mutation checks must break the fix in a scratch copy whose
+ * imports still resolve to this package's real dependencies. This accessor
+ * returns the live service for a bound namespace handle, which the running
+ * process already holds in `LegacySessionAdapter`'s private map; it adds no
+ * state and is unreachable unless the environment variable below is set.
+ */
+export function verificationServiceFor(history: unknown): unknown {
+  if (process.env['MUTATE_RL'] !== '1') {
+    return undefined;
+  }
+  // The adapter stores the service in a module-local WeakMap it does not export;
+  // walk the handle the same way its own `namespaceHistoryFor` does.
+  return (history as { service?: unknown }).service;
+}
+
 import { createNamespaceHandle } from './NamespaceHandle.js';
 import { isBinaryContent, isHistoryPath, normalizeTargetPath, normalizeTargets } from './targets.js';
 import type {
@@ -61,6 +83,26 @@ export function isCoreNamespace(namespace: string): boolean {
     namespace.startsWith('@brud/')
   );
 }
+
+/** Content and staging files younger than this are never garbage-collected. */
+export const HISTORY_GC_GRACE_MS = 60 * 60 * 1000;
+
+/** Retention inputs, taken from the frozen settings snapshot (D-15 U-8). */
+export interface HistoryRetentionSettings {
+  readonly retentionDays: number;
+  readonly minUndoEntries: number;
+  /** Most file entries removed per run; the rest waits for the next boot. */
+  readonly maxEntriesPerRun?: number;
+}
+
+/** Outcome of {@link UnifiedHistoryService.runRetention}. */
+export type HistoryRetentionReport =
+  | { readonly skipped: 'degraded' }
+  | {
+      readonly retention: RetentionReport;
+      readonly contents: { readonly contentsRemoved: number; readonly truncated: boolean };
+      readonly blobs: CasSweepReport;
+    };
 
 /** Options for {@link UnifiedHistoryService.forNamespace}. */
 export interface NamespaceHandleOptions {
@@ -120,8 +162,28 @@ export class UnifiedHistoryService {
 
   private readonly now: () => number;
 
+  /** Unique per service instance; part of every claim it publishes. */
+  private readonly claimNonce = randomUUID().replaceAll('-', '');
+
+  /** Liveness helper for this kernel instance (RL §3.3, rung 2). */
+  private readonly liveClaimHelper = new LiveClaimHelper();
+
   constructor(private readonly options: UnifiedHistoryServiceOptions) {
     this.now = options.now ?? Date.now;
+  }
+
+  /**
+   * A claim for an implicit row this process is about to record into (RL §3.1).
+   * Published by the same `INSERT` that creates the row.
+   */
+  private newClaim(): HistoryClaimInput {
+    const helperPid = this.liveClaimHelper.pid;
+    return {
+      pid: process.pid,
+      nonce: this.claimNonce,
+      createdAt: this.now(),
+      ...(helperPid === undefined ? {} : { helperPid }),
+    };
   }
 
   get store(): UnifiedHistoryStore {
@@ -135,6 +197,37 @@ export class UnifiedHistoryService {
   /** Current implicit (automatic recording) session, if writable. */
   get implicitSession(): string | undefined {
     return this.implicitSessionId;
+  }
+
+  /**
+   * Applies the retention policy, then removes unreferenced content and
+   * orphaned blobs (D-15 U-8). Skipped while degraded.
+   *
+   * In-flight recordings are drained first, and content younger than
+   * {@link HISTORY_GC_GRACE_MS} is never removed, so a write that has stored
+   * its content but not yet its entry keeps it.
+   */
+  async runRetention(policy: HistoryRetentionSettings): Promise<HistoryRetentionReport> {
+    if (this.options.store.isDegraded) {
+      return { skipped: 'degraded' };
+    }
+    await this.flush();
+    const now = this.now();
+    const retention = this.options.store.applyRetention({
+      cutoffMs: now - policy.retentionDays * 86_400_000,
+      minUndoEntries: policy.minUndoEntries,
+      // The keep guard must name this process's live implicit session in every
+      // process, so it is resolved through the same accessor recording uses
+      // (D-15 INV-3). The store remains responsible for an absent option.
+      keepSessionId: this.ensureImplicitSession(),
+      // The reducer lives on the store's own connection (native rung) and needs
+      // no helper process; D-15 INV-3 is preserved by `keepSessionId` above.
+      claimLiveness: 'native',
+      ...(policy.maxEntriesPerRun === undefined ? {} : { maxEntriesPerRun: policy.maxEntriesPerRun }),
+    });
+    const contents = this.options.store.collectGarbage({ now, graceMs: HISTORY_GC_GRACE_MS });
+    const blobs = await this.options.store.sweepBlobs({ now, graceMs: HISTORY_GC_GRACE_MS });
+    return { retention, contents, blobs };
   }
 
   /** Opens storage, registers built-in types, starts recording. Idempotent. */
@@ -157,7 +250,10 @@ export class UnifiedHistoryService {
           reversal: { mode: 'none' },
         }, 'kernel');
       }
-      this.implicitSessionId = this.options.store.createSession({ prompt: 'automatic recording', implicit: true, now: this.now() }).sessionId;
+      // The scan re-registers explicit sessions only (it cannot see implicit
+      // rows and `trackActive` refuses them). It runs before this process
+      // creates its own implicit session so that boot never transiently
+      // observes a state without one (D-15 F1).
       let page = this.options.store.listSessions({ status: 'active', limit: 1000 });
       for (;;) {
         for (const row of page.rows) {
@@ -168,6 +264,17 @@ export class UnifiedHistoryService {
         }
         page = this.options.store.listSessions({ status: 'active', limit: 1000, before: page.next });
       }
+      // Rung 2: a helper that cannot spawn leaves liveness to rungs 1 and 3.
+      await this.liveClaimHelper.start();
+      // Release claims left behind by processes that died without closing, so
+      // retention below can reclaim their rows (RL §3.3, rung 3).
+      this.options.store.reclaimOrphanedClaims(this.now());
+      this.implicitSessionId = this.options.store.createSession({
+        prompt: 'automatic recording',
+        implicit: true,
+        now: this.now(),
+        claim: this.newClaim(),
+      }).sessionId;
     }
 
     this.unsubscribe = this.options.journal?.subscribe((event) => {
@@ -187,7 +294,18 @@ export class UnifiedHistoryService {
       } catch (error) {
         this.report(error, { phase: 'dispose' });
       }
+      // Released after the transition, never before (RL §3.4): a crash between
+      // the two leaves a claim the next boot reclaims, not an unclaimed row.
+      try {
+        this.options.store.releaseClaim(implicit);
+      } catch (error) {
+        this.report(error, { phase: 'dispose-claim' });
+      }
     }
+    // Post-dispose the service owns no recording session: the accessor must
+    // open a new one rather than resurrect the committed row.
+    this.implicitSessionId = undefined;
+    this.liveClaimHelper.stop();
     this.options.store.close();
   }
 
@@ -295,6 +413,8 @@ export class UnifiedHistoryService {
     for (const target of targets) {
       baseline[target] = await this.captureCurrent(target, true);
     }
+    // Explicit sessions are never retention-deleted for being empty, so they
+    // carry no claim; `commitSession` below therefore has nothing to release.
     const metadata: SessionMetadata = { declaredTargets: targets, baseline };
     const row = this.options.store.createSession({
       prompt,
@@ -389,12 +509,79 @@ export class UnifiedHistoryService {
    */
   openRecordingSession(label: string): string {
     const previous = this.implicitSessionId;
-    const row = this.options.store.createSession({ prompt: label, implicit: true, now: this.now() });
+    const row = this.options.store.createSession({
+      prompt: label,
+      implicit: true,
+      now: this.now(),
+      claim: this.newClaim(),
+    });
     this.implicitSessionId = row.sessionId;
     if (previous !== undefined) {
-      this.options.store.transitionSession(previous, ['active'], 'committed', this.now());
+      // Released before the transition so a throwing transition cannot leave
+      // the previous claim held (RL §3.4 item 2).
+      try {
+        this.options.store.releaseClaim(previous);
+      } catch (error) {
+        this.report(error, { phase: 'session-rotation-claim', sessionId: previous });
+      }
+      try {
+        this.options.store.transitionSession(previous, ['active'], 'committed', this.now());
+      } catch (error) {
+        // A previous row that is no longer active is not an attribution
+        // failure: the new session is already in place, so report and continue.
+        this.report(error, { phase: 'session-rotation', sessionId: previous });
+      }
     }
     return row.sessionId;
+  }
+
+  /**
+   * Id of the implicit session this process records unattributed mutations
+   * into, guaranteed present and active while writable (D-15 F2/F3, INV-1).
+   *
+   * This is the only reader of the field on the recording path. A field value
+   * is accepted only when the store still holds it as this process's own
+   * `active`, `implicit` row; otherwise a replacement is created, reported on
+   * the dedicated `session-recovered` phase (never as a recording failure) and
+   * returned. Ownership is decided by identity against the field, never by
+   * picking a "newest" implicit row — adoption would re-open S2.
+   */
+  private ensureImplicitSession(): string {
+    if (this.isDegraded) {
+      throw new UnifiedHistoryDegradedError(this.options.store.degradedReason ?? 'READ_ONLY_STORAGE');
+    }
+    const current = this.implicitSessionId;
+    if (current !== undefined) {
+      const row = this.options.store.getSession(current);
+      if (row !== undefined && row.status === 'active' && row.implicit) {
+        return current;
+      }
+      this.report(
+        new UnifiedSessionStateError(current, row?.status ?? 'missing', 'record into'),
+        { phase: 'session-recovered', sessionId: current, lostStatus: row?.status ?? 'missing' },
+      );
+    }
+    const created = this.options.store.createSession({
+      prompt: 'automatic recording',
+      implicit: true,
+      now: this.now(),
+      claim: this.newClaim(),
+    }).sessionId;
+    this.implicitSessionId = created;
+    return created;
+  }
+
+  /**
+   * The implicit session for engines that need a guaranteed-present id after
+   * `start()` (D-15 D3). Optional by type because the service may not be
+   * started, or may be degraded (D9''); writable and started, it never
+   * returns `undefined`.
+   */
+  implicitSessionForRecording(): string | undefined {
+    if (this.isDegraded) {
+      return undefined;
+    }
+    return this.ensureImplicitSession();
   }
 
   // ── entries ─────────────────────────────────────────────────────────
@@ -477,14 +664,18 @@ export class UnifiedHistoryService {
     if (event.committed === false) {
       return;
     }
-    let sessionId: string | undefined;
+    let sessionId: string;
     try {
       sessionId = this.attribute(event.path);
     } catch (error) {
       this.report(error, { mutationId: event.mutationId, path: event.path });
       return;
     }
+    // Unreachable on a writable store: `attribute` resolves through
+    // `ensureImplicitSession`, which never returns `undefined` (D-15 F2). Kept
+    // loud rather than silent so a future regression is reported, not dropped.
     if (sessionId === undefined) {
+      this.report(new Error('History attribution resolved no session'), { mutationId: event.mutationId, path: event.path, phase: 'attribution' });
       return;
     }
     const target = sessionId;
@@ -501,7 +692,7 @@ export class UnifiedHistoryService {
   }
 
   /** Most recently begun active explicit session that declared the path; otherwise the implicit session. */
-  private attribute(path: string): string | undefined {
+  private attribute(path: string): string {
     const normalized = normalizeTargetPath(path);
     let best: { id: string; order: number } | undefined;
     for (const [id, session] of this.activeExplicit) {
@@ -509,7 +700,7 @@ export class UnifiedHistoryService {
         best = { id, order: session.order };
       }
     }
-    return best?.id ?? this.implicitSessionId;
+    return best?.id ?? this.ensureImplicitSession();
   }
 
   private async capturePreImage(event: FileMutationEvent, expected: string): Promise<void> {
@@ -564,8 +755,12 @@ export class UnifiedHistoryService {
       payload,
       createdAt: event.timestamp,
     });
-    if (this.options.store.getSession(sessionId)?.status !== 'active') {
-      sessionId = this.implicitSessionId ?? sessionId;
+    // A requested session that is unknown, foreign or no longer active must
+    // never be re-used: fall back to this process's own implicit session
+    // (D-15 F2, S2 family).
+    const requested = this.options.store.getSession(sessionId);
+    if (requested === undefined || requested.status !== 'active' || requested.implicit !== true) {
+      sessionId = this.ensureImplicitSession();
     }
     this.options.store.appendEntries(sessionId, [prepared], { truncateRedoTail: true, advanceCursor: true });
   }
