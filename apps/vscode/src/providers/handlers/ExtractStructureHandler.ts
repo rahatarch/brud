@@ -1,13 +1,24 @@
 import * as vscode from 'vscode';
-import { parseOperations, cleanBrudInput, BrudError, noExtractOperationsError } from '@brud/core';
+import { parseOperations, cleanBrudInput } from '@brud/patchblocks';
+import type { PatchblocksEnvironment } from '@brud/patchblocks';
+import { BrudError, noExtractOperationsError } from '@brud/core';
 import { bootCoreKernel } from '@brud/core';
 import { getWorkspaceFolders, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { BrudKernel, BrudSettings, FileOperation } from '@brud/core';
+import type { BrudKernel, BrudSettings } from '@brud/core';
+import type { FileOperation } from '@brud/patchblocks';
 import { isRecord } from '@brud/protocol';
 import type { ExtensionMessage, OperationResult, StructureResult, UnifiedOperationResult } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { closePreviewTabs } from '../services/SharedExecutionHelpers';
+
+function patchblocksEnvironment(): PatchblocksEnvironment {
+  return {
+    roots: getWorkspaceFolders(),
+    homeDirectory: process.env.HOME ?? process.env.USERPROFILE ?? '/home',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
+  };
+}
 import { isStructureResult, readOperationResults } from '../services/executionPayloads';
 
 function describeError(value: unknown): string {
@@ -42,7 +53,7 @@ export class ExtractStructureHandler {
 
     let operations: FileOperation[];
     try {
-      operations = parseOperations(cleanBrudInput(text), getWorkspaceFolders());
+      operations = parseOperations(cleanBrudInput(text), patchblocksEnvironment());
     } catch (e) {
       if (e instanceof BrudError) {
         this.errorReporter.sendParseError(e);

@@ -6,7 +6,7 @@ import type { TerminalExecutor } from '../terminal/types.js';
 import type { HistoryStore } from '../history/store.js';
 import type { BrudSettings } from '../settings/types.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
-import type { FileOperation } from '../types/patch.js';
+import type { FileOperation } from '../types/legacy.js';
 import { StructureService } from '../services/structureService.js';
 import type { ITerminalService, TerminalPolicy } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { bindTerminalAuthority, createTerminalExecutor } from '../terminal/bridge.js';

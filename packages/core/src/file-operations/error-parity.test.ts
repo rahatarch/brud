@@ -5,7 +5,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { NodeFileSystem } from '../testing/nodeFileSystem';
 import { executeFileOperations } from './index';
-import type { FileOperation } from '../types/patch';
+import type { FileOperation } from '../types/legacy.js';
 import type { TerminalExecutor, TerminalResult, GroupResult } from '../terminal/types';
 
 const OUTSIDE_FILE = path.join(os.tmpdir(), `brud-parity-outside-${process.pid}.txt`);

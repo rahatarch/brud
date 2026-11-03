@@ -4,7 +4,7 @@ import * as os from 'os';
 import { NodeFileSystem } from './src/testing/nodeFileSystem.js';
 import { executeFileOperations } from './src/file-operations/index.js';
 import { parseReadEnvelope } from './src/testing/readEnvelope.js';
-import type { FileOperation } from './src/types/patch.js';
+import type { FileOperation } from './src/types/legacy.js';
 
 async function main() {
   // 1. Create a temp directory with files and subdirectories

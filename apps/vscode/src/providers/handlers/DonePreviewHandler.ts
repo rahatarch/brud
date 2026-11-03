@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation, SessionMetadata } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
 import type { ExtensionMessage, UnifiedSessionResults } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 

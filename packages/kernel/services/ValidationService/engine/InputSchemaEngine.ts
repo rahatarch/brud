@@ -376,16 +376,18 @@ export class InputSchemaEngine {
   }
 
   /**
-   * Validates the legacy block format markers.
+   * Validates the Brud Protocol v2 wrapper.
    *
    * @param message - Raw message text.
    */
   validateFormat(message: string): SchemaOutcome {
-    const hasMarkers = message.includes('<<<<<<<')
-      && message.includes('=======')
-      && message.includes('>>>>>>>');
+    const open = message.indexOf('[BRUD]');
+    const close = message.indexOf('[/BRUD]');
+    const hasWrapper = open !== -1 && close > open;
 
-    return hasMarkers ? OK : failure('INPUT.PARSE_FORMAT', 'the message does not use a recognised patch format');
+    return hasWrapper
+      ? OK
+      : failure('INPUT.PARSE_FORMAT', 'the message does not use a recognised Brud Protocol v2 format');
   }
 
   /**

@@ -4,7 +4,7 @@ import * as path from 'path';
 import { NodeFileSystem } from '../testing/nodeFileSystem';
 import { createTestWorkspace, cleanupTestWorkspace } from '../testing/testUtils';
 import { executeFileOperations } from './index';
-import type { FileOperation } from '../types/patch';
+import type { FileOperation } from '../types/legacy.js';
 
 /**
  * A10 protected-path coverage for the legacy execution surface.

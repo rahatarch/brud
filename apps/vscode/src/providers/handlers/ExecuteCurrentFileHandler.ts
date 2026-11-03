@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
-import type { FileOperation, FileOperationResult, SessionMetadata, ChunkCallback } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
+import type { FileOperationResult, ChunkCallback } from '@brud/core';
 import type { ExtensionMessage, UnifiedOperationResult, UnifiedSessionResults } from '@brud/protocol';
 import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { PanelManager } from '../services/PanelManager';

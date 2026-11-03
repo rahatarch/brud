@@ -12,32 +12,6 @@ import {
   createLegacyPathAdapter,
 } from './LegacyPathAdapter.js';
 
-interface LegacyValidationResult {
-  readonly success: boolean;
-  readonly code?: string;
-  readonly data?: { readonly resolvedPath?: string };
-}
-
-interface LegacyApiModule {
-  readonly BrudAPI: {
-    readonly validate: {
-      path(path: string, workspaceFolders: string[]): LegacyValidationResult;
-    };
-  };
-}
-
-/**
- * Loads the legacy `BrudAPI` as a runtime-only dependency.
- *
- * The URL is computed so `tsc` never resolves the core package from the kernel
- * build: the parity oracle is a test-time comparison, not a kernel dependency.
- */
-async function loadLegacyApi(): Promise<LegacyApiModule> {
-  const specifier = new URL('../../../../core/src/api/index.ts', import.meta.url).href;
-
-  return await import(specifier) as LegacyApiModule;
-}
-
 interface Fixture {
   readonly base: string;
   readonly workspace: string;
@@ -149,16 +123,14 @@ describe('WorkspacePathAdapter translation', () => {
 });
 
 describe('legacy path parity matrix', () => {
-  it('matches legacy BrudAPI.validate outcomes for every row', async (context) => {
+  it('preserves the documented legacy path outcomes for every row', async (context) => {
     const fixture = await createFixture();
     context.after(async () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const legacy = await loadLegacyApi();
     const adapter = await createAdapter(fixture.workspace);
     const canonicalRoot = await realpath(fixture.workspace);
-    const folders = [canonicalRoot];
 
     const rows: readonly {
       readonly label: string;
@@ -198,7 +170,6 @@ describe('legacy path parity matrix', () => {
     ];
 
     for (const row of rows) {
-      const legacyResult = legacy.BrudAPI.validate.path(row.input, folders);
       const adapterResult = await adapter.validate(row.input);
 
       assert.equal(
@@ -206,22 +177,15 @@ describe('legacy path parity matrix', () => {
         row.expectSuccess,
         `${row.label}: adapter success mismatch (${adapterResult.ok ? 'ok' : adapterResult.code})`,
       );
-      assert.equal(
-        legacyResult.success,
-        row.expectSuccess,
-        `${row.label}: legacy success mismatch (${legacyResult.code ?? 'ok'})`,
-      );
-      assert.equal(adapterResult.ok, legacyResult.success, `${row.label}: parity mismatch`);
 
       if (row.expectCode !== undefined) {
         assert.equal(adapterResult.ok ? '' : adapterResult.code, row.expectCode, `row: ${row.label}`);
-        assert.equal(legacyResult.code, row.expectCode, `row: ${row.label}`);
       }
 
       if (row.expectRelative !== undefined) {
         assert.equal(adapterResult.ok ? adapterResult.kernelRelative : '', row.expectRelative, `row: ${row.label}`);
         assert.equal(
-          legacyResult.data?.resolvedPath,
+          adapterResult.ok ? adapterResult.absolutePath : '',
           join(canonicalRoot, row.expectRelative),
           `row: ${row.label}`,
         );
@@ -235,15 +199,11 @@ describe('legacy path parity matrix', () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const legacy = await loadLegacyApi();
     const adapter = await createAdapter(fixture.workspace);
-
-    const legacyResult = legacy.BrudAPI.validate.path('notes/a\u0000b.md', [fixture.workspace]);
     const adapterResult = await adapter.validate('notes/a\u0000b.md');
 
-    // Legacy accepts a null byte and defers failure to the filesystem call
+    // Legacy accepted a null byte and deferred failure to the filesystem call
     // (`ERR_INVALID_ARG_VALUE`, audit A7). The adapter rejects it up front.
-    assert.equal(legacyResult.success, true);
     assert.equal(adapterResult.ok, false);
     assert.equal(adapterResult.ok ? '' : adapterResult.code, 'VALIDATION_ERROR');
     assert.equal(adapterResult.ok ? '' : adapterResult.rule, 'NULL_BYTE');

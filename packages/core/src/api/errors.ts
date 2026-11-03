@@ -196,8 +196,8 @@ export function invalidFieldError(field: string, message: string): BrudError {
 export function missingIndexError(): BrudError {
   return brudError({
     code: 'MISSING_INDEX',
-    friendly: 'You haven\'t used any index number with your instructions.',
-    details: 'Please use index with instructions in this format: TOOL_CALL [INDEX]. Example: READ_FILE [1]',
+    friendly: 'You haven\'t used any tool call with your instructions.',
+    details: 'Please use the Brud Protocol v2 format: [BRUD] with [CALL tool_name] ... [END] blocks. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
   });
 }
 
@@ -205,7 +205,7 @@ export function parseError(): BrudError {
   return brudError({
     code: 'PARSE_ERROR',
     friendly: 'I couldn\'t understand the format of your message.',
-    details: 'Brud Code understands two formats: the legacy block format and YAML. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
+    details: 'Brud Code understands Brud Protocol v2: wrap the document in [BRUD] and [/BRUD], and write each tool call as [CALL tool_name] ... [END] with key: value parameters. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
   });
 }
 

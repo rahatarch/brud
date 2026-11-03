@@ -2,11 +2,14 @@ export const createFilePrompt = `Use CREATE_FILE to create a new file with the s
 
 Describe the file you want to create and its contents below:
 
-<<<<<<< CREATE_FILE [1]
-File Path: path/to/new/file.ext
-=======
+[BRUD]
+[CALL create_file]
+path: path/to/new/file.ext
+{content}
 // file contents here
->>>>>>> END CREATE_FILE [1]
+{/content}
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -16,12 +19,13 @@ export const searchReplacePrompt = `Use SEARCH/REPLACE to find and replace exist
 
 Describe the exact text to search for and the replacement text below:
 
-<<<<<<< SEARCH [1]
-File Path: path/to/file.ext
-exact text to find
-=======
-new text to insert
->>>>>>> REPLACE [1]
+[BRUD]
+[CALL search_replace]
+path: path/to/file.ext
+search: exact text to find
+replace: new text to insert
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -31,9 +35,11 @@ export const deleteFilePrompt = `Use DELETE_FILE to remove a file from the files
 
 Describe the file you want to delete below:
 
-<<<<<<< DELETE_FILE [1]
-File Path: path/to/file.ext
->>>>>>> END DELETE_FILE [1]
+[BRUD]
+[CALL delete_file]
+path: path/to/file.ext
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -43,10 +49,12 @@ export const renameFilePrompt = `Use RENAME_FILE to rename a file from one name 
 
 Describe the old name and the new name below:
 
-<<<<<<< RENAME_FILE [1]
-From: path/to/old-name.ext
-To: path/to/new-name.ext
->>>>>>> END RENAME_FILE [1]
+[BRUD]
+[CALL rename_file]
+from: path/to/old-name.ext
+to: path/to/new-name.ext
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -56,10 +64,12 @@ export const moveFilePrompt = `Use MOVE_FILE to move a file from one location to
 
 Describe the source path and the destination path below:
 
-<<<<<<< MOVE_FILE [1]
-From: path/to/source.ext
-To: path/to/destination.ext
->>>>>>> END MOVE_FILE [1]
+[BRUD]
+[CALL move_file]
+from: path/to/source.ext
+to: path/to/destination.ext
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -69,10 +79,12 @@ export const copyFilePrompt = `Use COPY_FILE to copy a file from one location to
 
 Describe the source path and the destination path below:
 
-<<<<<<< COPY_FILE [1]
-From: path/to/source.ext
-To: path/to/destination.ext
->>>>>>> END COPY_FILE [1]
+[BRUD]
+[CALL copy_file]
+from: path/to/source.ext
+to: path/to/destination.ext
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -82,12 +94,15 @@ export const appendFilePrompt = `Use APPEND_FILE to append content to the end of
 
 Describe the file and the content to append below:
 
-<<<<<<< APPEND_FILE [1]
-File Path: path/to/file.ext
-Position: end
-=======
+[BRUD]
+[CALL append_file]
+path: path/to/file.ext
+position: end
+{content}
 content to append
->>>>>>> END APPEND_FILE [1]
+{/content}
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -97,12 +112,12 @@ export const createDirectoryPrompt = `Use CREATE_DIRECTORY to create a new direc
 
 Describe the directory and files to create below:
 
-<<<<<<< CREATE_DIRECTORY [1]
-Directory Path: packages/core/src
-Files:
-  - types.ts
-  - index.ts
->>>>>>> END CREATE_DIRECTORY [1]
+[BRUD]
+[CALL create_directory]
+directoryPath: packages/core/src
+files: types.ts, index.ts
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -112,9 +127,11 @@ export const deleteDirectoryPrompt = `Use DELETE_DIRECTORY to remove a directory
 
 Describe the directory to delete below:
 
-<<<<<<< DELETE_DIRECTORY [1]
-Directory Path: src/old
->>>>>>> END DELETE_DIRECTORY [1]
+[BRUD]
+[CALL delete_directory]
+directoryPath: src/old
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -124,10 +141,12 @@ export const moveDirectoryPrompt = `Use MOVE_DIRECTORY to move a directory from 
 
 Describe the source path and the destination path below:
 
-<<<<<<< MOVE_DIRECTORY [1]
-From: src/components
-To: packages/ui/components
->>>>>>> END MOVE_DIRECTORY [1]
+[BRUD]
+[CALL move_directory]
+from: src/components
+to: packages/ui/components
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -137,29 +156,33 @@ export const extractStructurePrompt = `Use EXTRACT_STRUCTURE to extract a token-
 
 Describe the directory you want to extract below:
 
-<<<<<<< EXTRACT_STRUCTURE [1]
-Directory Path: [path]
-Depth: [number or 0 for unlimited]
->>>>>>> END EXTRACT_STRUCTURE [1]
+[BRUD]
+[CALL extract_structure]
+directoryPath: [path]
+depth: 0
+[END]
+[/BRUD]
 
 - Depth 0 means unlimited traversal of the entire directory tree
-- Depth N means N levels deep (e.g., Depth: 2 extracts the directory and its immediate children)
+- Depth N means N levels deep (e.g., depth: 2 extracts the directory and its immediate children)
 - Hidden files and directories (starting with ".") and build directories (node_modules, dist, .next, target, etc.) are automatically excluded
 - Files in the output tree automatically display their line count (e.g. "file.ts (142 lines)") or "[binary]"
-- Use these line counts to specify Start Line and End Line when reading large files
-- Multiple EXTRACT_STRUCTURE blocks can be used in a single prompt to extract several directories at once. Each block should have a unique index number.
+- Use these line counts to specify startLine and endLine when reading large files
+- Multiple [CALL extract_structure] blocks can be used in a single prompt to extract several directories at once. Each call is identified by its position in the document.
 
 Example of multiple directories:
 
-<<<<<<< EXTRACT_STRUCTURE [1]
-Directory Path: src/modules/trip
-Depth: 2
->>>>>>> END EXTRACT_STRUCTURE [1]
+[BRUD]
+[CALL extract_structure]
+directoryPath: src/modules/trip
+depth: 2
+[END]
 
-<<<<<<< EXTRACT_STRUCTURE [2]
-Directory Path: src/modules/driver
-Depth: 2
->>>>>>> END EXTRACT_STRUCTURE [2]
+[CALL extract_structure]
+directoryPath: src/modules/driver
+depth: 2
+[END]
+[/BRUD]
 
 Output ONLY the Brud blocks above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -169,16 +192,18 @@ export const searchFilesPrompt = `Use SEARCH_FILES to find files by name, patter
 
 Describe the files you want to search for below:
 
-<<<<<<< SEARCH_FILES [1]
-Pattern: **/*.ts
-Exclude: *.test.ts
-Scope: src
->>>>>>> END SEARCH_FILES [1]
+[BRUD]
+[CALL search_files]
+pattern: **/*.ts
+exclude: *.test.ts
+scope: src
+[END]
+[/BRUD]
 
-- Pattern: glob patterns or simple words (comma-separated for multiple)
-- Exclude: patterns to skip (optional)
-- Scope: directory to search (optional, default workspace root)
-- MaxResults: maximum files to return (optional, default unlimited)
+- pattern: glob patterns or simple words (comma-separated for multiple)
+- exclude: patterns to skip (optional)
+- scope: directory to search (optional, default workspace root)
+- maxResults: maximum files to return (optional, default unlimited)
 - Returns file paths, names, extensions, and sizes
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
@@ -189,8 +214,10 @@ export const codebaseMetadataPrompt = `Use CODEBASE_METADATA to get a quick summ
 
 This returns the total file count, folder count, and the most dense folder (the folder with the most files directly inside it). Use this to determine extraction strategy before deeper exploration.
 
-<<<<<<< CODEBASE_METADATA [1]
->>>>>>> END CODEBASE_METADATA [1]
+[BRUD]
+[CALL codebase_metadata]
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -200,13 +227,16 @@ export const appendFileMultiPrompt = `Use APPEND_FILE_MULTI to append content to
 
 Describe the pattern, scope, and content to append below:
 
-<<<<<<< APPEND_FILE_MULTI [1]
-Pattern: **/*.ts
-Scope: src
-Position: end
-=======
+[BRUD]
+[CALL append_file_multi]
+pattern: **/*.ts
+scope: src
+position: end
+{content}
 content to append
->>>>>>> END APPEND_FILE_MULTI [1]
+{/content}
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -216,12 +246,14 @@ export const searchReplaceMultiPrompt = `Use SEARCH_REPLACE_MULTI to find and re
 
 Describe the pattern, scope, search text, and replacement text below:
 
-<<<<<<< SEARCH_REPLACE_MULTI [1]
-Pattern: **/*.ts
-Scope: src
-Search: old text
-Replace: new text
->>>>>>> END SEARCH_REPLACE_MULTI [1]
+[BRUD]
+[CALL search_replace_multi]
+pattern: **/*.ts
+scope: src
+search: old text
+replace: new text
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -231,24 +263,26 @@ export const readFilePrompt = `Use READ_FILE to read a file with optional import
 
 Describe the file to read below:
 
-<<<<<<< READ_FILE [1]
-File Path: [path]
-Start Line: [optional number]
-End Line: [optional number]
+[BRUD]
+[CALL read_file]
+filePath: [path]
+startLine: [optional number]
+endLine: [optional number]
 isImportRead: [true or false]
-MaxDepth: [number, default 5]
+maxDepth: [number, default 5]
 importSyntax: [optional custom regex]
-Exclude: [patterns to skip, optional]
->>>>>>> END READ_FILE [1]
+exclude: [patterns to skip, optional]
+[END]
+[/BRUD]
 
-- File Path: the file to read
-- Start Line: 1-based starting line number (optional, defaults to 1)
-- End Line: 1-based ending line number (optional, defaults to EOF, auto-clamps)
+- filePath: the file to read
+- startLine: 1-based starting line number (optional, defaults to 1)
+- endLine: 1-based ending line number (optional, defaults to EOF, auto-clamps)
 - isImportRead: true to also read imported files recursively
-- MaxDepth: how deep to follow imports (default 5, 0 for unlimited)
+- maxDepth: how deep to follow imports (default 5, 0 for unlimited)
 - importSyntax: custom import pattern regex for non-standard languages (optional)
-- Exclude: glob patterns to skip when following imports (optional)
-- Multiple READ_FILE blocks ([1], [2], etc.) may be batched together in one request to read multiple distinct files across different directories in a single turn.
+- exclude: glob patterns to skip when following imports (optional)
+- Multiple [CALL read_file] blocks may be batched together in one request to read multiple distinct files across different directories in a single turn.
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -258,16 +292,18 @@ export const readFilesPrompt = `Use READ_FILES to read multiple files matching a
 
 Describe the files to read below:
 
-<<<<<<< READ_FILES [1]
-Pattern: src/{header,footer}.tsx
-Scope: .
-MaxResults: 10
+[BRUD]
+[CALL read_files]
+pattern: src/{header,footer}.tsx
+scope: .
+maxResults: 10
 isImportRead: false
->>>>>>> END READ_FILES [1]
+[END]
+[/BRUD]
 
-- Pattern: glob pattern to match files. Supports brace expansion (e.g. 'src/{header,footer}.tsx' or 'src/{auth,session}.ts') and comma-separated path lists (e.g. 'src/app.ts, src/utils.ts') to select specific files without matching unrelated files.
-- Scope: directory to search (optional, default workspace root)
-- MaxResults: maximum files to return (optional, default unlimited)
+- pattern: glob pattern to match files. Supports brace expansion (e.g. 'src/{header,footer}.tsx' or 'src/{auth,session}.ts') and comma-separated path lists (e.g. 'src/app.ts, src/utils.ts') to select specific files without matching unrelated files.
+- scope: directory to search (optional, default workspace root)
+- maxResults: maximum files to return (optional, default unlimited)
 - isImportRead: true to also read imported files (optional, default false)
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
@@ -278,15 +314,17 @@ export const readDirectoryPrompt = `Use READ_DIRECTORY to read all files in a di
 
 Describe the directory to read below:
 
-<<<<<<< READ_DIRECTORY [1]
-Directory Path: src/utils
-Recursive: true
-Exclude: *.test.ts
->>>>>>> END READ_DIRECTORY [1]
+[BRUD]
+[CALL read_directory]
+directoryPath: src/utils
+recursive: true
+exclude: *.test.ts
+[END]
+[/BRUD]
 
-- Directory Path: the directory to read
-- Recursive: true to read files in subdirectories (optional, default false)
-- Exclude: glob patterns to skip (optional)
+- directoryPath: the directory to read
+- recursive: true to read files in subdirectories (optional, default false)
+- exclude: glob patterns to skip (optional)
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -296,32 +334,24 @@ export const terminalInteractivePrompt = `Use TERMINAL_INTERACTIVE to run termin
 
 Describe the command and the answers to feed to its interactive prompts below:
 
-<<<<<<< TERMINAL_INTERACTIVE [1]
-Command: npm init
-Answers:
-  - brud-app
-  - 1.0.0
-  - My App
-  - index.js
-  - node index.js
-  - 
-  - 
-  - Your Name
-  - MIT
-  - yes
-Timeout: 120
->>>>>>> END TERMINAL_INTERACTIVE [1]
+[BRUD]
+[CALL terminal_interactive]
+command: npm init
+answers: brud-app, 1.0.0, My App, index.js, node index.js, , , Your Name, MIT, yes
+timeout: 120
+[END]
+[/BRUD]
 
-- Command: the terminal command to run
-- Answers: responses fed to interactive prompts IN ORDER
-- Empty answer (just -) means accept default (sends Enter)
-- Timeout: maximum seconds to wait (default 120)
+- command: the terminal command to run
+- answers: responses fed to interactive prompts IN ORDER as a comma-separated list
+- Empty answer (an empty comma-separated entry) means accept default (sends Enter)
+- timeout: maximum seconds to wait (default 120)
 - The answers are sent sequentially with small delays
 - User must know their tool's question order
 - Works with any interactive CLI (npm init, scaffolding tools, wizards)
 
 Raw mode: Use <command>...</command> tags inside the block for complex commands with pipes, multi-line, or special characters. This prevents the Brud parser from confusing command content with Brud syntax. It does NOT bypass any security checks. Dangerous commands like rm -rf / are still blocked.
-  Example inside TERMINAL_INTERACTIVE block:
+  Example inside terminal_interactive block:
   <command>
   sudo cat /var/log/syslog | grep error
   echo done
@@ -333,19 +363,23 @@ Output ONLY the Brud block above inside a markdown code block using triple backt
 
 export const getToolInfoPrompt = `Use GET_TOOL_INFO to discover available tools and their documentation.
 
-Without Tool field: returns list of all available tools with names and descriptions.
-With Tool field: returns full documentation for that specific tool.
+Without toolKind field: returns list of all available tools with names and descriptions.
+With toolKind field: returns full documentation for that specific tool.
 
 Use this to discover what Brud Code can do before requesting operations. Tool IDs use snake_case (e.g., create_file, search_replace).
 
 List all tools:
-<<<<<<< GET_TOOL_INFO [1]
->>>>>>> END GET_TOOL_INFO [1]
+[BRUD]
+[CALL get_tool_info]
+[END]
+[/BRUD]
 
 Get specific tool documentation:
-<<<<<<< GET_TOOL_INFO [1]
-Tool: [tool_name]
->>>>>>> END GET_TOOL_INFO [1]
+[BRUD]
+[CALL get_tool_info]
+toolKind: [tool_name]
+[END]
+[/BRUD]
 
 Output ONLY the Brud block above inside a markdown code block using triple backticks. No text outside the code block. No explanations.
 
@@ -356,42 +390,46 @@ export const terminalCommandPrompt = `Use TERMINAL_COMMAND to run terminal comma
 Describe the command(s) to run below:
 
 Single command:
-<<<<<<< TERMINAL_COMMAND [1]
-Command: npm install
-Timeout: 120
->>>>>>> END TERMINAL_COMMAND [1]
+[BRUD]
+[CALL terminal_command]
+command: npm install
+timeout: 120
+[END]
+[/BRUD]
 
 Sequential:
-<<<<<<< TERMINAL_COMMAND [1]
-Commands:
-  - npm install
-  - npm run build
-Mode: sequential
-StopOnFailure: true
->>>>>>> END TERMINAL_COMMAND [1]
+[BRUD]
+[CALL terminal_command]
+commands: npm install, npm run build
+mode: sequential
+stopOnFailure: true
+[END]
+[/BRUD]
 
 Parallel:
-<<<<<<< TERMINAL_COMMAND [1]
-Commands:
-  - npm run lint
-  - npm run type-check
-Mode: parallel
->>>>>>> END TERMINAL_COMMAND [1]
+[BRUD]
+[CALL terminal_command]
+commands: npm run lint, npm run type-check
+mode: parallel
+[END]
+[/BRUD]
 
 Conditional:
-<<<<<<< TERMINAL_COMMAND [1]
-Command: npm run build
-OnSuccess: npm test
-OnFailure: npm run build:fix
->>>>>>> END TERMINAL_COMMAND [1]
+[BRUD]
+[CALL terminal_command]
+command: npm run build
+onSuccess: npm test
+onFailure: npm run build:fix
+[END]
+[/BRUD]
 
 - Single: one command with optional timeout
-- Sequential: multiple commands run one after another; StopOnFailure controls whether to stop on error (default true)
+- Sequential: multiple commands run one after another; stopOnFailure controls whether to stop on error (default true)
 - Parallel: multiple commands run simultaneously
-- Conditional: run a command; run OnSuccess if it succeeds, or OnFailure if it fails
+- Conditional: run a command; run onSuccess if it succeeds, or onFailure if it fails
 
 Raw mode: Use <command>...</command> tags inside the block for complex commands with pipes, multi-line, or special characters. This prevents the Brud parser from confusing command content with Brud syntax. It does NOT bypass any security checks. Dangerous commands like rm -rf / are still blocked.
-  Example inside TERMINAL_COMMAND block:
+  Example inside terminal_command block:
   <command>
   sudo cat file | grep pattern
   echo done

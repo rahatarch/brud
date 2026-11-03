@@ -5,7 +5,7 @@ import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { TestHistoryStore } from '../testing/testHistoryStore.js';
 import { createTestWorkspace, cleanupTestWorkspace } from '../testing/testUtils.js';
 import { executeFileOperations } from './index.js';
-import type { FileOperation } from '../types/patch.js';
+import type { FileOperation } from '../types/legacy.js';
 import type { TerminalExecutor } from '../terminal/types.js';
 import {
   executeCommand,

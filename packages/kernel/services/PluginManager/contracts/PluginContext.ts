@@ -184,6 +184,7 @@ export class PluginContext implements IPluginContext {
       workspaceRoot: this.workspaceRoot,
       callerId: this.pluginId,
       signal: contextOverride?.signal,
+      permissions: [...this.permissions],
     };
 
     return this.resolveBrudTools().executeTool(name, rawInput, context);

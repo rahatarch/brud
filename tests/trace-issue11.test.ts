@@ -5,15 +5,27 @@ import * as os from 'node:os';
 import { promises as fsp } from 'node:fs';
 
 import {
-  parseOperationsWithMetadata,
-  cleanBrudInput,
   bootCoreKernel,
   DEFAULT_SETTINGS,
   isGlobPattern,
   matchGlob,
 } from '@brud/core';
-import { parseLegacyFormat } from '../packages/core/src/parser/legacy.js';
-import type { FileSystem, FileOperation } from '@brud/core';
+import {
+  parseOperationsWithMetadata,
+  parseLegacyFormat,
+  cleanBrudInput,
+} from '@brud/patchblocks';
+import type { PatchblocksEnvironment } from '@brud/patchblocks';
+import type { FileSystem } from '@brud/core';
+import type { FileOperation } from '@brud/patchblocks';
+
+function patchblocksEnvironment(root: string): PatchblocksEnvironment {
+  return {
+    roots: [root],
+    homeDirectory: process.env.HOME ?? process.env.USERPROFILE ?? '/home',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
+  };
+}
 
 const log = (s: string) => console.log(s);
 
@@ -239,8 +251,8 @@ test('Scenario A: sequential READ_FILE blocks — 12-layer signal trajectory', a
   log(`\n[L3-PARSE] input patch text (${patch.split('\n').length} lines):`);
   log(patch);
 
-  const viaLegacy = parseLegacyFormat(patch, [root]);
-  const viaHandlerPath = parseOperationsWithMetadata(cleanBrudInput(patch), [root]);
+  const viaLegacy = parseLegacyFormat(patch, patchblocksEnvironment(root));
+  const viaHandlerPath = parseOperationsWithMetadata(cleanBrudInput(patch), patchblocksEnvironment(root));
   log('\n[L3-PARSE] parseLegacyFormat operations[]:');
   for (const op of viaLegacy) log(`  ops[${viaLegacy.indexOf(op)}] = ${JSON.stringify({ kind: op.kind, path: readFilePath(op), index: op.index, isImportRead: readImportFlag(op), maxDepth: readMaxDepth(op) })}`);
   log(`[L3-PARSE] parseOperationsWithMetadata(cleanBrudInput()) .operations.length = ${viaHandlerPath.operations.length}`);
@@ -342,8 +354,8 @@ test('Scenario B: READ_FILES multi-file pattern evaluation', async () => {
   log('SCENARIO B — READ_FILES PATTERNS');
   log('==================================');
 
-  const parsedOp1 = parseLegacyFormat(syntax1, [root])[0];
-  const parsedOp2 = parseLegacyFormat(syntax2, [root])[0];
+  const parsedOp1 = parseLegacyFormat(syntax1, patchblocksEnvironment(root))[0];
+  const parsedOp2 = parseLegacyFormat(syntax2, patchblocksEnvironment(root))[0];
   assert.equal(parsedOp1?.kind, 'read_files');
   assert.equal(parsedOp2?.kind, 'read_files');
   const op1 = parsedOp1.kind === 'read_files' ? parsedOp1 : undefined;

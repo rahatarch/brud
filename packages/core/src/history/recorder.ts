@@ -1,5 +1,5 @@
 import { createTwoFilesPatch } from 'diff';
-import type { FileOperation, SessionMetadata } from '../types/patch.js';
+import type { FileOperation, SessionMetadata } from '../types/legacy.js';
 import type { FileSystem } from '../types/filesystem.js';
 import { generateSessionId } from './sessionId.js';
 import type { HistorySession, SnapshotData, HistoryEntry, OperationResult } from './types.js';

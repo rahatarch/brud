@@ -1,5 +1,54 @@
 import type { CommandGroup } from '../terminal/types';
 
+export type LegacyMatchErrorCode = 'SEARCH_NOT_FOUND' | 'MULTIPLE_MATCHES';
+
+export type LegacyMatchResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; error: { code: LegacyMatchErrorCode; message: string } };
+
+export function findSingleMatch(content: string, searchText: string): LegacyMatchResult<{ index: number }> {
+  const firstIndex = content.indexOf(searchText);
+  if (firstIndex === -1) {
+    return {
+      ok: false,
+      error: { code: 'SEARCH_NOT_FOUND', message: 'Search text was not found in the document.' },
+    };
+  }
+
+  const lastIndex = content.lastIndexOf(searchText);
+  if (firstIndex !== lastIndex) {
+    return {
+      ok: false,
+      error: { code: 'MULTIPLE_MATCHES', message: 'Search text matched more than once in the document.' },
+    };
+  }
+
+  return { ok: true, value: { index: firstIndex } };
+}
+
+export function stripNumericLinePrefixes(text: string): string {
+  return text.replace(/^\s*\d+\s*\|\s?/gm, '');
+}
+
+export function applySingleMatch(
+  content: string,
+  searchText: string,
+  replacement: string,
+): LegacyMatchResult<{ content: string }> {
+  const match = findSingleMatch(content, searchText);
+  if (!match.ok) {
+    return match;
+  }
+
+  const { index } = match.value;
+  return {
+    ok: true,
+    value: {
+      content: content.substring(0, index) + replacement + content.substring(index + searchText.length),
+    },
+  };
+}
+
 export interface PatchBlock {
   index: string;
   search: string;
@@ -14,7 +63,28 @@ export interface MatchResult {
   index: string;
 }
 
-export type FileOperationKind = 'search_replace' | 'create_file' | 'delete_file' | 'rename_file' | 'move_file' | 'copy_file' | 'append_file' | 'append_file_multi' | 'search_replace_multi' | 'create_directory' | 'delete_directory' | 'move_directory' | 'extract_structure' | 'codebase_metadata' | 'search_files' | 'read_file' | 'read_files' | 'read_directory' | 'terminal_interactive' | 'terminal_command' | 'get_tool_info';
+export type FileOperationKind =
+  | 'search_replace'
+  | 'create_file'
+  | 'delete_file'
+  | 'rename_file'
+  | 'move_file'
+  | 'copy_file'
+  | 'append_file'
+  | 'append_file_multi'
+  | 'search_replace_multi'
+  | 'create_directory'
+  | 'delete_directory'
+  | 'move_directory'
+  | 'extract_structure'
+  | 'codebase_metadata'
+  | 'search_files'
+  | 'read_file'
+  | 'read_files'
+  | 'read_directory'
+  | 'terminal_interactive'
+  | 'terminal_command'
+  | 'get_tool_info';
 
 export interface SearchReplaceOperation {
   kind: 'search_replace';
@@ -251,4 +321,25 @@ export interface SessionMetadata {
   description?: string;
 }
 
-export type FileOperation = SearchReplaceOperation | CreateFileOperation | DeleteFileOperation | RenameFileOperation | MoveFileOperation | CopyFileOperation | AppendFileOperation | AppendFileMultiOperation | SearchReplaceMultiOperation | CreateDirectoryOperation | DeleteDirectoryOperation | MoveDirectoryOperation | ExtractStructureOperation | CodebaseMetadataOperation | SearchFilesOperation | ReadFileOperation | ReadFilesOperation | ReadDirectoryOperation | TerminalInteractiveOperation | TerminalCommandOperation | GetToolInfoOperation;
+export type FileOperation =
+  | SearchReplaceOperation
+  | CreateFileOperation
+  | DeleteFileOperation
+  | RenameFileOperation
+  | MoveFileOperation
+  | CopyFileOperation
+  | AppendFileOperation
+  | AppendFileMultiOperation
+  | SearchReplaceMultiOperation
+  | CreateDirectoryOperation
+  | DeleteDirectoryOperation
+  | MoveDirectoryOperation
+  | ExtractStructureOperation
+  | CodebaseMetadataOperation
+  | SearchFilesOperation
+  | ReadFileOperation
+  | ReadFilesOperation
+  | ReadDirectoryOperation
+  | TerminalInteractiveOperation
+  | TerminalCommandOperation
+  | GetToolInfoOperation;

@@ -4,7 +4,7 @@ import * as pathModule from 'path';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { createTestWorkspace, cleanupTestWorkspace } from '../testing/testUtils.js';
 import { executeFileOperations } from './index.js';
-import type { FileOperation } from '../types/patch.js';
+import type { FileOperation } from '../types/legacy.js';
 
 describe('Settings enforcement during execution', () => {
   let tempDir: string;

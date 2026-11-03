@@ -1,5 +1,6 @@
 import type { FileSystem } from '../types/filesystem';
-import type { FileOperation } from '../types/patch';
+import type { FileOperation } from '../types/legacy.js';
+import { findSingleMatch } from '../types/legacy.js';
 import { getWorkspaceRootForPath } from '../utils/workspacePath';
 import {
   boundaryPolicy,
@@ -252,11 +253,6 @@ export const BrudAPI = {
     },
 
     async singleMatch(fs: FileSystem, path: string, searchText: string): Promise<ValidationResult> {
-      const searchResult = await this.searchText(fs, path, searchText);
-      if (!searchResult.success) {
-        return searchResult;
-      }
-
       let content: string;
       try {
         content = await fs.readFile(path);
@@ -264,14 +260,15 @@ export const BrudAPI = {
         return fail(fileNotFoundError(path));
       }
 
-      const firstIndex = content.indexOf(searchText);
-      const lastIndex = content.lastIndexOf(searchText);
+      const result = findSingleMatch(content, searchText);
 
-      if (firstIndex !== lastIndex) {
-        return fail(multipleMatchesError(path));
+      if (!result.ok) {
+        return result.error.code === 'SEARCH_NOT_FOUND'
+          ? fail(searchNotFoundError(path, searchText))
+          : fail(multipleMatchesError(path));
       }
 
-      return success({ path, searchText, index: firstIndex });
+      return success({ path, searchText, index: result.value.index });
     },
 
     requiredField(field: string, value: unknown, operation?: string): ValidationResult {

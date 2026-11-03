@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation, SessionMetadata } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
 import { revertSession } from '@brud/core';
 import type { ExtensionMessage } from '@brud/protocol';
 import { WorkspaceHistoryStore, VSCodeFileSystem, getWorkspaceFolders } from '@brud/vscode-adapter';

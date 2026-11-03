@@ -333,6 +333,63 @@ describe('PluginManagerService tool capabilities', () => {
     assert.equal(observed, controller.signal);
   });
 
+  it('denies a tool requiring fs:read to a plugin without it', async () => {
+    const tools = createTools();
+    const manager = createManager(() => tools);
+    let result: OperationResult | undefined;
+
+    manager.register(
+      createPlugin(
+        'acme.tools.no-fs',
+        ['tools:register', 'tools:execute'],
+        async (context) => {
+          context.registerTool({
+            name: 'acme_read',
+            description: 'Read',
+            parametersSchema: ECHO_SCHEMA,
+            requiredPermissions: ['fs:read'],
+            execute: async (input): Promise<OperationResult> => echoResult(input),
+          });
+
+          result = await context.executeTool('acme_read', { message: 'hi' });
+        },
+      ),
+    );
+
+    await manager.activatePlugin('acme.tools.no-fs');
+
+    assert.equal(result?.status, 'failed');
+    assert.match(String(result?.error), /^TOOL_PERMISSION_DENIED: /);
+  });
+
+  it('allows a tool requiring fs:read to a plugin holding it', async () => {
+    const tools = createTools();
+    const manager = createManager(() => tools);
+    let result: OperationResult | undefined;
+
+    manager.register(
+      createPlugin(
+        'acme.tools.with-fs',
+        ['tools:register', 'tools:execute', 'fs:read'],
+        async (context) => {
+          context.registerTool({
+            name: 'acme_read',
+            description: 'Read',
+            parametersSchema: ECHO_SCHEMA,
+            requiredPermissions: ['fs:read'],
+            execute: async (input): Promise<OperationResult> => echoResult(input),
+          });
+
+          result = await context.executeTool('acme_read', { message: 'hi' });
+        },
+      ),
+    );
+
+    await manager.activatePlugin('acme.tools.with-fs');
+
+    assert.deepEqual(result, { status: 'success', data: { echoed: 'hi' } });
+  });
+
   it('reports a friendly failure when the tools service is unavailable', async () => {
     const manager = new PluginManagerService({
       workspaceRoot: WORKSPACE_ROOT,

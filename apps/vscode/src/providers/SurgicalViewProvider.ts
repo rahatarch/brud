@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
-import { findMatches, reconstructContent } from '@brud/core';
+import { findMatches, reconstructContent } from '@brud/patchblocks';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';
 import { BrudDiffPreviewPanelManager } from './DiffPreviewPanelProvider';
@@ -12,7 +12,7 @@ import { BrudReadPanelManager } from './ReadPanelProvider';
 import { BrudAPI } from '@brud/core';
 import { fileOpenError, previewNotAvailableError } from '@brud/core';
 import type { ValidationResult } from '@brud/core';
-import { PatchBlock, FileOperation } from '@brud/core';
+import type { PatchBlock, FileOperation } from '@brud/patchblocks';
 import { isRecord } from '@brud/protocol';
 import type { WebviewMessage, ExtensionMessage, ReportSection, UnifiedSessionResults } from '@brud/protocol';
 import { SurgicalViewDependencies } from './SurgicalViewDependencies';

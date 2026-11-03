@@ -161,6 +161,10 @@ export interface IPluginContext {
    * before the handler runs; lookup and validation failures resolve to a
    * `failed` result rather than throwing.
    *
+   * The caller's permissions are taken from the plugin manifest, never from
+   * `contextOverride`. A tool that declares `requiredPermissions` fails closed
+   * with `TOOL_PERMISSION_DENIED` when any of them is missing.
+   *
    * @param name - Dispatch name of the tool.
    * @param rawInput - Untrusted payload supplied by the plugin.
    * @param contextOverride - Optional cancellation signal and caller override.

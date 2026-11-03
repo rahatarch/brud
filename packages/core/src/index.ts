@@ -1,7 +1,5 @@
-export * from './types/patch';
 export * from './types/filesystem';
-export * from './parser';
-export * from './engine';
+export * from './types/legacy';
 export * from './file-operations';
 export * from './utils/workspacePath';
 export * from './utils/pathResolver';
@@ -14,7 +12,6 @@ export * from './import-resolver';
 export * from './read-engine';
 export * from './terminal';
 export * from './validation/terminal';
-export * from './cleaner';
 export * from './api';
 export * from './settings';
 export * from './prompts';

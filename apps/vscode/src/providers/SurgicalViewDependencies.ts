@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-import type { FileOperation, SessionMetadata, BrudSettings } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
+import type { BrudSettings } from '@brud/core';
 import { DEFAULT_SETTINGS } from '@brud/core';
 import { getEffectiveSettings } from '@brud/vscode-adapter';
 import { BrudCodePreviewProvider } from './DiffPreviewProvider';

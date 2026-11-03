@@ -12,7 +12,7 @@
 | Depends on | [BEAS-0001](./ENGINE_ARCHITECTURE_STANDARD.md), [Microkernel Architecture Specification](./microkernel-architecture-spec.md), [MCP Subsystem Design](./mcp-subsystem-design.md), [BrudHistory Specification](./BRUD_HISTORY_ENGINE_SPEC.md) |
 | Review cadence | Re-read at the start of every phase; update the phase status table in §5.1 when a phase gate passes |
 | Change rule | A behavioural change that contradicts this document must update this document in the same change, citing code and tests. Silent divergence is a defect. |
-| Last revised | 2026-10-30: phase status refreshed (§2.3, §2.6, §5.1, Appendix F); strategy changed to rollout-before-release with legacy quarantine (D-12, D-13, D-14) |
+| Last revised | 2026-11-01: Brud Protocol v2 (`[BRUD]`) adopted; legacy 29-state FSM, Git-diff syntax and YAML parser decommissioned; parser confirmed as a Level-1 `BrudTools` capability. 2026-10-30: phase status refreshed (§2.3, §2.6, §5.1, Appendix F); strategy changed to rollout-before-release with legacy quarantine (D-12, D-13, D-14) |
 
 ### Status vocabulary
 
@@ -28,7 +28,7 @@
 1. §1 explains *why* the migration is phased and what may not be broken.
 2. §2 establishes the *ground truth* of the repository today.
 3. §3 lists the prerequisites that block userland plugins.
-4. §4 defines the eleven plugins that replace the legacy core.
+4. §4 defines the ten plugins that replace the legacy core, and the Level-1 parser capability that is not a plugin.
 5. §5 is the executable plan: phases, gates, rollback, and verification.
 
 ### Contents
@@ -135,7 +135,7 @@ The principle has five binding rules.
 | **R4 — Transports are replaceable** | stdio, HTTP, JSON-RPC, and future Desktop IPC are adapters over `tools:execute`, not executions of their own. | Replacing a transport cannot change security or semantics. |
 | **R5 — Removal is reversible at the edge** | Any adapter can be deleted without losing domain logic. | Host churn (VS Code → Desktop) does not become engine churn. |
 
-**Tool execution is kernel-owned; tool implementations are plugins.** `BrudTools` (`brud.core.tools`) is a Level-1 service that owns the live tool registry, the official-certification status, the schema-validation gate, and the dispatch table. Individual tool implementations — `create_file`, `search_replace`, `read_file`, and community tools such as a vendor Git runner — are ordinary capability-gated plugins that register into it through `context.registerTool(...)`. Neither the stream block parser nor the AI prompt surface enumerates plugins; both resolve tool names against the boot-time `BrudTools` routing table.
+**Tool execution is kernel-owned; tool implementations are plugins.** `BrudTools` (`brud.core.tools`) is a Level-1 service that owns the live tool registry, the official-certification status, the schema-validation gate, the `[BRUD]` block parser, and the dispatch table. Individual tool implementations — `create_file`, `search_replace`, `read_file`, and community tools such as a vendor Git runner — are ordinary capability-gated plugins that register into it through `context.registerTool(...)`. Neither the `[BRUD]` parser nor the AI prompt surface enumerates plugins; both resolve tool names against the boot-time `BrudTools` routing table.
 
 **Zero-downtime execution** in this document means the operational property implied by R1–R5: the workspace kernel and its state stay alive while surfaces attach, detach, or change transport. It does **not** promise hot-patching a running process. A migration cutover is a controlled boot or plugin reload; it is never a mid-operation replacement of the execution engine.
 
@@ -694,7 +694,7 @@ export interface ITerminalService {
 
 #### G-18 `BrudToolsService` — `brud.core.tools`
 
-**Why it blocks userland:** Tool cataloging and execution routing are not an optional documentation feature. The stream block parser (`<<<TOOL_NAME` … `>>>`), the AI prompt surface, the Brud Desktop tool palette, and the MCP bridge all require one authoritative, boot-time table that maps a tool name to a schema-validated handler. If that table lived in a late-phase userland plugin (`brud.tools.catalog`), the parser would have to load userland code before the kernel is running, or depend on plugin activation order, and every tool implementation would need a brittle parent/child plugin hierarchy to publish its descriptor.
+**Why it blocks userland:** Tool cataloging and execution routing are not an optional documentation feature. The `[BRUD]` block parser (`[CALL <tool_name>]` … `[END]`), the AI prompt surface, the Brud Desktop tool palette, and the MCP bridge all require one authoritative, boot-time table that maps a tool name to a schema-validated handler. If that table lived in a late-phase userland plugin (`brud.tools.catalog`), the parser would have to load userland code before the kernel is running, or depend on plugin activation order, and every tool implementation would need a brittle parent/child plugin hierarchy to publish its descriptor.
 
 | Aspect | Target |
 |---|---|
@@ -704,16 +704,17 @@ export interface ITerminalService {
 | Dependencies | `SettingsService`, `ValidationService` |
 | Boot position | After `ValidationService`, before `PluginManager` |
 | Responsibilities | Registry and dispatch table; plugin registration surface; official certification status; schema validation gate; parser routing table; tool-definition synthesis |
-| Status | Enforced as of 2026-10-29 (`packages/kernel/services/BrudTools/`; `.internal_docs/verifications/2026-10-29_brud_tools_level_1_service.md`, PASS after B-1). Parser routing and tool-definition synthesis are wired in later phases |
+| Status | Enforced as of 2026-10-29 (`packages/kernel/services/BrudTools/`; `.internal_docs/verifications/2026-10-29_brud_tools_level_1_service.md`, PASS after B-1). Parser embedding (`parseInput` / `parseAndRoute`, with the `[BRUD]` syntax engine and protected-region resolver) is Phase 6 capability work; tool-definition synthesis remains a later phase |
 
 **Responsibilities (normative):**
 
 1. Serves as the central registry and dispatch table for every tool — core official tools (`create_file`, `search_replace`, `read_file`, …) and community tools (for example a vendor Git runner).
 2. Exposes a unified registration interface for plugins through the `tools:register` capability on `IPluginContext`.
 3. Manages **Official Tool Certification** status by checking `OFFICIAL_PLUGIN_BRAND`; the `isOfficial` flag is derived, never asserted by the registrant.
-4. Validates tool payloads against their declared JSON Schema through `ValidationService` before the handler is invoked.
-5. Provides the direct routing table used by the stream block parser (`<<<TOOL_NAME` … `>>>`), so the tokenizer resolves a name with one lookup and never inspects plugins.
-6. Synthesizes the live tool definitions consumed by the AI prompt system, the Brud Desktop UI palette, and the MCP bridge.
+4. Validates tool payloads against their declared `parametersSchema` through the kernel's zero-dependency JSON Schema subset compiler **and** through the `ValidationService` policy gate before the handler is invoked.
+5. Embeds the Brud Protocol v2 parser: `parseInput` scans `[BRUD]` blocks and produces operations and metadata for preview callers, and `parseAndRoute` scans raw AI text, resolves `protected: true` parameters into `{param}…{/param}` regions, validates each operation against the registered schema, and dispatches it through the same path as `executeTool`.
+6. Provides the direct routing table used by the `[BRUD]` parser (`[CALL <tool_name>]`), so the scanner resolves a name with one lookup and never inspects plugins.
+7. Synthesizes the live tool definitions consumed by the AI prompt system, the Brud Desktop UI palette, and the MCP bridge.
 
 **Why this is Level-1 and not a plugin:** the registry is part of the execution contract, not a feature built on top of it. Putting it in Level-1 removes the parent/child plugin hierarchy, keeps the parser frozen (it resolves tool names against `BrudTools.getTool(toolName)`), and guarantees 100% API parity: an official tool and a community tool register through the exact same `registerTool` call and are dispatched through the exact same path. `brud.tools.catalog` survives as a convenience plugin layered on top (see §4.3), not as the storage of record.
 
@@ -748,10 +749,12 @@ export interface IBrudToolsService {
   getTool(name: string): RegisteredToolInfo | undefined;
   listTools(filter?: { officialOnly?: boolean }): readonly RegisteredToolInfo[];
   executeTool(name: string, rawInput: unknown, callerContext: IPluginExecutionContext): Promise<OperationResult>;
+  parseInput(rawInput: string, options?: ParseInputOptions): ParseInputResult;
+  parseAndRoute(rawInput: string, options: ParseAndRouteOptions): Promise<ParseAndRouteResult>;
 }
 ```
 
-**Exit criteria:** the parser resolves every tool through `BrudTools.getTool` with zero plugin awareness; an official and a third-party tool register through the same API and appear in `listTools`; an invalid payload is rejected by `ValidationService` before the handler runs; deactivating a plugin removes its tools and no stale route survives; two kernels in one process have independent registries.
+**Exit criteria:** the parser resolves every tool through `BrudTools.getTool` with zero plugin awareness; `parseAndRoute` parses `[BRUD]` input without an external dependency, resolves protected parameters, validates each operation against its registered `parametersSchema`, and dispatches through `executeTool`; an official and a third-party tool register through the same API and appear in `listTools`; an invalid payload is rejected before the handler runs; deactivating a plugin removes its tools and no stale route survives; two kernels in one process have independent registries.
 
 ### 3.2 Missing `IPluginContext` Capabilities
 
@@ -924,15 +927,15 @@ flowchart TD
 3. **No peer imports.** Plugins never import each other's runtime entry point. Shared pure logic is published as an SDK library (`@brud/sdk-*`); plugins may import SDK libraries, and may compose executable behavior through `tools:execute`. Runtime composition never crosses a plugin boundary by source import.
 4. **No host imports.** No plugin imports `node:*`, `vscode`, `@brud/core`, `@brud/mcp`, or an adapter.
 5. **No singletons.** Every registry is kernel-scoped and disposable. Module-level mutable state is a review blocker.
-6. **Official by brand.** All eleven are first-party, certified with the kernel symbol, and use the reserved `brud.` namespace.
-7. **Pure where possible.** Parsing and prompt libraries take bytes/strings and return values; they never touch a filesystem.
+6. **Official by brand.** All ten are first-party, certified with the kernel symbol, and use the reserved `brud.` namespace.
+7. **Pure where possible.** Parsing and prompt libraries take bytes/strings and return values; they never touch a filesystem. Brud Protocol v2 parsing is not a plugin: it is an internal capability of the Level-1 `BrudTools` service, so it holds no manifest and declares no permissions.
 8. **Tools register into Level-1.** Every plugin publishes its tools into `BrudTools` (`brud.core.tools`) through `context.registerTool(...)`. No plugin owns tool storage, and no plugin needs a parent/child relationship with another plugin to expose a descriptor.
 
 ### 4.2 Catalog Overview
 
 | # | Plugin ID | Domain | Extracted from | Permissions | Dependencies | Phase |
 |---|---|---|---|---|---|---|
-| 1 | `brud.patchblocks` | Pure block parsing and patch application | `parser/`, `engine/`, `cleaner/`, `types/patch.ts` | — | — | 6 |
+| — | *(not a plugin)* | Brud Protocol v2 (`[BRUD]`) block parsing, cleaning and metadata live inside the Level-1 `BrudTools` service (`brud.core.tools`) | `parser/`, `cleaner/`, `types/patch.ts` → `packages/kernel/services/BrudTools/parser/` | — | — | 6 (service capability) |
 | 2 | `brud.codebase.imports` | Import resolution | `import-resolver/` | `fs:read` | — | 6 |
 | 3 | `brud.search` | File search and glob resolution | `search/` | `fs:read`, `tools:register` | — | 6 |
 | 4 | `brud.codebase.structure` | AST/structure and metadata extraction | `structure-extractor/`, `metadata-extractor/` | `fs:read`, `tools:register` | — | 6 |
@@ -940,26 +943,28 @@ flowchart TD
 | 6 | `brud.prompts.user` | User prompt cascade and persistence | `prompts/`, adapter prompt stores | `fs:read`, `fs:write` | `brud.prompts.library` | 6 |
 | 7 | `brud.tools.catalog` | `get_tool_info` and documentation export over the Level-1 registry | `tool-registry/`, `get_tool_info` branch | `tools:register`, `tools:execute` | `brud.core.tools` (L1 service) | 7 |
 | 8 | `brud.tools.reader` | Bounded batch read engine | `read-engine/`, read branches | `fs:read`, `tools:register`, `tools:execute` | `brud.search`, `brud.codebase.imports` | 8 |
-| 9 | `brud.tools.filesystem` | Mutating file operations | mutation branches of `file-operations/`, patch application | `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register` | `brud.patchblocks`, `brud.search` | 9 |
+| 9 | `brud.tools.filesystem` | Mutating file operations | mutation branches of `file-operations/`, patch application | `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register` | `brud.search` | 9 |
 | 10 | `brud.terminal` | Command execution adapter | `terminal/`, terminal branches | `terminal:execute`, `settings:read`, `tools:register` | — | 10 |
 | 11 | `brud.mcp.bridge` | MCP transport and JSON-RPC adapter | `packages/mcp` | `tools:execute`, `fs:read`, `telemetry:emit` | `brud.core.tools` (L1 service), `brud.tools.catalog` | 10 |
 
-**The registry is not a plugin.** The table lists eleven plugins; the live tool registry is not one of them. `BrudTools` (`brud.core.tools`) is a Level-1 core service (G-18) that boots before `PluginManager`. Every operational plugin — `brud.tools.filesystem`, `brud.tools.reader`, `brud.terminal`, `brud.search`, `brud.codebase.structure`, and third-party packages such as `@vendor/git` — registers its tools into it through the exact same `context.registerTool(...)` API. There is no privileged registration path for official plugins; official status is a derived field, not a different contract.
+**The registry is not a plugin, and neither is the block parser.** The table lists ten plugins plus one non-plugin capability; the live tool registry and the Brud block parser are not plugins. `BrudTools` (`brud.core.tools`) is a Level-1 core service (G-18) that boots before `PluginManager` and owns both the tool registry and the embedded parser (`parseInput` / `parseAndRoute`). Every operational plugin — `brud.tools.filesystem`, `brud.tools.reader`, `brud.terminal`, `brud.search`, `brud.codebase.structure`, and third-party packages such as `@vendor/git` — registers its tools into it through the exact same `context.registerTool(...)` API. There is no privileged registration path for official plugins; official status is a derived field, not a different contract.
 
 ### 4.3 Plugin Specifications
 
-#### 1. `brud.patchblocks`
+#### 1. Brud block parser — Level-1 `BrudTools` capability (not a plugin)
 
 | Field | Value |
 |---|---|
-| Purpose | Parse Brud blocks and apply surgical search/replace with gravity-shift matching and deduplication |
-| Source | `packages/core/src/parser/` (legacy + YAML + metadata), `engine/` (`findMatches`, `reconstructContent`), `cleaner/`, `types/patch.ts` |
-| Public surface | Pure functions: `parseBlocks`, `parseOperations`, `findMatches`, `reconstructContent`, `cleanBrudInput` |
-| Permissions | None |
-| Operations | None (library only) |
-| Failure mode | Returns structured parse/match errors; never throws for user input |
-| Verify | Fixture parity against legacy parser and engine; property tests for whitespace ambiguity |
-| Why first | It is the only dependency of `search_replace` and has no host or capability risk |
+| Purpose | Scan Brud Protocol v2 input (`[BRUD]…[/BRUD]`, `[CALL tool]…[END]`, `key: value`, and `{param}…{/param}` protected regions), extract metadata, clean wrappers, validate each operation against its registered tool schema, and dispatch through the Level-1 routing table |
+| Location | `packages/kernel/services/BrudTools/parser/` (embedded), not `packages/plugins/` |
+| Source | `parser/`, `cleaner/`, `types/patch.ts`, pure cwd/path helpers. Matching (`findMatches`, `reconstructContent`, `singleMatch`) stays in `packages/core` until Phase 9 |
+| Public surface | `IBrudToolsService.parseInput(raw, options)` for preview/read-only callers; `IBrudToolsService.parseAndRoute(raw, options)` for parse → validate → dispatch. Internal parser functions are not a second public API |
+| Permissions | None. It runs inside the kernel and declares no plugin manifest |
+| Operations | None directly; it routes all 21 kinds to whichever plugin registered the tool |
+| Failure mode | Structured parse errors; parse failures dispatch nothing; a missing tool, invalid schema, invalid protected region, or invalid payload is reported per operation without aborting the batch (unless `stopOnFailure`) |
+| Verify | `[BRUD]` scanner fixtures (wrapper, call splitting, parameters, protected regions); routing tests for validation, abort, and dry-run; kernel purity test |
+| Why Level-1 | Parsing is part of the execution contract: the router, the preview surfaces and the MCP bridge all need one parse result before any handler can run. A plugin would have to activate before the kernel is running or force a parent/child plugin hierarchy |
+| Legacy syntax | The 29-state FSM, the Git-diff syntax (`<<<<<<<`, `=======`, `>>>>>>>`) and the YAML format are removed and are not parseable in v0.2.0. The kernel ships no `js-yaml`, no YAML loader and no compatibility mode. See `.internal_docs/plans/2026-11-01_embed_parser_into_brudtools_plan.md` |
 
 #### 2. `brud.codebase.imports`
 
@@ -1055,7 +1060,7 @@ flowchart TD
 | Operations | `search_replace`, `create_file`, `delete_file`, `rename_file`, `move_file`, `copy_file`, `append_file`, `create_directory`, `delete_directory`, `move_directory`, `append_file_multi`, `search_replace_multi` |
 | Failure mode | No partial writes; failed batch aborts the session and reverts applied operations; conflicts are reported before mutation |
 | Verify | Byte parity for all 12 kinds; reversal parity; crash recovery; symlink containment; failed-batch rollback |
-| Notes | Uses the `brud.patchblocks` SDK for matching, the kernel `ToolRegistrationOptions` contract for descriptors, and the `brud.search` SDK for glob expansion through its own `fs:read` handle. Requires G-7 filesystem primitives. Directory operations must be atomic enough to leave a recoverable state |
+| Notes | Uses the core patch matcher (moved into this plugin in Phase 9) and the L1 `BrudTools` parser (`parseAndRoute`), the kernel `ToolRegistrationOptions` contract for descriptors, and the `brud.search` SDK for glob expansion through its own `fs:read` handle. Requires G-7 filesystem primitives. Directory operations must be atomic enough to leave a recoverable state |
 
 #### 10. `brud.terminal`
 
@@ -1085,8 +1090,8 @@ flowchart TD
 
 | # | Legacy kind | Owner plugin | Mode | Notes |
 |---|---|---|---|---|
-| 1 | `search_replace` | `brud.tools.filesystem` | mutate | Uses `brud.patchblocks` |
-| 2 | `create_file` | `brud.tools.filesystem` | mutate | Overwrite semantics preserved |
+| 1 | `search_replace` | `brud.tools.filesystem` | mutate | Uses the L1 `[BRUD]` parser (`parseAndRoute`) and the core patch matcher (moves into this plugin in Phase 9); replacement content arrives in the `{content}` protected block |
+| 2 | `create_file` | `brud.tools.filesystem` | mutate | Overwrite semantics preserved; file content arrives in the `{content}` protected block |
 | 3 | `delete_file` | `brud.tools.filesystem` | mutate | History baseline before delete |
 | 4 | `rename_file` | `brud.tools.filesystem` | mutate | Requires FS `rename` |
 | 5 | `move_file` | `brud.tools.filesystem` | mutate | Cross-directory move |
@@ -1113,7 +1118,6 @@ flowchart TD
 
 ```mermaid
 flowchart LR
-    PB["brud.patchblocks"]
     IMP["brud.codebase.imports"]
     SRCH["brud.search"]
     STRUCT["brud.codebase.structure"]
@@ -1135,12 +1139,11 @@ flowchart LR
     PLIB --> PUSER
     SRCH --> READ
     IMP --> READ
-    PB --> FS
     SRCH --> FS
     CAT --> MCP
 ```
 
-**Rule:** arrows mean "must be active first". They do **not** mean "imports its code". `BTOOLS` is not a plugin: it is a Level-1 service that is constructed during kernel boot, before any plugin activates, so every arrow from it is satisfied by the time `PluginManager` runs. The reader composes search/imports through `tools:execute` or through kernel capability contracts; it never imports their modules. Tool descriptors come from the kernel `ToolRegistrationOptions` contract, which is why no plugin depends on `brud.tools.catalog` to register a tool.
+**Rule:** arrows mean "must be active first". They do **not** mean "imports its code". `BTOOLS` is not a plugin: it is a Level-1 service that is constructed during kernel boot, before any plugin activates, so every arrow from it is satisfied by the time `PluginManager` runs. The `[BRUD]` parser is inside `BTOOLS`, so it has no node or edge of its own. The reader composes search/imports through `tools:execute` or through kernel capability contracts; it never imports their modules. Tool descriptors come from the kernel `ToolRegistrationOptions` contract, which is why no plugin depends on `brud.tools.catalog` to register a tool.
 
 ### 4.6 Permission Matrix
 
@@ -1148,7 +1151,6 @@ Legend: `yes` declared, `-` not declared.
 
 | Plugin | fs:read | fs:write | history:read | history:write | tools:register | tools:execute | settings:read | terminal:execute | telemetry:emit |
 |---|---|---|---|---|---|---|---|---|---|
-| `brud.patchblocks` | - | - | - | - | - | - | - | - | - |
 | `brud.codebase.imports` | yes | - | - | - | - | - | - | - | - |
 | `brud.search` | yes | - | - | - | yes | - | - | - | - |
 | `brud.codebase.structure` | yes | - | - | - | yes | - | - | - | - |
@@ -1211,7 +1213,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 | **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium | **Implemented, gate not ratified.** Independent audit "Substantially Compliant" with open remediation items (`.internal_docs/audits/2026-10-29_terminal_service_independent_verification_audit.md`); fixes in commit `00422f1` not re-verified |
 | **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium | **In progress.** Done: `BrudTools`, `registerTool`/`executeTool`, `onRunning` boot grant (G-9), read-only universal history for plugins (G-8). Open: `settings:read`/`terminal:execute` + handles, telemetry sink, FS primitives (G-7), boundary script, denial matrix |
 | **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **U-7 legacy removal done; U-8 retention pending.** Build (U-0…U-5) and U-6 cutover verified. U-7: both legacy engines removed (53 files), the `historyEngine` selector and legacy options are gone, the unified engine is the only engine, and `.brud/history` is unwritable for every `BrudFileSystem` caller; legacy import is tested against a frozen fixture produced by the legacy engines; oracle 25/25 with R4 as an ordinary scenario. Third-party plugins get only a namespace-bound `getHistory()`. Remaining: U-8 retention and garbage collection. C-3/C-4 paused until 5.H completes |
-| **6** | Leaf plugins | Six leaf plugins (pure or narrowly scoped storage) live behind flags | 5 | 100% fixture parity per plugin | Low | Not started |
+| **6** | Leaf plugins + embedded parser | Five leaf plugins live behind flags, and the `[BRUD]` syntax engine is embedded in `BrudTools` as a Level-1 capability | 5 | 100% fixture parity per plugin and for the embedded parser; kernel stays dependency-free | Low | Not started |
 | **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium | Not started |
 | **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low | Not started |
 | **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** | Not started |
@@ -1390,7 +1392,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
    - Register the descriptor in `createStandardKernel` after `ValidationService` and before `PluginManager`, so the routing table exists before activation.
    - Implement `registerTool`, `getTool`, `listTools`, and `executeTool` exactly as specified in G-18; registration is instance-scoped and disposable.
    - Make `IPluginContext.registerTool()` and `executeTool()` thin permission-checked handles over this one instance; no plugin receives the raw registry.
-   - Wire the stream block parser to resolve `<<<TOOL_NAME` … `>>>` through `BrudTools.getTool` only; the tokenizer stays frozen and plugin-unaware.
+    - Wire the `[BRUD]` block parser to resolve `[CALL <tool_name>]` through `BrudTools.getTool` only; the scanner stays frozen and plugin-unaware.
    - Synthesize tool definitions for the AI prompt system, Brud Desktop palette, and MCP bridge from `listTools()`.
    - Remove `globalToolRegistry` from the plugin path; the legacy registry may remain only behind the Phase 11 compatibility flag.
 7. **Telemetry sink (G-14):** define `TelemetryTokens.Service`; route plugin logger records through it; keep a no-op default.
@@ -1400,7 +1402,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 **Exit criteria:**
 
 - A plugin can register a tool, execute it, read settings, run a terminal command, emit telemetry, and read history read-only, each only with the declared permission.
-- `BrudTools` boots as `brud.core.tools` after `ValidationService` and before `PluginManager`; the stream parser routes every tool name through `getTool` with no plugin awareness.
+- `BrudTools` boots as `brud.core.tools` after `ValidationService` and before `PluginManager`; the `[BRUD]` parser routes every tool name through `getTool` with no plugin awareness.
 - An official tool and a third-party tool register through the same `registerTool(...)` API and appear in `listTools()` with a correctly derived `isOfficial` flag.
 - Deactivating a plugin removes its tools from the routing table; a payload that violates the declared JSON Schema is rejected before the handler runs.
 - Two kernels in one process expose independent tool registries; `globalToolRegistry` is no longer in the plugin path.
@@ -1414,29 +1416,36 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 ---
 
-#### Phase 6 — Leaf Plugins
+#### Phase 6 — Leaf Plugins and Embedded Parser
 
-**Objective:** move the six low-risk plugins out of core, proving the plugin contract.
+**Objective:** move the five low-risk plugins out of core, proving the plugin contract, and embed the Brud Protocol v2 (`[BRUD]`) syntax engine in the Level-1 `BrudTools` service.
 
-**Plugins:** `brud.patchblocks`, `brud.codebase.imports`, `brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`.
+**Plugins:** `brud.codebase.imports`, `brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`.
+
+**Non-plugin capability:** the `[BRUD]` block parser is **not** a plugin. It extracts `[BRUD]…[/BRUD]`, splits `[CALL tool]…[END]` calls, parses `key: value` parameters and `{param}…{/param}` protected regions, and lives in `packages/kernel/services/BrudTools/parser/`, exposed as `parseInput` / `parseAndRoute` on `IBrudToolsService`. The legacy 29-state FSM, Git-diff syntax and YAML parser are removed; there is no format sniffing. Matching (`findMatches`, `reconstructContent`, `singleMatch`) stays in `packages/core` until Phase 9.
 
 **Work items:**
 
-1. Create one package per plugin under `packages/plugins/` (or an agreed equivalent) with its own manifest, tests, and README.
-2. Port code without behavioural edits; replace host calls with context handles.
-3. Register official branding through the internal certifier.
-4. Add shadow mode: run the plugin on the same input in an isolated sandbox and diff normalized output against legacy. Shadow never applies side effects.
-5. Make the plugin active per flag (`plugins.brud.<id> = active`); default `off`.
-6. Add parity fixtures for each plugin from Phase 0's oracle.
+1. Create one package per leaf plugin under `packages/plugins/` (or an agreed equivalent) with its own manifest, tests, and README. The parser is not a plugin (see §4.3.1).
+2. Port plugin code without behavioural edits; replace host calls with context handles.
+3. Embed the `[BRUD]` syntax engine in `BrudTools`: move the pure scanner modules, add `parseInput` and `parseAndRoute`, resolve `protected: true` parameters into brace-wrapped regions from the registered `parametersSchema`, validate operations with the kernel JSON Schema subset compiler, and dispatch through `executeTool`.
+4. Delete the legacy grammar and YAML path outright: remove the 29-state FSM, the Git-diff syntax and the YAML parser; remove `js-yaml` and the zero-dependency YAML subset loader. Keep `packages/kernel/package.json` at zero dependencies.
+5. Register official branding through the internal certifier for the five plugins.
+6. Add shadow mode per leaf plugin: run it on the same input in an isolated sandbox and diff normalized output against legacy. Shadow never applies side effects.
+7. Make each leaf plugin active per flag (`plugins.brud.<id> = active`); default `off`. The parser capability is additive and needs no flag: legacy execution stays authoritative until tool plugins register.
+8. Add parity fixtures for each plugin from Phase 0's oracle, plus `[BRUD]` scanner fixtures covering wrapper extraction, call splitting, parameters, and protected regions.
 
 **Exit criteria:**
 
-- 100% fixture parity for every leaf plugin; zero unexplained diffs.
+- 100% fixture parity for every leaf plugin and for the embedded parser; zero unexplained diffs.
+- `parseAndRoute` parses `[BRUD]` input with zero runtime dependencies, validates each operation against its registered schema, requires brace-wrapped protected parameters, and never dispatches after a parse error.
+- No legacy grammar survives: no 29-state FSM, no `<<<<<<<`/`=======`/`>>>>>>>` parsing, no YAML parser, no `js-yaml`.
 - No plugin imports `@brud/core`, `node:*`, or another plugin's implementation.
+- The kernel remains dependency-free and the parser modules contain no `node:*`, ambient process read, or external package import.
 - Plugin activation/deactivation leaves no disposables or file handles.
-- Legacy modules remain authoritative when flags are `off`.
+- Legacy modules remain authoritative when flags are `off`; the legacy execution path is unchanged.
 
-**Rollback:** set all six flags to `off`; no data changes occurred.
+**Rollback:** set the five leaf-plugin flags to `off`; the parser capability is additive and can be removed by reverting the embedding commit. No data changes occurred. Rollback does not restore the legacy grammars, which are decommissioned by directive.
 
 ---
 
@@ -1499,7 +1508,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 1. Extend the filesystem service with the directory/rename/copy primitives from Phase 5; verify atomicity and mutex coverage.
 2. Implement the 12 kinds in the plugin, preserving each kind's semantics and error codes.
 3. Implement transaction flow: resolve globs first, `beginSession` with the complete declared targets, validate, mutate, `commitSession('completed')`. On failure, use an explicit abort-with-rollback path (G-17): add `abortSession(sessionId, { revert: true })` or persist applied deltas before abort, so a partially applied batch is recoverable through the ledger.
-4. Integrate patch application through `brud.patchblocks`; keep `search_replace` matching semantics identical.
+4. Integrate patch application through the L1 `[BRUD]` parser (`BrudTools.parseAndRoute`) and the core patch matcher; move the matcher into `brud.tools.filesystem` and keep `search_replace` matching semantics identical. In `[BRUD]` input, `search_replace` and `create_file` deliver their file bodies through the schema-declared `{content}` protected block; the plugin must not expect legacy `<<<<<<<`/`=======`/`>>>>>>>` diff markers or YAML documents.
 5. Add **history provenance (G-10)**: an `origin` marker (`human`, `mcp`, `plugin:<id>`) on sessions; default `human` for legacy callers.
 6. Add the **history import bridge (G-15)**: a one-way, idempotent importer from `.brud/history/sessions/*` into the ledger. Dry-run by default; verify digests; never delete originals; record import provenance.
 7. Cut over in sub-steps: create/delete/append, then rename/move/copy, then directory operations, then multi-file, then `search_replace`.
@@ -1552,7 +1561,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 #### Phase 11 — Quarantine Legacy Core (`deprecated/`)
 
-**Objective:** take the legacy monolith out of every live path so the microkernel is the only execution path, while keeping its source files intact in one quarantine directory (D-14). Nothing is deleted.
+**Objective:** take the legacy monolith out of every live path so the microkernel is the only execution path, while keeping its source files intact in one quarantine directory (D-14). Nothing is deleted. This includes the final wipe of the legacy Brud block syntax: the `<<<<<<<`/`=======`/`>>>>>>>` grammar no longer exists anywhere in live code or documentation, and the Master System Prompt speaks Brud Protocol v2 (`[BRUD]`).
 
 **Quarantine model:**
 
@@ -1577,6 +1586,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 6. Rename `PluginManagerToken` id to `brud.core.pluginManager` and update tests/docs.
 7. Update BEAS-0001, the microkernel spec, the MCP design status register, `ARCHITECTURE.md`, and package READMEs to describe `deprecated/` as quarantined and unsupported.
 8. Add a CI gate that fails on any live reference to the quarantined symbols (`file-operations`, `legacyBridge`, `globalToolRegistry`, `bootCoreKernel`, `CoreTokens`) outside `deprecated/`.
+9. Wipe the legacy block syntax from the codebase and documentation: remove every producer, parser, fixture and example of `<<<<<<<` / `=======` / `>>>>>>>` and YAML block documents, and update the Master System Prompt (`packages/core/src/prompt-library/masterPrompt.ts`, shipped by `brud.prompts.library`) to Brud Protocol v2 with `[BRUD]`, `[CALL tool]`, `key: value` and `{content}` protected-region examples plus the protected-parameter rule.
 
 User data is out of scope: historical `.brud/history/sessions` files stay on disk untouched.
 
@@ -1590,6 +1600,7 @@ User data is out of scope: historical `.brud/history/sessions` files stay on dis
 - All 21 kinds are served by official plugins.
 - History has one writer (UniversalHistory) and one reader.
 - No test fake is importable from a production entry point.
+- The legacy `<<<<<<<`, `=======` and `>>>>>>>` syntax is wiped from the codebase and documentation, and the Master System Prompt uses `[BRUD]`, `[CALL]` and `{content}` with no legacy examples.
 - This document's status is updated to "Complete" with the date, which unblocks the next consumer release.
 
 **Rollback:** code-only. Because the source is preserved, restoring it means moving the files back and lifting the ESLint restriction; no user data is affected. Rollback re-opens the release block.
@@ -1623,7 +1634,7 @@ flowchart TD
 **Parallelizable work (respecting the graph):**
 
 - After Phase 2, the path adapter and its parity matrix can proceed alongside Phase 3.
-- After Phase 5, leaf plugins (Phase 6) can be built in parallel by independent owners, provided each has its own fixtures and no shared package.
+- After Phase 5, leaf plugins (Phase 6) can be built in parallel by independent owners, provided each has its own fixtures and no shared package. Embedding the parser in `BrudTools` is kernel work and must land before the reader and filesystem plugins consume `parseAndRoute`.
 - The history import bridge can be developed during Phase 8 and integrated at Phase 9.
 - Desktop shell development may proceed in parallel and consumes only the protocol and kernel contracts; it never calls legacy execution code. Its **release** is blocked until Phase 11 passes (D-12).
 
@@ -1690,12 +1701,12 @@ npm run lint
 | 3 | Validation matrix for 21 kinds; legacy-code boundary tests; frozen-policy test |
 | 4 | No-orphan tests; no spawn imports; terminal mode parity |
 | 5 | Capability denial matrix; read-only history tests; boot-grant test; FS primitive tests; `BrudTools` registry/routing/schema-gate tests; boundary script |
-| 6 | Per-plugin fixture parity; no forbidden imports; clean deactivation |
+| 6 | Per-plugin fixture parity; `[BRUD]` scanner fixtures including protected regions; no forbidden imports; clean deactivation |
 | 7 | Catalog schema parity; two-kernel isolation; no global registry; `get_tool_info` reads `BrudTools` only |
 | 8 | Read envelope/limit/binary/abort/stress parity |
 | 9 | 12-kind byte parity; reversal parity; crash recovery; import dry-run; zero data loss |
 | 10 | One-kernel-per-workspace test; MCP stdio/HTTP suites; daemon RPC; extension suite; terminal cleanup |
-| 11 | Legacy source moved byte-identical into `deprecated/`; ESLint import restriction with a negative test; zero live legacy references; clean build; all suites; single execution plane; doc updates |
+| 11 | Legacy source moved byte-identical into `deprecated/`; ESLint import restriction with a negative test; zero live legacy references; legacy `<<<<<<<`/`=======`/`>>>>>>>` syntax and YAML removed; Master System Prompt updated to `[BRUD]`; clean build; all suites; single execution plane; doc updates |
 
 **Parity definition:** for a given input, the normalized result must match on status, code, error kind, target paths (after path translation), file bytes, and history effect. Message wording may differ only where this document records an approved change. Timing is not a parity dimension, but a regression beyond an agreed budget fails the performance gate.
 
@@ -1730,7 +1741,7 @@ The rollout is complete when all of the following are true:
 - [ ] No consumer app has shipped on the legacy monolith during the rollout; the VS Code extension stayed frozen.
 - [ ] All 21 operation kinds are served by official plugins with parity evidence.
 - [ ] `createStandardKernel` boots Settings → Workspace → Filesystem → History → Validation → Terminal → BrudTools → Telemetry → PluginManager, deterministically, with reverse shutdown.
-- [ ] `BrudTools` (`brud.core.tools`) is the only tool registry and dispatch table; official and third-party tools register through the same `context.registerTool(...)` API and the stream parser routes by name against it.
+- [ ] `BrudTools` (`brud.core.tools`) is the only tool registry and dispatch table; official and third-party tools register through the same `context.registerTool(...)` API and the `[BRUD]` parser routes by name against it.
 - [ ] Plugins can use all seven capabilities plus the two new permissions, only through scoped handles.
 - [ ] `history:read` is read-only by construction.
 - [ ] One kernel and one history writer exist per workspace.
@@ -1922,7 +1933,7 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | **D-8** | Kernel-relative paths are canonical | One containment model for every plugin and host | Absolute paths are handled only by adapters |
 | **D-9** | Plugins compose through SDK libraries and `tools:execute` | Prevents peer coupling while allowing shared pure logic | No plugin imports another plugin's runtime |
 | **D-10** | New tokens use `brud.core.*`; `PluginManager` is renamed last | Avoids churn during the migration | Token rename is a Phase 11 item |
-| **D-11** | Elevate the Tool Registry and Execution Fabric (`BrudTools`) to a Level-1 Kernel Core Service while tool implementations remain capability-gated plugins | Prevents coupling all tools into a monolithic core, avoids brittle "parent/child" plugin hierarchies, ensures 100% API parity between official and community tools, and provides a stable Level-1 routing table for the stream parser | The parser and AI prompts interact with a frozen Level-1 contract (`IBrudToolsService`); adding or updating tools requires zero changes to kernel internals. `brud.tools.catalog` becomes a convenience layer over `brud.core.tools` rather than the storage of record |
+| **D-11** | Elevate the Tool Registry and Execution Fabric (`BrudTools`) to a Level-1 Kernel Core Service while tool implementations remain capability-gated plugins | Prevents coupling all tools into a monolithic core, avoids brittle "parent/child" plugin hierarchies, ensures 100% API parity between official and community tools, and provides a stable Level-1 routing table for the `[BRUD]` parser | The parser and AI prompts interact with a frozen Level-1 contract (`IBrudToolsService`); adding or updating tools requires zero changes to kernel internals. `brud.tools.catalog` becomes a convenience layer over `brud.core.tools` rather than the storage of record |
 | **D-12** | Roll out the whole architecture before shipping the next consumer app; no consumer app ships on the legacy monolith (2026-10-30) | A consumer release on legacy code would create users and support obligations on the engine being replaced, and would turn every later phase into a live migration | Brud Desktop's release is gated on Phase 11; Desktop development may proceed against contracts only; supersedes the Desktop-first rationale in D-1 |
 | **D-13** | Freeze VS Code extension releases until the rollout is complete (2026-10-30) | Applies D-12 to the existing consumer app; avoids shipping new behaviour on the legacy path | Published version (0.1.6) stays as-is; the "one-release fallback" is replaced by an internal flag-gated fallback until Phase 11 |
 | **D-14** | Quarantine the legacy monolith in `deprecated/` instead of deleting it (2026-10-30) | Keeps the original source files while guaranteeing they are unused | Phase 11 moves legacy source into `deprecated/` with `git mv`; ESLint rejects any import of it; the phase becomes code-reversible; replaces the two-release decommission gate |

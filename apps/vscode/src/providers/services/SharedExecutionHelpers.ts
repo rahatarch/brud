@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { FileOperation } from '@brud/core';
+import type { FileOperation } from '@brud/patchblocks';
 import type { ExtensionMessage, OperationResult, ReadResultData } from '@brud/protocol';
 import { transformTerminalOperation } from './TerminalDataAdapter';
 import type { TerminalGroupData, TerminalResultData } from './TerminalDataAdapter';

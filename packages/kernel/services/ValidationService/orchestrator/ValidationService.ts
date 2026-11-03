@@ -603,7 +603,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
   }
 
   /**
-   * Validates the legacy block-format markers.
+   * Validates the Brud Protocol v2 wrapper.
    *
    * @param message - Raw message text.
    */

@@ -4,7 +4,12 @@
  * The module is pure ECMAScript: no `node:*` imports, no packages.
  */
 
-/** Constraint keywords the validator enforces. Anything else is rejected. */
+/**
+ * Constraint keywords the validator enforces. Anything else is rejected.
+ *
+ * `protected` is an accepted annotation keyword: it never constrains a value,
+ * it only marks a parameter the Brud Protocol v2 parser treats as protected.
+ */
 export type JsonSchemaKeyword =
   | 'type'
   | 'properties'

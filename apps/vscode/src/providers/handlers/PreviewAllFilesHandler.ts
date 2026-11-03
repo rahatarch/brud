@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
 import { BrudAPI } from '@brud/core';
-import { findMatches, reconstructContent } from '@brud/core';
+import { findMatches, reconstructContent } from '@brud/patchblocks';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
-import type { FileOperation, PatchBlock } from '@brud/core';
+import type { FileOperation, PatchBlock } from '@brud/patchblocks';
 import { isRecord } from '@brud/protocol';
 import type { ExtensionMessage } from '@brud/protocol';
 import { BrudCodePreviewProvider } from '../DiffPreviewProvider';

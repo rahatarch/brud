@@ -235,11 +235,14 @@ describe('InputSchemaEngine — batch and message gates', () => {
     assert.equal(engine.validateExtractOperations(undefined).ok, false);
   });
 
-  it('validates the legacy block format', () => {
-    const valid = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
+  it('validates the Brud Protocol v2 wrapper', () => {
+    const valid = '[BRUD]\n[CALL read_file]\npath: a.ts\n[END]\n[/BRUD]';
+    const legacy = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
 
     assert.equal(engine.validateFormat(valid).ok, true);
-    assert.equal(engine.validateFormat('no markers').ok, false);
+    assert.equal(engine.validateFormat(legacy).ok, false);
+    assert.equal(engine.validateFormat('no wrapper').ok, false);
+    assert.equal(engine.validateFormat('[/BRUD]\n[BRUD]').ok, false);
   });
 
   it('validates preview eligibility', () => {

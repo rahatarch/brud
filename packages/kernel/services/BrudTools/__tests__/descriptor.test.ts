@@ -87,6 +87,30 @@ describe('BrudTools descriptor', () => {
     await kernel.shutdown();
   });
 
+  it('denies a tool whose requiredPermissions the caller lacks', async () => {
+    const kernel = createStandardKernel({
+      storageDriver: new InMemoryStorageDriver(),
+      history: { inMemory: true },
+    });
+
+    await kernel.boot({ workspaceRoot: '/workspace' });
+
+    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    tools.registerTool('brud.a', true, {
+      ...tool('synthetic_probe_tool'),
+      requiredPermissions: ['fs:read'],
+    });
+    const result = await tools.executeTool('synthetic_probe_tool', { value: 'hello' }, {
+      workspaceRoot: '/workspace',
+      callerId: 'test',
+    });
+
+    assert.strictEqual(result.status, 'failed');
+    assert.match(String(result.error), /^TOOL_PERMISSION_DENIED: /);
+
+    await kernel.shutdown();
+  });
+
   it('rejects a payload the boot validation policy refuses', async () => {    const kernel = createStandardKernel({
       storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },

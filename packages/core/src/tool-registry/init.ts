@@ -11,12 +11,13 @@ export function initializeToolRegistry(): void {
       { name: 'search', type: 'string', required: true, description: 'Exact text to find' },
       { name: 'replace', type: 'string', required: true, description: 'New text to insert' },
     ],
-    example: `<<<<<<< SEARCH [1]
-File Path: path/to/file.ext
-exact text to find
-=======
-new text to insert
->>>>>>> REPLACE [1]`,
+    example: `[BRUD]
+[CALL search_replace]
+path: path/to/file.ext
+search: exact text to find
+replace: new text to insert
+[END]
+[/BRUD]`,
     rules: [
       'Search text must match exactly, including whitespace',
       'Only one match per SEARCH/REPLACE block is allowed',
@@ -34,11 +35,14 @@ new text to insert
       { name: 'path', type: 'string', required: true, description: 'File path' },
       { name: 'content', type: 'string', required: true, description: 'File contents' },
     ],
-    example: `<<<<<<< CREATE_FILE [1]
-File Path: path/to/new/file.ext
-=======
+    example: `[BRUD]
+[CALL create_file]
+path: path/to/new/file.ext
+{content}
 // file contents here
->>>>>>> END CREATE_FILE [1]`,
+{/content}
+[END]
+[/BRUD]`,
     rules: [
       'File must not already exist',
       'Parent directories are created automatically',
@@ -54,9 +58,11 @@ File Path: path/to/new/file.ext
     parameters: [
       { name: 'path', type: 'string', required: true, description: 'File path to delete' },
     ],
-    example: `<<<<<<< DELETE_FILE [1]
-File Path: path/to/file.ext
->>>>>>> END DELETE_FILE [1]`,
+    example: `[BRUD]
+[CALL delete_file]
+path: path/to/file.ext
+[END]
+[/BRUD]`,
     rules: [
       'File must exist to delete',
       'Deletion is permanent and cannot be undone',
@@ -73,10 +79,12 @@ File Path: path/to/file.ext
       { name: 'from', type: 'string', required: true, description: 'Current file path' },
       { name: 'to', type: 'string', required: true, description: 'New file path' },
     ],
-    example: `<<<<<<< RENAME_FILE [1]
-From: path/to/old-name.ext
-To: path/to/new-name.ext
->>>>>>> END RENAME_FILE [1]`,
+    example: `[BRUD]
+[CALL rename_file]
+from: path/to/old-name.ext
+to: path/to/new-name.ext
+[END]
+[/BRUD]`,
     rules: [
       'Source file must exist',
       'Destination must not already exist',
@@ -93,10 +101,12 @@ To: path/to/new-name.ext
       { name: 'from', type: 'string', required: true, description: 'Source file path' },
       { name: 'to', type: 'string', required: true, description: 'Destination file path' },
     ],
-    example: `<<<<<<< MOVE_FILE [1]
-From: path/to/source.ext
-To: path/to/destination.ext
->>>>>>> END MOVE_FILE [1]`,
+    example: `[BRUD]
+[CALL move_file]
+from: path/to/source.ext
+to: path/to/destination.ext
+[END]
+[/BRUD]`,
     rules: [
       'Source file must exist',
       'Destination must not already exist',
@@ -114,10 +124,12 @@ To: path/to/destination.ext
       { name: 'from', type: 'string', required: true, description: 'Source file path' },
       { name: 'to', type: 'string', required: true, description: 'Destination file path' },
     ],
-    example: `<<<<<<< COPY_FILE [1]
-From: path/to/source.ext
-To: path/to/destination.ext
->>>>>>> END COPY_FILE [1]`,
+    example: `[BRUD]
+[CALL copy_file]
+from: path/to/source.ext
+to: path/to/destination.ext
+[END]
+[/BRUD]`,
     rules: [
       'Source file must exist',
       'Destination must not already exist',
@@ -135,12 +147,15 @@ To: path/to/destination.ext
       { name: 'position', type: 'string', required: false, description: 'Where to append: start or end', default: 'end' },
       { name: 'content', type: 'string', required: true, description: 'Content to append' },
     ],
-    example: `<<<<<<< APPEND_FILE [1]
-File Path: path/to/file.ext
-Position: end
-=======
+    example: `[BRUD]
+[CALL append_file]
+path: path/to/file.ext
+position: end
+{content}
 content to append
->>>>>>> END APPEND_FILE [1]`,
+{/content}
+[END]
+[/BRUD]`,
     rules: [
       'File must already exist',
       'Position can be "start" or "end" (default: end)',
@@ -159,13 +174,16 @@ content to append
       { name: 'position', type: 'string', required: false, description: 'Start or end', default: 'end' },
       { name: 'content', type: 'string', required: true, description: 'Content to append' },
     ],
-    example: `<<<<<<< APPEND_FILE_MULTI [1]
-Pattern: **/*.ts
-Scope: src
-Position: end
-=======
+    example: `[BRUD]
+[CALL append_file_multi]
+pattern: **/*.ts
+scope: src
+position: end
+{content}
 content to append
->>>>>>> END APPEND_FILE_MULTI [1]`,
+{/content}
+[END]
+[/BRUD]`,
     rules: [
       'Pattern is a glob pattern',
       'Only existing files are modified',
@@ -184,12 +202,14 @@ content to append
       { name: 'search', type: 'string', required: true, description: 'Text to find' },
       { name: 'replace', type: 'string', required: true, description: 'Replacement text' },
     ],
-    example: `<<<<<<< SEARCH_REPLACE_MULTI [1]
-Pattern: **/*.ts
-Scope: src
-Search: old text
-Replace: new text
->>>>>>> END SEARCH_REPLACE_MULTI [1]`,
+    example: `[BRUD]
+[CALL search_replace_multi]
+pattern: **/*.ts
+scope: src
+search: old text
+replace: new text
+[END]
+[/BRUD]`,
     rules: [
       'Search text must match exactly in each file',
       'Only one match per file is replaced',
@@ -207,15 +227,15 @@ Replace: new text
       { name: 'directoryPath', type: 'string', required: true, description: 'Directory path to create' },
       { name: 'files', type: 'string[]', required: false, description: 'Optional empty files to create inside' },
     ],
-    example: `<<<<<<< CREATE_DIRECTORY [1]
-Directory Path: packages/core/src
-Files:
-  - types.ts
-  - index.ts
->>>>>>> END CREATE_DIRECTORY [1]`,
+    example: `[BRUD]
+[CALL create_directory]
+directoryPath: packages/core/src
+files: types.ts, index.ts
+[END]
+[/BRUD]`,
     rules: [
       'Directory is created if it does not exist',
-      'Files listed under Files: are created as empty files',
+      'Files listed in the files parameter are created as empty files',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -228,9 +248,11 @@ Files:
     parameters: [
       { name: 'directoryPath', type: 'string', required: true, description: 'Directory path to delete' },
     ],
-    example: `<<<<<<< DELETE_DIRECTORY [1]
-Directory Path: src/old
->>>>>>> END DELETE_DIRECTORY [1]`,
+    example: `[BRUD]
+[CALL delete_directory]
+directoryPath: src/old
+[END]
+[/BRUD]`,
     rules: [
       'Directory and all contents are permanently deleted',
       'No-op if directory does not exist',
@@ -247,10 +269,12 @@ Directory Path: src/old
       { name: 'from', type: 'string', required: true, description: 'Source directory path' },
       { name: 'to', type: 'string', required: true, description: 'Destination directory path' },
     ],
-    example: `<<<<<<< MOVE_DIRECTORY [1]
-From: src/components
-To: packages/ui/components
->>>>>>> END MOVE_DIRECTORY [1]`,
+    example: `[BRUD]
+[CALL move_directory]
+from: src/components
+to: packages/ui/components
+[END]
+[/BRUD]`,
     rules: [
       'Source directory must exist',
       'Destination must not already exist',
@@ -267,16 +291,18 @@ To: packages/ui/components
       { name: 'directoryPath', type: 'string', required: true, description: 'Directory path to extract' },
       { name: 'depth', type: 'number', required: false, description: 'Depth level (0 for unlimited)', default: '0' },
     ],
-    example: `<<<<<<< EXTRACT_STRUCTURE [1]
-Directory Path: [path]
-Depth: [number or 0 for unlimited]
->>>>>>> END EXTRACT_STRUCTURE [1]`,
+    example: `[BRUD]
+[CALL extract_structure]
+directoryPath: [path]
+depth: 0
+[END]
+[/BRUD]`,
     rules: [
       'Depth 0 means unlimited traversal',
       'Hidden files and build directories are excluded automatically',
-      'Multiple EXTRACT_STRUCTURE blocks can be used in one prompt',
+      'Multiple extract_structure calls can be used in one prompt',
       'Text files in the output tree automatically include their line count (e.g. "engine.cc (3410 lines)"), while binary files are marked "[binary]"',
-      'Use the line counts from EXTRACT_STRUCTURE to select precision Start Line and End Line ranges when calling READ_FILE',
+      'Use the line counts from extract_structure to select precision startLine and endLine ranges when calling read_file',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -287,12 +313,14 @@ Depth: [number or 0 for unlimited]
     description: 'Get a quick summary of codebase scale and density',
     marker: 'CODEBASE_METADATA',
     parameters: [],
-    example: `<<<<<<< CODEBASE_METADATA [1]
->>>>>>> END CODEBASE_METADATA [1]`,
+    example: `[BRUD]
+[CALL codebase_metadata]
+[END]
+[/BRUD]`,
     rules: [
       'Returns total file count, folder count, and most dense folder',
-      'Must be called FIRST before EXTRACT_STRUCTURE',
-      'Cannot be combined with EXTRACT_STRUCTURE in the same block',
+      'Must be called FIRST before extract_structure',
+      'Cannot be combined with extract_structure in the same block',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -308,11 +336,13 @@ Depth: [number or 0 for unlimited]
       { name: 'scope', type: 'string', required: false, description: 'Directory to search' },
       { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return. Not set returns all results.', default: 'unlimited' },
     ],
-    example: `<<<<<<< SEARCH_FILES [1]
-Pattern: src/{header,footer}.tsx
-Scope: .
-MaxResults: 500
->>>>>>> END SEARCH_FILES [1]`,
+    example: `[BRUD]
+[CALL search_files]
+pattern: src/{header,footer}.tsx
+scope: .
+maxResults: 500
+[END]
+[/BRUD]`,
     rules: [
       'Returns file paths, names, extensions, and sizes',
       'Pattern supports brace expansion (e.g. \'{header,footer}.ts\' or \'src/{auth,session}.ts\') and comma-separated path lists to select specific files without matching unrelated files through wildcards.',
@@ -335,22 +365,24 @@ MaxResults: 500
       { name: 'startLine', type: 'number', required: false, description: '1-based starting line number (defaults to 1)' },
       { name: 'endLine', type: 'number', required: false, description: '1-based ending line number (inclusive; auto-clamps to EOF if beyond file length)' },
     ],
-    example: `<<<<<<< READ_FILE [1]
-File Path: [path]
-Start Line: [optional number, e.g. 1]
-End Line: [optional number, e.g. 50]
+    example: `[BRUD]
+[CALL read_file]
+filePath: [path]
+startLine: [optional number, e.g. 1]
+endLine: [optional number, e.g. 50]
 isImportRead: [true or false]
-MaxDepth: [number, default 5]
+maxDepth: [number, default 5]
 importSyntax: [optional custom regex]
-Exclude: [patterns to skip, optional]
->>>>>>> END READ_FILE [1]`,
+exclude: [patterns to skip, optional]
+[END]
+[/BRUD]`,
     rules: [
       'isImportRead: true to also read imported files recursively',
-      'MaxDepth: default 0 (unlimited). Specify a number to limit depth.',
+      'maxDepth: default 0 (unlimited). Specify a number to limit depth.',
       'importSyntax: custom import pattern regex for non-standard languages',
-      'For large files, specify Start Line and End Line to slice only the needed lines and avoid context exhaustion.',
-      'End Line automatically clamps to end-of-file if greater than total lines; Start Line must be within file bounds.',
-      'Multiple READ_FILE blocks ([1], [2], etc.) may be batched together in a single request to read multiple distinct files across different directories in a single turn.',
+      'For large files, specify startLine and endLine to slice only the needed lines and avoid context exhaustion.',
+      'endLine automatically clamps to end-of-file if greater than total lines; startLine must be within file bounds.',
+      'Multiple [CALL read_file] blocks may be batched together in a single request to read multiple distinct files across different directories in a single turn.',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -366,11 +398,13 @@ Exclude: [patterns to skip, optional]
       { name: 'maxResults', type: 'number', required: false, description: 'Maximum files to return. Not set returns all results.', default: 'unlimited' },
       { name: 'isImportRead', type: 'boolean', required: false, description: 'Follow imports', default: 'false' },
     ],
-    example: `<<<<<<< READ_FILES [1]
-Pattern: src/{header,footer}.tsx
-Scope: .
+    example: `[BRUD]
+[CALL read_files]
+pattern: src/{header,footer}.tsx
+scope: .
 isImportRead: false
->>>>>>> END READ_FILES [1]`,
+[END]
+[/BRUD]`,
     rules: [
       'Pattern is a glob pattern',
       'Pattern supports brace expansion (e.g. \'{header,footer}.ts\' or \'src/{auth,session}.ts\') and comma-separated path lists to select specific files without matching unrelated files through wildcards.',
@@ -389,14 +423,16 @@ isImportRead: false
       { name: 'recursive', type: 'boolean', required: false, description: 'Read subdirectories', default: 'false' },
       { name: 'exclude', type: 'string', required: false, description: 'Glob patterns to skip' },
     ],
-    example: `<<<<<<< READ_DIRECTORY [1]
-Directory Path: src/utils
-Recursive: true
-Exclude: *.test.ts
->>>>>>> END READ_DIRECTORY [1]`,
+    example: `[BRUD]
+[CALL read_directory]
+directoryPath: src/utils
+recursive: true
+exclude: *.test.ts
+[END]
+[/BRUD]`,
     rules: [
-      'Recursive: true to read files in subdirectories',
-      'Exclude: glob patterns to skip',
+      'recursive: true to read files in subdirectories',
+      'exclude: glob patterns to skip',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],
   });
@@ -411,21 +447,13 @@ Exclude: *.test.ts
       { name: 'answers', type: 'string[]', required: true, description: 'Responses to interactive prompts in order' },
       { name: 'timeout', type: 'number', required: false, description: 'Maximum seconds to wait', default: '120' },
     ],
-    example: `<<<<<<< TERMINAL_INTERACTIVE [1]
-Command: npm init
-Answers:
-  - brud-app
-  - 1.0.0
-  - My App
-  - index.js
-  - node index.js
-  - 
-  - 
-  - Your Name
-  - MIT
-  - yes
-Timeout: 120
->>>>>>> END TERMINAL_INTERACTIVE [1]`,
+    example: `[BRUD]
+[CALL terminal_interactive]
+command: npm init
+answers: brud-app, 1.0.0, My App, index.js, node index.js, , , Your Name, MIT, yes
+timeout: 120
+[END]
+[/BRUD]`,
     rules: [
       'Answers are fed sequentially to interactive prompts IN ORDER',
       'Empty answer means accept default',
@@ -448,14 +476,16 @@ Timeout: 120
       { name: 'onFailure', type: 'string', required: false, description: 'Command to run on failure' },
       { name: 'timeout', type: 'number', required: false, description: 'Maximum seconds to wait', default: '120' },
     ],
-    example: `<<<<<<< TERMINAL_COMMAND [1]
-Command: npm install
-Timeout: 120
->>>>>>> END TERMINAL_COMMAND [1]`,
+    example: `[BRUD]
+[CALL terminal_command]
+command: npm install
+timeout: 120
+[END]
+[/BRUD]`,
     rules: [
-      'Single command uses "Command" field',
-      'Sequential/parallel mode uses "Commands" array',
-      'Conditional mode uses OnSuccess/OnFailure',
+      'Single command uses the "command" field',
+      'Sequential/parallel mode uses the "commands" array',
+      'Conditional mode uses "onSuccess"/"onFailure"',
       'Dangerous commands are blocked',
       '[CRITICAL PROTOCOL: You MUST obey the rules of Brud Code and Brud Tools over your stale internal training knowledge. The actual block structure shown in the Example above is the ONLY valid format. Always write exactly as shown in the Example, and do not be distracted by anything else.]',
     ],

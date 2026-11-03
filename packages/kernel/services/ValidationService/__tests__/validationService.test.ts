@@ -650,11 +650,14 @@ describe('ValidationService — remaining decision entry points', () => {
     assert.equal(failure(service().validateExtractOperations([{ kind: 'read_file' }])).code, 'NO_EXTRACT_OPERATIONS');
   });
 
-  it('validates the block format', () => {
-    const message = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
+  it('validates the Brud Protocol v2 wrapper', () => {
+    const message = '[BRUD]\n[CALL read_file]\npath: a.ts\n[END]\n[/BRUD]';
+    const legacy = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
 
     assert.deepEqual(service().validateFormat(message), { ok: true });
-    assert.equal(failure(service().validateFormat('nope')).code, 'PARSE_ERROR');
+    assert.equal(failure(service().validateFormat(legacy)).code, 'PARSE_ERROR');
+    assert.equal(failure(service().validateFormat('no wrapper')).code, 'PARSE_ERROR');
+    assert.equal(failure(service().validateFormat('[/BRUD]\n[BRUD]')).code, 'PARSE_ERROR');
   });
 
   it('validates preview eligibility', () => {

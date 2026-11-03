@@ -1,8 +1,11 @@
 import * as vscode from 'vscode';
 import { randomUUID } from 'crypto';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
-import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
-import type { FileOperation, FileOperationResult, SessionMetadata } from '@brud/core';
+import { parseOperationsWithMetadata, cleanBrudInput } from '@brud/patchblocks';
+import type { PatchblocksEnvironment } from '@brud/patchblocks';
+import { BrudError } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
+import type { FileOperationResult } from '@brud/core';
 import type { ExtensionMessage, UnifiedSessionResults } from '@brud/protocol';
 import { ErrorReporter } from '../services/ErrorReporter';
 import { PanelManager } from '../services/PanelManager';
@@ -10,6 +13,14 @@ import { ExecutionCoordinator } from '../services/ExecutionCoordinator';
 import { closePreviewTabs, getChatStatusMessage, transformTerminalOperationData } from '../services/SharedExecutionHelpers';
 import { buildFailedTerminalData } from '../services/TerminalDataAdapter';
 import { parseStructuredExecutionMessage } from '../services/executionPayloads';
+
+function patchblocksEnvironment(): PatchblocksEnvironment {
+  return {
+    roots: getWorkspaceFolders(),
+    homeDirectory: process.env.HOME ?? process.env.USERPROFILE ?? '/home',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
+  };
+}
 
 export class ApplyPatchHandler {
   private _lastExecutionResult: UnifiedSessionResults | null = null;
@@ -42,7 +53,7 @@ export class ApplyPatchHandler {
     let operations: FileOperation[];
     let sessionMetadata: SessionMetadata | undefined;
     try {
-      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), getWorkspaceFolders());
+      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), patchblocksEnvironment());
       operations = parsed.operations;
       sessionMetadata = parsed.sessionMetadata;
       this.setSessionMetadata(sessionMetadata);

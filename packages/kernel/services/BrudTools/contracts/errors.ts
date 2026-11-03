@@ -3,6 +3,7 @@ export type BrudToolsErrorCode =
   | 'TOOL_DUPLICATE'
   | 'TOOL_NOT_FOUND'
   | 'TOOL_VALIDATION_ERROR'
+  | 'TOOL_PERMISSION_DENIED'
   | 'TOOL_DISPOSED'
   | 'TOOL_QUOTA_EXCEEDED';
 
@@ -114,6 +115,37 @@ export class ToolValidationError extends BrudToolsError {
     if (options?.validationCode !== undefined) {
       this.validationCode = options.validationCode;
     }
+  }
+}
+
+/** Raised when a caller lacks a permission a tool requires. */
+export class ToolPermissionError extends BrudToolsError {
+  public readonly code = 'TOOL_PERMISSION_DENIED' as const;
+
+  /** Name of the tool whose permission gate rejected the caller. */
+  public readonly toolName: string;
+
+  /** Permissions the tool requires. */
+  public readonly requiredPermissions: readonly string[];
+
+  /** Permissions the caller actually held. */
+  public readonly grantedPermissions: readonly string[];
+
+  /**
+   * @param toolName - Tool whose permission gate rejected the caller.
+   * @param requiredPermissions - Permissions the tool requires.
+   * @param grantedPermissions - Permissions the caller held.
+   */
+  constructor(
+    toolName: string,
+    requiredPermissions: readonly string[],
+    grantedPermissions: readonly string[],
+  ) {
+    super(`Tool "${toolName}" requires permissions: ${requiredPermissions.join(', ')}`);
+    this.name = 'ToolPermissionError';
+    this.toolName = toolName;
+    this.requiredPermissions = [...requiredPermissions];
+    this.grantedPermissions = [...grantedPermissions];
   }
 }
 

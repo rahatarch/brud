@@ -1,13 +1,23 @@
 import * as vscode from 'vscode';
-import { parseOperationsWithMetadata, cleanBrudInput, BrudError } from '@brud/core';
+import { parseOperationsWithMetadata, cleanBrudInput } from '@brud/patchblocks';
+import type { PatchblocksEnvironment } from '@brud/patchblocks';
+import { BrudError } from '@brud/core';
 import { getWorkspaceFolders } from '@brud/vscode-adapter';
 import { BrudAPI } from '@brud/core';
-import { findMatches, reconstructContent } from '@brud/core';
-import type { FileOperation, PatchBlock, SessionMetadata } from '@brud/core';
+import { findMatches, reconstructContent } from '@brud/patchblocks';
+import type { FileOperation, PatchBlock, SessionMetadata } from '@brud/patchblocks';
 import { isRecord } from '@brud/protocol';
 import type { DiffFileEntry, DiffPreviewData, ExtensionMessage, ReportSection } from '@brud/protocol';
 import { PanelManager } from '../services/PanelManager';
 import { ErrorReporter } from '../services/ErrorReporter';
+
+function patchblocksEnvironment(): PatchblocksEnvironment {
+  return {
+    roots: getWorkspaceFolders(),
+    homeDirectory: process.env.HOME ?? process.env.USERPROFILE ?? '/home',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
+  };
+}
 
 function groupOperationsByFile(operations: FileOperation[]): Map<string, FileOperation[]> {
   const grouped = new Map<string, FileOperation[]>();
@@ -67,7 +77,7 @@ export class PreviewPatchHandler {
     let operations: FileOperation[];
     let sessionMetadata: SessionMetadata | undefined;
     try {
-      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), getWorkspaceFolders());
+      const parsed = parseOperationsWithMetadata(cleanBrudInput(text), patchblocksEnvironment());
       operations = parsed.operations;
       sessionMetadata = parsed.sessionMetadata;
       this.setSessionMetadata(sessionMetadata);

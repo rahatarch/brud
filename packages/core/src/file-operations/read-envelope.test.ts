@@ -4,7 +4,7 @@ import * as fs from 'fs/promises';
 import * as pathModule from 'path';
 import { NodeFileSystem } from '../testing/nodeFileSystem.js';
 import { executeFileOperations } from './index.js';
-import type { FileOperation } from '../types/patch.js';
+import type { FileOperation } from '../types/legacy.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
 import { parseReadEnvelope } from '../testing/readEnvelope.js';
 

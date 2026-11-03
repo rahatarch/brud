@@ -17,6 +17,7 @@
   "workspaces": [
     "packages/*",
     "packages/adapters/*",
+    "packages/plugins/*",
     "apps/*"
   ],
   "engines": {
@@ -127,6 +128,7 @@
     "test": "vscode-test",
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
     "test:core": "node --import tsx --test \"packages/core/src/**/*.test.ts\"",
+    "test:kernel": "npm run test --workspace @brud/kernel",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "test:mcp": "npm run test --workspace @brud/mcp",
     "test:daemon": "npm run test --workspace @brud/daemon",
@@ -144,13 +146,12 @@
     "dev:web": "npm run dev --workspace brud-code-site",
     "lint:web": "npm run lint --workspace brud-code-site",
     "build:all": "npm run build:protocol && npm run build:kernel && npm run build:core && npm run build:mcp && npm run build:adapter && npm run build:daemon && npm run build:ui",
-    "ci": "npm run build:all && npm run test:core && npm run test:mcp && npm run test:extension && npm run check:boundaries && npm run lint",
+    "ci": "npm run build:all && npm run test:kernel && npm run test:core && npm run test:mcp && npm run test:extension && npm run check:boundaries && npm run lint",
     "ci:quick": "npm run build:core && npm run test:core && npm run test:mcp && npm run test:extension"
   },
   "dependencies": {
     "@brud/mcp": "*",
     "@fontsource/outfit": "^5.3.0",
-    "js-yaml": "^4.3.2",
     "lucide-react": "^1.39.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -158,9 +159,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/js-yaml": "^4.0.9",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "22.x",
+    "@types/mocha": "^10.0.10",    "@types/node": "22.x",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@types/vscode": "^1.80.0",

@@ -148,6 +148,31 @@ describe('compileJsonSchema — keywords', () => {
       type: 'integer',
     }, 1);
   });
+
+  it('accepts protected as a non-validating annotation', () => {
+    assertValid({
+      type: 'object',
+      protected: true,
+      properties: {
+        content: { type: 'string', protected: true },
+        list: { type: 'array', items: { type: 'string', protected: true } },
+        choice: { oneOf: [{ type: 'string', protected: true }, { type: 'number' }] },
+      },
+      required: ['content'],
+    }, { content: 'x' });
+
+    const missing = violations({
+      type: 'object',
+      properties: { content: { type: 'string', protected: true } },
+      required: ['content'],
+    }, {});
+    assert.deepEqual(missing.map((violation) => violation.keyword), ['required']);
+  });
+
+  it('still rejects unknown keywords next to protected', () => {
+    const found = errorsOf({ type: 'object', protected: true, mystery: true });
+    assert.ok(found.some((error) => error.code === 'UNSUPPORTED_KEYWORD' && error.schemaPath === '/mystery'));
+  });
 });
 
 describe('compileJsonSchema — fail closed', () => {

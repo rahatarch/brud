@@ -1,5 +1,6 @@
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
+import type { ParseOptions, ParseResult, RouteResult } from './parsing.js';
 
 /**
  * Caller context handed to a tool handler at dispatch time.
@@ -17,6 +18,15 @@ export interface IPluginExecutionContext {
 
   /** Cancellation signal of the request, when the transport supplied one. */
   readonly signal?: AbortSignal;
+
+  /**
+   * Permissions the caller holds at dispatch time.
+   *
+   * A tool's `requiredPermissions` are enforced as an all-of check: every
+   * required permission must be present. An absent or empty set fails closed
+   * for any tool that declares requirements.
+   */
+  readonly permissions?: readonly string[];
 }
 
 /**
@@ -120,4 +130,28 @@ export interface IBrudToolsService {
     rawInput: unknown,
     callerContext: IPluginExecutionContext,
   ): Promise<OperationResult>;
+
+  /**
+   * Scans Brud Protocol v2 text into operations without dispatching.
+   *
+   * The parser is fail-closed: a malformed document returns `ok: false` and no
+   * partial operation list. Protected parameters are resolved from each named
+   * tool's registered `parametersSchema`.
+   *
+   * @param rawInput - Raw model output, including any surrounding prose.
+   * @param options - Bounds and dispatch context.
+   */
+  parseInput(rawInput: string, options?: ParseOptions): ParseResult;
+
+  /**
+   * Parses, validates and dispatches every `[CALL tool_name]` block in order.
+   *
+   * Each operation is checked against its registered `parametersSchema` before
+   * dispatch. Parsing failures dispatch nothing. Handler throws become `failed`
+   * outcomes instead of rejecting the batch.
+   *
+   * @param rawInput - Raw model output.
+   * @param options - Bounds, cancellation and dispatch context.
+   */
+  parseAndRoute(rawInput: string, options?: ParseOptions): Promise<RouteResult>;
 }

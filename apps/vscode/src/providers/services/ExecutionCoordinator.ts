@@ -1,5 +1,6 @@
 import { DaemonExecutionHandler, getWorkspaceFolders, WorkspaceHistoryStore, VSCodeFileSystem } from '@brud/vscode-adapter';
-import type { FileOperation, FileOperationResult, SessionMetadata, BrudSettings, ChunkCallback } from '@brud/core';
+import type { FileOperation, SessionMetadata } from '@brud/patchblocks';
+import type { FileOperationResult, BrudSettings, ChunkCallback } from '@brud/core';
 import { DEFAULT_SETTINGS, killProcess, getActiveProcessIds, noWorkspaceError, unexpectedError } from '@brud/core';
 import type { DaemonClient } from '@brud/daemon';
 

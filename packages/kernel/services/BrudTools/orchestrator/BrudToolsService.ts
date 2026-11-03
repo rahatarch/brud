@@ -4,6 +4,7 @@ import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginCon
 import {
   ToolDisposedError,
   ToolNotFoundError,
+  ToolPermissionError,
   ToolValidationError,
   toolFailureMessage,
 } from '../contracts/errors.js';
@@ -14,7 +15,22 @@ import type {
   RegisteredToolInfo,
   ToolRegistrationOptions,
 } from '../contracts/IBrudToolsService.js';
+import type {
+  BrudParseFailure,
+  ParseOptions,
+  ParseResult,
+  RouteResult,
+  RoutedOperationOutcome,
+} from '../contracts/parsing.js';
+import { synthesizeIndex } from '../parser/indexSynthesis.js';
+import {
+  BrudParseError,
+  protectedParametersForSchema,
+  scanBrudDocument,
+} from '../parser/scanner.js';
+import type { BrudOperation } from '../parser/types/operations.js';
 import { ToolRegistry, type RegisteredToolEntry } from '../registry/ToolRegistry.js';
+import { compiledSchemaFor } from './schemaValidator.js';
 import type { BrudToolsDependencies, ToolSchemaDecision } from './types.js';
 
 /**
@@ -111,6 +127,14 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
       throw error;
     }
 
+    const missing = missingPermissions(entry.requiredPermissions, callerContext.permissions);
+
+    if (missing.length > 0) {
+      return failed(toolFailureMessage(
+        new ToolPermissionError(entry.name, missing, callerContext.permissions ?? []),
+      ));
+    }
+
     const input = normalizeInput(rawInput);
     const validateInput = this.dependencies.validateInput;
 
@@ -143,6 +167,207 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
     return entry.execute(input, callerContext);
   }
 
+  parseInput(rawInput: string, options: ParseOptions = {}): ParseResult {
+    if (this.disposed) {
+      return { ok: false, error: parseFailure(new ToolDisposedError()) };
+    }
+
+    const maxOperations = options.maxOperations ?? DEFAULT_MAX_OPERATIONS;
+
+    if (!Number.isSafeInteger(maxOperations) || maxOperations < 1) {
+      return {
+        ok: false,
+        error: {
+          code: 'PARSE_ERROR',
+          friendly: 'invalid operation bound',
+          details: `maxOperations must be a positive integer, received ${String(maxOperations)}`,
+        },
+      };
+    }
+
+    try {
+      const calls = scanBrudDocument(rawInput, (toolName) =>
+        protectedParametersForSchema(this.registry.getTool(toolName)?.parametersSchema));
+
+      if (calls.length > maxOperations) {
+        return {
+          ok: false,
+          error: {
+            code: 'OPERATION_LIMIT_EXCEEDED',
+            friendly: 'too many operations',
+            details: `document contains ${String(calls.length)} operations; the limit is ${String(maxOperations)}`,
+          },
+        };
+      }
+
+      const operations: BrudOperation[] = calls.map((call, sequence) => Object.freeze({
+        index: synthesizeIndex(sequence),
+        toolName: call.toolName,
+        parameters: call.parameters,
+      }));
+
+      return { ok: true, operations: Object.freeze(operations) };
+    } catch (error) {
+      return { ok: false, error: parseFailure(error) };
+    }
+  }
+
+  async parseAndRoute(rawInput: string, options: ParseOptions = {}): Promise<RouteResult> {
+    if (this.disposed) {
+      return {
+        status: 'failed',
+        operations: Object.freeze([]),
+        parseError: parseFailure(new ToolDisposedError()),
+        dispatched: 0,
+        failed: 0,
+      };
+    }
+
+    const parsed = this.parseInput(rawInput, options);
+
+    if (!parsed.ok) {
+      return {
+        status: 'failed',
+        operations: Object.freeze([]),
+        parseError: parsed.error,
+        dispatched: 0,
+        failed: 0,
+      };
+    }
+
+    const callerContext = options.callerContext ?? DEFAULT_CALLER_CONTEXT;
+    const stopOnFailure = options.stopOnFailure === true;
+    const operations: RoutedOperationOutcome[] = [];
+    let dispatched = 0;
+    let failed = 0;
+
+    for (let sequence = 0; sequence < parsed.operations.length; sequence += 1) {
+      const operation = parsed.operations[sequence] as BrudOperation;
+
+      if (callerContext.signal?.aborted === true) {
+        appendRemaining(operations, parsed.operations, sequence, 'aborted');
+        break;
+      }
+
+      const tool = this.registry.getTool(operation.toolName);
+
+      if (tool === undefined) {
+        failed += 1;
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: 'tool_not_found',
+          error: `TOOL_NOT_FOUND: tool "${operation.toolName}" is not registered`,
+        });
+
+        if (stopOnFailure) {
+          appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+          break;
+        }
+
+        continue;
+      }
+
+      const compiled = compiledSchemaFor(tool.parametersSchema);
+
+      if (!compiled.ok) {
+        failed += 1;
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: 'schema_invalid',
+          error: `SCHEMA_INVALID: ${compiled.errors.map((error) => error.message).join('; ')}`,
+        });
+
+        if (stopOnFailure) {
+          appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+          break;
+        }
+
+        continue;
+      }
+
+      const validation = compiled.schema.validate(operation.parameters);
+
+      if (!validation.valid) {
+        failed += 1;
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: 'schema_invalid',
+          error: `SCHEMA_INVALID: ${validation.violations.map((violation) => violation.message).join('; ')}`,
+        });
+
+        if (stopOnFailure) {
+          appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+          break;
+        }
+
+        continue;
+      }
+
+      if (options.dryRun === true) {
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: 'success',
+        });
+        continue;
+      }
+
+      try {
+        const result = await this.executeTool(
+          operation.toolName,
+          { ...operation.parameters, index: operation.index },
+          callerContext,
+        );
+
+        dispatched += 1;
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: result.status,
+          result,
+        });
+
+        if (result.status === 'failed') {
+          failed += 1;
+
+          if (stopOnFailure) {
+            appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+            break;
+          }
+        }
+      } catch (error) {
+        failed += 1;
+        operations.push({
+          operationIndex: operation.index,
+          sequence,
+          toolName: operation.toolName,
+          status: 'failed',
+          error: `TOOL_HANDLER_ERROR: ${describe(error)}`,
+        });
+
+        if (stopOnFailure) {
+          appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+          break;
+        }
+      }
+    }
+
+    return {
+      status: aggregateStatus(operations),
+      operations: Object.freeze(operations),
+      dispatched,
+      failed,
+    };
+  }
+
   /**
    * Refuses mutation after disposal.
    *
@@ -164,9 +389,103 @@ function failed(error: string): OperationResult {
   return { status: 'failed', error };
 }
 
+/** Default DoS bound for one parsed document. */
+const DEFAULT_MAX_OPERATIONS = 1_000;
+
+/** Parser-owned fallback context for dry runs and previews. */
+const DEFAULT_CALLER_CONTEXT: IPluginExecutionContext = Object.freeze({
+  workspaceRoot: '',
+  callerId: 'brud.parser',
+});
+
+/** Converts a thrown scanner failure into the public parse-failure shape. */
+function parseFailure(error: unknown): BrudParseFailure {
+  if (error instanceof BrudParseError) {
+    return {
+      code: error.code,
+      friendly: error.message,
+      details: error.message,
+      line: error.line,
+    };
+  }
+
+  if (error instanceof Error && 'code' in error) {
+    const code = (error as { readonly code?: unknown }).code;
+
+    if (typeof code === 'string') {
+      return { code, friendly: error.message, details: error.message };
+    }
+  }
+
+  return {
+    code: 'PARSE_ERROR',
+    friendly: describe(error),
+    details: describe(error),
+  };
+}
+
+/** Appends outcomes for operations that were never attempted. */
+function appendRemaining(
+  outcomes: RoutedOperationOutcome[],
+  operations: readonly BrudOperation[],
+  from: number,
+  status: 'aborted' | 'skipped',
+): void {
+  for (let sequence = from; sequence < operations.length; sequence += 1) {
+    const operation = operations[sequence] as BrudOperation;
+
+    outcomes.push({
+      operationIndex: operation.index,
+      sequence,
+      toolName: operation.toolName,
+      status,
+    });
+  }
+}
+
+/** Aggregates per-operation outcomes into one document status. */
+function aggregateStatus(
+  outcomes: readonly RoutedOperationOutcome[],
+): RouteResult['status'] {
+  if (outcomes.length === 0) {
+    return 'empty';
+  }
+
+  const successes = outcomes.filter((outcome) => outcome.status === 'success').length;
+
+  if (successes === outcomes.length) {
+    return 'success';
+  }
+
+  if (successes === 0) {
+    return 'failed';
+  }
+
+  return 'partial';
+}
+
 /** Renders an unknown thrown value for a diagnostic message. */
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Returns the required permissions the caller does not hold.
+ *
+ * An absent or empty requirement set is unrestricted. An absent or empty
+ * granted set fails closed for any tool that declares requirements.
+ */
+function missingPermissions(
+  required: readonly string[] | undefined,
+  granted: readonly string[] | undefined,
+): readonly string[] {
+  if (required === undefined || required.length === 0) {
+    return [];
+  }
+
+  const held = new Set(granted ?? []);
+
+  return required.filter((permission) => !held.has(permission));
 }
 
 /** Normalizes an untrusted payload to the handler's object contract. */

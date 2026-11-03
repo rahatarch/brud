@@ -1,5 +1,6 @@
 import path from 'path';
-import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/patch';
+import { FileOperation, SessionMetadata, TerminalInteractiveOperation, TerminalCommandOperation } from '../types/legacy.js';
+import { stripNumericLinePrefixes, applySingleMatch } from '../types/legacy.js';
 import { FileSystem } from '../types/filesystem';
 import { createPathCache, isWithinWorkspaceFolder } from '../utils/workspacePath';
 import { validateTerminalCommand, validateTerminalCwd } from '../validation/terminal';
@@ -497,10 +498,11 @@ export async function executeFileOperations(
 
           const filePath = result.resolvedPath;
 
-          const cleanSearch = operation.search.replace(/^\s*\d+\s*\|\s?/gm, '');
-          const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, cleanSearch);
-          if (!matchResult.success) {
-            if (matchResult.code === 'SEARCH_NOT_FOUND') {
+          const cleanSearch = stripNumericLinePrefixes(operation.search);
+          const content = await fs.readFile(filePath);
+          const applied = applySingleMatch(content, cleanSearch, operation.replace);
+          if (!applied.ok) {
+            if (applied.error.code === 'SEARCH_NOT_FOUND') {
               recordOperationFailure(operationResults, errors, i, operation, searchNotFoundError(operation.path, operation.search), {
                 status: 'aborted',
                 path: operation.path,
@@ -514,11 +516,7 @@ export async function executeFileOperations(
             continue;
           }
 
-          const content = await fs.readFile(filePath);
-
-          const matchIndex = content.indexOf(cleanSearch);
-          const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + cleanSearch.length);
-          await fs.writeFile(filePath, updatedContent);
+          await fs.writeFile(filePath, applied.value.content);
           operationResults.push({
             operationIndex: i,
               operationId: generateOperationId(),
@@ -1233,16 +1231,14 @@ operationResults.push({
             try {
               const content = await fs.readFile(filePath);
 
-              const cleanSearch = operation.search.replace(/^\s*\d+\s*\|\s?/gm, '');
-              const matchResult = await BrudAPI.validate.singleMatch(fs, filePath, cleanSearch);
-              if (!matchResult.success) {
+              const cleanSearch = stripNumericLinePrefixes(operation.search);
+              const applied = applySingleMatch(content, cleanSearch, operation.replace);
+              if (!applied.ok) {
                 skippedFiles.push(filePath);
                 continue;
               }
 
-              const matchIndex = content.indexOf(cleanSearch);
-              const updatedContent = content.substring(0, matchIndex) + operation.replace + content.substring(matchIndex + cleanSearch.length);
-              await fs.writeFile(filePath, updatedContent);
+              await fs.writeFile(filePath, applied.value.content);
               modifiedFiles.push(filePath);
             } catch (error) {
               failedFiles.push(filePath);
@@ -1467,7 +1463,7 @@ operationResults.push({
 
         case 'get_tool_info': {
           initializeToolRegistry();
-          const toolOp = operation as import('../types/patch.js').GetToolInfoOperation;
+          const toolOp = operation as import('../types/legacy.js').GetToolInfoOperation;
           if (!toolOp.toolKind) {
             const allTools = globalToolRegistry.getAllTools();
             const toolList = allTools.map(t => `${t.kind} - ${t.name}: ${t.description}`).join('\n');

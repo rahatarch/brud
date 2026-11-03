@@ -38,6 +38,7 @@ const CONSTRAINT_KEYWORDS: ReadonlySet<string> = new Set<JsonSchemaKeyword>([
 
 const ANNOTATION_KEYWORDS: ReadonlySet<string> = new Set([
   '$schema', '$id', 'title', 'description', '$comment', 'default', 'examples',
+  'protected',
 ]);
 
 /** Compiled, frozen form of one schema node. */

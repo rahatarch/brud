@@ -1,4 +1,4 @@
-import type { FileOperation } from '@brud/core';
+import type { FileOperation } from '@brud/patchblocks';
 import type { OperationResult } from '@brud/protocol';
 import { transformTerminalOperation, buildFailedTerminalData } from './TerminalDataAdapter';
 import type { TerminalGroupData, TerminalResultData } from './TerminalDataAdapter';
