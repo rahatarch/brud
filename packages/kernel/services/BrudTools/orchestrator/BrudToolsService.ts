@@ -327,6 +327,28 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
         );
 
         dispatched += 1;
+
+        if (!isValidOperationResult(result)) {
+          failed += 1;
+          const error = 'HANDLER_INVALID_RESULT: handler returned an invalid result shape';
+
+          operations.push({
+            operationIndex: operation.index,
+            sequence,
+            toolName: operation.toolName,
+            status: 'failed',
+            error,
+            result: { status: 'failed', error },
+          });
+
+          if (stopOnFailure) {
+            appendRemaining(operations, parsed.operations, sequence + 1, 'skipped');
+            break;
+          }
+
+          continue;
+        }
+
         operations.push({
           operationIndex: operation.index,
           sequence,
@@ -467,6 +489,45 @@ function aggregateStatus(
 /** Renders an unknown thrown value for a diagnostic message. */
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Whether a handler returned a structurally valid {@link OperationResult}. */
+function isValidOperationResult(value: unknown): value is OperationResult {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+
+  const candidate = value as {
+    readonly status?: unknown;
+    readonly message?: unknown;
+    readonly error?: unknown;
+    readonly durationMs?: unknown;
+  };
+
+  if (candidate.status !== 'success' && candidate.status !== 'failed') {
+    return false;
+  }
+
+  if (candidate.message !== undefined && typeof candidate.message !== 'string') {
+    return false;
+  }
+
+  if (
+    candidate.error !== undefined
+    && typeof candidate.error !== 'string'
+    && !(candidate.error instanceof Error)
+  ) {
+    return false;
+  }
+
+  if (
+    candidate.durationMs !== undefined
+    && (typeof candidate.durationMs !== 'number' || !Number.isFinite(candidate.durationMs))
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 /**

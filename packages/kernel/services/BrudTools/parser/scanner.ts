@@ -18,9 +18,10 @@ export interface ScannedCall {
 /**
  * Resolves the protected parameter names for a tool.
  *
- * Returns `undefined` when the tool has no registered schema. In that case the
- * scanner treats every brace region as opaque, because it cannot prove the
- * parameter unprotected; routing later reports `TOOL_NOT_FOUND`.
+ * Returns an empty array when the tool has no registered schema, so its
+ * parameters are parsed as plain `key: value` pairs and routing can report
+ * `TOOL_NOT_FOUND`. `undefined` remains available to custom scanners that
+ * explicitly want every brace region treated as opaque.
  */
 export type ProtectedParameterResolver = (
   toolName: string,
@@ -169,15 +170,17 @@ export function scanBrudDocument(
  * Lists the top-level `properties` marked `protected: true`.
  *
  * The `protected` keyword is an annotation only; it never constrains a value.
+ * An unknown tool has no protected parameters: its payload is parsed normally
+ * and the router owns the `TOOL_NOT_FOUND` decision.
  *
  * @param schema - Registered `parametersSchema` object.
  * @returns Protected parameter names, possibly empty.
  */
 export function protectedParametersForSchema(
   schema: Readonly<Record<string, unknown>> | undefined,
-): readonly string[] | undefined {
+): readonly string[] {
   if (schema === undefined) {
-    return undefined;
+    return [];
   }
 
   const properties = schema.properties;
