@@ -52,7 +52,7 @@ jobs:
       - run: npm ci
 
       - name: Build workspace packages
-        run: npm run build:all
+        run: npm run build:protocol && npm run build:kernel && npm run build:core && npm run build:adapter
 
       - name: Kernel tests (informational while O-3 is open)
         # Five pre-existing UniversalHistory failures (O-3) keep the combined
