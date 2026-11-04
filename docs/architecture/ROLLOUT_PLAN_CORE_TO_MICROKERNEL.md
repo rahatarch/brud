@@ -149,13 +149,13 @@ A big-bang cutover was evaluated and rejected. The audit trail exposes seven blo
 
 | ID | Audit finding | Evidence in the repository | Blast radius if cut over now | Retired by |
 |---|---|---|---|---|
-| **R1** | **21 entangled tool handlers.** All operation kinds share one 1,719-line switch and cross-cutting state (`pathCache`, pre-snapshots, batch read maps, metadata, search results, history session merge). | `packages/core/src/file-operations/index.ts` (`executeFileOperations` at line 186; dispatch switch begins line 242); `packages/core/src/bridge/legacyBridge.ts:15-21` enumerates 21 kinds. | Every tool breaks at once; a regression in one kind is indistinguishable from a regression in the dispatch layer. | Phases 6–10 |
-| **R2** | **Divergent path models.** Legacy core accepts absolute paths, supports multiple workspace folders, and canonicalizes with `realpath`. Kernel files are workspace-relative, single-root, and now reject absolute paths even when inside the root. | `packages/core/src/utils/workspacePath.ts`, `packages/core/src/utils/pathResolver.ts`, `packages/core/src/api/index.ts`; `packages/kernel/services/BrudFileSystem/validation/PathValidator/PathValidator.ts` (`resolveContained`, line 208); semantic audit `2026-10-24_kernel_pathvalidator_semantic_boundary_audit.md`. | Silent behaviour change for every MCP client and extension caller: paths that used to work become `PATH_TRAVERSAL_DETECTED`. | Phase 2 (WorkspaceService + path adapter) and Phase 3 (ValidationService) |
+| **R1** | **21 entangled tool handlers.** All operation kinds share one dispatch switch (1,545 lines of `executeFileOperations` inside a 1,844-line module) and cross-cutting state (`pathCache`, pre-snapshots, batch read maps, metadata, search results, history session merge). | `packages/core/src/file-operations/index.ts` (`executeFileOperations` spans lines 300–1844; the dispatch switch spans 488–1654, with a pre-snapshot classification switch at 363–419; `wc -l` reports 1,843 because the file has no trailing newline); `packages/core/src/bridge/legacyBridge.ts:28-34` enumerates the 21 kinds in `LEGACY_KINDS`. | Every tool breaks at once; a regression in one kind is indistinguishable from a regression in the dispatch layer. | Phases 6–10 |
+| **R2** | **Divergent path models.** Legacy core accepts absolute paths, supports multiple workspace folders, and canonicalizes with `realpath`. Kernel files are workspace-relative, single-root, and now reject absolute paths even when inside the root. | `packages/core/src/utils/workspacePath.ts`, `packages/core/src/utils/pathResolver.ts`, `packages/core/src/api/index.ts`; `packages/kernel/services/BrudFileSystem/validation/PathValidator/PathValidator.ts` (`resolveContained`, line 73); semantic audit `2026-10-24_kernel_pathvalidator_semantic_boundary_audit.md`. | Silent behaviour change for every MCP client and extension caller: paths that used to work become `PATH_TRAVERSAL_DETECTED`. | Phase 2 (WorkspaceService + path adapter) and Phase 3 (ValidationService) |
 | **R3** | **Dual kernels, one unbooted.** MCP builds a legacy kernel through `bootCoreKernel` without calling `boot()`; the daemon builds a standard kernel with no operation handlers. | `packages/mcp/src/bootstrap.ts:93-103`; `packages/core/src/bridge/legacyBridge.ts:92-118`; `packages/daemon/src/kernelRuntime.ts:17-25`; `packages/daemon/src/server/dispatch.ts` (fs/history methods only). | A third execution plane appears; security and history semantics differ by entry point. | Phase 10 |
 | **R4** | **Session history divergence.** Legacy history is JSON session folders; UniversalHistory is an SQLite ledger with CAS blobs, reversal plans, and different ID allocation. | `packages/core/src/history/store.ts`; `packages/adapters/vscode/src/historyStore.ts`; `packages/kernel/services/UniversalHistory/unified/` (`UnifiedHistoryStore`, `ReversalEngine`). | Two ledgers record the same transaction differently; undo can point at the wrong store; retention diverges. | Phase 9 (with import bridge) |
-| **R5** | **Global singletons and ambient state.** The tool catalog is a module singleton; operation IDs use a module counter; MCP wraps settings in a mutable `Proxy`; legacy tokens are module-local symbols. | `packages/core/src/tool-registry/registry.ts:17` (`globalToolRegistry`); `packages/core/src/file-operations/index.ts:43` (`operationIdCounter`); `packages/mcp/src/bootstrap.ts:26-44`; `packages/core/src/bridge/tokens.ts`. | Multiple Desktop workspaces or concurrent kernels share catalog and ID state; tests cannot isolate. | Phases 5–7 |
-| **R6** | **Incomplete plugin capability surface.** `IPluginContext` exposes only filesystem and history. Five target capabilities have no handle: three are declared permissions (`tools:register`, `tools:execute`, `telemetry:emit`) and two are not yet in the union (`settings:read`, `terminal:execute`). | `packages/kernel/services/PluginManager/contracts/IPluginContext.ts`; `permissions.ts` (`PluginCapability` lists only `fileSystem` and `universalHistory`). | Plugins cannot own tools, terminal, settings, or telemetry; extraction would leave half the logic in core. | Phase 5 |
-| **R7** | **Security projection gap.** Filesystem has `ReadOnlyFacade`; history has no read-only facade. Plugin activation also happens while the kernel is `BOOTING`, when the broker refuses grants. | `packages/kernel/services/BrudFileSystem/projection/ReadOnlyFacade/ReadOnlyFacade.ts`; `packages/kernel/src/engine/KernelAccessBroker.ts:29-32`; `PluginManagerService.initialize()` → `activateAll()`. | A `history:read` plugin receives the full mutation API; any plugin requesting a facade during boot fails. | Phase 5 |
+| **R5** | **Global singletons and ambient state.** The tool catalog is a module singleton; operation IDs use a module counter; MCP wraps settings in a mutable `Proxy`; legacy tokens are module-local symbols. | `packages/core/src/tool-registry/registry.ts:19` (`globalToolRegistry`); `packages/core/src/file-operations/index.ts:53` (`operationIdCounter`); `packages/mcp/src/bootstrap.ts:26-44`; `packages/core/src/bridge/tokens.ts`. | Multiple Desktop workspaces or concurrent kernels share catalog and ID state; tests cannot isolate. | Phases 5–7 |
+| **R6** | **Incomplete plugin capability surface (partly closed, as of 2026-11-04).** At the pre-rollout baseline `IPluginContext` exposed only filesystem and history, and `PluginCapability` listed only `fileSystem` and `universalHistory`. `tools:register` and `tools:execute` are now served by `registerTool(...)` / `executeTool(...)` over `brud.core.tools`; `settings:read` and `terminal:execute` remain undeclared and no settings, terminal, or telemetry handle exists. | `packages/kernel/services/PluginManager/contracts/IPluginContext.ts:114-178`; `permissions.ts:36,50`. | Plugin tool ownership is closed (G-5, G-6); settings, terminal, and telemetry handles remain Phase 5 work. | Phase 5 |
+| **R7** | **Security projection gap (closed 2026-10-30).** At the pre-rollout baseline, filesystem had `ReadOnlyFacade` while history had no read-only facade, and plugin activation ran while the kernel was `BOOTING`, when the broker refuses grants. | `packages/kernel/services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.ts`; `packages/kernel/src/engine/KernelAccessBroker.ts:48-52` (the `RUNNING` gate); `PluginManagerService.onRunning()` (`PluginManagerService.ts:316`). | A `history:read` plugin received the full mutation API; any plugin requesting a facade during boot failed. **Now:** G-8 and G-9 are closed. | Phase 5 |
 
 #### Decision matrix
 
@@ -360,7 +360,7 @@ Content of up to 65,536 bytes (64 KiB) is stored inline in `contents.inline_data
 
 **Known limits:**
 
-- Retention and garbage collection are not implemented yet (D-15 U-8).
+- Retention and garbage collection are implemented (as of 2026-11-04): `UnifiedHistoryService.runRetention` (`unified/service/UnifiedHistoryService.ts:210-231`) calls `UnifiedHistoryStore.applyRetention` (`unified/store/UnifiedHistoryStore.ts:689`), then `collectGarbage` and `sweepBlobs` under the `HISTORY_GC_GRACE_MS` grace period. Four retention tests and one attribution test remain open (O-3); see Phase 5.H.
 - File-level model only: directory rename/delete is represented as per-file entries; empty-directory state is not captured.
 - No abort-with-rollback path: `commitSession('aborted')` closes the session without reverting partial writes (G-17).
 - Legacy JSON session folders from `packages/core` are not imported (Phase 9).
@@ -384,13 +384,12 @@ The `OFFICIAL_PLUGIN_BRAND` symbol is declared only in kernel source and is abse
 
 **Known limits:**
 
-- `IPluginContext` exposes only `getFileSystem()` and `getUniversalHistory()` (G-5, G-6).
-- Activation occurs during `BOOTING`, before broker grants (G-9).
+G-5, G-6, G-8, and G-9 are closed (as of 2026-11-04); see §3.5.
+
 - The logger writes to `console`, which is a host leak; Phase 5 routes it to a telemetry sink.
 - Plugin history access resolves the legacy `brud.core.universalHistory` token, not the Phase 4 `brud.core.history` audit surface. The A10 denylist gates only **write, mutate, and delete** operations on `.brud/history/**` (`PROTECTED_PATH_DENIED`); it does **not** gate reads. Entry-level reads of the audit surface are governed by the `HistoryToken` access policy (core tier receives the service, every other tier receives `ReadOnlyHistoryFacade`). Plugins must never read `history.db` or the blob files through raw filesystem reads.
 - Capability projection is not process isolation. See §1.6.
 - No on-disk discovery, lazy module loading, or persistence of failure state across restarts.
-- History facade is the full service; there is no read-only projection (G-8).
 - The service token identifier is `PluginManager`, not namespaced. It is frozen until Phase 11 to avoid churn (G-12).
 
 **Lifecycle states:** `unloaded` → `activating` → `active` → `deactivating` → `unloaded`; failures land in `failed` with a recorded message.
@@ -466,7 +465,7 @@ Workspace scope wins over user scope so a project can enforce its own safety pol
 
 | Module | Responsibility | Host coupling | Target owner |
 |---|---|---|---|
-| `file-operations/index.ts` | 1,719-line execution switch for 21 kinds plus validation, pre-snapshot, history merge, read/search/metadata aggregation | Node `path`, `process.cwd()` fallback, terminal, JSON history | Split across `brud.tools.filesystem`, `brud.tools.reader`, `brud.tools.catalog`, `brud.terminal`, `brud.codebase.structure`, `brud.search` |
+| `file-operations/index.ts` | 1,844-line module: `executeFileOperations` (lines 300–1844, 1,545 lines; `wc -l` reports 1,843 because the file has no trailing newline) coordinates 21 kinds through a dispatch switch at 488–1654, plus validation, pre-snapshot, history merge, read/search/metadata aggregation | Node `path`, `process.cwd()` fallback, terminal, JSON history | Split across `brud.tools.filesystem`, `brud.tools.reader`, `brud.tools.catalog`, `brud.terminal`, `brud.codebase.structure`, `brud.search` |
 | `bridge/legacyBridge.ts` | Wraps `executeFileOperations` as one generic operation per kind; boots a raw service container | Resolves raw services; swallows resolution failures | Quarantined in `deprecated/` in Phase 11 |
 | `bridge/tokens.ts` | Module-local `Symbol` tokens with an unchecked generic cast | No identifier or description; undiscoverable | Quarantined in `deprecated/` in Phase 11 |
 | `history/` | JSON session folders, pre/post snapshots, revert, trash, retention | Node `fs` via adapter; local-time ID sequence | Retired; UniversalHistory is authoritative after Phase 9 |
@@ -511,7 +510,7 @@ Consequences:
 
 - **No access broker.** The MCP process talks to raw services; validation depends on legacy settings toggles.
 - **No Level-1 services.** PluginManager, UniversalHistory, WorkspaceService, ValidationService, and TerminalService are absent.
-- **Production depends on test fakes.** `NodeFileSystem` and `TestHistoryStore` are exported from `packages/core/src/index.ts` (lines 26–27).
+- **Production depended on test fakes (closed by H2).** The package root exported `NodeFileSystem` and `TestHistoryStore` (`packages/core/src/index.ts` lines 23–24 at `84307cb`). H2 (`25d94e3`) removed those root exports and moved the fakes behind the explicit `@brud/core/testing` subpath; at HEAD `packages/mcp/src/bootstrap.ts:9` imports `NodeFileSystem` and `NodeHistoryStore` from `@brud/core/testing`.
 - **Global state.** The catalog is a process singleton (`globalToolRegistry`), so two MCP workspaces in one process would share tools.
 - **Declared dependency deviation.** `packages/mcp` depends on `@brud/core` (MCP divergence D1), which the target forbids.
 
@@ -760,7 +759,7 @@ export interface IBrudToolsService {
 
 ### 3.2 Missing `IPluginContext` Capabilities
 
-The permission union already declares `tools:register`, `tools:execute`, and `telemetry:emit`, but no capability handle exists and `PluginCapability` only lists filesystem/history. `settings:read` and `terminal:execute` are not even declared. Phase 5 closes both the type and the runtime gap.
+The permission union declares `tools:register`, `tools:execute`, and `telemetry:emit`. `PluginCapability` includes `tools`, and `IPluginContext` exposes `registerTool(...)` and `executeTool(...)` over `brud.core.tools` (`IPluginContext.ts:155,174`; `permissions.ts:36,50`). `settings:read` and `terminal:execute` are still not declared, and no settings, terminal, or telemetry handle exists; Phase 5 closes the remaining type and runtime gap.
 
 | Capability | Permission required | Handle | Backing service | Denial behaviour |
 |---|---|---|---|---|
@@ -869,13 +868,13 @@ These are not optional; each blocks a phase even though it was not in the origin
 
 | ID | Gap | Evidence | Consequence | Phase |
 |---|---|---|---|---|
-| **G-5** | No `tools:register` / `tools:execute` contract | `IPluginContext.ts`; `PluginCapability` | Plugins cannot own operation kinds; closed by G-18 | 5 |
-| **G-6** | No per-kernel tool catalog | `globalToolRegistry` singleton | Two kernels share tools; registration cannot be disposed; closed by G-18 | 5, 7 |
+| **G-5** | No `tools:register` / `tools:execute` contract | `IPluginContext.ts`; `PluginCapability` | **Closed by G-18 (as of 2026-11-04):** `IPluginContext.registerTool` and `executeTool` exist over `brud.core.tools` (`IPluginContext.ts:155,174`; `.internal_docs/verifications/2026-10-29_phase5b_plugin_manager_tools.md`, PASS) | 5 |
+| **G-6** | No per-kernel tool catalog | `globalToolRegistry` singleton | **Closed by G-18 (as of 2026-11-04):** `BrudTools` (`brud.core.tools`) provides an instance-scoped registry with disposable registration, so two kernels no longer share tools on the plugin path | 5, 7 |
 | **G-7** | `IBrudFileSystem` lacks directory/rename/copy primitives | `IBrudFileSystem.ts` (8 methods) | `brud.tools.filesystem` cannot implement 12 kinds | 5 |
-| **G-8** | No read-only history projection | `UniversalHistory` exposes full service | `history:read` is effectively `history:write` | 5 |
-| **G-9** | Boot-time grant deadlock | `PluginManagerService.initialize()` vs broker `RUNNING` gate | Any real plugin requesting a facade fails at boot | 5 |
+| **G-8** | No read-only history projection | `UniversalHistory` exposes full service | **Closed for the plugin path (2026-10-30):** `ReadOnlyUniversalHistoryFacade` exists at `packages/kernel/services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.ts` with a test beside it | 5 |
+| **G-9** | Boot-time grant deadlock | `PluginManagerService.initialize()` vs broker `RUNNING` gate | **Closed 2026-10-30:** activation runs in `PluginManagerService.onRunning()` after `RUNNING` (`PluginManagerService.ts:316`); tests in `kernel.test.ts` and `bootstrapPlugins.test.ts` | 5 |
 | **G-10** | History provenance absent | `beginSession(prompt, targets)` has no origin | MCP/human changes indistinguishable; parity audits are weaker | 9 |
-| **G-11** | Test fakes exported in production | `packages/core/src/index.ts:26-27`; `packages/mcp/src/bootstrap.ts:93-94` | Production path depends on test code; public API is polluted. **Note (D-17):** the fix is superseded by Phase 10's wholesale replacement of MCP's legacy bootstrap. Under D-17, `packages/core/src/index.ts` cannot be edited to remove the exports; the test-fake isolation already applied by H2 (commit `25d94e3`, grandfathered) is the last permitted change. | 0, 10 |
+| **G-11** | Test fakes exported in production | `packages/core/src/index.ts` (no test-fake export at HEAD; H2 moved them to `@brud/core/testing`); `packages/mcp/src/bootstrap.ts:9` | Production path depends on test code; public API is polluted. **Note (D-17):** the fix is superseded by Phase 10's wholesale replacement of MCP's legacy bootstrap. Under D-17, `packages/core/src/index.ts` cannot be edited to remove the exports; the test-fake isolation already applied by H2 (commit `25d94e3`, grandfathered) is the last permitted change. | 0, 10 |
 | **G-12** | Token namespace inconsistency | `PluginManagerToken = 'PluginManager'` | Discovery and telemetry ids are inconsistent | 11 |
 | **G-13** | Debug output in production | `file-operations/index.ts:825-839` (`DEBUG extract_structure…`) | Noisy logs, possible path disclosure. **Note (D-17):** H1 (the DEBUG-leak removal) predates D-17 and is grandfathered. No further changes to `packages/core/` are permitted. | 0 |
 | **G-14** | Logger is `console` in plugin manager | `PluginManagerService.PluginManagerLogger` | No structured telemetry, no host routing | 5 |
@@ -1208,7 +1207,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 | Phase | Name | Primary outcome | Depends on | Exit gate | User-visible risk | Status (2026-11-04) |
 |---|---|---|---|---|---|---|
-| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None | **Partial (as of 2026-11-04).** H1 done; H2, H4, H6 open; H3, H5, H7 unrecorded |
+| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None | **Phase 0 complete except H4 deferred (as of 2026-11-04).** H1 done (pre-D-17). H2 done by `25d94e3` (test-fake isolation behind `@brud/core/testing`; grandfathered pre-D-17). H6 done (root `npm run typecheck` script). H4 deferred to immediately before Phase 6.B with recorded rationale in `.internal_docs/executions/2026-11-04_phase_0_close_out_h2_h6.md`. H3, H5, H7 unrecorded but not blocking any later phase. |
 | **1** | SettingsService | One frozen policy snapshot across hosts | 0 | Cross-host settings parity | Low | **Implemented, gate not ratified (as of 2026-11-04).** Service and tests exist; cross-host snapshot parity fails (MCP and VS Code read settings directly) |
 | **2** | WorkspaceService | Canonical root, containment, translation | 1 | Path parity matrix | Medium | **Implemented, gate not ratified (as of 2026-11-04).** Multi-root and absolute-path criteria pass; Windows parity is unit-only; core still uses `node:fs` canonicalization |
 | **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium | **Gate passed (2026-10-29).** `validationParity` passes 18/18; full validation suites not re-run at HEAD |
@@ -1223,7 +1222,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 | **11** | Quarantine legacy Core | Move the legacy monolith into `deprecated/`; ESLint forbids any import of it | 10 | Zero live imports of `deprecated/`; full CI | **High** (code-only reversal; source kept) | **Not started (as of 2026-11-04).** No `deprecated/`; no ESLint restriction; 53 live `@brud/core` imports |
 | **Release** | Next consumer app | Brud Desktop ships on the microkernel path; VS Code release freeze lifts | 11 | Phase 11 verification record | — | Blocked on Phase 11 |
 
-**Status updated 2026-11-04** per the approved ADR `.internal_docs/decisions/2026-11-04_rollout_status_reconciliation_v2.md` and its evidence audit `.internal_docs/audits/2026-11-04_phase_status_reconciliation_audit.md`. Verdicts reflect code state at HEAD `84307cb`, not the prior ledger's claims.
+**Status updated 2026-11-04** per the approved ADR `.internal_docs/decisions/2026-11-04_rollout_status_reconciliation_v2.md` and its evidence audit `.internal_docs/audits/2026-11-04_phase_status_reconciliation_audit.md`. Verdicts reflect code state as of 2026-11-04, not the prior ledger's claims.
 
 "Implemented, gate not ratified" means the code is merged but no verification record in `.internal_docs/verifications/` shows the phase's exit gate passing. Such a phase is not complete until that record exists.
 
@@ -1459,6 +1458,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - `packages/core/QUARANTINE.md` no longer references a non-existent fixture path.
 - Plugin activation/deactivation leaves no disposables or file handles.
 - Legacy modules remain authoritative when flags are `off`.
+- Adversarial coverage: malformed `[BRUD]` blocks, injection attempts in parameters, oversized payloads, and nested protected regions must be covered by tests that use the real `BrudTools` parser and real plugin registrations.
 
 **Dependency:** Phase 6.B depends on Phase 5 (plugin runtime) and Phase 5.H (unified history with O-3 closed) being satisfied. Phase 7 depends on 6.A + 6.B.
 
@@ -1513,6 +1513,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - 1,600-file batch completes without freezing or unbounded memory.
 - No path is read outside the workspace, including through symlinks and imports.
 - MCP read tools and VS Code read panel behave identically.
+- Adversarial coverage: path traversal via symlink, oversized files, malformed glob patterns, and abort during a batch read must be covered by tests using the real `BrudFileSystem` on real temp directories.
 
 **Rollback:** flag off; legacy read branches remain.
 
@@ -1542,6 +1543,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - Imported legacy sessions are readable and revertible; originals untouched.
 - MCP mutations and VS Code mutations produce the same result and history provenance.
 - No operation kind is served by `executeFileOperations` when its flag is `active`.
+- Adversarial coverage: concurrent writers to the same path, replay of the same mutation, forged history entries, and crash between write and commit must be covered by tests using `DurableNodeStorageDriver` on real disk and `UniversalHistory` on real SQLite.
 
 **Rollback:** set mutation flags to `off`; the import bridge is additive and does not modify legacy data. This is the last phase where a clean rollback exists.
 
@@ -1573,6 +1575,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - No `bootCoreKernel` call remains in production code.
 - Terminal plugin cleans up all children on stop.
 - Tool listing and execution over stdio and HTTP are unchanged.
+- Adversarial coverage: forged MCP messages, malformed JSON-RPC framing, oversized HTTP bodies, and daemon handshake replay must be covered by tests exercising the real transport layer.
 
 **Rollback:** the daemon can boot with the legacy plugin set off; MCP can revert to the previous bootstrap only while the legacy package is still live (it is, until Phase 11 quarantines it).
 
@@ -1710,6 +1713,19 @@ npm run check:boundaries
 npm run lint
 ```
 
+**Production-realistic testing (D-18):**
+
+D-18 is the binding test standard for this repository. It has four parts:
+
+1. **Real contract implementations.** Contract implementations are exercised against real environments, not test doubles: `DurableNodeStorageDriver` on real temporary directories, `UniversalHistory` on real SQLite files, `TerminalService` spawning real processes.
+2. **Simulated external APIs with real-shape responses.** External services (LLM APIs, package registries, HTTP endpoints, external systems) are simulated with real-shape responses, including errors, timeouts, rate limits, and malformed payloads — never mocked away with a happy-path substitute.
+3. **Pure functions tested directly.** Parsers, hashers, and schema validators are the unit under test; testing them directly is not a mock.
+4. **Adversarial coverage.** Injection, replay, token forgery, unauthorized access, malformed payloads, concurrent access, and resource exhaustion are mandatory for every phase's exit gate for the surfaces that phase introduces.
+
+Setup helpers that wire real implementations into a test harness (e.g., `realKernel.ts`, `kernelWorker.ts`) are permitted. Substitution helpers that replace a production contract with an in-memory or fake implementation (e.g., `InMemoryStorageDriver`, `MapPathPort`, `TestHistoryStore`) are forbidden outside `packages/core/` and are the subject of the subsequent de-mocking work.
+
+See §Appendix G, D-18, and the evidence base at `.internal_docs/audits/2026-11-04_test_realism_inventory.md`.
+
 **Per-phase evidence:**
 
 | Phase | Required evidence |
@@ -1766,6 +1782,7 @@ The rollout is complete when all of the following are true:
 - [ ] One kernel and one history writer exist per workspace.
 - [ ] No global mutable registry, module counter, or mutable settings `Proxy` remains in a runtime path.
 - [ ] No production entry point imports a test fake.
+- [ ] Every phase's exit gate includes adversarial coverage appropriate to the surfaces the phase introduces (D-18).
 - [ ] The legacy monolith source lives only in `deprecated/`, is unused, and is guarded by an ESLint import restriction plus a CI symbol gate.
 - [ ] All verification commands pass from clean.
 - [ ] This document, BEAS-0001, the microkernel spec, and the MCP status register agree with the code.
@@ -1796,29 +1813,29 @@ When every item above is checked, the next consumer app (Brud Desktop) may ship 
 
 Each cell must be covered by a named test before the owning plugin can be `active`.
 
-| Kind | Success | Validation failure | Not found | Conflict | Abort | History effect | Reversal |
-|---|---|---|---|---|---|---|---|
-| `search_replace` | required | required | required | required | required | required | required |
-| `create_file` | required | required | n/a | required | required | required | required |
-| `delete_file` | required | required | required | n/a | required | required | required |
-| `rename_file` | required | required | required | required | required | required | required |
-| `move_file` | required | required | required | required | required | required | required |
-| `copy_file` | required | required | required | required | required | required | required |
-| `append_file` | required | required | required | n/a | required | required | required |
-| `create_directory` | required | required | n/a | required | required | required | required* |
-| `delete_directory` | required | required | required | n/a | required | required | required* |
-| `move_directory` | required | required | required | required | required | required | required* |
-| `append_file_multi` | required | required | required | n/a | required | required | required |
-| `search_replace_multi` | required | required | required | required | required | required | required |
-| `extract_structure` | required | required | required | n/a | required | none | n/a |
-| `codebase_metadata` | required | required | n/a | n/a | required | none | n/a |
-| `search_files` | required | required | n/a | n/a | required | none | n/a |
-| `read_file` | required | required | required | n/a | required | none | n/a |
-| `read_files` | required | required | n/a | n/a | required | none | n/a |
-| `read_directory` | required | required | required | n/a | required | none | n/a |
-| `terminal_interactive` | required | required | n/a | n/a | required | none | n/a |
-| `terminal_command` | required | required | n/a | n/a | required | none | n/a |
-| `get_tool_info` | required | required | required | n/a | n/a | none | n/a |
+| Kind | Success | Validation failure | Not found | Conflict | Abort | History effect | Reversal | Adversarial |
+|---|---|---|---|---|---|---|---|---|
+| `search_replace` | required | required | required | required | required | required | required | required |
+| `create_file` | required | required | n/a | required | required | required | required | required |
+| `delete_file` | required | required | required | n/a | required | required | required | required |
+| `rename_file` | required | required | required | required | required | required | required | required |
+| `move_file` | required | required | required | required | required | required | required | required |
+| `copy_file` | required | required | required | required | required | required | required | required |
+| `append_file` | required | required | required | n/a | required | required | required | required |
+| `create_directory` | required | required | n/a | required | required | required | required* | required |
+| `delete_directory` | required | required | required | n/a | required | required | required* | required |
+| `move_directory` | required | required | required | required | required | required | required* | required |
+| `append_file_multi` | required | required | required | n/a | required | required | required | required |
+| `search_replace_multi` | required | required | required | required | required | required | required | required |
+| `extract_structure` | required | required | required | n/a | required | none | n/a | n/a |
+| `codebase_metadata` | required | required | n/a | n/a | required | none | n/a | n/a |
+| `search_files` | required | required | n/a | n/a | required | none | n/a | required |
+| `read_file` | required | required | required | n/a | required | none | n/a | required |
+| `read_files` | required | required | n/a | n/a | required | none | n/a | required |
+| `read_directory` | required | required | required | n/a | required | none | n/a | required |
+| `terminal_interactive` | required | required | n/a | n/a | required | none | n/a | required |
+| `terminal_command` | required | required | n/a | n/a | required | none | n/a | required |
+| `get_tool_info` | required | required | required | n/a | n/a | none | n/a | n/a |
 
 `*` Directory reversal follows the file-level model: every affected file is restored. Empty-directory state is a documented limitation until the history engine supports directory targets.
 
@@ -1930,8 +1947,8 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 |---|---|
 | Document status | Active |
 | Baseline captured | 2026-10-25 |
-| Status updated | 2026-11-04 (ADR v2: `.internal_docs/decisions/2026-11-04_rollout_status_reconciliation_v2.md`; audit: `.internal_docs/audits/2026-11-04_phase_status_reconciliation_audit.md`) |
-| Phase 0 | Partial — H2, H4, H6 open |
+| Status updated | 2026-11-04 (ADR v2 + D-17 + D-18; Section P remediation) |
+| Phase 0 | Partial — H2 and H6 closed by `25d94e3`; H1 done (pre-D-17); H4 deferred to Phase 6.B with recorded rationale; H3/H5/H7 unrecorded, non-blocking. |
 | Phase 1 | Implemented; exit gate not ratified (cross-host parity fails) |
 | Phase 2 | Implemented; exit gate not ratified (core `node:fs` remains; Windows unit-only) |
 | Phase 3 | Gate passed (2026-10-29) |
@@ -1940,7 +1957,7 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | Phase 5.H | Partial — U-8 retention implemented; 5 open tests (O-3) block the gate |
 | Phase 6 | Split: 6.A satisfied (parser); 6.B not satisfied (five leaf plugins absent; 26 `@brud/patchblocks` imports need repoint) |
 | Phases 7–11 | Not started |
-| Next action | Close Phase 0 items (H2, H4, H6) and Phase 5 open items; ratify Phases 1, 2, 4 evidence; close Phase 5.H O-3; execute Phase 6.B; then proceed to Phase 7 |
+| Next action | Close H4 immediately before Phase 6.B and Phase 5 open items; ratify Phases 1, 2, 4 evidence; close Phase 5.H O-3; execute Phase 6.B; then proceed to Phase 7 |
 
 ## Appendix G — Decision Register
 
@@ -1963,6 +1980,7 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | **D-15** | Unify the kernel's two history engines into one polymorphic history service (2026-10-30) | Two ledgers (session ledger and mutation journal) recorded the same file changes in different models, with two reversal engines and two blob layouts; plugins need typed, schema-validated history beyond files before any plugin is written against the contract | One service on `brud.core.universalHistory` and one database `.brud/history/universal.db`; `brud.core.history` is removed; entries are `{ namespace, type, schemaVersion, payload }` validated by a zero-dependency in-kernel JSON Schema subset validator (D7); files are the built-in `brud.core.file` type; reversal modes `none` / `inverse-payload` / `handler` (handlers run last, timed, owner must be active); plugins are confined to their own namespace and cannot see `brud.core.file` (D3, D10); file writes outside an explicit session go to one implicit session per boot (D9); old `ledger.db` and `history.db` are imported, never modified; delivered as increments U-0 to U-8; D11 amended 2026-10-30: two approvals, Build (U-2–U-5) and Switch (U-6–U-8), with hard gates and stop-on-fail inside each run; overrides the §1.6 non-goal on rewriting the history engine |
 | **D-16** | Migrate `@brud/patchblocks` into the Level-1 `BrudTools` service (2026-11-04). The package is not deleted; its parsing capability now lives at `packages/kernel/services/BrudTools/parser/` as `parseInput` / `parseAndRoute`. | The `[BRUD]` parser was always intended to be a Level-1 capability of `BrudTools` (per §3.1 G-18 and §4.3.1), not a plugin. The migration is complete; the remaining 26 legacy import sites (23 in `apps/vscode`, 3 in `tests/trace-issue11.test.ts`) are stale paths, not evidence of a missing package. | The 23 `apps/vscode` imports and the 3 test imports are repointed through a thin re-export in `@brud/vscode-adapter` (§1.3 rule R1). `apps/vscode` MUST NOT import `@brud/kernel` directly. Parser parity fixtures live at `packages/kernel/src/__tests__/`. `packages/core/QUARANTINE.md` references the fixture path that no longer reflects reality and must be corrected in Phase 6.B. The 29 current `apps/vscode` typecheck diagnostics are the expected symptom of stale imports, not a build-system regression. |
 | **D-17** | Freeze `packages/core/` from the date D-17 lands (2026-11-04) onward. `packages/core/` may be read as reference material but MUST NOT be modified, added to, or deleted from in any phase, for any reason. | `@brud/core` is being deleted in Phase 11 (D-14); every change made to it after the rollout starts is throwaway work and risks contaminating the parity evidence the rollout depends on. D-12 and D-13 already freeze consumer releases, so legacy behaviour is not a compatibility surface that requires maintenance. | Phase 11 relocates `packages/core/` into `deprecated/` **byte-identical** (physical move, not an edit). Any requirement that would have touched `packages/core/` is re-scoped to a non-core package or recorded as historical debt. Specifically, Phase 6.B work item 3 (correct `packages/core/QUARANTINE.md`) is retired — the stale reference is debt, not a fix. G-11 is superseded by Phase 10 replacement; G-13 is grandfathered (H1 predates D-17). **Effective date is prospective**: H1 and H2 (commit `25d94e3`) predate D-17 and stand as-is. |
+| **D-18** | Production-realistic, zero-mock, adversarial testing (2026-11-04). Contract implementations in this repository are exercised through real implementations on real environments, not test doubles. Filesystem tests use `DurableNodeStorageDriver` on real temporary directories. History tests use `UniversalHistory` on real SQLite files. Terminal tests use `TerminalService` spawning real processes. External services (LLM APIs, package registries, HTTP endpoints, external systems) are simulated with real-shape responses including errors, timeouts, rate limits, and malformed payloads — never mocked away with a happy-path substitute. Pure functions (parsers, hashers, schema validators) are tested directly; that is not a mock, it is the unit under test. Setup helpers that wire real implementations into a test harness (e.g., `realKernel.ts`, `kernelWorker.ts`) are permitted. Substitution helpers that replace a production contract with an in-memory or fake implementation (e.g., `InMemoryStorageDriver`, `MapPathPort`, `TestHistoryStore`) are forbidden outside `packages/core/` and are the subject of the de-mocking work that follows this decision. Adversarial coverage — injection, replay, token forgery, unauthorized access, malformed payloads, concurrent access, resource exhaustion — is mandatory for every phase's exit gate for the surfaces that phase introduces. | capability projection (§1.3 R3) is only as strong as the tests that exercise it; mocked tests pass while production fails under the same capability model. A test that never touches a real driver cannot detect a containment bug, a race, or a missing index. | the standard supersedes BEAS-0001 §6.1's sanction of "in-memory scratchpads for headless testing". `CONTRIBUTING.md`'s Testing Requirements section is rewritten to state this standard. The 2026-11-04 test-realism inventory (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`) is the evidence base. MCP's legacy bootstrap imports `TestHistoryStore` via `@brud/core/testing` today; MCP is a legacy-on-legacy path built on `bootCoreKernel` that Phase 10 rewrites as a kernel plugin (§4.2 item 11, D-4). This import is **scheduled for deletion**, not repair — it retires when the bootstrap is replaced wholesale. Any defect, finding, or debt recorded against the current MCP implementation is informational, not actionable; it is not fixed incrementally. The D-18 standard binds the surfaces that survive Phase 10 — the kernel, the daemon host, and the plugins built on them. |
 
 
 

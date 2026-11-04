@@ -35,7 +35,7 @@ Before submitting a bug report, please check the [issue tracker](https://github.
    npm run ci
    ```
 
-   This builds all packages, runs core and integration tests, and lints the codebase.
+   This runs `npm run build:all`, `npm run test:kernel`, `npm run test:core`, `npm run test:mcp`, `npm run test:extension`, `npm run check:boundaries`, and `npm run lint`. It does not run `npm run test:integration`, `npm run test:daemon`, or `npm run test:adapter`; run those separately.
 
 4. **For a quicker feedback loop** during development:
 
@@ -64,10 +64,43 @@ Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the ar
 
 ## Testing Requirements
 
-- **Core logic** must have corresponding unit tests in `packages/core/src/**/*.test.ts`.
-- **Run core tests** with `npm run test:core`.
-- **Run integration tests** with `npm run test:integration`.
-- All tests must pass before submitting a pull request. The CI pipeline (`npm run ci`) enforces this.
+Capability projection (§1.3 R3 of the rollout plan) is only as strong as the tests that exercise it. Mocked tests pass while production fails under the same capability model: a test that never touches a real driver cannot detect a containment bug, a race, or a missing index. The repository therefore enforces production-realistic, zero-mock, adversarial testing under **D-18**, and `packages/core/` is frozen reference material under **D-17** — it is not a test target and it is scheduled for removal. New tests belong in the package that owns the surface.
+
+**The standard (D-18):**
+
+- **Real contract implementations.** Exercise contract implementations on real environments, not test doubles. Use `DurableNodeStorageDriver` on real temporary directories, `UniversalHistory` on real SQLite files, and `TerminalService` spawning real processes.
+- **Simulated external APIs with real-shape responses.** External services (LLM APIs, package registries, HTTP endpoints, external systems) are simulated with real-shape responses, including errors, timeouts, rate limits, and malformed payloads — never mocked away with a happy-path substitute.
+- **Pure functions tested directly.** Parsers, hashers, and schema validators are the unit under test; testing them directly is not a mock.
+- **Adversarial coverage.** Cover the adversarial categories below for every surface you introduce or change.
+
+**Use real implementations:**
+
+- `DurableNodeStorageDriver` on real temporary directories for filesystem durability and containment tests.
+- `UniversalHistory` on real SQLite files for history, reversal, and retention tests.
+- `TerminalService` spawning real processes for terminal lifecycle, timeout, and output-cap tests.
+
+**Do not use substitutions:**
+
+- `InMemoryStorageDriver`, `MapPathPort`, or `TestHistoryStore` as replacements for a production contract.
+- Any in-memory or fake implementation of a production contract outside `packages/core/`. These are the subject of the de-mocking work that follows D-18.
+
+**Setup helpers versus substitution helpers.** A setup helper wires real implementations into a test harness and is permitted; `packages/kernel/src/__tests__/support/realKernel.ts` and `packages/kernel/src/__tests__/fixtures/kernelWorker.ts` are the canonical examples. A substitution helper replaces a production contract with an in-memory or fake implementation and is forbidden outside `packages/core/`.
+
+**Adversarial categories and examples:**
+
+- **Injection** — malicious `[BRUD]` blocks and parameter injection routed through the real `BrudTools` parser.
+- **Replay** — replaying the same mutation against `UniversalHistory` on real SQLite.
+- **Token forgery** — forged history entries and forged plugin brand or claim records.
+- **Unauthorized access** — a plugin without a capability attempting the corresponding handle, and path traversal via symlink against the real `BrudFileSystem`.
+- **Malformed payloads** — malformed JSON-RPC framing and malformed tool parameters against the real transports.
+- **Concurrent access** — concurrent writers to the same path through `DurableNodeStorageDriver`, and concurrent history appends against real SQLite.
+- **Resource exhaustion** — oversized payloads, oversized files, and batch/read ceilings against the real reader and terminal surfaces.
+
+**Running the suite.** Run the suite that owns the surface you changed: `npm run test:core`, `npm run test:mcp`, `npm run test:daemon`, `npm run test:adapter`, or `npm run test --workspace @brud/kernel`. All tests must pass before submitting a pull request. The CI pipeline (`npm run ci`) runs `build:all`, `test:kernel`, `test:core`, `test:mcp`, `test:extension`, `check:boundaries`, and `lint`; it does not run `test:integration`, `test:daemon`, or `test:adapter`, so run those separately.
+
+**References.** D-17 (packages/core frozen), D-18 (the standard), plan §5.5 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), evidence base (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`).
+
+**For codebase learners.** A codebase that tests against real drivers, real SQLite files, real processes, and real transports — and that requires adversarial cases for every new surface — is telling you its quality posture directly: it expects production failures to be found in tests, not in production. The capability model is enforced by tests that would actually fail if containment, durability, or authorization regressed.
 
 ## Pull Request Process
 

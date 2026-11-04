@@ -32,7 +32,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
 ```text
                 ┌────────────────────────────────────────────────────────┐
                 │                   Boundary Adapters                    │
-                │     apps/vscode  •  packages/mcp  •  apps/server       │
+                │     apps/vscode  •  packages/mcp  •  packages/daemon   │
                 └───────────────────────────┬────────────────────────────┘
                                             │
                                             ▼ (Strict Protocol Messages)
@@ -47,10 +47,11 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
 
 **No domain, execution, or business logic may reside inside boundary adapters.**
 
-1. **Single Source of Truth:** All AST manipulations, validation algorithms, state transitions, diff calculations, patch generators, and pipeline orchestrations belong exclusively in core packages (`packages/core`, `packages/kernel`, `packages/protocol`).
+1. **Single Source of Truth:** All AST manipulations, validation algorithms, state transitions, diff calculations, patch generators, and pipeline orchestrations belong exclusively in the engine (`packages/kernel`, `packages/protocol`, and the official plugins that replace the legacy core).
    - `packages/protocol`: Owns message schemas, IPC payloads, and serializable protocol contracts.
-   - `packages/core`: Owns business models, operation handlers, diffing algorithms, and domain utilities.
-   - `packages/kernel`: Owns the execution pipeline, dependency injection container, and lifecycle arbitration.
+   - `packages/kernel`: Owns the execution pipeline, dependency injection container, lifecycle arbitration, Level-1 services, and the `BrudTools` tool registry and parser.
+   - `packages/core`: Frozen reference material under D-17 (2026-11-04) and scheduled for quarantine in Phase 11 of ROLLOUT-0001. It is not a live owner of new logic.
+   - `brud.tools.filesystem`: Owns diffing and patch generation in Phase 9, operating over `BrudTools.parseAndRoute` and the patch matcher moved into that plugin.
 2. **Prohibition of Duplicate Business Logic:** If a capability is required by multiple surfaces (for example, both a future CLI binary and the VS Code panel), implementing that capability within the adapter layer is strictly forbidden. The logic must be implemented in the core engine, exposed via `@brud/protocol`, and consumed uniformly.
 3. **The Deletion Invariant:** If any adapter (such as `apps/vscode`) is removed in its entirety, zero core domain logic, verification contracts, or execution capabilities are lost.
 
@@ -86,9 +87,9 @@ The kernel serves as the central orchestrator, dependency container, and capabil
 
 ### 4.1 FileSystem Port & VFS Target
 
-In the current baseline, file input/output is abstracted through the `FileSystem` interface (`packages/core/src/types/filesystem.ts`), injected into the kernel container at boot (`CoreTokens.FileSystem`).
+In the current baseline, file input/output is abstracted through the `FileSystem` interface (`packages/core/src/types/filesystem.ts`), registered in the kernel container at boot as `brud.core.filesystem` (`FileSystemToken` in `packages/kernel/services/BrudFileSystem/descriptor/tokens.ts`).
 
-- **Current Invariant:** Domain services and operation handlers must interact with disk resources via the injected `FileSystem` port rather than calling Node.js `fs` or `fs/promises` directly. Legacy direct filesystem calls in core utilities are actively being refactored to consume this port.
+- **Current Invariant:** Domain services and operation handlers must interact with disk resources via the injected `FileSystem` port rather than calling Node.js `fs` or `fs/promises` directly. Legacy direct filesystem calls remain in `packages/core/`, which is frozen under D-17 (2026-11-04); that refactor is retired and the package is scheduled for quarantine in Phase 11.
 - **Target Rollout:** The engine is transitioning to a sovereign Virtual File System (VFS) gateway managed directly by the kernel, enabling transparent sandboxing, in-memory virtual layers, path remapping, and granular file access auditing.
 
 ### 4.2 Inter-Service Communication & The No-Peer Invariant
@@ -118,13 +119,16 @@ System Core Services provide the baseline capabilities of the engine:
 - Registered during the kernel boot phase.
 - Once initialization concludes, the container transitions to an immutable state (`serviceContainer.freeze()`). Modifying or monkey-patching Level 1 services at runtime is prohibited.
 - Registered Level 1 service tokens include:
-  - `CoreTokens.FileSystem`: Abstract file operations.
-  - `CoreTokens.TerminalExecutor`: Terminal process execution.
-  - `CoreTokens.HistoryStore`: State tracking and snapshot journals.
-  - `CoreTokens.Settings`: Configuration resolution.
-  - `CoreTokens.StructureService`: Workspace structural extraction.
-  - `DiagnosticsTokens.Provider`: Problem diagnostics inspection.
-  - `TelemetryTokens.Service`: Operational telemetry spooling.
+  - `brud.core.filesystem`: Abstract file operations.
+  - `brud.core.terminal`: Terminal process execution.
+  - `brud.core.universalHistory`: Session history and reversal (`IUniversalHistoryService`).
+  - `brud.core.history`: Journal-driven checkpoint/undo history (`IUniversalHistory`).
+  - `brud.core.settings` and `brud.core.settings.reader`: Configuration resolution (frozen snapshot and read-only snapshot).
+  - `brud.core.workspace`: Canonical workspace identity and path translation.
+  - `brud.core.validation`: Pre-execution validation gate.
+  - `brud.core.tools`: `BrudTools` tool registry, certification, schema gate, dispatch table, and `[BRUD]` parser routing.
+  - `PluginManager`: Plugin manager (legacy id, frozen until Phase 11).
+  - Telemetry sink: planned (not implemented at HEAD); no `TelemetryTokens.Service` exists.
 
 ### 5.2 Level 2: Sandboxed Plugins (Target Specification)
 
@@ -143,20 +147,24 @@ System Core Services provide the baseline capabilities of the engine:
 
 The State and History subsystem guarantees workspace recoverability through transaction-style snapshot and rollback mechanisms.
 
-### 6.1 Abstract Persistence
+### 6.1 Persistent History Model
 
-The history subsystem decouples state journals from concrete storage mechanisms via the `HistoryStore` interface:
+The active history engine is specified by [`BRUD_HISTORY_ENGINE_SPEC.md`](./BRUD_HISTORY_ENGINE_SPEC.md); this section records the binding architecture and does not restate that specification's detailed persistence rules.
 
-- **Desktop Adapter:** Persists file-based snapshots to local workspace storage (`.brud/`).
-- **Target Extensibility:** The `HistoryStore` contract is designed to accept alternative persistence drivers (in-memory scratchpads for headless testing, or database backends for remote execution).
+- **Store:** `UnifiedHistoryStore` (`packages/kernel/services/UniversalHistory/unified/store/`) opens the single SQLite database `.brud/history/universal.db` with `STRICT` tables, foreign-key-enforced type registration, JSON `CHECK` constraints, WAL mode, and `busy_timeout = 5000`.
+- **Content addressing:** Payloads of up to 64 KiB are stored inline in `contents.inline_data`; larger payloads are offloaded to `cas/<aa>/<sha256>` under `.brud/history/`, sharded by the first two hex digits of the SHA-256 digest. Content is re-hashed before write and on every read.
+- **Service and reversal:** `UnifiedHistoryService` owns recording, sessions, and schema-at-registration; `ReversalEngine` (`unified/engine/ReversalEngine.ts`) owns linear undo/redo/checkpoint rollback and session reversal.
+- **Degraded operation:** A read-only or newer-schema database opens degraded: boot succeeds, recording is a no-op, and writes and reversals are refused.
+
+Test doubles of production contracts are forbidden in this repository (D-18; ROLLOUT-0001 §Appendix G, `docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`). Setup helpers that wire real implementations into a test harness are permitted.
 
 ### 6.2 Atomic Operation Batches and Session Reversal
 
 Operations do not execute as uncoordinated file mutations:
 
 - Operations are grouped into discrete transactional batches.
-- **Rollback Guarantee:** If an operation within a multi-step batch encounters a failure, the engine initiates rollback via core reversal routines (`revertOperations`, `revertSession`), returning modified files to their prior snapshot state.
-- **Stable Identifiers:** Every completed execution session records a stable identifier, enabling programmatic reversal across UI, API, and automated tooling surfaces.
+- **Rollback Guarantee:** If an operation within a multi-step batch encounters a failure, the engine plans and executes reversal through the unified history service (`IUniversalHistoryService.planReversal`, `IUniversalHistoryService.executeReversal`), returning modified files to their prior state. Reversal semantics are specified in `BRUD_HISTORY_ENGINE_SPEC.md`.
+- **Stable Identifiers:** Every completed execution session records a stable identifier (`BR-YYYYMMDD-NNN`), enabling programmatic reversal across UI, API, and automated tooling surfaces.
 
 ---
 
