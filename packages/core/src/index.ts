@@ -20,5 +20,3 @@ export * from './services/index.js';
 export { globalToolRegistry } from './tool-registry/registry';
 export { initializeToolRegistry } from './tool-registry/init';
 export type { ToolDoc, ToolParameter } from './tool-registry/types';
-export { NodeFileSystem } from './testing/nodeFileSystem';
-export { TestHistoryStore as NodeHistoryStore } from './testing/testHistoryStore';

@@ -4,7 +4,8 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process';
-import { NodeFileSystem, NodeHistoryStore, revertSession } from '@brud/core';
+import { revertSession } from '@brud/core';
+import { NodeFileSystem, NodeHistoryStore } from '@brud/core/testing';
 
 interface JsonRpcResponse {
   id?: number;

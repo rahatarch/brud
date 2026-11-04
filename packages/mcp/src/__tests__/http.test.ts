@@ -5,7 +5,8 @@ import * as os from 'os';
 import * as path from 'path';
 import { startHttpServer } from '../http';
 import type { StartedHttpServer } from '../http';
-import { NodeFileSystem, NodeHistoryStore, revertSession } from '@brud/core';
+import { revertSession } from '@brud/core';
+import { NodeFileSystem, NodeHistoryStore } from '@brud/core/testing';
 
 interface RpcResponse {
   result?: unknown;

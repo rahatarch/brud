@@ -2,12 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import {
   DEFAULT_SETTINGS,
-  NodeFileSystem,
-  NodeHistoryStore,
   bootCoreKernel,
   createTerminalExecutor,
   killAllProcesses,
 } from '@brud/core';
+import { NodeFileSystem, NodeHistoryStore } from '@brud/core/testing';
 import type { BrudSettings, FileSystem, HistoryStore, TerminalExecutor } from '@brud/core';
 import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 

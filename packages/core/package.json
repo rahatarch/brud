@@ -3,6 +3,18 @@
   "version": "0.0.1",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./testing": {
+      "types": "./src/testing/index.ts",
+      "require": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
+    }
+  },
   "scripts": {
     "build": "tsc"
   },
