@@ -1,5 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { posix, win32 } from 'node:path';
 import type {
   ValidationEnvironment,
@@ -13,7 +16,6 @@ import { ValidationService } from '../orchestrator/ValidationService.js';
 import { KIND_CONSTRAINTS } from '../engine/kindMatrix.js';
 import { legacyMessages } from '../engine/errorCatalog.js';
 import { createStandardKernel } from '../../../src/bootstrap/index.js';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
 import { ValidationToken } from '../descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
@@ -742,13 +744,14 @@ describe('errorCatalog — legacy message parity', () => {
 });
 
 describe('ValidationService — standard kernel registration', () => {
-  it('registers after workspace and before history, with both dependencies', async () => {
+  it('registers after workspace and before history, with both dependencies', async (context) => {
+    const root = await mkdtemp(join(tmpdir(), 'brud-validation-kernel-'));
+    context.after(() => rm(root, { recursive: true, force: true }));
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot: root });
 
     try {
       const ids = kernel.listServices().map((entry) => entry.id);
@@ -759,7 +762,7 @@ describe('ValidationService — standard kernel registration', () => {
       assert.ok(ids.indexOf('brud.core.validation') < ids.indexOf('brud.core.history'));
 
       const validation = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: '/workspace' },
+        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
         ValidationToken,
       );
 
@@ -768,17 +771,17 @@ describe('ValidationService — standard kernel registration', () => {
       assert.equal(Object.isFrozen(validation.getPolicy()), true);
 
       const workspace = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: '/workspace' },
+        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
         WorkspaceToken,
       );
       const settings = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: '/workspace' },
+        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
         SettingsReaderToken,
       );
 
       assert.equal(validation.getPolicy().readMaxBatchFiles, settings.getSnapshot().readMaxBatchFiles);
       assert.equal(validation.getPolicy().workspaceBoundaryEnabled, settings.getSnapshot().workspaceBoundaryEnabled);
-      assert.equal(workspace.primaryRoot, '/workspace');
+      assert.equal(workspace.primaryRoot, root);
 
       assert.deepEqual(await validation.validatePath('src/a.ts', 'read_file'), { ok: true });
 

@@ -1,11 +1,23 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
+import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 
-const ROOT = '/workspace';
+let root = '';
 
-class DurableRecordingDriver extends InMemoryStorageDriver {
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-scoped-driver-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+class DurableRecordingDriver extends DurableNodeStorageDriver {
   public readonly calls: string[] = [];
 
   public failSyncFile = false;
@@ -46,16 +58,19 @@ class DurableRecordingDriver extends InMemoryStorageDriver {
     await super.mkdir(absoluteDirectoryPath, options);
   }
 
-  async syncFile(absolutePath: string): Promise<void> {
+  override async syncFile(absolutePath: string): Promise<void> {
     this.calls.push(`syncFile:${absolutePath}`);
 
     if (this.failSyncFile) {
       throw new Error('syncFile unavailable');
     }
+
+    await super.syncFile(absolutePath);
   }
 
-  async syncDirectory(absoluteDirectoryPath: string): Promise<void> {
+  override async syncDirectory(absoluteDirectoryPath: string): Promise<void> {
     this.calls.push(`syncDirectory:${absoluteDirectoryPath}`);
+    await super.syncDirectory(absoluteDirectoryPath);
   }
 }
 
@@ -64,12 +79,16 @@ async function createHarness(): Promise<{
   driver: DurableRecordingDriver;
 }> {
   const driver = new DurableRecordingDriver();
-  const service = new BrudFileSystem(ROOT, driver);
+  const service = new BrudFileSystem(root, driver);
 
   await service.initialize();
   driver.reset();
 
   return { service, driver };
+}
+
+function sortEntries<T extends { name: string }>(entries: readonly T[]): T[] {
+  return [...entries].sort((left, right) => left.name.localeCompare(right.name));
 }
 
 describe('BrudFileSystem scoped storage driver', () => {
@@ -80,12 +99,12 @@ describe('BrudFileSystem scoped storage driver', () => {
 
     const [mkdirCall, writeCall, syncCall, renameCall, syncDirectoryCall] = driver.calls;
 
-    assert.equal(mkdirCall, `mkdir:${ROOT}/reports`);
-    assert.match(writeCall ?? '', new RegExp(`^writeFile:${ROOT}/reports/\\.summary\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
+    assert.equal(mkdirCall, `mkdir:${root}/reports`);
+    assert.match(writeCall ?? '', new RegExp(`^writeFile:${root}/reports/\\.summary\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
     const temporaryPath = (writeCall ?? '').slice('writeFile:'.length);
     assert.equal(syncCall, `syncFile:${temporaryPath}`);
-    assert.equal(renameCall, `rename:${temporaryPath}->${ROOT}/reports/summary.txt`);
-    assert.equal(syncDirectoryCall, `syncDirectory:${ROOT}/reports`);
+    assert.equal(renameCall, `rename:${temporaryPath}->${root}/reports/summary.txt`);
+    assert.equal(syncDirectoryCall, `syncDirectory:${root}/reports`);
     assert.equal(driver.calls.length, 5);
     assert.equal(await service.readText('reports/summary.txt'), 'payload');
     assert.equal(await driver.exists(temporaryPath), false);
@@ -98,28 +117,28 @@ describe('BrudFileSystem scoped storage driver', () => {
 
     const [mkdirCall, writeCall, syncCall, renameCall, syncDirectoryCall] = driver.calls;
 
-    assert.equal(mkdirCall, `mkdir:${ROOT}`);
-    assert.match(writeCall ?? '', new RegExp(`^writeFile:${ROOT}/\\.created\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
+    assert.equal(mkdirCall, `mkdir:${root}`);
+    assert.match(writeCall ?? '', new RegExp(`^writeFile:${root}/\\.created\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
     const temporaryPath = (writeCall ?? '').slice('writeFile:'.length);
     assert.equal(syncCall, `syncFile:${temporaryPath}`);
-    assert.equal(renameCall, `rename:${temporaryPath}->${ROOT}/created.txt`);
-    assert.equal(syncDirectoryCall, `syncDirectory:${ROOT}`);
+    assert.equal(renameCall, `rename:${temporaryPath}->${root}/created.txt`);
+    assert.equal(syncDirectoryCall, `syncDirectory:${root}`);
     assert.equal(driver.calls.length, 5);
-    assert.equal(driver.calls.includes(`writeFile:${ROOT}/created.txt`), false);
+    assert.equal(driver.calls.includes(`writeFile:${root}/created.txt`), false);
   });
 
   it('flushes the containing directory after a delete', async () => {
     const { service, driver } = await createHarness();
 
-    await driver.mkdir(`${ROOT}/reports`, { recursive: true });
-    await driver.writeFile(`${ROOT}/reports/old.txt`, 'old');
+    await driver.mkdir(`${root}/reports`, { recursive: true });
+    await driver.writeFile(`${root}/reports/old.txt`, 'old');
     driver.reset();
 
     await service.deleteFile('reports/old.txt');
 
     assert.deepEqual(driver.calls, [
-      `deleteFile:${ROOT}/reports/old.txt`,
-      `syncDirectory:${ROOT}/reports`,
+      `deleteFile:${root}/reports/old.txt`,
+      `syncDirectory:${root}/reports`,
     ]);
     assert.equal(await service.exists('reports/old.txt'), false);
   });
@@ -135,20 +154,20 @@ describe('BrudFileSystem scoped storage driver', () => {
 
     driver.failSyncFile = false;
     assert.equal(await service.readText('stable.txt'), 'original');
-    assert.deepEqual(await driver.readDir(ROOT), [
+    assert.deepEqual(sortEntries(await driver.readDir(root)), [
       { name: 'stable.txt', isFile: true, isDirectory: false },
     ]);
   });
 
   it('degrades to atomic staging when the driver has no flush capability', async () => {
-    const driver = new InMemoryStorageDriver();
-    const service = new BrudFileSystem(ROOT, driver);
+    const driver = new NodeStorageDriver();
+    const service = new BrudFileSystem(root, driver);
 
     await service.initialize();
     await service.writeAtomic('plain.txt', 'plain');
 
     assert.equal(await service.readText('plain.txt'), 'plain');
-    assert.deepEqual(await driver.readDir(ROOT), [
+    assert.deepEqual(sortEntries(await driver.readDir(root)), [
       { name: 'plain.txt', isFile: true, isDirectory: false },
     ]);
   });

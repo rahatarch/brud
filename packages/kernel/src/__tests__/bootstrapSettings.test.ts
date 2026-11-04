@@ -1,9 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it } from 'node:test';
+import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../drivers/memory/index.js';
 import {
   SettingsReaderToken,
   SettingsToken,
@@ -15,7 +14,15 @@ import { createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 
-const WORKSPACE_ROOT = '/workspace';
+let WORKSPACE_ROOT = '';
+
+beforeEach(async () => {
+  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-bootstrap-settings-ws-'));
+});
+
+afterEach(async () => {
+  await rm(WORKSPACE_ROOT, { recursive: true, force: true });
+});
 
 function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
@@ -28,7 +35,6 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
 
 function createKernel(settingsStore: InMemoryConfigStore | ConfigStore): BrudKernel {
   return createStandardKernel({
-    storageDriver: new InMemoryStorageDriver(),
     history: { inMemory: true },
     settings: { store: settingsStore },
   });

@@ -1,16 +1,16 @@
-import { after, before, describe, it } from 'node:test';
+import { after, before, beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
 import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { FileAlreadyExistsError } from '../operations/shared/errors.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import { BrudFileSystem } from './BrudFileSystem.js';
 
-class RenameFailingDriver extends InMemoryStorageDriver {
+class RenameFailingDriver extends DurableNodeStorageDriver {
   override async rename(_sourcePath: string, _targetPath: string): Promise<void> {
     throw new Error('rename unavailable');
   }
@@ -27,26 +27,41 @@ function isSymlinkEscape(error: unknown): boolean {
     && error.rule === 'SYMLINK_ESCAPE';
 }
 
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-fs-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
 async function createService(
-  driver: InMemoryStorageDriver = new InMemoryStorageDriver(),
-): Promise<{ service: BrudFileSystem; driver: InMemoryStorageDriver }> {
-  const service = new BrudFileSystem('/workspace', driver);
+  driver: DurableNodeStorageDriver = new DurableNodeStorageDriver(),
+): Promise<{ service: BrudFileSystem; driver: DurableNodeStorageDriver }> {
+  const service = new BrudFileSystem(root, driver);
   await service.initialize();
   return { service, driver };
+}
+
+function sortEntries<T extends { name: string }>(entries: readonly T[]): T[] {
+  return [...entries].sort((left, right) => left.name.localeCompare(right.name));
 }
 
 describe('BrudFileSystem', () => {
   describe('lifecycle', () => {
     it('creates the workspace root during initialization', async () => {
-      const driver = new InMemoryStorageDriver();
-      const service = new BrudFileSystem('/workspace', driver);
+      const driver = new DurableNodeStorageDriver();
+      const workspace = join(root, 'workspace');
+      const service = new BrudFileSystem(workspace, driver);
 
       await service.initialize();
 
-      const stats = await driver.stat('/workspace');
+      const stats = await driver.stat(workspace);
       assert.ok(stats);
       assert.equal(stats.isDirectory, true);
-      assert.equal(service.workspaceRoot, '/workspace');
+      assert.equal(service.workspaceRoot, workspace);
 
       await service.dispose();
     });
@@ -95,7 +110,7 @@ describe('BrudFileSystem', () => {
       await service.createFile('tree/alpha/file.txt', 'alpha');
       await service.createFile('tree/beta.txt', 'beta');
 
-      assert.deepEqual(await service.readDirectory('tree'), [
+      assert.deepEqual(sortEntries(await service.readDirectory('tree')), [
         { name: 'alpha', isFile: false, isDirectory: true },
         { name: 'beta.txt', isFile: true, isDirectory: false },
       ]);
@@ -138,17 +153,17 @@ describe('BrudFileSystem', () => {
       await service.writeAtomic('reports/summary.txt', 'second');
 
       assert.equal(await service.readText('reports/summary.txt'), 'second');
-      assert.deepEqual(await service.readDirectory('reports'), [
+      assert.deepEqual(sortEntries(await service.readDirectory('reports')), [
         { name: 'summary.txt', isFile: true, isDirectory: false },
       ]);
-      assert.equal(await driver.exists('/workspace/reports/summary.txt.tmp'), false);
+      assert.equal(await driver.exists(join(root, 'reports/summary.txt.tmp')), false);
     });
 
     it('keeps the previous contents when the atomic rename fails', async () => {
       const driver = new RenameFailingDriver();
       const { service } = await createService(driver);
-      await driver.mkdir('/workspace/reports', { recursive: true });
-      await driver.writeFile('/workspace/reports/summary.txt', 'original');
+      await driver.mkdir(join(root, 'reports'), { recursive: true });
+      await driver.writeFile(join(root, 'reports/summary.txt'), 'original');
 
       await assert.rejects(
         service.writeAtomic('reports/summary.txt', 'replacement'),
@@ -156,7 +171,7 @@ describe('BrudFileSystem', () => {
       );
 
       assert.equal(await service.readText('reports/summary.txt'), 'original');
-      assert.equal(await driver.exists('/workspace/reports/summary.txt.tmp'), false);
+      assert.equal(await driver.exists(join(root, 'reports/summary.txt.tmp')), false);
     });
 
     it('serializes concurrent writes to the same path', async () => {

@@ -126,6 +126,8 @@
     "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint packages apps tests",
     "typecheck": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/mcp/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit && tsc -p packages/adapters/vscode/tsconfig.json --noEmit && tsc -p apps/vscode/tsconfig.json --noEmit",
+    "typecheck:ci": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/core/tsconfig.json --noEmit && tsc -p packages/mcp/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit && tsc -p packages/adapters/vscode/tsconfig.json --noEmit",
+    "typecheck:apps": "tsc -p apps/vscode/tsconfig.json --noEmit",
     "test": "vscode-test",
     "test:integration": "node --import tsx --test packages/core/src/history/integration.test.ts",
     "test:core": "node --import tsx --test \"packages/core/src/**/*.test.ts\"",

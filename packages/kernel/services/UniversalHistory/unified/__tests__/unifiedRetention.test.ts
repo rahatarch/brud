@@ -13,7 +13,6 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
@@ -26,14 +25,14 @@ import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, HISTORY_GC_GRACE_MS, UnifiedHistoryService } from '../service/index.js';
 import { UnifiedHistoryStore, blobPath, sha256Hex } from '../store/index.js';
 
-const ROOT = '/workspace';
 const DAY = 86_400_000;
-const HISTORY = `${ROOT}/.brud/history`;
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 
 interface Harness {
   readonly clock: { now: number };
-  readonly driver: InMemoryStorageDriver;
+  readonly root: string;
+  readonly history: string;
+  readonly driver: DurableNodeStorageDriver;
   readonly fs: BrudFileSystem;
   readonly store: UnifiedHistoryStore;
   readonly service: UnifiedHistoryService;
@@ -43,16 +42,19 @@ interface Harness {
 async function harness(context: TestContext): Promise<Harness> {
   const clock = { now: Date.now() };
   const now = (): number => clock.now;
-  const driver = new InMemoryStorageDriver();
+  const root = await mkdtemp(join(tmpdir(), 'brud-unified-retention-'));
+  const history = join(root, '.brud/history');
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
-  const fs = new BrudFileSystem(ROOT, driver, { mutationJournal: journal });
+  const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
   await fs.initialize();
-  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: HISTORY, driver, now });
+  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: history, driver, now });
   const service = new UnifiedHistoryService({ store, fileSystem: () => fs, journal, now });
   await service.start();
   context.after(() => service.dispose());
   const engine = new ReversalEngine({ service, fileSystem: () => fs, now });
-  return { clock, driver, fs, store, service, engine };
+  return { clock, root, history, driver, fs, store, service, engine };
 }
 
 async function write(h: Harness, path: string, text: string): Promise<void> {
@@ -245,20 +247,20 @@ describe('history garbage collection (D-15 U-8)', () => {
     await assertNoDanglingContent(h);
     // The large blob's row went in this run; its file is swept in the same run.
     assert.equal(report.blobs.blobsRemoved, 1);
-    assert.equal(await h.driver.exists(blobPath(HISTORY, large.sha256)), false);
+    assert.equal(await h.driver.exists(blobPath(h.history, large.sha256)), false);
   });
 
   it('sweeps only old orphan blobs and staging files under cas/, never legacy files', async (context) => {
     const h = await harness(context);
     const digest = sha256Hex(new TextEncoder().encode('lost'));
-    const orphanPath = blobPath(HISTORY, digest);
+    const orphanPath = blobPath(h.history, digest);
     await h.driver.mkdir(join(orphanPath, '..'), { recursive: true });
     await h.driver.writeFile(orphanPath, 'lost');
     const staging = join(orphanPath, '..', `.${digest}.123.abc.tmp`);
     await h.driver.writeFile(staging, 'partial');
     for (const legacy of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
-      await h.driver.mkdir(join(HISTORY, legacy, '..'), { recursive: true });
-      await h.driver.writeFile(join(HISTORY, legacy), 'legacy');
+      await h.driver.mkdir(join(h.history, legacy, '..'), { recursive: true });
+      await h.driver.writeFile(join(h.history, legacy), 'legacy');
     }
 
     const early = await h.store.sweepBlobs({ now: Date.now(), graceMs: HISTORY_GC_GRACE_MS });
@@ -269,7 +271,7 @@ describe('history garbage collection (D-15 U-8)', () => {
     assert.equal(await h.driver.exists(orphanPath), false);
     assert.equal(await h.driver.exists(staging), false);
     for (const legacy of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
-      assert.equal(await h.driver.readText(join(HISTORY, legacy)), 'legacy', legacy);
+      assert.equal(await h.driver.readText(join(h.history, legacy)), 'legacy', legacy);
     }
   });
 

@@ -1,12 +1,15 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type {
   DirectoryEntry,
   FileStats,
   IStorageDriver,
   PathEntryStats,
 } from '../../../drivers/contracts/index.js';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import type {
   IWorkspaceService,
@@ -16,12 +19,20 @@ import { WorkspaceService } from '../../WorkspaceService/orchestrator/WorkspaceS
 import { createStorageDriverPathPort } from '../../WorkspaceService/ports/StorageDriverPathPort.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 
-const ROOT = '/workspace';
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-workspace-containment-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
 
 class CountingDriver implements IStorageDriver {
   public calls = 0;
 
-  private readonly inner = new InMemoryStorageDriver();
+  private readonly inner = new DurableNodeStorageDriver();
 
   reset(): void {
     this.calls = 0;
@@ -142,8 +153,8 @@ async function createHarness(): Promise<{
 }> {
   const driver = new CountingDriver();
   const inner = new WorkspaceService({
-    roots: [ROOT],
-    primaryRoot: ROOT,
+    roots: [root],
+    primaryRoot: root,
     port: createStorageDriverPathPort(driver),
     flavor: 'posix',
   });
@@ -151,7 +162,7 @@ async function createHarness(): Promise<{
   await inner.initialize();
 
   const workspace = new RecordingWorkspace(inner);
-  const service = new BrudFileSystem(workspace, driver, { root: ROOT });
+  const service = new BrudFileSystem(workspace, driver, { root });
 
   await service.initialize();
   driver.reset();
@@ -169,7 +180,7 @@ describe('BrudFileSystem workspace containment', () => {
     const { service, workspace } = await createHarness();
 
     assert.equal(service.workspaceRoot, workspace.primaryRoot);
-    assert.equal(service.workspaceRoot, ROOT);
+    assert.equal(service.workspaceRoot, root);
   });
 
   it('resolves every public operation through WorkspaceService.resolveContained', async () => {
@@ -186,7 +197,7 @@ describe('BrudFileSystem workspace containment', () => {
     await service.readDirectory('notes');
     await service.deleteFile('notes/other.md');
 
-    const stagingPaths = workspace.resolvedPaths.filter((path) => path.startsWith(`${ROOT}/notes/.`));
+    const stagingPaths = workspace.resolvedPaths.filter((path) => path.startsWith(`${root}/notes/.`));
 
     assert.equal(stagingPaths.length, 2);
 
@@ -195,7 +206,7 @@ describe('BrudFileSystem workspace containment', () => {
     }
 
     assert.deepEqual(
-      workspace.resolvedPaths.filter((path) => !path.startsWith(`${ROOT}/notes/.`)),
+      workspace.resolvedPaths.filter((path) => !path.startsWith(`${root}/notes/.`)),
       [
         'notes/draft.md',
         'notes/draft.md',
@@ -245,7 +256,7 @@ describe('BrudFileSystem workspace containment', () => {
       return true;
     });
     await assert.rejects(
-      service.writeAtomic('/workspace-evil/secret.txt', 'nope'),
+      service.writeAtomic(`${root}-evil/secret.txt`, 'nope'),
       (error: unknown) => {
         assert.ok(error instanceof WorkspaceViolationError);
         assert.equal(error.rule, 'SIBLING_PREFIX');
@@ -262,6 +273,6 @@ describe('BrudFileSystem workspace containment', () => {
 
     await service.writeAtomic('notes/draft.md', '# draft');
 
-    assert.equal(await service.readText(`${ROOT}/notes/draft.md`), '# draft');
+    assert.equal(await service.readText(`${root}/notes/draft.md`), '# draft');
   });
 });

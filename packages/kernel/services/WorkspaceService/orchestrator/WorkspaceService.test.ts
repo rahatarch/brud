@@ -1,12 +1,48 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import {
   WorkspaceConfigurationError,
   WorkspaceViolationError,
 } from '../contracts/errors.js';
 import type { WorkspaceWarning } from '../contracts/IWorkspaceService.js';
-import { MapPathPort, createIdentityPathPort } from '../testing/MapPathPort.js';
+import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { WorkspaceService, type WorkspaceServiceOptions } from './WorkspaceService.js';
+
+let base = '';
+let caseCounter = 0;
+
+before(async () => {
+  base = await mkdtemp(join(tmpdir(), 'brud-workspace-service-'));
+});
+
+after(async () => {
+  await rm(base, { recursive: true, force: true });
+});
+
+function realPort(): ReturnType<typeof createStorageDriverPathPort> {
+  return createStorageDriverPathPort(new NodeStorageDriver());
+}
+
+async function makeRoot(name = 'workspace'): Promise<string> {
+  caseCounter += 1;
+  const root = join(base, `case-${caseCounter}`, name);
+  await mkdir(root, { recursive: true });
+  return root;
+}
+
+async function makeMultiRoot(): Promise<{ parent: string; client: string; server: string }> {
+  caseCounter += 1;
+  const parent = join(base, `case-${caseCounter}`);
+  const client = join(parent, 'client');
+  const server = join(parent, 'server');
+  await mkdir(client, { recursive: true });
+  await mkdir(server, { recursive: true });
+  return { parent, client, server };
+}
 
 async function createService(options: WorkspaceServiceOptions): Promise<WorkspaceService> {
   const service = new WorkspaceService(options);
@@ -30,66 +66,71 @@ async function assertViolation(
 }
 
 describe('WorkspaceService — POSIX resolution', () => {
-  const port = createIdentityPathPort();
-
   it('registers and canonicalizes the boot root', async () => {
-    const service = await createService({ roots: ['/workspace/'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [`${root}/`], port: realPort() });
 
-    assert.deepEqual(service.roots, ['/workspace']);
-    assert.equal(service.primaryRoot, '/workspace');
+    assert.deepEqual(service.roots, [root]);
+    assert.equal(service.primaryRoot, root);
     assert.equal(service.flavor, 'posix');
     assert.equal(service.isInitialized, true);
   });
 
   it('resolves relative paths against the primary root', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
     assert.deepEqual(await service.resolve('notes/draft.md'), {
-      root: '/workspace',
-      absolutePath: '/workspace/notes/draft.md',
+      root,
+      absolutePath: join(root, 'notes/draft.md'),
       relativePath: 'notes/draft.md',
     });
     assert.deepEqual(await service.resolve('./notes/./draft.md'), {
-      root: '/workspace',
-      absolutePath: '/workspace/notes/draft.md',
+      root,
+      absolutePath: join(root, 'notes/draft.md'),
       relativePath: 'notes/draft.md',
     });
   });
 
   it('maps the root itself to an empty relative path', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
     assert.equal((await service.resolve('')).relativePath, '');
     assert.equal((await service.resolve('.')).relativePath, '');
-    assert.equal((await service.resolve('/workspace')).relativePath, '');
-    assert.equal((await service.resolve('/workspace')).absolutePath, '/workspace');
+    assert.equal((await service.resolve(root)).relativePath, '');
+    assert.equal((await service.resolve(root)).absolutePath, root);
   });
 
   it('accepts absolute paths inside the root', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
-    const location = await service.resolveContained('/workspace/notes/draft.md');
+    const location = await service.resolveContained(join(root, 'notes/draft.md'));
 
     assert.equal(location.relativePath, 'notes/draft.md');
-    assert.equal(location.absolutePath, '/workspace/notes/draft.md');
+    assert.equal(location.absolutePath, join(root, 'notes/draft.md'));
   });
 
   it('rejects absolute paths outside the root', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
     await assertViolation(() => service.resolve('/etc/passwd'), 'OUTSIDE_ROOT');
-    await assertViolation(() => service.resolve('/workspace/../etc/passwd'), 'OUTSIDE_ROOT');
+    await assertViolation(() => service.resolve(join(root, '..', 'etc/passwd')), 'OUTSIDE_ROOT');
   });
 
   it('rejects sibling-prefix paths with a dedicated rule', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
-    await assertViolation(() => service.resolve('/workspace-evil/secret.txt'), 'SIBLING_PREFIX');
-    assert.equal(await service.contains('/workspace-evil/secret.txt'), false);
+    await assertViolation(() => service.resolve(`${root}-evil/secret.txt`), 'SIBLING_PREFIX');
+    assert.equal(await service.contains(`${root}-evil/secret.txt`), false);
   });
 
   it('rejects lexical traversal, null bytes, and non-string input', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
     await assertViolation(() => service.resolve('../etc/passwd'), 'TRAVERSAL');
     await assertViolation(() => service.resolve('notes/../../etc/passwd'), 'TRAVERSAL');
@@ -101,18 +142,20 @@ describe('WorkspaceService — POSIX resolution', () => {
   });
 
   it('translates between kernel and absolute paths', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
-    assert.equal(await service.toKernelPath('/workspace/a/b.md'), 'a/b.md');
+    assert.equal(await service.toKernelPath(join(root, 'a/b.md')), 'a/b.md');
     assert.equal(await service.toKernelPath('a/b.md'), 'a/b.md');
-    assert.equal(service.toAbsolutePath('a/b.md'), '/workspace/a/b.md');
-    assert.equal(service.toAbsolutePath(''), '/workspace');
-    assert.equal(service.toAbsolutePath('.'), '/workspace');
-    assert.equal(service.toAbsolutePath('./a//b//'), '/workspace/a/b');
+    assert.equal(service.toAbsolutePath('a/b.md'), join(root, 'a/b.md'));
+    assert.equal(service.toAbsolutePath(''), root);
+    assert.equal(service.toAbsolutePath('.'), root);
+    assert.equal(service.toAbsolutePath('./a//b//'), join(root, 'a/b'));
   });
 
   it('rejects unsafe kernel descriptors', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
     assert.throws(() => service.toAbsolutePath('../outside'), (error: unknown) => violationOf(error).rule === 'TRAVERSAL');
     assert.throws(() => service.toAbsolutePath('/etc/passwd'), (error: unknown) => violationOf(error).rule === 'TRAVERSAL');
@@ -120,22 +163,23 @@ describe('WorkspaceService — POSIX resolution', () => {
   });
 
   it('implements contains as a non-throwing predicate', async () => {
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
 
-    assert.equal(await service.contains('/workspace/a.md'), true);
-    assert.equal(await service.contains('/workspace'), true);
-    assert.equal(await service.contains('/workspace-evil/a.md'), false);
+    assert.equal(await service.contains(join(root, 'a.md')), true);
+    assert.equal(await service.contains(root), true);
+    assert.equal(await service.contains(`${root}-evil/a.md`), false);
     assert.equal(await service.contains('a\u0000b'), false);
     assert.equal(await service.contains('../a'), false);
   });
 
   it('rejects non-absolute roots', () => {
     assert.throws(
-      () => new WorkspaceService({ roots: ['workspace'], port }),
+      () => new WorkspaceService({ roots: ['workspace'], port: realPort() }),
       WorkspaceConfigurationError,
     );
     assert.throws(
-      () => new WorkspaceService({ roots: [], port }),
+      () => new WorkspaceService({ roots: [], port: realPort() }),
       WorkspaceConfigurationError,
     );
   });
@@ -143,17 +187,17 @@ describe('WorkspaceService — POSIX resolution', () => {
 
 describe('WorkspaceService — symlink containment', () => {
   it('rejects a symlink that escapes the root', async () => {
-    const port = new MapPathPort({
-      '/workspace': {},
-      '/outside': {},
-      '/outside/secret.txt': {},
-      '/workspace/escape': { target: '/outside' },
-    });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const outside = join(base, `outside-${caseCounter}`);
+    await mkdir(outside, { recursive: true });
+    await writeFile(join(outside, 'secret.txt'), 'secret');
+    await symlink(outside, join(root, 'escape'));
+
+    const service = await createService({ roots: [root], port: realPort() });
 
     await assertViolation(() => service.resolve('escape/secret.txt'), 'SYMLINK_ESCAPE');
     await assertViolation(
-      () => service.resolve('/workspace/escape/secret.txt'),
+      () => service.resolve(join(root, 'escape/secret.txt')),
       'SYMLINK_ESCAPE',
     );
     await assertViolation(() => service.resolve('escape/new/deep.txt'), 'SYMLINK_ESCAPE');
@@ -161,42 +205,42 @@ describe('WorkspaceService — symlink containment', () => {
   });
 
   it('rejects a dangling symlink', async () => {
-    const port = new MapPathPort({
-      '/workspace': {},
-      '/workspace/dangling': { target: '/outside/missing' },
-    });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    await symlink(join(base, 'missing-target'), join(root, 'dangling'));
+
+    const service = await createService({ roots: [root], port: realPort() });
 
     await assertViolation(() => service.resolve('dangling/x.txt'), 'SYMLINK_ESCAPE');
   });
 
   it('admits a symlink that stays inside the root and reports the canonical target', async () => {
-    const port = new MapPathPort({
-      '/workspace': {},
-      '/workspace/notes': {},
-      '/workspace/notes/a.md': {},
-      '/workspace/inner': { target: '/workspace/notes' },
-    });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    await mkdir(join(root, 'notes'));
+    await writeFile(join(root, 'notes/a.md'), 'a');
+    await symlink(join(root, 'notes'), join(root, 'inner'));
+
+    const service = await createService({ roots: [root], port: realPort() });
 
     const location = await service.resolve('inner/a.md');
 
-    assert.equal(location.absolutePath, '/workspace/notes/a.md');
+    assert.equal(location.absolutePath, join(root, 'notes/a.md'));
   });
 
   it('rejects a root that canonicalizes onto the filesystem root', async () => {
-    const port = new MapPathPort({
-      '/': {},
-      '/workspace': { target: '/' },
-    });
-    const service = new WorkspaceService({ roots: ['/workspace'], port });
+    caseCounter += 1;
+    const parent = join(base, `case-${caseCounter}`);
+    await mkdir(parent, { recursive: true });
+    const link = join(parent, 'root-link');
+    await symlink('/', link);
+
+    const service = new WorkspaceService({ roots: [link], port: realPort() });
 
     await assert.rejects(service.initialize(), (error: unknown) =>
       error instanceof WorkspaceConfigurationError && error.rule === 'FILESYSTEM_ROOT');
   });
 
   it('rejects a filesystem root unless explicitly allowed', async () => {
-    const port = createIdentityPathPort();
+    const port = realPort();
 
     assert.throws(
       () => new WorkspaceService({ roots: ['/'], port }),
@@ -213,8 +257,9 @@ describe('WorkspaceService — symlink containment', () => {
 
 describe('WorkspaceService — batch-scoped cache', () => {
   it('reuses canonicalization for existing paths inside one batch', async () => {
-    const port = new MapPathPort({ '/workspace': {}, '/workspace/a.md': {} });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    await writeFile(join(root, 'a.md'), 'a');
+    const service = await createService({ roots: [root], port: realPort() });
     const batch = service.createBatch();
 
     await batch.resolve('a.md');
@@ -224,8 +269,8 @@ describe('WorkspaceService — batch-scoped cache', () => {
   });
 
   it('does not reuse canonicalization for non-existent targets', async () => {
-    const port = new MapPathPort({ '/workspace': {} });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
     const batch = service.createBatch();
 
     const first = await batch.resolve('new/file.md');
@@ -236,8 +281,9 @@ describe('WorkspaceService — batch-scoped cache', () => {
   });
 
   it('keeps batches isolated from each other', async () => {
-    const port = new MapPathPort({ '/workspace': {}, '/workspace/a.md': {} });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    await writeFile(join(root, 'a.md'), 'a');
+    const service = await createService({ roots: [root], port: realPort() });
     const first = service.createBatch();
     const second = service.createBatch();
 
@@ -249,103 +295,131 @@ describe('WorkspaceService — batch-scoped cache', () => {
   });
 
   it('enforces the same boundary as the unbounded service', async () => {
-    const port = new MapPathPort({
-      '/workspace': {},
-      '/workspace-evil': {},
-      '/workspace-evil/secret.txt': {},
-    });
-    const service = await createService({ roots: ['/workspace'], port });
+    const root = await makeRoot();
+    const service = await createService({ roots: [root], port: realPort() });
     const batch = service.createBatch();
 
-    assert.equal(await batch.contains('/workspace-evil/secret.txt'), false);
-    await assertViolation(() => batch.toKernelPath('/workspace-evil/secret.txt'), 'SIBLING_PREFIX');
+    assert.equal(await batch.contains(`${root}-evil/secret.txt`), false);
+    await assertViolation(() => batch.toKernelPath(`${root}-evil/secret.txt`), 'SIBLING_PREFIX');
   });
 });
 
 describe('WorkspaceService — multi-root routing', () => {
-  const options: WorkspaceServiceOptions = {
-    roots: ['/workspace/client', '/workspace/server'],
-    primaryRoot: '/workspace/client',
-    port: createIdentityPathPort(),
-  };
-
   it('routes absolute paths to the owning root', async () => {
-    const service = await createService(options);
+    const { client, server } = await makeMultiRoot();
+    const service = await createService({
+      roots: [client, server],
+      primaryRoot: client,
+      port: realPort(),
+    });
 
-    assert.deepEqual(await service.resolve('/workspace/server/src/a.ts'), {
-      root: '/workspace/server',
-      absolutePath: '/workspace/server/src/a.ts',
+    assert.deepEqual(await service.resolve(join(server, 'src/a.ts')), {
+      root: server,
+      absolutePath: join(server, 'src/a.ts'),
       relativePath: 'src/a.ts',
     });
-    assert.equal(service.primaryRoot, '/workspace/client');
+    assert.equal(service.primaryRoot, client);
   });
 
   it('resolves relative paths against the primary root unless a hint is given', async () => {
-    const service = await createService(options);
+    const { client, server } = await makeMultiRoot();
+    const service = await createService({
+      roots: [client, server],
+      primaryRoot: client,
+      port: realPort(),
+    });
 
     assert.equal((await service.resolve('src/a.ts')).relativePath, 'src/a.ts');
-    assert.equal((await service.resolve('src/a.ts')).root, '/workspace/client');
+    assert.equal((await service.resolve('src/a.ts')).root, client);
     assert.equal(
-      (await service.resolveInRoot('/workspace/server', 'src/a.ts')).root,
-      '/workspace/server',
+      (await service.resolveInRoot(server, 'src/a.ts')).root,
+      server,
     );
   });
 
   it('rejects an unregistered root hint', async () => {
-    const service = await createService(options);
+    const { client, server } = await makeMultiRoot();
+    const service = await createService({
+      roots: [client, server],
+      primaryRoot: client,
+      port: realPort(),
+    });
 
-    await assertViolation(() => service.resolveInRoot('/workspace/other', 'a.ts'), 'UNKNOWN_ROOT');
+    await assertViolation(() => service.resolveInRoot(join(base, 'other'), 'a.ts'), 'UNKNOWN_ROOT');
   });
 
   it('refuses cross-root traversal while routing normalized paths by real owner', async () => {
-    const service = await createService(options);
+    const { client, server } = await makeMultiRoot();
+    const service = await createService({
+      roots: [client, server],
+      primaryRoot: client,
+      port: realPort(),
+    });
 
-    await assertViolation(() => service.resolveInRoot('/workspace/client', '../server/src/a.ts'), 'TRAVERSAL');
-    await assertViolation(() => service.resolve('/workspace/client/../../outside/a.ts'), 'OUTSIDE_ROOT');
+    await assertViolation(() => service.resolveInRoot(client, '../server/src/a.ts'), 'TRAVERSAL');
+    await assertViolation(() => service.resolve(join(client, '../../outside/a.ts')), 'OUTSIDE_ROOT');
 
-    const normalized = await service.resolve('/workspace/client/../server/src/a.ts');
+    const normalized = await service.resolve(join(client, '../server/src/a.ts'));
 
-    assert.equal(normalized.root, '/workspace/server');
+    assert.equal(normalized.root, server);
     assert.equal(normalized.relativePath, 'src/a.ts');
   });
 
   it('reports overlapping roots as ambiguous instead of guessing', async () => {
+    const { parent, server } = await makeMultiRoot();
     const warnings: WorkspaceWarning[] = [];
     const service = await createService({
-      roots: ['/workspace', '/workspace/sub'],
-      port: createIdentityPathPort(),
+      roots: [parent, server],
+      port: realPort(),
       onWarning: (warning) => warnings.push(warning),
     });
 
     assert.equal(warnings.some((warning) => warning.code === 'ROOT_OVERLAP'), true);
-    await assertViolation(() => service.resolve('/workspace/sub/a.ts'), 'AMBIGUOUS_ROOT');
+    await assertViolation(() => service.resolve(join(server, 'a.ts')), 'AMBIGUOUS_ROOT');
   });
 
   it('collapses duplicate root declarations with a warning', async () => {
+    const { parent } = await makeMultiRoot();
     const warnings: WorkspaceWarning[] = [];
     const service = await createService({
-      roots: ['/workspace', '/workspace/'],
-      port: createIdentityPathPort(),
+      roots: [parent, `${parent}/`],
+      port: realPort(),
       onWarning: (warning) => warnings.push(warning),
     });
 
-    assert.deepEqual(service.roots, ['/workspace']);
+    assert.deepEqual(service.roots, [parent]);
     assert.equal(warnings.some((warning) => warning.code === 'ROOT_DUPLICATE'), true);
   });
 });
 
+const WINDOWS_ROOT = 'C:\\Users\\Dev\\Workspace';
+
+function windowsPort(): ReturnType<typeof createStorageDriverPathPort> {
+  return createStorageDriverPathPort(new NodeStorageDriver());
+}
+
+async function createWindowsService(): Promise<WorkspaceService> {
+  return createService({
+    roots: [WINDOWS_ROOT],
+    port: windowsPort(),
+    flavor: 'win32',
+  });
+}
+
 describe('WorkspaceService — Windows semantics', () => {
-  const port = createIdentityPathPort();
-
   it('canonicalizes drive case and trailing separators', async () => {
-    const service = await createService({ roots: ['c:\\Users\\Dev\\Workspace\\'], port, flavor: 'win32' });
+    const service = await createService({
+      roots: ['c:\\Users\\Dev\\Workspace\\'],
+      port: windowsPort(),
+      flavor: 'win32',
+    });
 
-    assert.deepEqual(service.roots, ['C:\\Users\\Dev\\Workspace']);
-    assert.equal(service.primaryRoot, 'C:\\Users\\Dev\\Workspace');
+    assert.deepEqual(service.roots, [WINDOWS_ROOT]);
+    assert.equal(service.flavor, 'win32');
   });
 
   it('accepts absolute paths inside the root across separators and case', async () => {
-    const service = await createService({ roots: ['C:\\Users\\Dev\\Workspace'], port, flavor: 'win32' });
+    const service = await createWindowsService();
 
     assert.equal((await service.resolve('notes\\a.md')).relativePath, 'notes/a.md');
     assert.equal(
@@ -359,25 +433,31 @@ describe('WorkspaceService — Windows semantics', () => {
   });
 
   it('rejects case-sensitive siblings and other roots', async () => {
-    const service = await createService({ roots: ['C:\\Users\\Dev\\Workspace'], port, flavor: 'win32' });
+    const service = await createWindowsService();
 
     await assertViolation(
       () => service.resolve('c:\\users\\dev\\workspace-evil\\a.md'),
       'SIBLING_PREFIX',
     );
-    await assertViolation(() => service.resolve('D:\\Users\\Dev\\Workspace\\a.md'), 'OUTSIDE_ROOT');
+    await assertViolation(
+      () => service.resolve('D:\\Users\\Dev\\Workspace\\a.md'),
+      'OUTSIDE_ROOT',
+    );
   });
 
   it('rejects drive-relative, UNC, and device paths', async () => {
-    const service = await createService({ roots: ['C:\\Users\\Dev\\Workspace'], port, flavor: 'win32' });
+    const service = await createWindowsService();
 
     await assertViolation(() => service.resolve('C:notes\\a.md'), 'TRAVERSAL');
     await assertViolation(() => service.resolve('\\\\server\\share\\a.md'), 'TRAVERSAL');
-    await assertViolation(() => service.resolve('\\\\?\\C:\\Users\\Dev\\Workspace\\a.md'), 'TRAVERSAL');
+    await assertViolation(
+      () => service.resolve('\\\\?\\C:\\Users\\Dev\\Workspace\\a.md'),
+      'TRAVERSAL',
+    );
   });
 
   it('applies reserved device, ADS, and trailing dot/space rules', async () => {
-    const service = await createService({ roots: ['C:\\Users\\Dev\\Workspace'], port, flavor: 'win32' });
+    const service = await createWindowsService();
 
     await assertViolation(() => service.resolve('nul'), 'RESERVED_DEVICE');
     await assertViolation(() => service.resolve('CON.txt'), 'RESERVED_DEVICE');
@@ -387,27 +467,37 @@ describe('WorkspaceService — Windows semantics', () => {
   });
 
   it('returns host-native absolute paths for kernel descriptors', async () => {
-    const service = await createService({ roots: ['C:\\Users\\Dev\\Workspace'], port, flavor: 'win32' });
+    const service = await createWindowsService();
 
     assert.equal(
       service.toAbsolutePath('notes/a.md'),
       'C:\\Users\\Dev\\Workspace\\notes\\a.md',
     );
-    assert.equal(service.toAbsolutePath(''), 'C:\\Users\\Dev\\Workspace');
+    assert.equal(service.toAbsolutePath(''), WINDOWS_ROOT);
   });
 
-  it('rejects a volume root unless explicitly allowed', () => {
+  it('rejects a volume root unless explicitly allowed', async () => {
     assert.throws(
-      () => new WorkspaceService({ roots: ['C:\\'], port, flavor: 'win32' }),
+      () =>
+        new WorkspaceService({
+          roots: ['C:\\'],
+          port: windowsPort(),
+          flavor: 'win32',
+        }),
       (error: unknown) => error instanceof WorkspaceConfigurationError
         && error.rule === 'FILESYSTEM_ROOT',
     );
   });
 
-  it('rejects UNC and device roots outright', () => {
+  it('rejects UNC and device roots outright', async () => {
     assert.throws(
-      () => new WorkspaceService({ roots: ['\\\\server\\share'], port, flavor: 'win32' }),
-      WorkspaceConfigurationError,
+      () =>
+        new WorkspaceService({
+          roots: ['\\\\server\\share'],
+          port: windowsPort(),
+          flavor: 'win32',
+        }),
+      (error: unknown) => error instanceof WorkspaceConfigurationError,
     );
   });
 });

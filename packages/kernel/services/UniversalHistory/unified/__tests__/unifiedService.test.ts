@@ -4,7 +4,6 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
@@ -32,7 +31,6 @@ import {
 } from '../store/index.js';
 import type { EntryRow } from '../store/index.js';
 
-const ROOT = '/workspace';
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 
@@ -44,11 +42,13 @@ interface Harness {
 }
 
 async function harness(context: TestContext): Promise<Harness> {
-  const driver = new InMemoryStorageDriver();
+  const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
-  const fs = new BrudFileSystem(ROOT, driver, { mutationJournal: journal });
+  const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
   await fs.initialize();
-  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: `${ROOT}/.brud/history`, driver });
+  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver });
   const errors: { error: unknown; context: Record<string, unknown> }[] = [];
   const service = new UnifiedHistoryService({
     store,
@@ -209,13 +209,15 @@ describe('UnifiedHistoryService — automatic recording (brud.core.file)', () =>
   });
 
   it('reports recording failures to the error sink and keeps recording (legacy F5)', async (context) => {
-    const driver = new InMemoryStorageDriver();
+    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-'));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const driver = new DurableNodeStorageDriver();
     const journal = createFileMutationJournal();
-    const fs = new BrudFileSystem(ROOT, driver, { mutationJournal: journal });
+    const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
     await fs.initialize();
     const errors: unknown[] = [];
     const service = new UnifiedHistoryService({
-      store: new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: `${ROOT}/.brud/history`, driver }),
+      store: new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver }),
       fileSystem: () => fs,
       journal,
       onError: (error) => errors.push(error),
@@ -455,8 +457,10 @@ describe('UnifiedHistoryService — degraded storage', () => {
 
 describe('UnifiedHistoryService — dispose', () => {
   it('closes the implicit session and releases reversal callbacks without unregistering the type', async (context) => {
-    const driver = new InMemoryStorageDriver();
-    const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: `${ROOT}/.brud/history`, driver });
+    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-dispose-'));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const driver = new DurableNodeStorageDriver();
+    const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver });
     const service = new UnifiedHistoryService({ store, fileSystem: () => { throw new Error('unused'); } });
     await service.start();
     const implicit = service.implicitSession as string;

@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
 import { ForeignReversalPlanError, LegacySessionAdapter } from '../compat/LegacySessionAdapter.js';
@@ -11,8 +14,6 @@ import { CORE_NAMESPACE, UnifiedHistoryService } from '../service/index.js';
 import type { EntryReversal } from '../service/index.js';
 import { UnifiedHistoryStore } from '../store/index.js';
 
-const ROOT = '/workspace';
-
 interface Harness {
   readonly service: UnifiedHistoryService;
   readonly engine: ReversalEngine;
@@ -21,11 +22,13 @@ interface Harness {
 }
 
 async function harness(context: TestContext, callbackTimeoutMs = 2_000): Promise<Harness> {
-  const driver = new InMemoryStorageDriver();
+  const root = await mkdtemp(join(tmpdir(), 'brud-unified-engine-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
-  const fs = new BrudFileSystem(ROOT, driver, { mutationJournal: journal });
+  const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
   await fs.initialize();
-  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: `${ROOT}/.brud/history`, driver });
+  const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver });
   const service = new UnifiedHistoryService({ store, fileSystem: () => fs, journal });
   await service.start();
   context.after(() => service.dispose());

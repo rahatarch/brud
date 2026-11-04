@@ -1,20 +1,29 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
 import { statPath } from './statPath.js';
 
-async function seed(driver: InMemoryStorageDriver): Promise<void> {
-  await driver.mkdir('/workspace', { recursive: true });
-}
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-stat-path-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
 
 describe('statPath operation', () => {
   it('reports file stats', async () => {
-    const driver = new InMemoryStorageDriver();
-    await seed(driver);
-    await driver.writeFile('/workspace/file.txt', 'payload');
+    const driver = new DurableNodeStorageDriver();
+    const target = join(root, 'file.txt');
+    await driver.writeFile(target, 'payload');
 
-    const stats = await statPath(driver, '/workspace/file.txt');
+    const stats = await statPath(driver, target);
 
     assert.ok(stats);
     assert.equal(stats.isFile, true);
@@ -24,11 +33,11 @@ describe('statPath operation', () => {
   });
 
   it('reports directory stats', async () => {
-    const driver = new InMemoryStorageDriver();
-    await seed(driver);
-    await driver.mkdir('/workspace/directory');
+    const driver = new DurableNodeStorageDriver();
+    const directory = join(root, 'directory');
+    await driver.mkdir(directory);
 
-    const stats = await statPath(driver, '/workspace/directory');
+    const stats = await statPath(driver, directory);
 
     assert.ok(stats);
     assert.equal(stats.isFile, false);
@@ -36,9 +45,8 @@ describe('statPath operation', () => {
   });
 
   it('returns null for missing paths', async () => {
-    const driver = new InMemoryStorageDriver();
-    await seed(driver);
+    const driver = new DurableNodeStorageDriver();
 
-    assert.equal(await statPath(driver, '/workspace/missing'), null);
+    assert.equal(await statPath(driver, join(root, 'missing')), null);
   });
 });

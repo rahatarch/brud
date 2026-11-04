@@ -1,6 +1,8 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
@@ -12,13 +14,21 @@ import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../descriptor/tokens.js';
 import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
 
-const ROOT = '/workspace';
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-bootstrap-integration-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
 
 function caller(): ServiceContext {
   return {
     callerId: 'brud.host.desktop',
     tier: 'core',
-    workspaceRoot: ROOT,
+    workspaceRoot: root,
   };
 }
 
@@ -36,12 +46,11 @@ async function bootKernel(
   }
 
   const kernel = createStandardKernel({
-    storageDriver: new InMemoryStorageDriver(),
     history: { inMemory: true },
     mutationJournal: journal,
   });
 
-  await kernel.boot({ workspaceRoot: ROOT });
+  await kernel.boot({ workspaceRoot: root });
 
   const workspace = kernel.requestAccess(caller(), WorkspaceToken);
   const fileSystem = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;
@@ -71,7 +80,7 @@ describe('BrudFileSystem descriptor and kernel bootstrap', () => {
       await fileSystem.writeAtomic('src/index.ts', 'export const value = 1;\n');
 
       assert.equal(await fileSystem.readText('src/index.ts'), 'export const value = 1;\n');
-      assert.equal(await workspace.toKernelPath(`${ROOT}/src/index.ts`), 'src/index.ts');
+      assert.equal(await workspace.toKernelPath(`${root}/src/index.ts`), 'src/index.ts');
     } finally {
       await kernel.shutdown();
     }
@@ -89,7 +98,7 @@ describe('BrudFileSystem descriptor and kernel bootstrap', () => {
         return true;
       });
       await assert.rejects(
-        fileSystem.writeAtomic(`${ROOT}-evil/secret.txt`, 'nope'),
+        fileSystem.writeAtomic(`${root}-evil/secret.txt`, 'nope'),
         (error: unknown) => {
           assert.ok(error instanceof WorkspaceViolationError);
           assert.equal(error.rule, 'SIBLING_PREFIX');

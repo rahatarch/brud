@@ -1,9 +1,11 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { IBrudToolsService, ToolRegistrationOptions } from '../contracts/IBrudToolsService.js';
 import {
@@ -12,7 +14,19 @@ import {
 } from '../descriptor/BrudToolsDescriptor.js';
 import { BrudToolsToken } from '../descriptor/tokens.js';
 
-const CALLER: ServiceContext = { callerId: 'test', tier: 'core', workspaceRoot: '/workspace' };
+let workspaceRoot = '';
+
+before(async () => {
+  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-tools-descriptor-'));
+});
+
+after(async () => {
+  await rm(workspaceRoot, { recursive: true, force: true });
+});
+
+function caller(): ServiceContext {
+  return { callerId: 'test', tier: 'core', workspaceRoot };
+}
 
 function tool(name: string, schema = 'object'): ToolRegistrationOptions {
   return {
@@ -40,19 +54,18 @@ describe('BrudTools descriptor', () => {
 
   it('boots after validation and resolves through the kernel', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
 
     assert.deepStrictEqual(tools.listTools(), []);
 
     const disposable = tools.registerTool('brud.a', true, tool('read_file', 'read_file'));
     const result = await tools.executeTool('read_file', { index: '1', path: 'a.ts' }, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 
@@ -67,16 +80,15 @@ describe('BrudTools descriptor', () => {
 
   it('admits a non-frozen tool name through the standard kernel gate', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const disposable = tools.registerTool('brud.a', true, tool('synthetic_probe_tool'));
     const result = await tools.executeTool('synthetic_probe_tool', { value: 'hello' }, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 
@@ -89,19 +101,18 @@ describe('BrudTools descriptor', () => {
 
   it('denies a tool whose requiredPermissions the caller lacks', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, {
       ...tool('synthetic_probe_tool'),
       requiredPermissions: ['fs:read'],
     });
     const result = await tools.executeTool('synthetic_probe_tool', { value: 'hello' }, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 
@@ -112,16 +123,15 @@ describe('BrudTools descriptor', () => {
   });
 
   it('rejects a payload the boot validation policy refuses', async () => {    const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, tool('read_file', 'read_file'));
     const result = await tools.executeTool('read_file', { path: 'a.ts' }, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 
@@ -133,15 +143,14 @@ describe('BrudTools descriptor', () => {
 
   it('reports TOOL_NOT_FOUND for unknown tools', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const tools = kernel.requestAccess<IBrudToolsService>(CALLER, BrudToolsToken);
+    const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const result = await tools.executeTool('nope', {}, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 
@@ -154,7 +163,7 @@ describe('BrudTools descriptor', () => {
   it('gates payloads through the injected validator', async () => {
     const descriptor = createBrudToolsDescriptor();
     const service = descriptor.factory(
-      { callerId: 'kernel', tier: 'kernel', workspaceRoot: '/workspace' },
+      { callerId: 'kernel', tier: 'kernel', workspaceRoot },
       {
         requestAccess: () => ({
           validateInput: (_schema: string, input: unknown) => (input === undefined
@@ -166,7 +175,7 @@ describe('BrudTools descriptor', () => {
 
     service.registerTool('brud.a', true, tool('read_file'));
     const result = await service.executeTool('read_file', { path: 'a.ts' }, {
-      workspaceRoot: '/workspace',
+      workspaceRoot,
       callerId: 'test',
     });
 

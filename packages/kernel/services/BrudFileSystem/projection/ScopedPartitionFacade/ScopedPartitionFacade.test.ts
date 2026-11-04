@@ -1,9 +1,28 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../orchestrator/BrudFileSystem.js';
 import { PathTraversalViolationError } from '../../validation/PathValidator/PathValidator.js';
 import { ReadOnlyProjectionViolationError, ScopedPartitionFacade } from './ScopedPartitionFacade.js';
+
+let root = '';
+let caseCounter = 0;
+
+before(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-scoped-partition-'));
+});
+
+after(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+function nextRoot(): string {
+  caseCounter += 1;
+  return join(root, `case-${caseCounter}`);
+}
 
 function isTraversalViolation(error: unknown): boolean {
   return error instanceof PathTraversalViolationError
@@ -14,7 +33,7 @@ async function createFacade(): Promise<{
   facade: ScopedPartitionFacade;
   service: BrudFileSystem;
 }> {
-  const service = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
+  const service = new BrudFileSystem(nextRoot(), new DurableNodeStorageDriver());
   await service.initialize();
   const facade = new ScopedPartitionFacade(service, '.brud/work');
   return { facade, service };

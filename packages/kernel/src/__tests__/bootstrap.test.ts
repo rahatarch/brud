@@ -1,6 +1,9 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { FileSystemToken } from '../../services/BrudFileSystem/descriptor/tokens.js';
 import { PluginManagerToken } from '../../services/PluginManager/contracts/tokens.js';
 import { UniversalHistoryToken } from '../../services/UniversalHistory/descriptor/tokens.js';
@@ -9,30 +12,36 @@ import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';
 
-const WORKSPACE_ROOT = '/workspace';
+let workspaceRoot = '';
+
+beforeEach(async () => {
+  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-bootstrap-'));
+});
+
+afterEach(async () => {
+  await rm(workspaceRoot, { recursive: true, force: true });
+});
 
 function createCaller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.runner',
     tier: 'core',
-    workspaceRoot: WORKSPACE_ROOT,
+    workspaceRoot,
     ...overrides,
   };
 }
 
-async function bootStandardKernel(driver: InMemoryStorageDriver): Promise<BrudKernel> {
+async function bootStandardKernel(): Promise<BrudKernel> {
   const kernel = createStandardKernel({
-    storageDriver: driver,
     history: { inMemory: true },
   });
-  await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+  await kernel.boot({ workspaceRoot });
   return kernel;
 }
 
 describe('createStandardKernel', () => {
   it('boots the kernel and resolves the standard core services', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
@@ -41,7 +50,7 @@ describe('createStandardKernel', () => {
     assert.equal(kernel.hasService(UniversalHistoryToken), true);
     assert.equal(kernel.hasService(PluginManagerToken), true);
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ workspaceRoot });
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.equal(kernel.hasService(FileSystemToken), true);
@@ -52,7 +61,7 @@ describe('createStandardKernel', () => {
   });
 
   it('resolves the history service lazily after the kernel is RUNNING', async () => {
-    const kernel = await bootStandardKernel(new InMemoryStorageDriver());
+    const kernel = await bootStandardKernel();
 
     try {
       const fileSystem = kernel.requestAccess(createCaller(), FileSystemToken);
@@ -78,7 +87,7 @@ describe('createStandardKernel', () => {
   });
 
   it('mediates file system access through the access broker', async () => {
-    const kernel = await bootStandardKernel(new InMemoryStorageDriver());
+    const kernel = await bootStandardKernel();
 
     try {
       const fs = kernel.requestAccess(createCaller(), FileSystemToken);
@@ -92,8 +101,7 @@ describe('createStandardKernel', () => {
   });
 
   it('scopes writes to the caller partition prefix', async () => {
-    const driver = new InMemoryStorageDriver();
-    const kernel = await bootStandardKernel(driver);
+    const kernel = await bootStandardKernel();
 
     try {
       const scopedFs = kernel.requestAccess(
@@ -103,8 +111,9 @@ describe('createStandardKernel', () => {
 
       await scopedFs.writeAtomic('index.json', '{"version": 1}');
 
+      const driver = new DurableNodeStorageDriver();
       assert.equal(
-        await driver.readText(`${WORKSPACE_ROOT}/.brud/work/index.json`),
+        await driver.readText(join(workspaceRoot, '.brud/work/index.json')),
         '{"version": 1}',
       );
     } finally {
@@ -113,7 +122,7 @@ describe('createStandardKernel', () => {
   });
 
   it('rejects access after shutdown', async () => {
-    const kernel = await bootStandardKernel(new InMemoryStorageDriver());
+    const kernel = await bootStandardKernel();
 
     await kernel.shutdown();
 

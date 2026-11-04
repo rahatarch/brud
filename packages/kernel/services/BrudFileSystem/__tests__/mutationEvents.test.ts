@@ -1,12 +1,23 @@
 import { createHash } from 'node:crypto';
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from '../events/FileMutationJournal.js';
 import type { FileMutationEvent } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 
-const ROOT = '/workspace';
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-mutation-events-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
 
 function digest(value: string): string {
   return createHash('sha256').update(value, 'utf8').digest('hex');
@@ -31,7 +42,7 @@ async function createHarness(options?: {
       ? undefined
       : { onListenerError: options.onListenerError },
   );
-  const service = new BrudFileSystem(ROOT, new InMemoryStorageDriver(), {
+  const service = new BrudFileSystem(root, new DurableNodeStorageDriver(), {
     mutationJournal: journal,
   });
   const events: FileMutationEvent[] = [];

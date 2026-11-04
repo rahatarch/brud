@@ -1,0 +1,55 @@
+name: Quality Gate
+
+on:
+  push:
+    branches: [main, 'feat/**', 'feature/**']
+    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+  pull_request:
+    branches: [main]
+    paths-ignore: ['**.md', 'docs/**', 'assets/**']
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Run lint (informational until pre-existing debt is cleared)
+        continue-on-error: true
+        run: npm run lint
+
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Typecheck workspace packages (excluding apps/vscode)
+        run: npm run typecheck:ci
+      - name: Typecheck apps/vscode (D-16 Phase 6.B known failure)
+        continue-on-error: true
+        run: npm run typecheck:apps
+
+  boundaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Check package boundaries
+        run: npm run check:boundaries

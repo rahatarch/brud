@@ -1,6 +1,9 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import type { ServiceInfo, IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
@@ -10,11 +13,27 @@ import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/Scope
 import { FileSystemDescriptor, createFileSystemDescriptor } from './descriptor.js';
 import { FileSystemToken } from './tokens.js';
 
+let workspaceRoot = '';
+let caseCounter = 0;
+
+before(async () => {
+  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-fs-descriptor-'));
+});
+
+after(async () => {
+  await rm(workspaceRoot, { recursive: true, force: true });
+});
+
+function nextRoot(): string {
+  caseCounter += 1;
+  return join(workspaceRoot, `case-${caseCounter}`);
+}
+
 function createCaller(overrides: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test-suite',
     tier: 'core',
-    workspaceRoot: '/workspace',
+    workspaceRoot,
     ...overrides,
   };
 }
@@ -41,7 +60,7 @@ function isReadOnlyViolation(error: unknown): boolean {
 }
 
 async function createInstance(): Promise<BrudFileSystem> {
-  const instance = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
+  const instance = new BrudFileSystem(nextRoot(), new DurableNodeStorageDriver());
   await instance.initialize();
   return instance;
 }
@@ -65,22 +84,23 @@ describe('FileSystemDescriptor', () => {
     );
 
     assert.ok(built instanceof BrudFileSystem);
-    assert.equal(built.workspaceRoot, '/workspace');
+    assert.equal(built.workspaceRoot, workspaceRoot);
     await built.dispose();
   });
 
   it('binds an explicitly supplied canonical root instead of the context root', async () => {
+    const canonicalRoot = join(workspaceRoot, 'canonical');
     const descriptor = createFileSystemDescriptor({
-      driver: new InMemoryStorageDriver(),
-      root: '/canonical/workspace',
+      driver: new DurableNodeStorageDriver(),
+      root: canonicalRoot,
     });
 
     const built = descriptor.factory(
-      createCaller({ callerId: 'kernel', tier: 'core', workspaceRoot: '/linked/workspace' }),
+      createCaller({ callerId: 'kernel', tier: 'core', workspaceRoot: join(workspaceRoot, 'linked') }),
       createBroker(),
     );
 
-    assert.equal(built.workspaceRoot, '/canonical/workspace');
+    assert.equal(built.workspaceRoot, canonicalRoot);
     await built.dispose();
   });
 

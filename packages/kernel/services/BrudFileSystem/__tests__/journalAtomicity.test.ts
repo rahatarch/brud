@@ -1,28 +1,32 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { access, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
-import { InMemoryStorageDriver, StorageError } from '../../../drivers/memory/index.js';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from '../events/FileMutationJournal.js';
 import type { FileMutationEvent } from '../events/types.js';
 import { CommittedWithDurabilityWarningError } from '../operations/shared/errors.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 
-class AccessDeniedDriver extends InMemoryStorageDriver {
+function isErrno(error: unknown, code: string): boolean {
+  return error instanceof Error && (error as { readonly code?: unknown }).code === code;
+}
+
+class AccessDeniedDriver extends DurableNodeStorageDriver {
   override async writeFileExclusive(
     absolutePath: string,
     _data: Uint8Array | string,
     _options?: { readonly mode?: number },
   ): Promise<void> {
-    throw new StorageError('EACCES', 'open', absolutePath);
+    throw Object.assign(new Error(`EACCES: open '${absolutePath}'`), { code: 'EACCES' });
   }
 }
 
-class DirectorySyncFailingDriver extends InMemoryStorageDriver {
-  async syncDirectory(_absoluteDirectoryPath: string): Promise<void> {
+class DirectorySyncFailingDriver extends DurableNodeStorageDriver {
+  override async syncDirectory(_absoluteDirectoryPath: string): Promise<void> {
     throw new Error('directory fsync unavailable');
   }
 }
@@ -33,12 +37,22 @@ async function flushJournal(): Promise<void> {
   });
 }
 
-async function createHarness(driver: InMemoryStorageDriver): Promise<{
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-journal-atomicity-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
+
+async function createHarness(driver: DurableNodeStorageDriver): Promise<{
   service: BrudFileSystem;
   events: FileMutationEvent[];
 }> {
   const journal = createFileMutationJournal();
-  const service = new BrudFileSystem('/workspace', driver, { mutationJournal: journal });
+  const service = new BrudFileSystem(root, driver, { mutationJournal: journal });
   const events: FileMutationEvent[] = [];
 
   await service.initialize();
@@ -54,7 +68,7 @@ describe('journal atomicity (V-6)', () => {
     const { service, events } = await createHarness(new AccessDeniedDriver());
 
     await assert.rejects(service.writeAtomic('denied.txt', 'payload'), (error: unknown) => {
-      return error instanceof Error && (error as { readonly code?: unknown }).code === 'EACCES';
+      return isErrno(error, 'EACCES');
     });
     await flushJournal();
 
@@ -62,7 +76,7 @@ describe('journal atomicity (V-6)', () => {
   });
 
   it('emits zero records for a no-op deletion', async () => {
-    const { service, events } = await createHarness(new InMemoryStorageDriver());
+    const { service, events } = await createHarness(new DurableNodeStorageDriver());
 
     await service.deleteFile('missing.txt');
     await flushJournal();
@@ -98,18 +112,18 @@ describe('commit/durability split-brain (V-7)', () => {
 
 describe('startup staging sweep (V-8)', () => {
   it('removes orphan staging files whose owning process is gone', async () => {
-    const driver = new InMemoryStorageDriver();
-    await driver.mkdir('/workspace', { recursive: true });
+    const driver = new DurableNodeStorageDriver();
+    await driver.mkdir(root, { recursive: true });
 
-    const orphan = `/workspace/.report.txt.999999.${randomUUID()}.tmp`;
-    const live = `/workspace/.report.txt.${process.pid}.${randomUUID()}.tmp`;
-    const unrelated = '/workspace/.report.txt.tmp';
+    const orphan = join(root, `.report.txt.999999.${randomUUID()}.tmp`);
+    const live = join(root, `.report.txt.${process.pid}.${randomUUID()}.tmp`);
+    const unrelated = join(root, '.report.txt.tmp');
 
     await driver.writeFile(orphan, 'orphan');
     await driver.writeFile(live, 'live');
     await driver.writeFile(unrelated, 'user file');
 
-    const service = new BrudFileSystem('/workspace', driver);
+    const service = new BrudFileSystem(root, driver);
     await service.initialize();
 
     assert.equal(await driver.exists(orphan), false);
@@ -118,21 +132,21 @@ describe('startup staging sweep (V-8)', () => {
   });
 
   it('sweeps old staging files even when the pid was reused', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-sweep-old-'));
+    const sweepRoot = await mkdtemp(join(tmpdir(), 'brud-sweep-old-'));
 
     try {
-      const oldStaging = join(root, `.old.txt.${process.pid}.${randomUUID()}.tmp`);
+      const oldStaging = join(sweepRoot, `.old.txt.${process.pid}.${randomUUID()}.tmp`);
       await writeFile(oldStaging, 'old');
 
       const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
       await utimes(oldStaging, twoHoursAgo, twoHoursAgo);
 
-      const service = new BrudFileSystem(root, new NodeStorageDriver());
+      const service = new BrudFileSystem(sweepRoot, new NodeStorageDriver());
       await service.initialize();
 
       await assert.rejects(access(oldStaging));
     } finally {
-      await rm(root, { recursive: true, force: true });
+      await rm(sweepRoot, { recursive: true, force: true });
     }
   });
 });

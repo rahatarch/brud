@@ -1,0 +1,77 @@
+name: Cross-Platform Tests
+
+on:
+  push:
+    branches: [main, 'feat/**', 'feature/**']
+    paths:
+      - 'packages/kernel/**'
+      - 'packages/core/**'
+      - 'packages/protocol/**'
+      - 'packages/mcp/**'
+      - 'packages/daemon/**'
+      - 'packages/adapters/**'
+      - 'packages/ui/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/test-matrix.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/kernel/**'
+      - 'packages/core/**'
+      - 'packages/protocol/**'
+      - 'packages/mcp/**'
+      - 'packages/daemon/**'
+      - 'packages/adapters/**'
+      - 'packages/ui/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/test-matrix.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node-version: [20, 22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+      - run: npm ci
+
+      - name: Build workspace packages
+        run: npm run build:protocol && npm run build:core && npm run build:kernel && npm run build:adapter
+
+      - name: Kernel tests (informational while O-3 is open)
+        # Five pre-existing UniversalHistory failures (O-3) keep the combined
+        # kernel suite red. The suite still runs on every matrix cell; the B0
+        # goal tests below are the blocking kernel gate.
+        continue-on-error: true
+        run: npm run test:kernel
+
+      - name: B0 goal tests (blocking)
+        run: node --import tsx --test "packages/kernel/src/__tests__/goals/*.test.ts"
+
+      - name: Core tests
+        run: npm run test:core
+
+      - name: Core integration tests
+        run: npm run test:integration
+
+      - name: Adapter tests
+        run: npm run test:adapter
+
+      - name: Check package boundaries
+        run: npm run check:boundaries

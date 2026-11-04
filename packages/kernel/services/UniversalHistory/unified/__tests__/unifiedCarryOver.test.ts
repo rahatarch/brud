@@ -15,7 +15,7 @@ import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../src/engine/BrudKernel.js';
 import type { KernelLogger, ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
+import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { createUnifiedHistoryDescriptors } from '../descriptor/unifiedHistoryDescriptors.js';
@@ -155,7 +155,7 @@ describe('unified history — carried-over legacy behaviour', () => {
 
   it('declares core-tier descriptors with their boot dependencies (descriptor and bootstrap tests)', () => {
     const descriptors = createUnifiedHistoryDescriptors({
-      driver: new InMemoryStorageDriver(),
+      driver: new DurableNodeStorageDriver(),
       journal: createFileMutationJournal(),
       inMemory: true,
     });

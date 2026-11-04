@@ -1,24 +1,38 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { ITerminalService, TerminalChunkCallback } from '../contracts/ITerminalService.js';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
+
+let workspaceRoot = '';
+
+before(async () => {
+  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-terminal-descriptor-'));
+});
+
+after(async () => {
+  await rm(workspaceRoot, { recursive: true, force: true });
+});
+
+function caller(overrides?: Partial<ServiceContext>): ServiceContext {
+  return { callerId: 'test', tier: 'core', workspaceRoot, ...overrides };
+}
 
 describe('TerminalService bootstrap registration', () => {
   it('registers brud.core.terminal after validation and resolves it through the kernel', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
-    const caller: ServiceContext = { callerId: 'test', tier: 'core', workspaceRoot: '/workspace' };
-    const terminal = kernel.requestAccess(caller, TerminalToken);
-    const validation = kernel.requestAccess(caller, ValidationToken);
+    const terminal = kernel.requestAccess(caller(), TerminalToken);
+    const validation = kernel.requestAccess(caller(), ValidationToken);
 
     assert.strictEqual(terminal.getPolicy().schemaVersion, 1);
     assert.strictEqual(validation.getPolicy().schemaVersion, 1);
@@ -29,14 +43,13 @@ describe('TerminalService bootstrap registration', () => {
 
   it('disposes orphan sessions when the kernel shuts down', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
     const terminal = kernel.requestAccess<ITerminalService>(
-      { callerId: 'test', tier: 'core', workspaceRoot: '/workspace' },
+      caller(),
       TerminalToken,
     );
     terminal.registerExternal(
@@ -58,14 +71,13 @@ describe('TerminalService bootstrap registration', () => {
 
   it('exposes the legacy chunk callback surface through the kernel authority', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ workspaceRoot });
 
     const terminal = kernel.requestAccess<ITerminalService>(
-      { callerId: 'test', tier: 'core', workspaceRoot: '/workspace' },
+      caller(),
       TerminalToken,
     );
     const callback: TerminalChunkCallback = () => undefined;

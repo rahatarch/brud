@@ -1,17 +1,38 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import { BrudKernel } from '../../../src/engine/BrudKernel.js';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import { createSettingsReaderDescriptor, createSettingsDescriptor } from '../../SettingsService/descriptor/descriptor.js';
 import { InMemoryConfigStore } from '../../SettingsService/storage/InMemoryConfigStore.js';
 import { WorkspaceService } from '../orchestrator/WorkspaceService.js';
-import { createIdentityPathPort } from '../testing/MapPathPort.js';
+import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { WORKSPACE_SERVICE_TIER, createWorkspaceDescriptor } from './descriptor.js';
 import { WorkspaceToken } from './tokens.js';
 
-const WORKSPACE_ROOT = '/workspace';
+let WORKSPACE_ROOT = '';
+let clientRoot = '';
+let serverRoot = '';
+
+before(async () => {
+  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-workspace-descriptor-'));
+  clientRoot = join(WORKSPACE_ROOT, 'client');
+  serverRoot = join(WORKSPACE_ROOT, 'server');
+  await mkdir(clientRoot, { recursive: true });
+  await mkdir(serverRoot, { recursive: true });
+});
+
+after(async () => {
+  await rm(WORKSPACE_ROOT, { recursive: true, force: true });
+});
+
+function realPort(): ReturnType<typeof createStorageDriverPathPort> {
+  return createStorageDriverPathPort(new NodeStorageDriver());
+}
 
 function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
@@ -26,7 +47,7 @@ function createKernel(): BrudKernel {
   const kernel = new BrudKernel();
   kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
   kernel.register(createSettingsReaderDescriptor());
-  kernel.register(createWorkspaceDescriptor({ port: createIdentityPathPort() }));
+  kernel.register(createWorkspaceDescriptor({ port: realPort() }));
 
   return kernel;
 }
@@ -53,9 +74,8 @@ describe('createWorkspaceDescriptor', () => {
   it('boots after settings and before the filesystem in the standard kernel', async () => {
     const { createStandardKernel } = await import('../../../src/bootstrap/index.js');
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
-      workspace: { port: createIdentityPathPort() },
+      workspace: { port: realPort() },
     });
 
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
@@ -76,16 +96,16 @@ describe('createWorkspaceDescriptor', () => {
   it('builds a service over the boot workspace root', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace/' });
+    await kernel.boot({ workspaceRoot: `${WORKSPACE_ROOT}/` });
 
     try {
       const workspace = kernel.requestAccess(caller(), WorkspaceToken);
 
       assert.ok(workspace instanceof WorkspaceService);
-      assert.deepEqual(workspace.roots, ['/workspace']);
-      assert.equal(workspace.primaryRoot, '/workspace');
+      assert.deepEqual(workspace.roots, [WORKSPACE_ROOT]);
+      assert.equal(workspace.primaryRoot, WORKSPACE_ROOT);
       assert.equal(workspace.isInitialized, true);
-      assert.equal((await workspace.toKernelPath('/workspace/a.md')), 'a.md');
+      assert.equal((await workspace.toKernelPath(`${WORKSPACE_ROOT}/a.md`)), 'a.md');
     } finally {
       await kernel.shutdown();
     }
@@ -99,8 +119,8 @@ describe('createWorkspaceDescriptor', () => {
     try {
       const workspace = kernel.requestAccess(caller({ tier: 'userland', callerId: 'plugin.demo' }), WorkspaceToken);
 
-      assert.equal(await workspace.contains('/workspace/a.md'), true);
-      assert.equal(await workspace.contains('/workspace-evil/a.md'), false);
+      assert.equal(await workspace.contains(`${WORKSPACE_ROOT}/a.md`), true);
+      assert.equal(await workspace.contains(`${WORKSPACE_ROOT}-evil/a.md`), false);
     } finally {
       await kernel.shutdown();
     }
@@ -111,18 +131,18 @@ describe('createWorkspaceDescriptor', () => {
     kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
     kernel.register(createSettingsReaderDescriptor());
     kernel.register(createWorkspaceDescriptor({
-      roots: ['/workspace/client', '/workspace/server'],
-      port: createIdentityPathPort(),
+      roots: [clientRoot, serverRoot],
+      port: realPort(),
     }));
 
-    await kernel.boot({ workspaceRoot: '/workspace/server' });
+    await kernel.boot({ workspaceRoot: serverRoot });
 
     try {
-      const workspace = kernel.requestAccess(caller({ workspaceRoot: '/workspace/server' }), WorkspaceToken);
+      const workspace = kernel.requestAccess(caller({ workspaceRoot: serverRoot }), WorkspaceToken);
 
-      assert.deepEqual(workspace.roots, ['/workspace/client', '/workspace/server']);
-      assert.equal(workspace.primaryRoot, '/workspace/server');
-      assert.equal((await workspace.resolve('/workspace/client/a.md')).root, '/workspace/client');
+      assert.deepEqual(workspace.roots, [clientRoot, serverRoot]);
+      assert.equal(workspace.primaryRoot, serverRoot);
+      assert.equal((await workspace.resolve(`${clientRoot}/a.md`)).root, clientRoot);
     } finally {
       await kernel.shutdown();
     }
@@ -134,7 +154,7 @@ describe('createWorkspaceDescriptor', () => {
     kernel.register(createSettingsReaderDescriptor());
     kernel.register(createWorkspaceDescriptor({
       roots: ['relative/path'],
-      port: createIdentityPathPort(),
+      port: realPort(),
     }));
 
     await assert.rejects(kernel.boot({ workspaceRoot: 'relative/path' }));

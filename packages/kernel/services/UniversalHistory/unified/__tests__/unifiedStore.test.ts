@@ -8,7 +8,6 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { InMemoryStorageDriver } from '../../../../drivers/memory/index.js';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import {
   CAS_DIRECTORY,
@@ -26,7 +25,6 @@ import {
 } from '../store/index.js';
 import type { HistoryStoreWarning, PreparedEntry } from '../store/index.js';
 
-const MEMORY_ROOT = '/ws/.brud/history';
 const DAY_MS = Date.UTC(2026, 9, 30, 12, 0, 0);
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 
@@ -41,11 +39,14 @@ const FILE_TYPE = {
 };
 
 async function memoryStore(context: TestContext, warnings: HistoryStoreWarning[] = []): Promise<UnifiedHistoryStore> {
-  const driver = new InMemoryStorageDriver();
-  await driver.mkdir(MEMORY_ROOT, { recursive: true });
+  const root = await mkdtemp(join(tmpdir(), 'brud-unified-store-memory-'));
+  context.after(() => rm(root, { recursive: true, force: true }));
+  const historyRoot = join(root, '.brud/history');
+  const driver = new DurableNodeStorageDriver();
+  await driver.mkdir(historyRoot, { recursive: true });
   const store = new UnifiedHistoryStore({
     dbPath: ':memory:',
-    historyRoot: MEMORY_ROOT,
+    historyRoot,
     driver,
     now: () => DAY_MS,
     onWarning: (warning) => warnings.push(warning),
@@ -320,14 +321,18 @@ describe('UnifiedHistoryStore — CAS containment (amendment §2.1)', () => {
   it('refuses to write bytes that do not match their address, before touching the driver', async (context) => {
     const store = await memoryStore(context);
     const writes: string[] = [];
-    const driver = new InMemoryStorageDriver();
+    const root = await mkdtemp(join(tmpdir(), 'brud-unified-store-integrity-'));
+    context.after(() => rm(root, { recursive: true, force: true }));
+    const historyRoot = join(root, '.brud/history');
+    const driver = new DurableNodeStorageDriver();
+    await driver.mkdir(historyRoot, { recursive: true });
     const original = driver.writeFileExclusive.bind(driver);
     driver.writeFileExclusive = async (path, data, options) => {
       writes.push(path);
       return original(path, data, options);
     };
     const { writeBlob } = await import('../store/cas.js');
-    await assert.rejects(() => writeBlob(driver, MEMORY_ROOT, 'b'.repeat(64), new Uint8Array([1])), UnifiedBlobIntegrityError);
+    await assert.rejects(() => writeBlob(driver, historyRoot, 'b'.repeat(64), new Uint8Array([1])), UnifiedBlobIntegrityError);
     assert.deepEqual(writes, []);
     void store;
   });

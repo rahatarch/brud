@@ -1,6 +1,10 @@
-import { describe, it } from 'node:test';
+import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtempSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import type { ServiceInfo } from '../../../src/contracts/accessBroker.js';
 import { KernelAccessBroker } from '../../../src/engine/KernelAccessBroker.js';
 import { KernelRegistry } from '../../../src/engine/KernelRegistry.js';
@@ -32,7 +36,19 @@ import {
   createPluginManagerDescriptor,
 } from './PluginManagerDescriptor.js';
 
-const WORKSPACE_ROOT = '/workspace';
+const workspaceRoots: string[] = [];
+let caseCounter = 0;
+
+function nextWorkspaceRoot(): string {
+  caseCounter += 1;
+  const root = mkdtempSync(join(tmpdir(), `brud-plugin-manager-${caseCounter}-`));
+  workspaceRoots.push(root);
+  return root;
+}
+
+after(async () => {
+  await Promise.all(workspaceRoots.map((root) => rm(root, { recursive: true, force: true })));
+});
 
 class UnusedUniversalHistory implements IUniversalHistoryService {
   async beginSession(): Promise<never> {
@@ -136,8 +152,8 @@ interface Harness {
 
 function createHarness(options?: HarnessOptions): Harness {
   const registry = new KernelRegistry();
-  const driver = new InMemoryStorageDriver();
-  const fileSystem = new BrudFileSystem(WORKSPACE_ROOT, driver);
+  const driver = new DurableNodeStorageDriver();
+  const fileSystem = new BrudFileSystem(nextWorkspaceRoot(), driver);
   const universalHistory = new UnusedUniversalHistory();
 
   registry.register(createFileSystemDescriptor({ driver }));
@@ -178,7 +194,7 @@ function createCaller(): ServiceContext {
   return {
     callerId: 'plugin-manager-descriptor-suite',
     tier: PLUGIN_MANAGER_SERVICE_TIER,
-    workspaceRoot: WORKSPACE_ROOT,
+    workspaceRoot: workspaceRoots[workspaceRoots.length - 1] ?? tmpdir(),
   };
 }
 

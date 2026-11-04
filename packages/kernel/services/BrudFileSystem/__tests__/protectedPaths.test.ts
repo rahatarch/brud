@@ -1,11 +1,24 @@
-import { describe, it } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { InMemoryStorageDriver } from '../../../drivers/memory/index.js';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
+
+let root = '';
+
+beforeEach(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-protected-paths-'));
+});
+
+afterEach(async () => {
+  await rm(root, { recursive: true, force: true });
+});
 
 function isProtected(error: unknown): boolean {
   return error instanceof WorkspaceViolationError
@@ -15,10 +28,10 @@ function isProtected(error: unknown): boolean {
 
 async function createService(): Promise<{
   service: BrudFileSystem;
-  driver: InMemoryStorageDriver;
+  driver: DurableNodeStorageDriver;
 }> {
-  const driver = new InMemoryStorageDriver();
-  const service = new BrudFileSystem('/workspace', driver);
+  const driver = new DurableNodeStorageDriver();
+  const service = new BrudFileSystem(root, driver);
 
   await service.initialize();
 
@@ -65,24 +78,24 @@ describe('A10 protected-path denylist (V-9)', () => {
   it('grants no default write scope, and an explicit scope only to its caller', async () => {
     // Since D-15 U-7 history writes through the storage driver, so no caller,
     // the history service included, may write .brud/history by default.
-    const descriptor = createFileSystemDescriptor({ driver: new InMemoryStorageDriver() });
+    const descriptor = createFileSystemDescriptor({ driver: new DurableNodeStorageDriver() });
     const scoped = createFileSystemDescriptor({
-      driver: new InMemoryStorageDriver(),
+      driver: new DurableNodeStorageDriver(),
       trustedWriteScopesByCaller: { 'acme.owner': ['.brud/history'] },
     });
-    const instance = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
+    const instance = new BrudFileSystem(root, new DurableNodeStorageDriver());
 
     await instance.initialize();
 
     const coreCaller: ServiceContext = {
       callerId: 'some.core.service',
       tier: 'core',
-      workspaceRoot: '/workspace',
+      workspaceRoot: root,
     };
     const historyCaller: ServiceContext = {
       callerId: 'brud.core.universalHistory',
       tier: 'core',
-      workspaceRoot: '/workspace',
+      workspaceRoot: root,
     };
 
     assert.ok(descriptor.project);
@@ -100,7 +113,7 @@ describe('A10 protected-path denylist (V-9)', () => {
 
   it('projects kernel and userland callers away from the raw writable handle', async () => {
     const descriptor = createFileSystemDescriptor();
-    const instance = new BrudFileSystem('/workspace', new InMemoryStorageDriver());
+    const instance = new BrudFileSystem(root, new DurableNodeStorageDriver());
 
     await instance.initialize();
 
@@ -108,12 +121,12 @@ describe('A10 protected-path denylist (V-9)', () => {
     const kernelProjection = descriptor.project(instance, {
       callerId: 'kernel.host',
       tier: 'kernel',
-      workspaceRoot: '/workspace',
+      workspaceRoot: root,
     });
     const userlandProjection = descriptor.project(instance, {
       callerId: 'plugin.demo',
       tier: 'userland',
-      workspaceRoot: '/workspace',
+      workspaceRoot: root,
     });
 
     assert.notEqual(kernelProjection, instance);

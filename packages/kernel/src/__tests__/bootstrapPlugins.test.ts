@@ -1,7 +1,10 @@
-import { describe, it } from 'node:test';
+import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { IStorageDriver } from '../../drivers/contracts/index.js';
-import { InMemoryStorageDriver } from '../../drivers/memory/index.js';
+import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import type { IBrudFileSystem } from '../../services/BrudFileSystem/contracts/index.js';
 import { BrudFileSystem } from '../../services/BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../../services/BrudFileSystem/descriptor/tokens.js';
@@ -30,7 +33,15 @@ import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';
 
-const WORKSPACE_ROOT = '/workspace';
+let WORKSPACE_ROOT = '';
+
+beforeEach(async () => {
+  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-bootstrap-plugins-'));
+});
+
+afterEach(async () => {
+  await rm(WORKSPACE_ROOT, { recursive: true, force: true });
+});
 
 function createCaller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
@@ -95,14 +106,13 @@ function createTracingFileSystemDescriptor(
     tier: 'core',
     dependencies: [],
     factory: (context: ServiceContext): TracingFileSystem =>
-      new TracingFileSystem(context.workspaceRoot, new InMemoryStorageDriver(), log),
+      new TracingFileSystem(context.workspaceRoot, new DurableNodeStorageDriver(), log),
   };
 }
 
 describe('createStandardKernel plugin integration', () => {
   it('resolves the running plugin manager through the access broker', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
     });
 
@@ -129,7 +139,6 @@ describe('createStandardKernel plugin integration', () => {
     });
 
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [beta, alpha],
     });
@@ -163,7 +172,7 @@ describe('createStandardKernel plugin integration', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
-    kernel.register(createUnifiedHistoryDescriptors({ driver: new InMemoryStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
+    kernel.register(createUnifiedHistoryDescriptors({ driver: new DurableNodeStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [plugin] }));
 
     await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
@@ -196,7 +205,7 @@ function createCapabilityPlugin(
 
 describe('plugin capabilities requested during activation at boot', () => {
   it('grants the filesystem during activate() and the handle reads a seeded file', async () => {
-    const driver = new InMemoryStorageDriver();
+    const driver = new DurableNodeStorageDriver();
     await driver.mkdir(WORKSPACE_ROOT, { recursive: true });
     await driver.writeFile(`${WORKSPACE_ROOT}/seed.txt`, 'seeded content');
     let readBack: string | undefined;
@@ -225,7 +234,6 @@ describe('plugin capabilities requested during activation at boot', () => {
 
   it('registers a tool during activate() and the tool is routable after boot', async () => {
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.boot.tools', ['tools:register'], (context) => {
@@ -256,7 +264,6 @@ describe('plugin capabilities requested during activation at boot', () => {
   it('grants universal history during activate()', async () => {
     let historyResolved = false;
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.boot.history', ['history:read'], (context) => {
@@ -298,7 +305,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
-    kernel.register(createUnifiedHistoryDescriptors({ driver: new InMemoryStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
+    kernel.register(createUnifiedHistoryDescriptors({ driver: new DurableNodeStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [broken, stable] }));
 
     await assert.rejects(
@@ -333,7 +340,6 @@ describe('plugin capabilities requested during activation at boot', () => {
     let handle: NamespaceHistoryHandle | undefined;
     let coreDenied: unknown;
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.history.reader', ['history:read'], (context) => {
@@ -392,7 +398,6 @@ describe('plugin capabilities requested during activation at boot', () => {
     let handle: NamespaceHistoryHandle | undefined;
     let coreDenied: unknown;
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [
         createCapabilityPlugin('acme.history.writer', ['history:read', 'history:write'], (context) => {
@@ -448,7 +453,6 @@ describe('plugin capabilities requested during activation at boot', () => {
       }),
     );
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [official],
     });
@@ -475,7 +479,6 @@ describe('plugin capabilities requested during activation at boot', () => {
       }),
     );
     const kernel = createStandardKernel({
-      storageDriver: new InMemoryStorageDriver(),
       history: { inMemory: true },
       initialPlugins: [official],
     });

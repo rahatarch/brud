@@ -1,0 +1,42 @@
+name: Extension Package Verification
+
+on:
+  push:
+    branches: [main, 'feat/**', 'feature/**']
+    paths:
+      - 'apps/vscode/**'
+      - 'packages/**'
+      - '.vscodeignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/package.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'apps/vscode/**'
+      - 'packages/**'
+      - '.vscodeignore'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/package.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    # apps/vscode cannot package until @brud/patchblocks is restored in Phase 6.B
+    # (D-16). Keep the workflow as a signal without blocking the gate.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      - name: Package the extension
+        run: npm run package:vsix
