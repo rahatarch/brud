@@ -1200,20 +1200,22 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 | Phase | Name | Primary outcome | Depends on | Exit gate | User-visible risk | Status (2026-11-04) |
 |---|---|---|---|---|---|---|
-| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None | **Phase 0 complete except H4 deferred (as of 2026-11-04).** H1 done (pre-D-17). H2 done by `25d94e3` (test-fake isolation behind `@brud/core/testing`; grandfathered pre-D-17). H6 done (root `npm run typecheck` script). H4 deferred to immediately before Phase 6.B with recorded rationale in `.internal_docs/executions/2026-11-04_phase_0_close_out_h2_h6.md`. H3, H5, H7 unrecorded but not blocking any later phase. |
+| **0** | Contract freeze & housekeeping | Frozen contracts; clean baseline; no debug/test leakage | — | Frozen inventory + baseline suite green | None | **Complete except H4 deferred (as of 2026-11-05).** H1, H2, H6 done; H4 deferred to Phase 6.B; H3/H5/H7 unrecorded, non-blocking. |
 | **1** | SettingsService | One frozen policy snapshot across hosts | 0 | Cross-host settings parity | Low | **Implemented, gate not ratified (as of 2026-11-04).** Service and tests exist; cross-host snapshot parity fails (MCP and VS Code read settings directly) |
 | **2** | WorkspaceService | Canonical root, containment, translation | 1 | Path parity matrix | Medium | **Implemented, gate not ratified (as of 2026-11-04).** Multi-root and absolute-path criteria pass; Windows parity is unit-only; core still uses `node:fs` canonicalization |
 | **3** | ValidationService | One pre-execution policy gate | 1, 2 | Validation parity matrix | Medium | **Gate passed (2026-10-29).** `validationParity` passes 18/18; full validation suites not re-run at HEAD |
 | **4** | TerminalService | Host-owned process lifecycle | 1, 2, 3 | No orphan process; no spawn imports | Medium | **Implemented, gate not ratified (as of 2026-11-04).** Orphan/validation tests exist; explicit "zero `child_process` in kernel" fails at `ProcessManager.ts:1` |
-| **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium | **Not satisfied (as of 2026-11-04).** No settings/terminal/telemetry handles; no `settings:read`/`terminal:execute`; no G-7 FS primitives |
-| **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **Partial (as of 2026-11-04).** Oracle/daemon/scale pass; U-8 retention implemented but 4 retention + 1 attribution tests remain open (O-3) |
-| **6** | Leaf plugins + embedded parser | Five leaf plugins live behind flags, and the `[BRUD]` syntax engine is embedded in `BrudTools` as a Level-1 capability | 5 | 100% fixture parity per plugin and for the embedded parser; kernel stays dependency-free | Low | **Split (as of 2026-11-04).** 6.A satisfied (parser embedded, 47/47 focused tests pass); 6.B not satisfied (five leaf plugins absent; 26 legacy `@brud/patchblocks` imports need repoint) |
-| **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium | **Not started (as of 2026-11-04).** No catalog plugin; `globalToolRegistry` still in runtime code |
-| **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low | **Not started (as of 2026-11-04).** No reader plugin |
-| **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** | **Not started (as of 2026-11-04).** No filesystem plugin; 12 mutating branches remain in core |
-| **10** | Terminal + MCP bridge | Terminal plugin; daemon and MCP on one standard kernel | 4, 7, 8, 9 | One kernel per workspace; all suites green | High | **Not started (as of 2026-11-04).** `bootCoreKernel` still in production; no `tools.execute` RPC |
-| **11** | Quarantine legacy Core | Move the legacy monolith into `deprecated/`; ESLint forbids any import of it | 10 | Zero live imports of `deprecated/`; full CI | **High** (code-only reversal; source kept) | **Not started (as of 2026-11-04).** No `deprecated/`; no ESLint restriction; 53 live `@brud/core` imports |
+| **5** | Plugin runtime completion | Full capability context, `BrudTools` Level-1 registry, read-only history, boot grant, FS primitives | 1–4 | Capability denial matrix; tool routing table tests | Medium | **Complete (G-7 filesystem primitives added; capability handles present; boundary test in place).** |
+| **5.H** | Unified polymorphic history (D-15) | One history service, store, and reversal engine; files as `brud.core.file`; three reversal modes; namespace isolation; import of both old ledgers | 5 (C-1, C-2) | Parity oracle green on old and new engines; daemon 45/45 unchanged; scaling properties (plan §7) | **High** | **Complete (O-3 resolved; retention and attribution tests pass).** |
+| **6** | Leaf plugins + embedded parser | Five leaf plugins live behind flags, and the `[BRUD]` syntax engine is embedded in `BrudTools` as a Level-1 capability | 5 | 100% fixture parity per plugin and for the embedded parser; kernel stays dependency-free | Low | **Complete.** 6.A satisfied (parser embedded). 6.B satisfied (four leaf plugins: Search, Structure, UserPrompts; ImportResolver reclassified as utility per D-19). |
+| **7** | Tool catalog (`get_tool_info`) | `brud.tools.catalog` answers `get_tool_info` and exports documentation over Level-1 `BrudTools` | 5, 6 | Catalog parity; no singleton | Medium | **Complete (2026-11-05).** Tool Catalog plugin registered; get_tool_info in dual-mode; schema deep-freeze and registration-time validation added; 174 tests pass. |
+| **8** | Reader | Read tools served by `brud.tools.reader` | 6, 7 | Read parity + stress + abort | Low | **Complete (2026-11-05).** Reader plugin registered; read_file, read_files, read_directory; governor enforced at boundary values; 248 tests pass. |
+| **9** | Filesystem mutations | All 12 mutating kinds via plugin + UniversalHistory | 6, 7, 8 | Zero data loss + reversal parity | **High** | **Complete (2026-11-05).** Filesystem plugin registered; 12 mutating tools with colocated tests; transaction coordinator; governor; directory-safe reversal via DIRECTORY_STATE_SHA256. 332 plugin tests, 211 verification tests. |
+| **10** | Terminal + MCP bridge | Terminal plugin; daemon and MCP on one standard kernel | 4, 7, 8, 9 | One kernel per workspace; all suites green | High | **Next (as of 2026-11-05).** Terminal tools + MCP bridge. |
+| **11** | Quarantine legacy Core | Move the legacy monolith into `deprecated/`; ESLint forbids any import of it | 10 | Zero live imports of `deprecated/`; full CI | **High** (code-only reversal; source kept) | **Pending (after Phase 10).** Quarantine packages/core. |
 | **Release** | Next consumer app | Brud Desktop ships on the microkernel path; VS Code release freeze lifts | 11 | Phase 11 verification record | — | Blocked on Phase 11 |
+
+> **Status updated 2026-11-05:** Phases 6 through 9 are complete and verified. The Utility Service (D-19) and the Utility vs. Plugin boundary (D-20) are committed. The History API security model (D-21) is documented. Next: Phase 10 (Terminal tools + MCP bridge), then Phase 11 (Quarantine).
 
 **Status updated 2026-11-04** per the approved ADR `.internal_docs/decisions/2026-11-04_rollout_status_reconciliation_v2.md` and its evidence audit `.internal_docs/audits/2026-11-04_phase_status_reconciliation_audit.md`. Verdicts reflect code state as of 2026-11-04, not the prior ledger's claims.
 
@@ -1422,7 +1424,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 **Non-plugin capability:** the `[BRUD]` block parser is **not** a plugin. It extracts `[BRUD]…[/BRUD]`, splits `[CALL tool]…[END]` calls, parses `key: value` parameters and `{param}…{/param}` protected regions, and lives in `packages/kernel/services/BrudTools/parser/`, exposed as `parseInput` / `parseAndRoute` on `IBrudToolsService`. The legacy 29-state FSM, Git-diff syntax and YAML parser are removed; there is no format sniffing. Matching (`findMatches`, `reconstructContent`, `singleMatch`) stays in `packages/core` until Phase 9.
 
-##### 6.A — Embedded Parser (SATISFIED as of 2026-11-04)
+##### 6.A — Embedded Parser (SATISFIED as of 2026-11-04; verified)
 
 **Objective:** embed the Brud Protocol v2 (`[BRUD]`) syntax engine into the Level-1 `BrudTools` service as `parseInput` / `parseAndRoute`.
 
@@ -1430,9 +1432,9 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 **Exit criteria (all met):** `[BRUD]` wrapper extraction works; call splitting works; parameters and protected regions parse; `parseAndRoute` validates against registered schema and dispatches through `executeTool`; no legacy grammar survives; kernel remains dependency-free.
 
-##### 6.B — Four Leaf Plugins and Legacy Import Repoint (NOT SATISFIED as of 2026-11-04)
+##### 6.B — Four Leaf Plugins and Legacy Import Repoint (SATISFIED as of 2026-11-05)
 
-**Objective:** deliver the four leaf plugins (`brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`) as official plugins over the Phase 5 plugin runtime, AND repoint the 26 legacy `@brud/patchblocks` import sites to the migrated `BrudTools` capability.
+**Objective:** deliver the four leaf plugins (`brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`) as official plugins over the Phase 5 plugin runtime, AND repoint the 26 legacy `@brud/patchblocks` import sites to the migrated `BrudTools` capability. (ImportResolver was reclassified as a utility per D-19 and does not appear in the leaf plugin list.)
 
 **D-19 note:** ImportResolver was reclassified as a utility per D-19 and is no longer a Phase 6.B plugin. It is hosted by `brud.core.utils` as `resolveImports`.
 
@@ -1455,9 +1457,9 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - Legacy modules remain authoritative when flags are `off`.
 - Adversarial coverage: malformed `[BRUD]` blocks, injection attempts in parameters, oversized payloads, and nested protected regions must be covered by tests that use the real `BrudTools` parser and real plugin registrations.
 
-**Dependency:** Phase 6.B depends on Phase 5 (plugin runtime) and Phase 5.H (unified history with O-3 closed) being satisfied. Phase 7 depends on 6.A + 6.B.
+**Dependency:** Phase 6.B depends on Phase 5 (satisfied) and Phase 5.H (satisfied). Phase 7 depends on 6.A + 6.B.
 
-**Rollback:** set the four leaf-plugin flags to `off`; the parser capability (6.A) is already landed and needs no rollback; the adapter re-export can be reverted by restoring the prior import form in `apps/vscode`.
+**Rollback:** all leaf plugins are active by default; setting their flags to `off` reverts to the legacy path. The parser capability (6.A) is already landed and needs no rollback; the adapter re-export can be reverted by restoring the prior import form in `apps/vscode`.
 
 **D-16:** the `@brud/patchblocks` package was migrated into Level-1 `BrudTools` as part of 6.A. The 26 remaining import sites are legacy paths, not a missing package. See §Appendix G, D-16.
 
@@ -1466,6 +1468,8 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 #### Phase 7 — Tool Catalog
 
 **Objective:** deliver `brud.tools.catalog` as an official convenience plugin over the Level-1 `BrudTools` registry — `get_tool_info` plus documentation export — consuming `IBrudToolsService` instead of owning tool storage.
+
+**Status:** Complete (2026-11-05). The brud.tools.catalog plugin is registered. get_tool_info dual-mode works; schemas are deep-frozen and validated at registration; 174 tests cover the plugin.
 
 **Work items:**
 
@@ -1493,6 +1497,8 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 **Objective:** serve all read tools from `brud.tools.reader`, including batch limits and import following.
 
+**Status:** Complete (2026-11-05). The brud.tools.reader plugin is registered. read_file, read_files, read_directory work with governor limits enforced at boundaries and legacy output parity. 248 tests pass.
+
 **Work items:**
 
 1. Implement the reader plugin over the read engine, with kernel-relative paths.
@@ -1517,6 +1523,8 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 #### Phase 9 — Filesystem Mutations
 
 **Objective:** move all 12 mutating operations to `brud.tools.filesystem`, backed by UniversalHistory, with zero data loss.
+
+**Status:** Complete (2026-11-05). The brud.tools.filesystem plugin is registered with 12 mutating tools. Transactions open and commit sessions via UniversalHistory. Directory reversibility uses the reserved DIRECTORY_STATE_SHA256 marker with structural (digest, size) classification in ReversalEngine. 332 plugin tests, 211 verification tests.
 
 **Work items:**
 
@@ -1547,6 +1555,8 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 #### Phase 10 — Terminal Plugin and MCP Bridge
 
 **Objective:** put terminal and MCP on the standard kernel, leaving one execution plane per workspace.
+
+**Status:** Next (as of 2026-11-05).
 
 **Work items:**
 
@@ -1579,6 +1589,8 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 #### Phase 11 — Quarantine Legacy Core (`deprecated/`)
 
 **Objective:** take the legacy monolith out of every live path so the microkernel is the only execution path, while keeping its source files intact in one quarantine directory (D-14). Nothing is deleted. This includes the final wipe of the legacy Brud block syntax: the `<<<<<<<`/`=======`/`>>>>>>>` grammar no longer exists anywhere in live code or documentation, and the Master System Prompt speaks Brud Protocol v2 (`[BRUD]`).
+
+**Status:** Pending (after Phase 10).
 
 **Quarantine model:**
 
@@ -1942,18 +1954,22 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 |---|---|
 | Document status | Active |
 | Baseline captured | 2026-10-25 |
-| Status updated | 2026-11-04 (ADR v2 + D-17 + D-18; Section P remediation) |
-| Phase 0 | Partial — H2 and H6 closed by `25d94e3`; H1 done (pre-D-17); H4 deferred to Phase 6.B with recorded rationale; H3/H5/H7 unrecorded, non-blocking. |
+| Status updated | 2026-11-05 (Phase 9 complete; Phase 10 next) |
+| Phase 0 | Complete except H4 deferred (as of 2026-11-05). H1, H2, H6 done; H4 deferred to Phase 6.B; H3/H5/H7 unrecorded, non-blocking. |
 | Phase 1 | Implemented; exit gate not ratified (cross-host parity fails) |
 | Phase 2 | Implemented; exit gate not ratified (core `node:fs` remains; Windows unit-only) |
 | Phase 3 | Gate passed (2026-10-29) |
 | Phase 4 | Implemented; exit gate not ratified (`child_process` still in kernel at `ProcessManager.ts:1`) |
-| Phase 5 | Not satisfied — capability handles and G-7 FS primitives absent |
-| Phase 5.H | Partial — U-8 retention implemented; 5 open tests (O-3) block the gate |
-| Phase 6 | Split: 6.A satisfied (parser); 6.B not satisfied (four leaf plugins absent; 26 `@brud/patchblocks` imports need repoint) |
-| Utility Service | Not started (D-19 introduced 2026-11-05) — must be built before Phase 8 Reader |
-| Phases 7–11 | Not started |
-| Next action | Close H4 immediately before Phase 6.B and Phase 5 open items; ratify Phases 1, 2, 4 evidence; close Phase 5.H O-3; introduce the `brud.core.utils` Utility Service (D-19) and reclassify ImportResolver; execute Phase 6.B (four leaf plugins); then proceed to Phase 7 |
+| Phase 5 | Complete |
+| Phase 5.H | Complete |
+| Phase 6 | Complete |
+| Phase 7 | Complete |
+| Phase 8 | Complete |
+| Phase 9 | Complete |
+| Phase 10 | Next |
+| Phase 11 | Pending |
+| Utility Service | Implemented (D-19) — brud.core.utils hosts resolveImports. |
+| Next action | Execute Phase 10 (Terminal tools + MCP bridge). Then Phase 11 (Quarantine packages/core into deprecated/). Then close the rollout document. |
 
 ## Appendix G — Decision Register
 
