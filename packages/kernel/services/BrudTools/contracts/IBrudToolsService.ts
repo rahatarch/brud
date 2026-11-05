@@ -27,6 +27,14 @@ export interface IPluginExecutionContext {
    * for any tool that declares requirements.
    */
   readonly permissions?: readonly string[];
+
+  /**
+   * Origin marker of the dispatch surface, when one is known.
+   *
+   * Additive and intentionally not a provenance model: the daemon uses
+   * `daemon-rpc` today, and in-process plugin calls omit it.
+   */
+  readonly origin?: string;
 }
 
 /**

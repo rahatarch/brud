@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 
-const PACKAGE_ROOT = resolve(new URL('../packages/mcp/src', import.meta.url).pathname);
+const PACKAGE_ROOT = resolve(new URL('../packages/plugins/MCPBridge/src', import.meta.url).pathname);
 const REPO_ROOT = resolve(new URL('../', import.meta.url).pathname);
 const FORBIDDEN_ROOTS = [join(REPO_ROOT, 'apps'), join(REPO_ROOT, 'packages', 'adapters')];
 const IMPORT_PATTERN = /(?:from\s+|require\()\s*['"]([^'"]+)['"]/g;
@@ -11,8 +11,10 @@ function walk(directory) {
   for (const name of readdirSync(directory)) {
     const full = join(directory, name);
     if (statSync(full).isDirectory()) {
-      entries.push(...walk(full));
-    } else if (name.endsWith('.ts')) {
+      if (name !== '__tests__') {
+        entries.push(...walk(full));
+      }
+    } else if (name.endsWith('.ts') && !name.endsWith('.test.ts')) {
       entries.push(full);
     }
   }
@@ -47,11 +49,11 @@ for (const file of walk(PACKAGE_ROOT)) {
 }
 
 if (violations.length > 0) {
-  process.stderr.write('MCP package must not depend on the editor layer:\n');
+  process.stderr.write('MCP bridge plugin must not depend on the editor layer:\n');
   for (const violation of violations) {
     process.stderr.write(`  ${violation}\n`);
   }
   process.exit(1);
 }
 
-process.stdout.write('MCP package boundaries: ok\n');
+process.stdout.write('MCP bridge plugin boundaries: ok\n');

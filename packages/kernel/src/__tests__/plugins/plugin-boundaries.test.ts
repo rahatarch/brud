@@ -8,14 +8,61 @@ import * as ts from 'typescript';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
 
-const PLUGIN_PACKAGES = ['Catalog', 'UserPrompts', 'Structure', 'Search'] as const;
+const PLUGIN_PACKAGES = [
+  'Catalog',
+  'UserPrompts',
+  'Structure',
+  'Search',
+  'Terminal',
+  'MCPBridge',
+] as const;
+
+/**
+ * Process and network primitives no leaf plugin may import directly.
+ *
+ * The Terminal plugin must reach execution only through
+ * `context.getTerminal()`; the MCP bridge must speak only over the
+ * daemon-provided `IMcpTransport`. Both therefore stay off `child_process`,
+ * `node:net`, `node:http`, and the rest of Node's transport surface. Bare
+ * builtin names are listed alongside their `node:`-prefixed forms because
+ * Node accepts both.
+ */
+const FORBIDDEN_PROCESS_OR_NETWORK_SPECIFIERS: readonly string[] = [
+  'child_process',
+  'node:child_process',
+  'net',
+  'node:net',
+  'http',
+  'node:http',
+  'https',
+  'node:https',
+  'http2',
+  'node:http2',
+  'tls',
+  'node:tls',
+  'dgram',
+  'node:dgram',
+];
 
 const FORBIDDEN_SPECIFIERS = new Set([
   'node:fs',
   '@brud/core',
-  '@brud/mcp',
   '@brud/vscode-adapter',
   '@brud/daemon',
+  ...FORBIDDEN_PROCESS_OR_NETWORK_SPECIFIERS,
+]);
+
+/**
+ * External protocol libraries a plugin may import.
+ *
+ * `@modelcontextprotocol/sdk` is a well-scoped MCP framing/negotiation
+ * library. It is only used by the MCPBridge plugin and provides no
+ * general-purpose network primitives beyond MCP message handling. Every other
+ * external module stays forbidden so leaf plugins cannot reach host or
+ * transport authority directly.
+ */
+const ALLOWED_EXTERNAL_SPECIFIERS = new Set([
+  '@modelcontextprotocol/sdk',
 ]);
 
 interface ImportReference {
@@ -109,13 +156,18 @@ async function collectSourceFiles(directory: string): Promise<string[]> {
 
     if (entry.isDirectory()) {
       // The invariant covers plugin runtime source. Test files legitimately
-      // boot a kernel and touch `node:fs`, so they are out of scope.
+      // boot a kernel and touch `node:fs`, so they are out of scope. Colocated
+      // `*.test.ts` files are excluded for the same reason as `__tests__`.
       if (entry.name === '__tests__') {
         continue;
       }
 
       files.push(...await collectSourceFiles(absolutePath));
-    } else if (entry.isFile() && entry.name.endsWith('.ts')) {
+    } else if (
+      entry.isFile()
+      && entry.name.endsWith('.ts')
+      && !entry.name.endsWith('.test.ts')
+    ) {
       files.push(absolutePath);
     }
   }
@@ -182,6 +234,14 @@ describe('plugin boundaries invariant', () => {
             continue;
           }
 
+          if (
+            [...ALLOWED_EXTERNAL_SPECIFIERS].some(
+              (allowed) => specifier === allowed || specifier.startsWith(`${allowed}/`),
+            )
+          ) {
+            continue;
+          }
+
           violations.push(`${location} imports external module ${JSON.stringify(specifier)}`);
         }
       }
@@ -190,4 +250,32 @@ describe('plugin boundaries invariant', () => {
     assert.ok(scannedFiles >= PLUGIN_PACKAGES.length, 'every plugin package must be scanned');
     assert.deepEqual(violations, [], 'leaf plugins must not leak across architectural boundaries');
   });
+});
+
+describe('Phase 10 plugin transport boundaries', () => {
+  for (const packageName of ['Terminal', 'MCPBridge'] as const) {
+    it(`${packageName} does not import process or network primitives directly`, async () => {
+      const pluginRoot = join(PLUGINS_ROOT, packageName);
+      const sourceFiles = await collectSourceFiles(join(pluginRoot, 'src'));
+      const forbidden = new Set(FORBIDDEN_PROCESS_OR_NETWORK_SPECIFIERS);
+      const violations: string[] = [];
+
+      assert.ok(sourceFiles.length > 0, `${packageName} must contain runtime sources`);
+
+      for (const file of sourceFiles) {
+        const source = await readFile(file, 'utf8');
+        const displayFile = relative(PLUGINS_ROOT, file).replace(/\\/gu, '/');
+
+        for (const reference of collectImportReferences(file, source)) {
+          if (forbidden.has(reference.specifier)) {
+            violations.push(
+              `${displayFile}:${reference.line} imports ${JSON.stringify(reference.specifier)}`,
+            );
+          }
+        }
+      }
+
+      assert.deepEqual(violations, []);
+    });
+  }
 });

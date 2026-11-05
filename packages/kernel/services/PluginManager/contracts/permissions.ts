@@ -12,6 +12,7 @@ export type PluginPermission =
   | 'history:write'
   | 'tools:register'
   | 'tools:execute'
+  | 'terminal:execute'
   | 'telemetry:emit';
 
 /**
@@ -27,13 +28,14 @@ export const PLUGIN_PERMISSIONS: readonly PluginPermission[] = [
   'history:write',
   'tools:register',
   'tools:execute',
+  'terminal:execute',
   'telemetry:emit',
 ];
 
 /**
  * Capability handles a plugin context can expose.
  */
-export type PluginCapability = 'fileSystem' | 'universalHistory' | 'tools';
+export type PluginCapability = 'fileSystem' | 'universalHistory' | 'tools' | 'terminal';
 
 /**
  * Permissions that unlock each capability handle.
@@ -48,6 +50,7 @@ export const CAPABILITY_PERMISSION_REQUIREMENTS: Readonly<
   fileSystem: ['fs:read', 'fs:write'],
   universalHistory: ['history:read', 'history:write'],
   tools: ['tools:register', 'tools:execute'],
+  terminal: ['terminal:execute'],
 };
 
 /**

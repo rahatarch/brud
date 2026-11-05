@@ -32,7 +32,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
 ```text
                 ┌────────────────────────────────────────────────────────┐
                 │                   Boundary Adapters                    │
-                │     apps/vscode  •  packages/mcp  •  packages/daemon   │
+                │     apps/vscode  •  packages/plugins/MCPBridge  •  packages/daemon   │
                 └───────────────────────────┬────────────────────────────┘
                                             │
                                             ▼ (Strict Protocol Messages)
@@ -179,5 +179,5 @@ All new pull requests, refactors, and architectural additions must comply with t
    - Monorepo Typecheck: `npm run typecheck`
    - Unit Test Suite: `npm run test:core`
    - History Integration Suite: `npm run test:integration`
-   - MCP Test Suite: `npm run test:mcp`
+   - MCP stdio end-to-end: `node --import tsx --test packages/daemon/src/__tests__/stdioMode.test.ts`
    - Package Boundary Audit: `npm run check:boundaries`

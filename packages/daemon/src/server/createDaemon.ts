@@ -5,16 +5,27 @@ import * as Protocol from '@brud/protocol';
 import { IdleMonitor } from '../lifecycle/idle.js';
 import { acquireDaemonLock } from '../lifecycle/lock.js';
 import type { LockHandle } from '../lifecycle/lock.js';
-import { resolveEndpoint } from '../lifecycle/endpoint.js';
+import { canonicalizeDaemonWorkspaceRoot, resolveEndpoint } from '../lifecycle/endpoint.js';
 import type { DaemonEndpoint } from '../lifecycle/endpoint.js';
 import { GracefulShutdownCoordinator } from '../lifecycle/shutdown.js';
-import { createKernel } from '../kernelRuntime.js';
+import { attachMcpTransports } from '../mcpTransport.js';
+import { OFFICIAL_PLUGINS } from '../officialPlugins.js';
+import { WorkspaceRegistry } from '../workspaceRegistry.js';
+import type { KernelWorkspace } from '../workspaceRegistry.js';
 import { DaemonServer } from './DaemonServer.js';
 import * as DaemonVersion from '../version.js';
 
 export interface CreateDaemonOptions {
   readonly workspaceRoot: string;
+  /** Shuts the daemon process down after this much transport idleness. */
   readonly idleTimeoutMs?: number;
+  /** Disposes client-less workspace kernels after this window. */
+  readonly workspaceIdleTimeoutMs?: number;
+  /**
+   * Binds `process.stdin`/`process.stdout` as the transport for plugins that
+   * declare `transports: ['stdio']` and skips the Unix-domain socket listener.
+   */
+  readonly stdio?: boolean;
   readonly storageDriver?: IStorageDriver;
 }
 
@@ -33,7 +44,10 @@ export interface RunningDaemon {
   readonly endpoint: DaemonEndpoint;
   readonly token: string;
   readonly lock: LockHandle;
+  /** Primary workspace kernel, kept for single-workspace callers. */
   readonly kernel: BrudKernel;
+  readonly registry: WorkspaceRegistry;
+  readonly primaryWorkspace: KernelWorkspace;
   readonly server: DaemonServer;
   readonly idleMonitor: IdleMonitor;
   readonly isShuttingDown: () => boolean;
@@ -41,8 +55,56 @@ export interface RunningDaemon {
 }
 
 interface DaemonRuntime {
-  readonly kernel: BrudKernel;
+  readonly registry: WorkspaceRegistry;
+  readonly workspace: KernelWorkspace;
   readonly server: DaemonServer;
+}
+
+/**
+ * A daemon bound to the host process's stdio streams.
+ *
+ * There is no socket, lock, token, or metadata record: the lifetime of the
+ * kernel is the lifetime of the stdio client. `clientClosed` resolves when the
+ * client closes the input stream.
+ */
+export interface RunningStdioDaemon {
+  readonly workspaceRoot: string;
+  readonly kernel: BrudKernel;
+  readonly registry: WorkspaceRegistry;
+  readonly primaryWorkspace: KernelWorkspace;
+  readonly clientClosed: Promise<void>;
+  readonly isShuttingDown: () => boolean;
+  readonly shutdown: () => Promise<void>;
+}
+
+function writeDaemonWarning(message: string, meta?: Record<string, unknown>): void {
+  process.stderr.write(
+    `${message}${meta === undefined ? '' : ` ${JSON.stringify(meta)}`}\n`,
+  );
+}
+
+function createWorkspaceRegistry(
+  options: CreateDaemonOptions,
+  stdio: boolean,
+): WorkspaceRegistry {
+  return new WorkspaceRegistry({
+    initialPlugins: OFFICIAL_PLUGINS,
+    certifyInitialPlugins: true,
+    ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
+    // A stdio daemon serves exactly one client for its whole process
+    // lifetime, so its workspace must never be reclaimed by the idle sweep.
+    ...(stdio
+      ? { idleTimeoutMs: 0 }
+      : options.workspaceIdleTimeoutMs === undefined
+        ? {}
+        : { idleTimeoutMs: options.workspaceIdleTimeoutMs }),
+    onWorkspaceSpawned: (workspace) =>
+      attachMcpTransports(workspace, {
+        stdio,
+        logger: { warn: writeDaemonWarning },
+      }),
+    logger: { warn: writeDaemonWarning },
+  });
 }
 
 function readErrorCode(error: unknown): string | undefined {
@@ -67,15 +129,15 @@ async function unlinkIfPresent(path: string): Promise<void> {
 async function rollbackStartup(
   endpoint: DaemonEndpoint,
   lock: LockHandle,
-  kernel: BrudKernel | undefined,
+  registry: WorkspaceRegistry | undefined,
   server: DaemonServer | undefined,
 ): Promise<void> {
   if (server !== undefined) {
     await server.close().catch(() => undefined);
   }
 
-  if (kernel !== undefined && kernel.lifecycleState === 'RUNNING') {
-    await kernel.shutdown().catch(() => undefined);
+  if (registry !== undefined) {
+    await registry.disposeAll().catch(() => undefined);
   }
 
   await unlinkIfPresent(endpoint.tokenPath).catch(() => undefined);
@@ -89,18 +151,19 @@ async function startRuntime(
   token: string,
   options: CreateDaemonOptions,
 ): Promise<DaemonRuntime> {
-  let kernel: BrudKernel | undefined;
+  let registry: WorkspaceRegistry | undefined;
   let server: DaemonServer | undefined;
 
   try {
     await writeFile(endpoint.tokenPath, token, { encoding: 'utf8', mode: 0o600 });
 
-    const createdKernel = await createKernel({ storageDriver: options.storageDriver });
-    kernel = createdKernel;
-    await createdKernel.boot({ workspaceRoot: endpoint.workspaceRoot });
+    const createdRegistry = createWorkspaceRegistry(options, false);
+    registry = createdRegistry;
+
+    const workspace = await createdRegistry.spawn(endpoint.workspaceRoot);
 
     const createdServer = await DaemonServer.create({
-      kernel: createdKernel,
+      registry: createdRegistry,
       socketPath: endpoint.socketPath,
       token,
       workspaceRoot: endpoint.workspaceRoot,
@@ -123,14 +186,70 @@ async function startRuntime(
       mode: 0o600,
     });
 
-    return { kernel: createdKernel, server: createdServer };
+    return { registry: createdRegistry, workspace, server: createdServer };
   } catch (error: unknown) {
-    await rollbackStartup(endpoint, lock, kernel, server);
+    await rollbackStartup(endpoint, lock, registry, server);
     throw error;
   }
 }
 
-export async function createDaemon(options: CreateDaemonOptions): Promise<RunningDaemon> {
+/**
+ * Boots a daemon whose only transport is the host process's stdio.
+ *
+ * No Unix-domain socket is bound and no runtime artifacts are written. The
+ * workspace registry spawns one kernel, and `attachMcpTransports` hands the
+ * MCP bridge plugin a {@link StdioMcpTransport} reading from `process.stdin`
+ * and writing to `process.stdout`. Diagnostics go to stderr so the stdout
+ * stream stays a clean newline-delimited JSON-RPC channel.
+ */
+export async function createStdioDaemon(
+  options: CreateDaemonOptions,
+): Promise<RunningStdioDaemon> {
+  const workspaceRoot = await canonicalizeDaemonWorkspaceRoot(options.workspaceRoot);
+  const registry = createWorkspaceRegistry(options, true);
+
+  let shutdownPromise: Promise<void> | undefined;
+
+  const shutdown = (): Promise<void> => {
+    shutdownPromise ??= registry.disposeAll();
+    return shutdownPromise;
+  };
+
+  const clientClosed = new Promise<void>((resolve) => {
+    const finish = (): void => resolve();
+    process.stdin.once('end', finish);
+    process.stdin.once('close', finish);
+  });
+
+  try {
+    const workspace = await registry.spawn(workspaceRoot);
+
+    return {
+      workspaceRoot,
+      kernel: workspace.kernel,
+      registry,
+      primaryWorkspace: workspace,
+      clientClosed,
+      isShuttingDown: () => shutdownPromise !== undefined,
+      shutdown,
+    };
+  } catch (error: unknown) {
+    await registry.disposeAll().catch(() => undefined);
+    throw error;
+  }
+}
+
+export function createDaemon(
+  options: CreateDaemonOptions & { readonly stdio: true },
+): Promise<RunningStdioDaemon>;
+export function createDaemon(options: CreateDaemonOptions): Promise<RunningDaemon>;
+export async function createDaemon(
+  options: CreateDaemonOptions,
+): Promise<RunningDaemon | RunningStdioDaemon> {
+  if (options.stdio === true) {
+    return createStdioDaemon(options);
+  }
+
   const endpoint = await resolveEndpoint(options.workspaceRoot);
   const lock = await acquireDaemonLock(endpoint, {
     pid: process.pid,
@@ -151,7 +270,8 @@ export async function createDaemon(options: CreateDaemonOptions): Promise<Runnin
 
     const shutdownCoordinator = new GracefulShutdownCoordinator({
       server: runtime.server,
-      kernel: runtime.kernel,
+      kernel: runtime.workspace.kernel,
+      disposeKernels: () => runtime.registry.disposeAll(),
       endpoint,
       beforeTeardown: () => {
         unsubscribeActivity();
@@ -165,14 +285,16 @@ export async function createDaemon(options: CreateDaemonOptions): Promise<Runnin
       endpoint,
       token,
       lock,
-      kernel: runtime.kernel,
+      kernel: runtime.workspace.kernel,
+      registry: runtime.registry,
+      primaryWorkspace: runtime.workspace,
       server: runtime.server,
       idleMonitor,
       isShuttingDown: () => shutdownCoordinator.isShuttingDown,
       shutdown: () => shutdownCoordinator.shutdown(),
     };
   } catch (error: unknown) {
-    await rollbackStartup(endpoint, lock, runtime.kernel, runtime.server);
+    await rollbackStartup(endpoint, lock, runtime.registry, runtime.server);
     throw error;
   }
 }

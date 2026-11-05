@@ -13,6 +13,8 @@
   },
   "dependencies": {
     "@brud/kernel": "^0.1.4",
+    "@brud/plugin-mcp-bridge": "*",
+    "@brud/plugin-terminal": "*",
     "@brud/protocol": "*"
   },
   "devDependencies": {

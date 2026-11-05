@@ -16,6 +16,13 @@ export const HISTORY_REVERT = 'history.revert';
 export const HISTORY_LIST = 'history.list';
 export const HISTORY_GET = 'history.get';
 
+export const WORKSPACE_LIST = 'workspace.list';
+export const WORKSPACE_STATUS = 'workspace.status';
+export const WORKSPACE_DISPOSE = 'workspace.dispose';
+
+export const TOOLS_LIST = 'tools.list';
+export const TOOLS_EXECUTE = 'tools.execute';
+
 export const DAEMON_METHODS = [DAEMON_CONNECT, DAEMON_PING, DAEMON_INFO] as const;
 export type DaemonMethod = (typeof DAEMON_METHODS)[number];
 
@@ -30,6 +37,16 @@ export const HISTORY_METHODS = [
   HISTORY_GET,
 ] as const;
 export type HistoryMethod = (typeof HISTORY_METHODS)[number];
+
+export const WORKSPACE_METHODS = [
+  WORKSPACE_LIST,
+  WORKSPACE_STATUS,
+  WORKSPACE_DISPOSE,
+] as const;
+export type WorkspaceMethod = (typeof WORKSPACE_METHODS)[number];
+
+export const TOOLS_METHODS = [TOOLS_LIST, TOOLS_EXECUTE] as const;
+export type ToolsMethod = (typeof TOOLS_METHODS)[number];
 
 /** Capability names advertised by a history-enabled daemon. */
 export const HISTORY_CAPABILITIES = [
@@ -58,6 +75,9 @@ export interface DaemonConnectParams {
   readonly protocolVersion: string;
   readonly token: string;
   readonly workspaceRoot: string;
+  /** Client identity supplied by newer clients. */
+  readonly clientInfo?: DaemonClientIdentity;
+  /** Legacy client identity field retained for wire compatibility. */
   readonly client?: DaemonClientIdentity;
   readonly capabilities?: readonly string[];
 }
@@ -79,8 +99,92 @@ export interface DaemonHandshakeResult {
   readonly connectionId: string;
   readonly protocolVersion: DaemonProtocolVersion;
   readonly workspaceRoot: string;
+  /** Canonical workspace root the connection is attached to. */
+  readonly workspaceId: string;
+  /** Kernel lifecycle state for the attached workspace. */
+  readonly kernelState: 'running';
   readonly capabilities: DaemonCapabilities;
   readonly server: DaemonServerIdentity;
+}
+
+/** Lifecycle state of a daemon-managed workspace kernel. */
+export type WorkspaceKernelState =
+  | 'uninitialized'
+  | 'booting'
+  | 'running'
+  | 'shutting-down'
+  | 'disposed';
+
+/** Wire projection of one workspace managed by the daemon registry. */
+export interface WorkspaceDescriptor {
+  readonly root: string;
+  readonly clientCount: number;
+  readonly kernelState: WorkspaceKernelState;
+  readonly lastUsedAt: string;
+}
+
+export interface WorkspaceListResult {
+  readonly workspaces: readonly WorkspaceDescriptor[];
+}
+
+export interface WorkspaceStatusParams {
+  /** Workspace to describe. Defaults to the caller's attached workspace. */
+  readonly workspaceRoot?: string;
+}
+
+export interface WorkspaceStatusResult {
+  readonly workspace: WorkspaceDescriptor | null;
+}
+
+export interface WorkspaceDisposeParams {
+  readonly workspaceRoot: string;
+}
+
+export interface WorkspaceDisposeResult {
+  readonly root: string;
+  readonly disposed: boolean;
+}
+
+/**
+ * Handler-free projection of a registered tool.
+ *
+ * Mirrors the kernel's `RegisteredToolInfo` on the wire without importing the
+ * kernel package.
+ */
+export interface RegisteredToolInfo {
+  readonly name: string;
+  readonly description: string;
+  readonly parametersSchema: Readonly<Record<string, unknown>>;
+  readonly requiredPermissions?: readonly string[];
+  readonly ownerPluginId: string;
+  readonly isOfficial: boolean;
+}
+
+export interface ToolsListResult {
+  readonly tools: readonly RegisteredToolInfo[];
+}
+
+export interface ToolsExecuteParams {
+  readonly name: string;
+  readonly input?: unknown;
+}
+
+/**
+ * JSON-serializable tool result.
+ *
+ * Mirrors the kernel `OperationResult`; `error` is flattened to text because a
+ * thrown `Error` cannot cross the wire.
+ */
+export interface ToolOperationResult<TData = unknown> {
+  readonly status: 'success' | 'failed' | 'aborted' | 'skipped';
+  readonly data?: TData;
+  readonly message?: string;
+  readonly error?: string;
+  readonly durationMs?: number;
+}
+
+export interface ToolsExecuteResult {
+  readonly result: ToolOperationResult;
 }
 
 export interface DaemonPingParams {
@@ -326,6 +430,26 @@ export interface DaemonMethodMap {
   readonly 'history.get': {
     readonly params: HistoryGetParams;
     readonly result: HistoryGetResult;
+  };
+  readonly 'workspace.list': {
+    readonly params: DaemonEmptyParams;
+    readonly result: WorkspaceListResult;
+  };
+  readonly 'workspace.status': {
+    readonly params: WorkspaceStatusParams;
+    readonly result: WorkspaceStatusResult;
+  };
+  readonly 'workspace.dispose': {
+    readonly params: WorkspaceDisposeParams;
+    readonly result: WorkspaceDisposeResult;
+  };
+  readonly 'tools.list': {
+    readonly params: DaemonEmptyParams;
+    readonly result: ToolsListResult;
+  };
+  readonly 'tools.execute': {
+    readonly params: ToolsExecuteParams;
+    readonly result: ToolsExecuteResult;
   };
 }
 

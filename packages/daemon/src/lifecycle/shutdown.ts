@@ -19,7 +19,10 @@ export interface ShutdownKernel {
 
 export interface GracefulShutdownCoordinatorOptions {
   readonly server: ShutdownServer;
-  readonly kernel: ShutdownKernel;
+  /** Single-kernel composition. Ignored when `disposeKernels` is provided. */
+  readonly kernel?: ShutdownKernel;
+  /** Multi-workspace disposer, run before the single-kernel fallback. */
+  readonly disposeKernels?: () => Promise<void>;
   readonly endpoint: DaemonEndpoint;
   readonly drainTimeoutMs?: number;
   readonly beforeTeardown?: () => void;
@@ -47,7 +50,9 @@ async function unlinkIfPresent(path: string): Promise<void> {
 export class GracefulShutdownCoordinator {
   private readonly server: ShutdownServer;
 
-  private readonly kernel: ShutdownKernel;
+  private readonly kernel: ShutdownKernel | undefined;
+
+  private readonly disposeKernels: (() => Promise<void>) | undefined;
 
   private readonly endpoint: DaemonEndpoint;
 
@@ -60,6 +65,7 @@ export class GracefulShutdownCoordinator {
   constructor(options: GracefulShutdownCoordinatorOptions) {
     this.server = options.server;
     this.kernel = options.kernel;
+    this.disposeKernels = options.disposeKernels;
     this.endpoint = options.endpoint;
     this.drainTimeoutMs = options.drainTimeoutMs ?? DEFAULT_DRAIN_TIMEOUT_MS;
     this.beforeTeardown = options.beforeTeardown;
@@ -84,7 +90,9 @@ export class GracefulShutdownCoordinator {
       await this.drainInFlightRequests();
       this.server.closeConnections();
 
-      if (this.kernel.lifecycleState === 'RUNNING') {
+      if (this.disposeKernels !== undefined) {
+        await this.disposeKernels();
+      } else if (this.kernel !== undefined && this.kernel.lifecycleState === 'RUNNING') {
         await this.kernel.shutdown();
       }
     } catch (error: unknown) {

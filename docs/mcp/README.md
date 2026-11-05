@@ -1,5 +1,7 @@
 # MCP Subsystem
 
+> **Status (Phase 10, 2026-11-05):** `packages/mcp` has been deleted. MCP is now served by the `brud.mcp.bridge` plugin inside the daemon, and the daemon's `--stdio` mode is the only stdio entry point. `brud daemon --stdio --workspace <path>` replaces the former standalone `brud-mcp` process. The remaining sections describe the retired implementation and are retained as historical design context.
+
 ## What It Is
 
 The Model Context Protocol subsystem lets an external AI client call Brud Code's file, search, and terminal operations through a standard protocol instead of a human pasting output into the editor.
@@ -38,11 +40,13 @@ In the editor, one window asks for local port 8899 so the endpoint stays stable 
 
 ## Headless Usage
 
-Build the server:
+Build the daemon, kernel, and MCP bridge plugin:
 
 ```bash
 npm install
-npm run build:mcp
+npm run build:kernel
+npm run build:daemon
+npm run build --workspace @brud/plugin-mcp-bridge
 ```
 
 Process-pipe client configuration:
@@ -51,24 +55,22 @@ Process-pipe client configuration:
 {
   "mcpServers": {
     "brud": {
-      "command": "node",
-      "args": ["/absolute/path/to/brud/packages/mcp/dist/cli.js", "/absolute/path/to/project"]
+      "command": "brud",
+      "args": ["daemon", "--stdio", "--workspace", "/absolute/path/to/project"]
     }
   }
 }
 ```
 
-HTTP client:
+Or run the built daemon directly:
 
 ```bash
-brud-mcp /absolute/path/to/project --http --port 7717
-curl -s -X POST http://127.0.0.1:7717/mcp \
-  -H 'content-type: application/json' \
-  -H 'accept: application/json, text/event-stream' \
-  -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'
+node packages/daemon/dist/cli.js --stdio --workspace /absolute/path/to/project
 ```
 
-Append `--timeout <seconds>` to either transport to change the per-call deadline.
+The daemon binds stdin/stdout as the MCP transport for plugins that declare `transports: ['stdio']`. It does not bind the Unix-domain socket in this mode, and diagnostics go to stderr so the stdout stream stays a clean newline-delimited JSON-RPC channel. There is no separate `brud-mcp` binary.
+
+A normally launched daemon still hosts the loopback HTTP transport through the bridge plugin and writes its endpoint to `.brud/mcp-endpoint.json`.
 
 ## API Reference
 
@@ -125,18 +127,20 @@ Options: `port` (fixed or ephemeral when omitted), `host` (must be loopback), `p
 ## How To Test It
 
 ```bash
-npm run test --workspace @brud/mcp
+node --import tsx --test packages/daemon/src/__tests__/stdioMode.test.ts
 ```
 
-From the repository root, `npm run test:mcp` runs the same suite and is part of `npm run ci`. Tests use `node:test` through `tsx`, spawn the real stdio server over pipes, and start a real HTTP listener. There is no Electron dependency.
+The end-to-end test spawns a real daemon with `--stdio`, exchanges real MCP JSON-RPC messages over real stdin/stdout, and asserts `initialize`, `tools/list`, successful `tools/call`, unknown-tool `isError`, and clean exit when stdin closes.
+
+The plugin suite lives at `packages/plugins/MCPBridge/src` and runs the bridge over an in-process `IMcpTransport`.
 
 ## How To Extend It
 
-**Add a tool.** Register the operation and its documentation in `packages/core/src/tool-registry/init.ts`, then add a matching entry to `TOOL_SPECS` in `packages/mcp/src/normalize.ts`. The catalog is generated from the registry, so no catalog code changes. Two tests enforce the contract: every documented tool must have a spec, and every spec key must be documented.
+**Add a tool.** Register it in the owning plugin's `activate` hook through `context.registerTool(...)`. The MCP bridge lists whatever the kernel's `BrudTools` service exposes; there is no separate catalog to maintain.
 
-**Add a transport.** Implement it against `createBrudMcpServer`, call `dispatchToolCall` for execution, and keep diagnostics off the protocol channel. Follow `src/http.ts` for port policy and cancellation.
+**Add a transport.** Add the transport kind to the plugin manifest's `transports` array and implement `onTransportAttach`. The daemon owns construction and lifetime of `StdioMcpTransport` and `HttpMcpTransport` in `packages/daemon/src/mcpTransport.ts`.
 
-**Add a parameter.** Document it in the tool registry, map it in `normalize.ts`, and set a default only if the engine tolerates the field being present. Prefer omitting a field when "absent" and "zero" mean different things.
+**Add a parameter.** Declare it in the plugin tool's `parametersSchema`; the bridge forwards the schema directly to MCP clients.
 
 ## Edge Cases & Gotchas
 
@@ -155,6 +159,5 @@ From the repository root, `npm run test:mcp` runs the same suite and is part of 
 
 ## Related Docs
 
-- [Package README](../../packages/mcp/README.md) — module map and exports
-- [MCP subsystem design specification](../architecture/mcp-subsystem-design.md) — the approved architecture this implementation follows, with §9 recording which parts of it are enforced today
+- [MCP subsystem design specification](../architecture/mcp-subsystem-design.md) — the historical design specification; the daemon-hosted bridge supersedes the standalone package
 - [Microkernel architecture specification](../architecture/microkernel-architecture-spec.md) — the invariants the wrapper must not weaken

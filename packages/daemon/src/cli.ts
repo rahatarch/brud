@@ -1,14 +1,23 @@
 #!/usr/bin/env node
-import { createDaemon } from './server/createDaemon.js';
-import type { RunningDaemon } from './server/createDaemon.js';
+import { format } from 'node:util';
+import { createDaemon, createStdioDaemon } from './server/createDaemon.js';
+import type { RunningDaemon, RunningStdioDaemon } from './server/createDaemon.js';
 
 interface CliOptions {
   readonly workspaceRoot: string;
   readonly idleTimeoutMs: number | undefined;
+  readonly workspaceIdleTimeoutMs: number | undefined;
   readonly foreground: boolean;
+  readonly stdio: boolean;
 }
 
-const KNOWN_FLAGS = new Set(['--workspace', '--idle-ms', '--foreground']);
+const KNOWN_FLAGS = new Set([
+  '--workspace',
+  '--idle-ms',
+  '--workspace-idle-ms',
+  '--foreground',
+  '--stdio',
+]);
 
 function readArgument(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -53,7 +62,9 @@ function parseOptions(argv: readonly string[]): CliOptions {
   return {
     workspaceRoot,
     idleTimeoutMs: parseIdleTimeout(readArgument(argv, '--idle-ms')),
+    workspaceIdleTimeoutMs: parseIdleTimeout(readArgument(argv, '--workspace-idle-ms')),
     foreground: argv.includes('--foreground'),
+    stdio: argv.includes('--stdio'),
   };
 }
 
@@ -61,8 +72,77 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Keeps stdout reserved for MCP JSON-RPC.
+ *
+ * The kernel's plugin manager emits diagnostics through `console.info`, which
+ * writes to stdout. In stdio mode that would interleave human-readable lines
+ * with protocol frames, so console logging is redirected to stderr for the
+ * lifetime of the process.
+ */
+function redirectConsoleToStderr(): void {
+  const write = (...args: unknown[]): void => {
+    process.stderr.write(`${format(...args)}\n`);
+  };
+
+  console.log = write;
+  console.info = write;
+  console.debug = write;
+}
+
+async function runStdio(options: CliOptions): Promise<void> {
+  redirectConsoleToStderr();
+
+  const daemon: RunningStdioDaemon = await createStdioDaemon({
+    workspaceRoot: options.workspaceRoot,
+    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: options.idleTimeoutMs }),
+    ...(options.workspaceIdleTimeoutMs === undefined
+      ? {}
+      : { workspaceIdleTimeoutMs: options.workspaceIdleTimeoutMs }),
+    stdio: true,
+  });
+
+  process.stderr.write(
+    `brud-daemon stdio mode ready (workspace: ${daemon.workspaceRoot})\n`,
+  );
+
+  let terminating = false;
+
+  const terminate = async (reason: string): Promise<void> => {
+    if (terminating) {
+      return;
+    }
+
+    terminating = true;
+
+    try {
+      await daemon.shutdown();
+      process.stderr.write(`brud-daemon stopped (${reason})\n`);
+      process.exit(0);
+    } catch (error: unknown) {
+      process.stderr.write(`brud-daemon shutdown failed: ${describeError(error)}\n`);
+      process.exit(1);
+    }
+  };
+
+  process.once('SIGINT', () => {
+    void terminate('SIGINT');
+  });
+  process.once('SIGTERM', () => {
+    void terminate('SIGTERM');
+  });
+
+  await daemon.clientClosed;
+  await terminate('stdin closed');
+}
+
 async function main(): Promise<void> {
   const options = parseOptions(process.argv.slice(2));
+
+  if (options.stdio) {
+    await runStdio(options);
+    return;
+  }
 
   if (!options.foreground) {
     process.stdout.write('brud-daemon runs in the foreground; pass --foreground to silence this notice\n');
@@ -71,6 +151,9 @@ async function main(): Promise<void> {
   const daemon: RunningDaemon = await createDaemon({
     workspaceRoot: options.workspaceRoot,
     ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: options.idleTimeoutMs }),
+    ...(options.workspaceIdleTimeoutMs === undefined
+      ? {}
+      : { workspaceIdleTimeoutMs: options.workspaceIdleTimeoutMs }),
   });
 
   process.stdout.write(

@@ -18,9 +18,12 @@ import type {
   IPluginLogger,
   IPluginSubscriptions,
 } from './IPluginContext.js';
+import type { ITerminalHandle } from './ITerminalHandle.js';
+import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from './permissions.js';
 import type { PluginCapability, PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';
+import { createTerminalHandle } from './TerminalHandle.js';
 
 /**
  * Resolves scoped capability facades for a single plugin.
@@ -43,6 +46,9 @@ export interface PluginCapabilityProviders {
 
   /** Resolves the pure `brud.core.utils` service. */
   readonly utilities?: () => IUtilityService;
+
+  /** Resolves the `brud.core.terminal` execution service. */
+  readonly terminal?: () => ITerminalService;
 }
 
 /** Construction options for {@link PluginContext}. */
@@ -104,6 +110,8 @@ export class PluginContext implements IPluginContext {
   private brudToolsReader: IBrudToolsReader | undefined;
 
   private utilities: IUtilityService | undefined;
+
+  private terminalHandle: ITerminalHandle | null | undefined;
 
   constructor(options: PluginContextOptions) {
     this.pluginId = options.pluginId;
@@ -186,6 +194,46 @@ export class PluginContext implements IPluginContext {
     this.utilities ??= Object.freeze(utilities());
 
     return this.utilities;
+  }
+
+  /**
+   * Returns the scoped terminal handle, or `null` without `terminal:execute`.
+   *
+   * The lookup is memoized: every activation receives one handle, so its
+   * `dispose()` releases exactly the sessions the plugin started.
+   */
+  public getTerminal(): ITerminalHandle | null {
+    if (this.terminalHandle !== undefined) {
+      return this.terminalHandle;
+    }
+
+    if (!this.permissions.has('terminal:execute')) {
+      this.terminalHandle = null;
+
+      return null;
+    }
+
+    const terminal = this.capabilities.terminal;
+
+    if (terminal === undefined) {
+      this.terminalHandle = null;
+
+      return null;
+    }
+
+    try {
+      this.terminalHandle = createTerminalHandle({
+        service: terminal(),
+        callerId: this.pluginId,
+        workspaceRoot: this.workspaceRoot,
+      });
+    } catch {
+      // A declared permission without a registered service is a composition
+      // gap, not a plugin fault: feature detection must stay total.
+      this.terminalHandle = null;
+    }
+
+    return this.terminalHandle;
   }
 
   public registerTool(options: ToolRegistrationOptions): IPluginDisposable {

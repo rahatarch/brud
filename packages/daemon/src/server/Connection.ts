@@ -13,6 +13,8 @@ export interface ConnectionActivityHooks {
 export class Connection implements DispatchSession {
   readonly connectionId: string;
 
+  workspaceRoot: string | undefined;
+
   private readonly socket: Socket;
 
   private readonly dispatcher: RequestDispatcher;

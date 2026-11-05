@@ -8,6 +8,7 @@ import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
+import type { ITerminalHandle } from './ITerminalHandle.js';
 import type { PluginPermission } from './permissions.js';
 
 /**
@@ -151,6 +152,23 @@ export interface IPluginContext {
    * @returns The shared utility service instance.
    */
   getUtilities(): IUtilityService;
+
+  /**
+   * Returns a terminal execution handle scoped to this plugin.
+   *
+   * Requires `terminal:execute`. The handle pins the workspace root as the
+   * default working directory and attributes every execution to this plugin,
+   * so {@link ITerminalHandle.list}, {@link ITerminalHandle.cancel} and
+   * {@link ITerminalHandle.dispose} only observe sessions the plugin started.
+   *
+   * Unlike the other capability getters this method returns `null` instead of
+   * throwing when the permission is absent, so a plugin can feature-detect
+   * terminal support without a manifest change.
+   *
+   * @returns The scoped handle, or `null` when `terminal:execute` is not
+   * declared or no terminal service is available.
+   */
+  getTerminal(): ITerminalHandle | null;
 
   /**
    * Registers a tool into the live `brud.core.tools` registry on behalf of

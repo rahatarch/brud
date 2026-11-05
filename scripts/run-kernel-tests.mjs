@@ -17,6 +17,8 @@ const TARGETS = [
   { directory: 'services', recursive: true },
 ];
 
+const EXCLUDED_DIRECTORY_NAMES = new Set(['node_modules', 'dist']);
+
 async function collectTestFiles(directory, recursive) {
   let entries;
 
@@ -36,7 +38,7 @@ async function collectTestFiles(directory, recursive) {
     const absolutePath = join(directory, entry.name);
 
     if (entry.isDirectory()) {
-      if (recursive) {
+      if (recursive && !EXCLUDED_DIRECTORY_NAMES.has(entry.name)) {
         files.push(...await collectTestFiles(absolutePath, true));
       }
 
@@ -72,7 +74,7 @@ async function collectPluginTestFiles(root) {
     }
 
     files.push(
-      ...await collectTestFiles(join(root, entry.name, 'src', '__tests__'), true),
+      ...await collectTestFiles(join(root, entry.name, 'src'), true),
     );
   }
 

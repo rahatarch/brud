@@ -8,6 +8,7 @@ import {
   createBrudToolsDescriptor,
   type BrudToolsDescriptorOptions,
 } from '../../services/BrudTools/descriptor/BrudToolsDescriptor.js';
+import { certifyOfficialPlugin } from '../../services/PluginManager/contracts/branding.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { createPluginManagerDescriptor } from '../../services/PluginManager/descriptor/index.js';
 import {
@@ -115,6 +116,16 @@ export interface CreateStandardKernelOptions {
    * sequence, after the filesystem and history services have initialized.
    */
   readonly initialPlugins?: readonly IBrudPlugin[];
+  /**
+   * Certifies every initial plugin with the kernel's internal official brand.
+   *
+   * This is a host-composition trust decision: only a trusted daemon that owns
+   * the plugin list should set it. The standard daemon uses it for its
+   * official plugin set so first-party plugins that need core services (the
+   * Filesystem plugin's history access) activate under the same brand the
+   * kernel derives for first-party code.
+   */
+  readonly certifyInitialPlugins?: boolean;
   /**
    * Kernel diagnostic sink forwarded to every service context. Defaults to a
    * console-backed sink so background failures (history ingestion, degraded
@@ -246,11 +257,15 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   });
   kernel.register(history.session);
   kernel.register(history.journal);
+  const initialPlugins = options?.certifyInitialPlugins === true
+    ? (options.initialPlugins ?? []).map((plugin) => certifyOfficialPlugin(plugin))
+    : options?.initialPlugins;
   kernel.register(createPluginManagerDescriptor({
-    initialPlugins: options?.initialPlugins,
+    initialPlugins,
     withUniversalHistory: true,
     withTools: true,
     withUtilities: true,
+    withTerminal: true,
   }));
 
   const boot = kernel.boot.bind(kernel);

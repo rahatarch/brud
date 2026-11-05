@@ -2,6 +2,7 @@ import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { namespaceHistoryFor } from '../../UniversalHistory/unified/compat/LegacySessionAdapter.js';
 import { createReadOnlyNamespaceHandle } from '../../UniversalHistory/unified/service/NamespaceHandle.js';
@@ -528,6 +529,15 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
 
           if (accessor === undefined) {
             throw new Error(`Utility service is unavailable for plugin "${record.manifest.id}"`);
+          }
+
+          return accessor();
+        },
+        terminal: (): ITerminalService => {
+          const accessor = this.dependencies.terminal;
+
+          if (accessor === undefined) {
+            throw new Error(`Terminal service is unavailable for plugin "${record.manifest.id}"`);
           }
 
           return accessor();

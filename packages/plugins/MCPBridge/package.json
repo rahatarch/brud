@@ -1,0 +1,29 @@
+{
+  "name": "@brud/plugin-mcp-bridge",
+  "version": "0.0.1",
+  "description": "Brud MCP bridge: speaks MCP over daemon-provided transports and delegates to brud.core.tools",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*",
+    "@modelcontextprotocol/sdk": "^1.32.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}

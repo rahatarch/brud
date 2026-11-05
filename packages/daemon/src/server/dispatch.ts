@@ -2,7 +2,10 @@ import { Buffer } from 'node:buffer';
 import type {
   BrudKernel,
   IBrudFileSystem,
+  IBrudToolsService,
+  IPluginExecutionContext,
   IUniversalHistoryService,
+  OperationResult,
   ServiceContext,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
@@ -35,18 +38,29 @@ import type {
 } from '@brud/protocol';
 import { HandshakeValidator } from './handshake.js';
 import { createRpcErrorResponse, toRpcErrorResponse } from './wireErrors.js';
+import { WorkspaceRegistry } from '../workspaceRegistry.js';
+import type { KernelWorkspace } from '../workspaceRegistry.js';
 import * as DaemonVersion from '../version.js';
 
 export interface DispatchSession {
   readonly connectionId: string;
   readonly handshaken: boolean;
+  /** Workspace the connection attached to during `daemon.connect`. */
+  workspaceRoot: string | undefined;
   markHandshaken(): void;
 }
 
 export interface RequestDispatcherOptions {
-  readonly kernel: BrudKernel;
+  /**
+   * Multi-workspace registry. When omitted, a private registry adopts
+   * {@link kernel} for {@link workspaceRoot}.
+   */
+  readonly registry?: WorkspaceRegistry;
+  /** Legacy single-kernel composition. */
+  readonly kernel?: BrudKernel;
   readonly fileSystemToken: ServiceToken<IBrudFileSystem>;
   readonly historyToken: ServiceToken<IUniversalHistoryService>;
+  readonly toolsToken?: ServiceToken<IBrudToolsService>;
   readonly token: string;
   readonly workspaceRoot: string;
   readonly serverName?: string;
@@ -253,11 +267,17 @@ function readEncoding(params: Record<string, unknown>, key: string): FileEncodin
 }
 
 export class RequestDispatcher {
-  private readonly kernel: BrudKernel;
+  private readonly registry: WorkspaceRegistry;
 
   private readonly fileSystemToken: ServiceToken<IBrudFileSystem>;
 
   private readonly historyToken: ServiceToken<IUniversalHistoryService>;
+
+  private readonly toolsToken: ServiceToken<IBrudToolsService> | undefined;
+
+  private readonly defaultWorkspaceRoot: string;
+
+  private readonly enforcePrimaryWorkspaceRoot: boolean;
 
   private readonly handshake: HandshakeValidator;
 
@@ -268,9 +288,20 @@ export class RequestDispatcher {
   private readonly startedAt: number = Date.now();
 
   constructor(options: RequestDispatcherOptions) {
-    this.kernel = options.kernel;
+    if (options.registry !== undefined) {
+      this.registry = options.registry;
+    } else if (options.kernel !== undefined) {
+      this.registry = new WorkspaceRegistry();
+      this.registry.adopt(options.workspaceRoot, options.kernel);
+    } else {
+      throw new Error('RequestDispatcher requires a workspace registry or a kernel');
+    }
+
     this.fileSystemToken = options.fileSystemToken;
     this.historyToken = options.historyToken;
+    this.toolsToken = options.toolsToken;
+    this.defaultWorkspaceRoot = options.workspaceRoot;
+    this.enforcePrimaryWorkspaceRoot = options.registry === undefined;
     this.handshake = new HandshakeValidator({
       token: options.token,
       workspaceRoot: options.workspaceRoot,
@@ -296,7 +327,7 @@ export class RequestDispatcher {
     session: DispatchSession,
   ): Promise<RpcResponse> {
     if (request.method === Protocol.DAEMON_CONNECT) {
-      return success(request.id, this.connect(request.params, session));
+      return success(request.id, await this.connect(request.params, session));
     }
 
     if (!session.handshaken) {
@@ -332,6 +363,16 @@ export class RequestDispatcher {
         return success(request.id, await this.listHistory(request.params, session));
       case Protocol.HISTORY_GET:
         return success(request.id, await this.getHistory(request.params, session));
+      case Protocol.WORKSPACE_LIST:
+        return success(request.id, this.listWorkspaces());
+      case Protocol.WORKSPACE_STATUS:
+        return success(request.id, this.workspaceStatus(request.params, session));
+      case Protocol.WORKSPACE_DISPOSE:
+        return success(request.id, await this.disposeWorkspace(request.params, session));
+      case Protocol.TOOLS_LIST:
+        return success(request.id, this.listTools(session));
+      case Protocol.TOOLS_EXECUTE:
+        return success(request.id, await this.executeTool(request.params, session));
       default:
         throw new MethodError(
           Protocol.METHOD_NOT_FOUND,
@@ -341,22 +382,43 @@ export class RequestDispatcher {
     }
   }
 
-  private connect(value: unknown, session: DispatchSession): DaemonHandshakeResult {
-    const outcome = this.handshake.validate(value);
+  private async connect(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<DaemonHandshakeResult> {
+    const outcome = this.enforcePrimaryWorkspaceRoot
+      ? this.handshake.validate(value)
+      : this.handshake.validateForRegistry(value);
 
     if (!outcome.ok) {
       throw new MethodError(outcome.code, outcome.message, outcome.data);
     }
 
+    const workspaceRoot = outcome.params.workspaceRoot;
+
+    if (session.workspaceRoot !== undefined && session.workspaceRoot !== workspaceRoot) {
+      this.registry.detachClient(session.connectionId);
+    }
+
+    let workspace = this.registry.get(workspaceRoot);
+
+    if (workspace === undefined) {
+      workspace = await this.registry.spawn(workspaceRoot);
+    }
+
+    this.registry.attachClient(workspaceRoot, session.connectionId);
+    session.workspaceRoot = workspaceRoot;
     session.markHandshaken();
 
     return {
       connectionId: session.connectionId,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      workspaceRoot: this.handshake.workspaceRoot,
+      workspaceRoot,
+      workspaceId: workspace.root,
+      kernelState: 'running',
       capabilities: {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        workspaceRoot: this.handshake.workspaceRoot,
+        workspaceRoot,
         fs: Protocol.FS_METHODS,
         history: Protocol.HISTORY_CAPABILITIES,
       },
@@ -386,30 +448,161 @@ export class RequestDispatcher {
       name: this.serverName,
       version: this.serverVersion,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      workspaceRoot: this.handshake.workspaceRoot,
+      workspaceRoot: this.sessionWorkspaceRoot(session),
       pid: process.pid,
       uptimeMs: Date.now() - this.startedAt,
     };
   }
 
+  private sessionWorkspaceRoot(session: DispatchSession): string {
+    return session.workspaceRoot ?? this.defaultWorkspaceRoot;
+  }
+
+  private workspaceEntry(session: DispatchSession): KernelWorkspace {
+    const root = session.workspaceRoot;
+
+    if (root === undefined) {
+      throw new MethodError(
+        Protocol.HANDSHAKE_REQUIRED,
+        'The connection is not attached to a workspace',
+      );
+    }
+
+    const workspace = this.registry.get(root);
+
+    if (workspace === undefined) {
+      throw new MethodError(
+        Protocol.INTERNAL_ERROR,
+        `Workspace "${root}" is not registered`,
+        { errorCode: 'WORKSPACE_NOT_FOUND', path: root },
+      );
+    }
+
+    return workspace;
+  }
+
   private fileSystem(session: DispatchSession): IBrudFileSystem {
+    const workspace = this.workspaceEntry(session);
     const caller: ServiceContext = {
       callerId: session.connectionId,
       tier: 'core',
-      workspaceRoot: this.handshake.workspaceRoot,
+      workspaceRoot: workspace.root,
     };
 
-    return this.kernel.requestAccess(caller, this.fileSystemToken);
+    return workspace.kernel.requestAccess(caller, this.fileSystemToken);
   }
 
   private history(session: DispatchSession): IUniversalHistoryService {
+    const workspace = this.workspaceEntry(session);
     const caller: ServiceContext = {
       callerId: session.connectionId,
       tier: 'core',
-      workspaceRoot: this.handshake.workspaceRoot,
+      workspaceRoot: workspace.root,
     };
 
-    return this.kernel.requestAccess(caller, this.historyToken);
+    return workspace.kernel.requestAccess(caller, this.historyToken);
+  }
+
+  private brudTools(session: DispatchSession): IBrudToolsService {
+    const token = this.toolsToken;
+
+    if (token === undefined) {
+      throw new MethodError(
+        Protocol.INTERNAL_ERROR,
+        'The tools service token is not configured',
+        { errorCode: 'TOOLS_UNAVAILABLE' },
+      );
+    }
+
+    const workspace = this.workspaceEntry(session);
+    const caller: ServiceContext = {
+      callerId: session.connectionId,
+      tier: 'core',
+      workspaceRoot: workspace.root,
+    };
+
+    return workspace.kernel.requestAccess(caller, token);
+  }
+
+  private listWorkspaces(): Protocol.WorkspaceListResult {
+    return {
+      workspaces: this.registry.list().map(describeWorkspace),
+    };
+  }
+
+  private workspaceStatus(
+    value: unknown,
+    session: DispatchSession,
+  ): Protocol.WorkspaceStatusResult {
+    const params = asParams(value);
+    const root = optionalString(params, 'workspaceRoot') ?? session.workspaceRoot;
+
+    if (root === undefined) {
+      throw new MethodError(
+        Protocol.INVALID_PARAMS,
+        'workspaceRoot is required when the connection is not attached to a workspace',
+      );
+    }
+
+    const workspace = this.registry.get(root);
+
+    return { workspace: workspace === undefined ? null : describeWorkspace(workspace) };
+  }
+
+  private async disposeWorkspace(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<Protocol.WorkspaceDisposeResult> {
+    const params = asParams(value);
+    const root = requireString(params, 'workspaceRoot');
+    const existed = this.registry.get(root) !== undefined;
+
+    await this.registry.dispose(root);
+
+    if (session.workspaceRoot === root) {
+      session.workspaceRoot = undefined;
+    }
+
+    return { root, disposed: existed };
+  }
+
+  private listTools(session: DispatchSession): Protocol.ToolsListResult {
+    const tools = this.brudTools(session).listTools();
+
+    return {
+      tools: tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parametersSchema: tool.parametersSchema,
+        ...(tool.requiredPermissions === undefined
+          ? {}
+          : { requiredPermissions: tool.requiredPermissions }),
+        ownerPluginId: tool.ownerPluginId,
+        isOfficial: tool.isOfficial,
+      })),
+    };
+  }
+
+  private async executeTool(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<Protocol.ToolsExecuteResult> {
+    const params = asParams(value);
+    const name = requireString(params, 'name');
+    const workspace = this.workspaceEntry(session);
+    const callerContext: IPluginExecutionContext = {
+      workspaceRoot: workspace.root,
+      callerId: session.connectionId,
+      permissions: [],
+      origin: 'daemon-rpc',
+    };
+    const result = await this.brudTools(session).executeTool(
+      name,
+      params.input,
+      callerContext,
+    );
+
+    return { result: toProtocolOperationResult(result) };
   }
 
   private async beginHistorySession(
@@ -588,6 +781,41 @@ export class RequestDispatcher {
       },
     };
   }
+}
+
+const WORKSPACE_KERNEL_STATES: Readonly<
+  Record<KernelWorkspace['kernel']['lifecycleState'], Protocol.WorkspaceKernelState>
+> = {
+  UNINITIALIZED: 'uninitialized',
+  BOOTING: 'booting',
+  RUNNING: 'running',
+  SHUTTING_DOWN: 'shutting-down',
+  DISPOSED: 'disposed',
+};
+
+function describeWorkspace(workspace: KernelWorkspace): Protocol.WorkspaceDescriptor {
+  return {
+    root: workspace.root,
+    clientCount: workspace.clients.size,
+    kernelState: WORKSPACE_KERNEL_STATES[workspace.kernel.lifecycleState],
+    lastUsedAt: workspace.lastUsedAt.toISOString(),
+  };
+}
+
+function toProtocolOperationResult(
+  result: OperationResult,
+): Protocol.ToolOperationResult {
+  const error = result.error instanceof Error
+    ? result.error.message
+    : result.error;
+
+  return {
+    status: result.status,
+    ...(result.data === undefined ? {} : { data: result.data }),
+    ...(result.message === undefined ? {} : { message: result.message }),
+    ...(error === undefined ? {} : { error }),
+    ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
+  };
 }
 
 function success<TResult>(id: JsonRpcId, result: TResult): RpcSuccessResponse<TResult> {

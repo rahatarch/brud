@@ -1561,12 +1561,13 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 **Work items:**
 
 1. Implement `brud.terminal` over `ITerminalHandle`; move the two terminal kinds.
-2. Implement `brud.mcp.bridge` as a daemon-hosted transport adapter. Remove `bootCoreKernel` from `packages/mcp`.
-3. Make the standalone MCP entry point a **thin client/proxy** to the daemon:
-   - stdio: connect to the workspace daemon (starting it if absent) and forward framed requests; never boot a kernel in the MCP process.
+2. Implement `brud.mcp.bridge` as a daemon-hosted transport adapter. The bridge owns the MCP protocol and declares `transports: ['stdio', 'mcp-http']`; the daemon owns transport lifecycle.
+3. Make the daemon the single MCP entry point. The daemon's `--stdio` mode binds stdin/stdout as the transport for plugins that declare `transports: ['stdio']`. The MCP bridge plugin attaches to it. There is no separate `brud-mcp` process. The `brud daemon` binary is the single entry point for all MCP clients.
+   - stdio: `brud daemon --stdio --workspace <path>` binds the host process's stdin/stdout and never binds the Unix-domain socket.
    - HTTP: the daemon hosts the loopback listener through the bridge plugin.
+   - `packages/mcp` is deleted; no standalone MCP package or binary remains.
 4. The daemon boots `createStandardKernel` with the Node storage driver, the full Level-1 set, and the official plugins. Settings come from `SettingsService`; history comes from UniversalHistory; the tool routing table comes from `BrudTools` (`brud.core.tools`).
-5. Remove `@brud/core` from `packages/mcp` dependencies.
+5. Delete `packages/mcp`, remove `@brud/mcp` from the workspace, build scripts, dependencies, and lockfile, and repoint residual references at `brud daemon --stdio`.
 6. Expose `tools.execute` over daemon JSON-RPC (additive; do not break existing fs/history methods).
 7. Rewire the VS Code adapter (`executeOperationsFromVSCode`) and the history UI to the daemon client instead of `bootCoreKernel` and the JSON history adapter. Keep the legacy execution fallback available behind the rollout flag in internal builds until Phase 11; it is never part of a consumer release (D-12, D-13).
 8. Enforce one daemon/kernel per workspace; reject a second live kernel in the same root.
@@ -1580,6 +1581,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 - No `bootCoreKernel` call remains in production code.
 - Terminal plugin cleans up all children on stop.
 - Tool listing and execution over stdio and HTTP are unchanged.
+- `packages/mcp` is deleted. The daemon's `--stdio` mode is the only MCP entry point.
 - Adversarial coverage: forged MCP messages, malformed JSON-RPC framing, oversized HTTP bodies, and daemon handshake replay must be covered by tests exercising the real transport layer.
 
 **Rollback:** the daemon can boot with the legacy plugin set off; MCP can revert to the previous bootstrap only while the legacy package is still live (it is, until Phase 11 quarantines it).
@@ -1978,7 +1980,7 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | **D-1** | Phased migration over big-bang cutover | Isolates failure to one plugin/phase and keeps every step verifiable (rationale revised 2026-10-30 by D-12) | Legacy fallback remains internal until Phase 11 |
 | **D-2** | Raw JSON settings as a Level-1 service (user + workspace scopes) | Human-editable, git-versionable, concurrency-safe, simple for Desktop UI | Frozen boot snapshot; no SQL policy store |
 | **D-3** | One kernel per workspace root; WorkspaceService routes roots | Avoids ambiguous containment and cross-root transactions | No single session spans roots in v1 |
-| **D-4** | MCP bridge is daemon-hosted; stdio entry is a client/proxy | Guarantees one execution plane and one ledger | MCP process never boots a kernel |
+| **D-4** | MCP bridge is daemon-hosted; stdio entry is a client/proxy | Guarantees one execution plane and one ledger | MCP process never boots a kernel. **As of Phase 10, the stdio entry point is the daemon itself in `--stdio` mode. There is no separate MCP proxy process. The `brud.mcp.bridge` plugin handles MCP protocol inside the daemon. See the Phase 10 amendment in §5.2.** |
 | **D-5** | Sandbox means capability projection, not process isolation | Matches the plugin contract that exists and can ship | OS-level isolation is a future ADR |
 | **D-6** | UniversalHistory is the sole writer after Phase 9 | Removes dual-history divergence and undo ambiguity | JSON history is retired; files remain on disk |
 | **D-7** | Legacy execution remains the internal fallback until Phase 11. **Clarification (D-17):** "fallback" means read-only fallback — the code continues to execute as a fallback path, but its source is not edited. `packages/core/` is frozen under D-17. | Every cutover is reversible until the final gate | The two-release decommission gate is replaced by the Phase 11 evidence gate (D-12, D-14) |

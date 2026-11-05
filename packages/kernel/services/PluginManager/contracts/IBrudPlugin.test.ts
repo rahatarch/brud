@@ -67,6 +67,7 @@ function createContext(pluginId: string): IPluginContext {
     getUtilities: (): IUtilityService => {
       throw new Error('utility service is not used in this test');
     },
+    getTerminal: (): null => null,
     executeTool: (): Promise<OperationResult> => {
       throw new PluginPermissionError(pluginId, 'executeTool', ['tools:register', 'tools:execute']);
     },

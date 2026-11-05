@@ -13,6 +13,8 @@ import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
 import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
+import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
+import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
@@ -63,6 +65,16 @@ export interface PluginManagerDescriptorOptions {
    * utility handle is only exposed when the token is actually registered.
    */
   readonly withUtilities?: boolean;
+
+  /**
+   * Declares {@link TerminalToken} as a boot dependency.
+   *
+   * Defaults to `false`. The standard kernel opts in so plugins holding
+   * `terminal:execute` can call `context.getTerminal()`. Regardless of this
+   * flag, the terminal handle is only exposed when the token is actually
+   * registered.
+   */
+  readonly withTerminal?: boolean;
 }
 
 /**
@@ -84,6 +96,7 @@ export function createPluginManagerDescriptor(
   const withUniversalHistory = options?.withUniversalHistory ?? false;
   const withTools = options?.withTools ?? false;
   const withUtilities = options?.withUtilities ?? false;
+  const withTerminal = options?.withTerminal ?? false;
 
   const dependencies: ServiceToken<unknown>[] = withUniversalHistory
     ? [FileSystemToken, UniversalHistoryToken]
@@ -95,6 +108,10 @@ export function createPluginManagerDescriptor(
 
   if (withUtilities) {
     dependencies.push(UtilityToken);
+  }
+
+  if (withTerminal) {
+    dependencies.push(TerminalToken);
   }
 
   return {
@@ -128,12 +145,18 @@ export function createPluginManagerDescriptor(
           ? (): IUtilityService => broker.requestAccess(caller, UtilityToken)
           : undefined;
 
+      const terminal: (() => ITerminalService) | undefined =
+        withTerminal && broker.hasService(TerminalToken)
+          ? (): ITerminalService => broker.requestAccess(caller, TerminalToken)
+          : undefined;
+
       const manager = new PluginManagerService({
         workspaceRoot: context.workspaceRoot,
         fileSystem,
         ...(universalHistory === undefined ? {} : { universalHistory }),
         ...(brudTools === undefined ? {} : { brudTools }),
         ...(utilities === undefined ? {} : { utilities }),
+        ...(terminal === undefined ? {} : { terminal }),
       });
 
       for (const plugin of initialPlugins) {

@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { isAbsolute, resolve, sep } from 'node:path';
 import * as Protocol from '@brud/protocol';
 import type {
   DaemonClientIdentity,
@@ -100,7 +100,27 @@ export class HandshakeValidator {
     return this.canonicalWorkspaceRoot;
   }
 
+  /**
+   * Validates a connect request against the daemon's primary workspace.
+   *
+   * Retained for single-workspace callers. Multi-workspace daemons use
+   * {@link validateForRegistry}, which accepts any absolute root.
+   */
   validate(value: unknown): HandshakeOutcome {
+    return this.parse(value, true);
+  }
+
+  /**
+   * Validates a connect request for the multi-workspace registry.
+   *
+   * The root must be an absolute path but is not constrained to the daemon's
+   * primary workspace; the registry decides whether to reuse or spawn it.
+   */
+  validateForRegistry(value: unknown): HandshakeOutcome {
+    return this.parse(value, false);
+  }
+
+  private parse(value: unknown, enforcePrimaryRoot: boolean): HandshakeOutcome {
     if (!isRecord(value)) {
       return failure(Protocol.INVALID_PARAMS, 'daemon.connect requires a params object');
     }
@@ -121,6 +141,14 @@ export class HandshakeValidator {
       return failure(Protocol.INVALID_PARAMS, 'workspaceRoot must be a string');
     }
 
+    if (!enforcePrimaryRoot && !isAbsolute(workspaceRoot)) {
+      return failure(
+        Protocol.INVALID_PARAMS,
+        'workspaceRoot must be an absolute path',
+        { errorCode: 'INVALID_WORKSPACE_ROOT', path: workspaceRoot },
+      );
+    }
+
     if (protocolVersion !== Protocol.DAEMON_PROTOCOL_VERSION) {
       return failure(
         Protocol.PROTOCOL_VERSION_MISMATCH,
@@ -138,7 +166,7 @@ export class HandshakeValidator {
 
     const candidateRoot = canonicalizeWorkspaceRoot(workspaceRoot);
 
-    if (candidateRoot !== this.canonicalWorkspaceRoot) {
+    if (enforcePrimaryRoot && candidateRoot !== this.canonicalWorkspaceRoot) {
       return failure(
         Protocol.WORKSPACE_MISMATCH,
         'Workspace root does not match the daemon workspace',
@@ -149,7 +177,8 @@ export class HandshakeValidator {
       );
     }
 
-    const client = parseClientIdentity(value.client);
+    const clientInfo = parseClientIdentity(value.clientInfo);
+    const client = clientInfo ?? parseClientIdentity(value.client);
     const capabilities = isUnknownArray(value.capabilities)
       ? value.capabilities.filter((entry): entry is string => typeof entry === 'string')
       : undefined;
@@ -159,6 +188,7 @@ export class HandshakeValidator {
       token,
       workspaceRoot: candidateRoot,
       ...(client === undefined ? {} : { client }),
+      ...(clientInfo === undefined ? {} : { clientInfo }),
       ...(capabilities === undefined ? {} : { capabilities }),
     };
 

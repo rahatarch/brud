@@ -5,16 +5,22 @@ import type { Server, Socket } from 'node:net';
 import type {
   BrudKernel,
   IBrudFileSystem,
+  IBrudToolsService,
   IUniversalHistoryService,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { Connection } from './Connection.js';
 import { RequestDispatcher } from './dispatch.js';
 import { loadKernelModule } from '../kernelRuntime.js';
+import { WorkspaceRegistry } from '../workspaceRegistry.js';
 import * as DaemonVersion from '../version.js';
 
 export interface DaemonServerConfig {
-  readonly kernel: BrudKernel;
+  /** Multi-workspace registry. Preferred over `kernel`. */
+  readonly registry?: WorkspaceRegistry;
+
+  /** Legacy single-kernel composition adopted for `workspaceRoot`. */
+  readonly kernel?: BrudKernel;
   readonly socketPath: string;
   readonly token: string;
   readonly workspaceRoot: string;
@@ -52,6 +58,7 @@ export class DaemonServer {
       config,
       kernelModule.FileSystemToken,
       kernelModule.UniversalHistoryToken,
+      kernelModule.BrudToolsToken,
     );
   }
 
@@ -59,12 +66,15 @@ export class DaemonServer {
     config: DaemonServerConfig,
     fileSystemToken: ServiceToken<IBrudFileSystem>,
     historyToken: ServiceToken<IUniversalHistoryService>,
+    toolsToken: ServiceToken<IBrudToolsService>,
   ) {
     this.socketPath = config.socketPath;
     this.dispatcher = new RequestDispatcher({
-      kernel: config.kernel,
+      ...(config.registry === undefined ? {} : { registry: config.registry }),
+      ...(config.kernel === undefined ? {} : { kernel: config.kernel }),
       fileSystemToken,
       historyToken,
+      toolsToken,
       token: config.token,
       workspaceRoot: config.workspaceRoot,
       serverName: config.serverName ?? DaemonVersion.DAEMON_SERVER_NAME,

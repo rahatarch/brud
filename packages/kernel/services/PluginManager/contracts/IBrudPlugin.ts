@@ -1,3 +1,4 @@
+import type { IMcpTransport } from './IMcpTransport.js';
 import type { IPluginContext } from './IPluginContext.js';
 import type { PluginManifest } from './manifest.js';
 
@@ -31,4 +32,14 @@ export interface IBrudPlugin {
    * activation failed.
    */
   deactivate?(): Promise<void> | void;
+
+  /**
+   * Receives an MCP transport bound by the host after activation.
+   *
+   * Called once per entry in `manifest.transports`, only while the plugin is
+   * active. The host closes the transport before shutting the kernel down.
+   *
+   * @param transport - Bound stdio or loopback HTTP transport.
+   */
+  onTransportAttach?(transport: IMcpTransport): Promise<void> | void;
 }

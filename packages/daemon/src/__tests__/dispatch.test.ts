@@ -16,7 +16,6 @@ import type {
 import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { DaemonServer } from '../server/DaemonServer.js';
 
-const WORKSPACE_ROOT = '/workspace';
 const TOKEN = 'test-daemon-token-0123456789abcdef';
 const CALL_TIMEOUT_MS = 5_000;
 
@@ -178,7 +177,7 @@ function createConnectRequest(overrides?: Partial<DaemonConnectParams>): RpcRequ
   const params: DaemonConnectParams = {
     protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
     token: TOKEN,
-    workspaceRoot: WORKSPACE_ROOT,
+    workspaceRoot,
     ...overrides,
   };
 
@@ -193,6 +192,7 @@ function createConnectRequest(overrides?: Partial<DaemonConnectParams>): RpcRequ
 let kernel: BrudKernel | undefined;
 let driver: IStorageDriver | undefined;
 let server: DaemonServer | undefined;
+let workspaceRoot = '';
 let tempDirectory = '';
 let socketPath = '';
 
@@ -217,22 +217,24 @@ describe('DaemonServer dispatch', () => {
     const kernelModule = await import('@brud/kernel');
     const storageDriver = new kernelModule.NodeStorageDriver();
 
+    workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-dispatch-test-'));
+    tempDirectory = await mkdtemp(join(tmpdir(), 'brud-daemon-test-'));
+
     const createdKernel = kernelModule.createStandardKernel({
       storageDriver,
       history: { inMemory: true },
     });
-    await createdKernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await createdKernel.boot({ workspaceRoot });
     kernel = createdKernel;
     driver = storageDriver;
 
-    tempDirectory = await mkdtemp(join(tmpdir(), 'brud-daemon-test-'));
     socketPath = join(tempDirectory, 'daemon.sock');
 
     server = await DaemonServer.create({
       kernel: createdKernel,
       socketPath,
       token: TOKEN,
-      workspaceRoot: WORKSPACE_ROOT,
+      workspaceRoot,
     });
     await server.listen();
   });
@@ -244,6 +246,10 @@ describe('DaemonServer dispatch', () => {
 
     if (kernel !== undefined) {
       await kernel.shutdown();
+    }
+
+    if (workspaceRoot.length > 0) {
+      await rm(workspaceRoot, { recursive: true, force: true });
     }
 
     if (tempDirectory.length > 0) {
@@ -292,7 +298,7 @@ describe('DaemonServer dispatch', () => {
 
     const result = expectRecord(response.result);
     assert.equal(expectString(result, 'protocolVersion'), Protocol.DAEMON_PROTOCOL_VERSION);
-    assert.equal(expectString(result, 'workspaceRoot'), WORKSPACE_ROOT);
+    assert.equal(expectString(result, 'workspaceRoot'), workspaceRoot);
     assert.ok(expectString(result, 'connectionId').startsWith('c_'));
 
     const capabilities = expectRecord(result.capabilities);
@@ -354,8 +360,8 @@ describe('DaemonServer dispatch', () => {
       await client.close();
     });
 
-    await driver.mkdir(join(WORKSPACE_ROOT, 'listing'));
-    await driver.mkdir(join(WORKSPACE_ROOT, 'listing', 'nested'));
+    await driver.mkdir(join(workspaceRoot, 'listing'));
+    await driver.mkdir(join(workspaceRoot, 'listing', 'nested'));
 
     const writeResponse = await client.call(
       createRequest(Protocol.FS_WRITE_ATOMIC, {

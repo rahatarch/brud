@@ -15,8 +15,14 @@ export type {
   PluginManifestValidationResult,
   PluginManifestValidationSuccess,
   ThirdPartyPluginManifest,
+  PluginTransportKind,
 } from './manifest.js';
-export { PLUGIN_ID_PATTERN, SEMVER_PATTERN, validatePluginManifest } from './manifest.js';
+export {
+  PLUGIN_ID_PATTERN,
+  PLUGIN_TRANSPORT_KINDS,
+  SEMVER_PATTERN,
+  validatePluginManifest,
+} from './manifest.js';
 
 export type {
   IPluginContext,
@@ -27,6 +33,12 @@ export type {
 export { PluginSubscriptions } from './PluginSubscriptions.js';
 export { PluginContext } from './PluginContext.js';
 export type { PluginCapabilityProviders, PluginContextOptions } from './PluginContext.js';
+
+export type { ITerminalHandle, TerminalExecutionInfo } from './ITerminalHandle.js';
+export { createTerminalHandle } from './TerminalHandle.js';
+export type { TerminalHandleOptions } from './TerminalHandle.js';
+
+export type { IMcpTransport } from './IMcpTransport.js';
 
 export type { IBrudPlugin } from './IBrudPlugin.js';
 

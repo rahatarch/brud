@@ -1,0 +1,2 @@
+export { TERMINAL_INTERACTIVE_SCHEMA, createTerminalInteractiveRequest, terminalInteractive } from './terminalInteractive.js';
+export type { TerminalOperationResult } from '../shared/terminalResult.js';

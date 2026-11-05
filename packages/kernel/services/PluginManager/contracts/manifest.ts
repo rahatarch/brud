@@ -2,6 +2,20 @@ import { hasOfficialPluginBrand, isReservedPluginId } from './branding.js';
 import { isPluginPermission } from './permissions.js';
 import type { PluginPermission } from './permissions.js';
 
+/**
+ * Transport a plugin can accept from the daemon host.
+ *
+ * `stdio` uses the daemon's standard streams when it was launched with
+ * `--stdio`; `mcp-http` binds a loopback listener.
+ */
+export type PluginTransportKind = 'stdio' | 'mcp-http';
+
+/** Every transport kind understood by the host. */
+export const PLUGIN_TRANSPORT_KINDS: readonly PluginTransportKind[] = [
+  'stdio',
+  'mcp-http',
+];
+
 /** Fields shared by every plugin manifest. */
 export interface PluginManifestBase {
   /**
@@ -28,6 +42,14 @@ export interface PluginManifestBase {
 
   /** Capabilities this plugin declares. */
   readonly permissions: readonly PluginPermission[];
+
+  /**
+   * Transports the plugin accepts from the host.
+   *
+   * Absent means the plugin needs no host transport. The daemon binds each
+   * declared transport after activation and calls `onTransportAttach`.
+   */
+  readonly transports?: readonly PluginTransportKind[];
 }
 
 /**
@@ -279,6 +301,49 @@ function validatePermissions(candidate: unknown): FieldResult<readonly PluginPer
   return { ok: true, value: permissions };
 }
 
+function isPluginTransportKind(value: unknown): value is PluginTransportKind {
+  return value === 'stdio' || value === 'mcp-http';
+}
+
+function validateTransports(
+  candidate: unknown,
+): FieldResult<readonly PluginTransportKind[] | undefined> {
+  if (candidate === undefined) {
+    return { ok: true, value: undefined };
+  }
+
+  if (!Array.isArray(candidate)) {
+    return {
+      ok: false,
+      error: 'manifest.transports must be an array of transport kinds when provided',
+    };
+  }
+
+  const transports: PluginTransportKind[] = [];
+  const seen = new Set<PluginTransportKind>();
+
+  for (const entry of candidate) {
+    if (!isPluginTransportKind(entry)) {
+      return {
+        ok: false,
+        error: `manifest.transports contains an unknown transport: ${JSON.stringify(entry)}`,
+      };
+    }
+
+    if (seen.has(entry)) {
+      return {
+        ok: false,
+        error: `manifest.transports must not contain duplicate transport "${entry}"`,
+      };
+    }
+
+    seen.add(entry);
+    transports.push(entry);
+  }
+
+  return { ok: true, value: transports };
+}
+
 /**
  * Validates an untrusted manifest candidate without mutating it.
  *
@@ -358,6 +423,11 @@ export function validatePluginManifest(
     return { ok: false, reason: 'INVALID_MANIFEST', error: permissions.error };
   }
 
+  const transports = validateTransports(candidate.transports);
+  if (!transports.ok) {
+    return { ok: false, reason: 'INVALID_MANIFEST', error: transports.error };
+  }
+
   const base: PluginManifestBase = {
     id: id.value,
     name: name.value,
@@ -367,6 +437,7 @@ export function validatePluginManifest(
     ...(dependencies.value === undefined
       ? {}
       : { dependencies: [...dependencies.value] }),
+    ...(transports.value === undefined ? {} : { transports: [...transports.value] }),
   };
 
   if (official.value === true) {

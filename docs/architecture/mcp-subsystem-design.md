@@ -4,6 +4,7 @@
 
 - **Classification:** Internal architectural specification
 - **Status:** Approved target contract. The shipped behaviour of every subsection is tracked in **§9 Implementation Status Register**; a subsection whose behaviour differs from its text carries an `Implementation status` note at its head. This document is deliberately not rewritten to match the code, so the approved intent and the current reality stay separately readable.
+- **Phase 10 supersession (2026-11-05):** `packages/mcp` has been deleted. The MCP protocol is now implemented by the `brud.mcp.bridge` kernel plugin, and the daemon's `--stdio` mode (`brud daemon --stdio --workspace <path>`) is the single stdio entry point. References to the standalone package below describe the retired implementation and are retained as historical design context.
 - **Audience:** Platform engineers, security reviewers, packaging maintainers, integration test authors
 - **Relation to Baseline:** Extends the Microkernel Architecture Specification (docs/architecture/microkernel-architecture-spec.md) with a defined machine-to-machine transport subsystem. This document introduces no exceptions to the Inversion Invariant; it formalizes how the existing pure orchestrator may be reached by external AI clients.
 
