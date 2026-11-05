@@ -49,6 +49,22 @@ export class ReadOnlyFacade implements IBrudFileSystem {
     throw new ReadOnlyViolationError('deleteFile');
   }
 
+  async rename(_sourceRelativePath: string, _destinationRelativePath: string): Promise<void> {
+    throw new ReadOnlyViolationError('rename');
+  }
+
+  async copy(_sourceRelativePath: string, _destinationRelativePath: string): Promise<void> {
+    throw new ReadOnlyViolationError('copy');
+  }
+
+  async createDirectory(_relativePath: string): Promise<void> {
+    throw new ReadOnlyViolationError('createDirectory');
+  }
+
+  async deleteDirectory(_relativePath: string): Promise<void> {
+    throw new ReadOnlyViolationError('deleteDirectory');
+  }
+
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
     return this.service.readDirectory(relativeDirectoryPath);
   }

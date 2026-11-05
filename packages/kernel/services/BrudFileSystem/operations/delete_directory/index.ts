@@ -1,0 +1,1 @@
+export { deleteDirectory } from './deleteDirectory.js';

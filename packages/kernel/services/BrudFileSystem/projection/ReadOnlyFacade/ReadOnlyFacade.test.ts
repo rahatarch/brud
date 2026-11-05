@@ -33,6 +33,22 @@ class RecordingFileSystem implements IBrudFileSystem {
     this.calls.push(`deleteFile:${relativePath}`);
   }
 
+  async rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    this.calls.push(`rename:${sourceRelativePath}:${destinationRelativePath}`);
+  }
+
+  async copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    this.calls.push(`copy:${sourceRelativePath}:${destinationRelativePath}`);
+  }
+
+  async createDirectory(relativePath: string): Promise<void> {
+    this.calls.push(`createDirectory:${relativePath}`);
+  }
+
+  async deleteDirectory(relativePath: string): Promise<void> {
+    this.calls.push(`deleteDirectory:${relativePath}`);
+  }
+
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
     this.calls.push(`readDirectory:${relativeDirectoryPath}`);
     return [{ name: 'child.txt', isFile: true, isDirectory: false }];
@@ -92,6 +108,10 @@ describe('ReadOnlyFacade', () => {
       isReadOnlyViolation,
     );
     await assert.rejects(facade.deleteFile('a.txt'), isReadOnlyViolation);
+    await assert.rejects(facade.rename('a.txt', 'b.txt'), isReadOnlyViolation);
+    await assert.rejects(facade.copy('a.txt', 'b.txt'), isReadOnlyViolation);
+    await assert.rejects(facade.createDirectory('directory'), isReadOnlyViolation);
+    await assert.rejects(facade.deleteDirectory('directory'), isReadOnlyViolation);
 
     assert.deepEqual(inner.calls, []);
   });

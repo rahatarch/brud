@@ -16,6 +16,10 @@ function isUnsupportedDirectorySync(error: unknown): boolean {
     || code === 'ENOENT';
 }
 
+function isErrno(error: unknown, code: string): boolean {
+  return error instanceof Error && 'code' in error && error.code === code;
+}
+
 /**
  * Node storage driver with durable flush capabilities.
  *
@@ -29,6 +33,38 @@ function isUnsupportedDirectorySync(error: unknown): boolean {
  * errors are treated as best-effort; file flushes always propagate.
  */
 export class DurableNodeStorageDriver extends NodeStorageDriver {
+  protected async renameNative(sourcePath: string, targetPath: string): Promise<void> {
+    await super.rename(sourcePath, targetPath);
+  }
+
+  override async rename(sourcePath: string, targetPath: string): Promise<void> {
+    try {
+      await this.renameNative(sourcePath, targetPath);
+      return;
+    } catch (error: unknown) {
+      if (!isErrno(error, 'EXDEV')) {
+        throw error;
+      }
+    }
+
+    process.emitWarning(
+      `brud.core.filesystem: cross-device rename from "${sourcePath}" to "${targetPath}" `
+      + 'fell back to copy + delete',
+      'BrudFilesystemWarning',
+    );
+
+    await this.copy(sourcePath, targetPath);
+
+    const stats = await this.stat(sourcePath);
+
+    if (stats?.isDirectory === true) {
+      await this.deleteDirectory(sourcePath);
+      return;
+    }
+
+    await this.deleteFile(sourcePath);
+  }
+
   /**
    * Creates a staging file with POSIX exclusive-create semantics.
    *

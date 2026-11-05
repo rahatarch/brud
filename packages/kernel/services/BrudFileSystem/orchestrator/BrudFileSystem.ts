@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import type { DirectoryEntry, FileStats, IStorageDriver } from '../../../drivers/contracts/index.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import type {
@@ -26,9 +27,13 @@ import type {
   IFileMutationJournal,
 } from '../events/types.js';
 import { createFile as createFileOperation } from '../operations/create_file/createFile.js';
+import { copy as copyOperation } from '../operations/copy/copy.js';
+import { createDirectory as createDirectoryOperation } from '../operations/create_directory/createDirectory.js';
+import { deleteDirectory as deleteDirectoryOperation } from '../operations/delete_directory/deleteDirectory.js';
 import { deleteFile as deleteFileOperation } from '../operations/delete_file/deleteFile.js';
 import { readFile as readFileOperation, readText as readTextOperation } from '../operations/read_file/readFile.js';
 import { readDirectory as readDirectoryOperation } from '../operations/read_directory/readDirectory.js';
+import { rename as renameOperation } from '../operations/rename/rename.js';
 import {
   CommittedWithDurabilityWarningError,
   FileAlreadyExistsError,
@@ -252,6 +257,22 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     await this.performDeleteFile(relativePath, []);
   }
 
+  async rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    await this.performRename(sourceRelativePath, destinationRelativePath, []);
+  }
+
+  async copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    await this.performCopy(sourceRelativePath, destinationRelativePath, []);
+  }
+
+  async createDirectory(relativePath: string): Promise<void> {
+    await this.performCreateDirectory(relativePath, []);
+  }
+
+  async deleteDirectory(relativePath: string): Promise<void> {
+    await this.performDeleteDirectory(relativePath, []);
+  }
+
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
     const { location } = await this.resolveTarget(relativeDirectoryPath);
 
@@ -295,6 +316,40 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     scopes: readonly string[],
   ): Promise<void> {
     await this.performDeleteFile(relativePath, scopes);
+  }
+
+  /** @internal Trusted projection entry point for {@link rename}. */
+  async renameWithinScopes(
+    sourceRelativePath: string,
+    destinationRelativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    await this.performRename(sourceRelativePath, destinationRelativePath, scopes);
+  }
+
+  /** @internal Trusted projection entry point for {@link copy}. */
+  async copyWithinScopes(
+    sourceRelativePath: string,
+    destinationRelativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    await this.performCopy(sourceRelativePath, destinationRelativePath, scopes);
+  }
+
+  /** @internal Trusted projection entry point for {@link createDirectory}. */
+  async createDirectoryWithinScopes(
+    relativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    await this.performCreateDirectory(relativePath, scopes);
+  }
+
+  /** @internal Trusted projection entry point for {@link deleteDirectory}. */
+  async deleteDirectoryWithinScopes(
+    relativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    await this.performDeleteDirectory(relativePath, scopes);
   }
 
   private async performWriteAtomic(
@@ -452,6 +507,363 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
         });
       }
     });
+  }
+
+  private async performRename(
+    sourceRelativePath: string,
+    destinationRelativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    const source = await this.resolveTarget(sourceRelativePath);
+    const destination = await this.resolveTarget(destinationRelativePath);
+
+    await this.runExclusiveAll(
+      [source.location.absolutePath, destination.location.absolutePath],
+      async () => {
+        const trustedScopes = this.scopesWith(scopes);
+
+        this.assertMutableTarget(sourceRelativePath, source, trustedScopes);
+        this.assertMutableTarget(destinationRelativePath, destination, trustedScopes);
+        await this.assertRenamePreconditions(source, destination);
+
+        const tracked = this.journal.enabled;
+        const mutationId = tracked ? this.newMutationId() : '';
+        const previousSource = tracked
+          ? await captureMutationState(this.driver, source.location.absolutePath)
+          : missingState();
+        const previousDestination = tracked
+          ? await captureMutationState(this.driver, destination.location.absolutePath)
+          : missingState();
+
+        if (tracked) {
+          this.emit('renamed', 'before', source, mutationId, previousSource, missingState(), {
+            sourcePath: source.location.relativePath,
+            destinationPath: destination.location.relativePath,
+          });
+        }
+
+        await renameOperation(
+          this.driver,
+          source.location.absolutePath,
+          destination.location.absolutePath,
+        );
+
+        if (tracked) {
+          const actual = await captureMutationState(
+            this.driver,
+            destination.location.absolutePath,
+          );
+
+          this.emit('renamed', 'after', destination, mutationId, previousDestination, actual, {
+            status: 'committed',
+            committed: true,
+            sourcePath: source.location.relativePath,
+            destinationPath: destination.location.relativePath,
+          });
+        }
+      },
+    );
+  }
+
+  private async performCopy(
+    sourceRelativePath: string,
+    destinationRelativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    const source = await this.resolveTarget(sourceRelativePath);
+    const destination = await this.resolveTarget(destinationRelativePath);
+
+    await this.runExclusiveAll(
+      [source.location.absolutePath, destination.location.absolutePath],
+      async () => {
+        const trustedScopes = this.scopesWith(scopes);
+
+        this.assertMutableTarget(sourceRelativePath, source, trustedScopes);
+        this.assertMutableTarget(destinationRelativePath, destination, trustedScopes);
+        await this.assertCopyPreconditions(source, destination);
+
+        const tracked = this.journal.enabled;
+        const mutationId = tracked ? this.newMutationId() : '';
+        const previousDestination = tracked
+          ? await captureMutationState(this.driver, destination.location.absolutePath)
+          : missingState();
+        const intended = tracked
+          ? await captureMutationState(this.driver, source.location.absolutePath)
+          : missingState();
+
+        if (tracked) {
+          this.emit('copied', 'before', destination, mutationId, previousDestination, intended, {
+            sourcePath: source.location.relativePath,
+            destinationPath: destination.location.relativePath,
+          });
+        }
+
+        await copyOperation(
+          this.driver,
+          source.location.absolutePath,
+          destination.location.absolutePath,
+        );
+
+        if (tracked) {
+          const actual = await captureMutationState(
+            this.driver,
+            destination.location.absolutePath,
+          );
+
+          this.emit('copied', 'after', destination, mutationId, previousDestination, actual, {
+            status: 'committed',
+            committed: true,
+            sourcePath: source.location.relativePath,
+            destinationPath: destination.location.relativePath,
+          });
+        }
+      },
+    );
+  }
+
+  private async performCreateDirectory(
+    relativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    const target = await this.resolveTarget(relativePath);
+
+    await this.runExclusiveAll([target.location.absolutePath], async () => {
+      const trustedScopes = this.scopesWith(scopes);
+
+      this.assertMutableTarget(relativePath, target, trustedScopes);
+
+      const existing = await this.driver.stat(target.location.absolutePath);
+
+      if (existing !== null) {
+        if (!existing.isDirectory) {
+          throw new FileSystemError(
+            'CONFLICT',
+            target.location.relativePath,
+            `A non-directory entry already exists at "${target.location.relativePath}"`,
+          );
+        }
+
+        return;
+      }
+
+      const tracked = this.journal.enabled;
+      const mutationId = tracked ? this.newMutationId() : '';
+
+      if (tracked) {
+        this.emit(
+          'created_directory',
+          'before',
+          target,
+          mutationId,
+          missingState(),
+          directoryState(),
+        );
+      }
+
+      await createDirectoryOperation(this.driver, target.location.absolutePath);
+
+      if (tracked) {
+        const actual = await captureMutationState(
+          this.driver,
+          target.location.absolutePath,
+        );
+
+        this.emit('created_directory', 'after', target, mutationId, missingState(), actual, {
+          status: 'committed',
+          committed: true,
+        });
+      }
+    });
+  }
+
+  private async performDeleteDirectory(
+    relativePath: string,
+    scopes: readonly string[],
+  ): Promise<void> {
+    const target = await this.resolveTarget(relativePath);
+
+    await this.runExclusiveAll([target.location.absolutePath], async () => {
+      const trustedScopes = this.scopesWith(scopes);
+
+      this.assertMutableTarget(relativePath, target, trustedScopes);
+
+      const stats = await this.driver.stat(target.location.absolutePath);
+
+      if (stats === null) {
+        return;
+      }
+
+      if (!stats.isDirectory) {
+        throw new FileSystemError(
+          'CANNOT_DELETE_FILE_AS_DIRECTORY',
+          target.location.relativePath,
+          `Cannot delete a file as a directory: "${target.location.relativePath}"`,
+        );
+      }
+
+      const tracked = this.journal.enabled;
+      const mutationId = tracked ? this.newMutationId() : '';
+
+      if (tracked) {
+        await this.captureDirectoryFileStates(target, mutationId);
+        this.emit(
+          'deleted_directory',
+          'before',
+          target,
+          mutationId,
+          directoryState(),
+          missingState(),
+        );
+      }
+
+      await deleteDirectoryOperation(this.driver, target.location.absolutePath);
+
+      if (tracked) {
+        this.emit(
+          'deleted_directory',
+          'after',
+          target,
+          mutationId,
+          directoryState(),
+          missingState(),
+          { status: 'committed', committed: true },
+        );
+      }
+    });
+  }
+
+  private async assertRenamePreconditions(
+    source: ResolvedTarget,
+    destination: ResolvedTarget,
+  ): Promise<void> {
+    if ((await this.driver.lstat(source.location.absolutePath)) === null) {
+      throw new FileSystemError(
+        'FILE_NOT_FOUND',
+        source.location.relativePath,
+        `Rename source does not exist: "${source.location.relativePath}"`,
+      );
+    }
+
+    if ((await this.driver.lstat(destination.location.absolutePath)) !== null) {
+      throw new FileSystemError(
+        'CONFLICT',
+        destination.location.relativePath,
+        `Rename destination already exists: "${destination.location.relativePath}"`,
+      );
+    }
+
+    const parent = await this.driver.stat(dirname(destination.location.absolutePath));
+
+    if (parent === null || !parent.isDirectory) {
+      throw new FileSystemError(
+        'PARENT_NOT_FOUND',
+        destination.location.relativePath,
+        `Rename destination parent does not exist: "${destination.location.relativePath}"`,
+      );
+    }
+  }
+
+  private async assertCopyPreconditions(
+    source: ResolvedTarget,
+    destination: ResolvedTarget,
+  ): Promise<void> {
+    if ((await this.driver.lstat(source.location.absolutePath)) === null) {
+      throw new FileSystemError(
+        'FILE_NOT_FOUND',
+        source.location.relativePath,
+        `Copy source does not exist: "${source.location.relativePath}"`,
+      );
+    }
+
+    if ((await this.driver.lstat(destination.location.absolutePath)) !== null) {
+      throw new FileSystemError(
+        'CONFLICT',
+        destination.location.relativePath,
+        `Copy destination already exists: "${destination.location.relativePath}"`,
+      );
+    }
+
+    const parent = await this.driver.stat(dirname(destination.location.absolutePath));
+
+    if (parent === null || !parent.isDirectory) {
+      throw new FileSystemError(
+        'PARENT_NOT_FOUND',
+        destination.location.relativePath,
+        `Copy destination parent does not exist: "${destination.location.relativePath}"`,
+      );
+    }
+  }
+
+  private async captureDirectoryFileStates(
+    target: ResolvedTarget,
+    mutationId: string,
+  ): Promise<void> {
+    const pending: Array<{ readonly absolutePath: string; readonly relativePath: string }> = [
+      {
+        absolutePath: target.location.absolutePath,
+        relativePath: target.location.relativePath,
+      },
+    ];
+
+    while (pending.length > 0) {
+      const current = pending.pop();
+
+      if (current === undefined) {
+        continue;
+      }
+
+      let entries: readonly DirectoryEntry[];
+
+      try {
+        entries = await this.driver.readDir(current.absolutePath);
+      } catch {
+        continue;
+      }
+
+      for (const entry of entries) {
+        const absolutePath = `${current.absolutePath}/${entry.name}`;
+        const relativePath = `${current.relativePath}/${entry.name}`;
+
+        if (entry.isDirectory) {
+          pending.push({ absolutePath, relativePath });
+          continue;
+        }
+
+        if (!entry.isFile) {
+          continue;
+        }
+
+        const state = await captureMutationState(this.driver, absolutePath);
+
+        this.emitAtPath(
+          'unlink',
+          'before',
+          relativePath,
+          mutationId,
+          state,
+          missingState(),
+        );
+      }
+    }
+  }
+
+  private async runExclusiveAll<T>(
+    keys: readonly string[],
+    task: () => Promise<T>,
+  ): Promise<T> {
+    const uniqueKeys = [...new Set(keys)].sort();
+
+    const run = async (index: number): Promise<T> => {
+      if (index >= uniqueKeys.length) {
+        return task();
+      }
+
+      const key = uniqueKeys[index] as string;
+
+      return this.writeMutex.runExclusive(key, () => run(index + 1));
+    };
+
+    return run(0);
   }
 
   private async resolveWorkspace(): Promise<IWorkspaceService> {
@@ -665,7 +1077,10 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     mutationId: string,
     previous: FileMutationState,
     updated: FileMutationState,
-    extra?: Pick<FileMutationEvent, 'status' | 'committed' | 'error'>,
+    extra?: Pick<
+      FileMutationEvent,
+      'status' | 'committed' | 'error' | 'sourcePath' | 'destinationPath'
+    >,
   ): void {
     this.emitAtPath(
       operation,
@@ -685,7 +1100,10 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     mutationId: string,
     previous: FileMutationState,
     updated: FileMutationState,
-    extra?: Pick<FileMutationEvent, 'status' | 'committed' | 'error'>,
+    extra?: Pick<
+      FileMutationEvent,
+      'status' | 'committed' | 'error' | 'sourcePath' | 'destinationPath'
+    >,
   ): void {
     const event: FileMutationEvent = {
       mutationId,

@@ -5,7 +5,15 @@
  * patch-block mutations through the same journal even when the underlying
  * physical write is a staged full-file replacement.
  */
-export type FileMutationOperation = 'write' | 'patch' | 'unlink' | 'mkdir';
+export type FileMutationOperation =
+  | 'write'
+  | 'patch'
+  | 'unlink'
+  | 'mkdir'
+  | 'renamed'
+  | 'copied'
+  | 'created_directory'
+  | 'deleted_directory';
 
 /** Whether the descriptor was published before or after the mutation. */
 export type FileMutationPhase = 'before' | 'after';
@@ -50,6 +58,12 @@ export interface FileMutationEvent {
 
   /** Workspace-relative path of the mutated target. */
   readonly path: string;
+
+  /** Workspace-relative source path for rename and copy descriptors. */
+  readonly sourcePath?: string;
+
+  /** Workspace-relative destination path for rename and copy descriptors. */
+  readonly destinationPath?: string;
 
   /** State observed before the mutation. */
   readonly previous: FileMutationState;

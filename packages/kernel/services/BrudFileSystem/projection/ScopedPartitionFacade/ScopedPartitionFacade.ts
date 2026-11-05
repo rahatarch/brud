@@ -43,7 +43,14 @@ function assertSafeRelativePath(candidate: string, flavor: PathFlavor): string {
  * Every one of them is routed through {@link ScopedPartitionFacade.toMutableScopedPath},
  * which is where a read-only projection is enforced.
  */
-export type PartitionMutationKind = 'writeAtomic' | 'createFile' | 'deleteFile';
+export type PartitionMutationKind =
+  | 'writeAtomic'
+  | 'createFile'
+  | 'deleteFile'
+  | 'rename'
+  | 'copy'
+  | 'createDirectory'
+  | 'deleteDirectory';
 
 /**
  * Failure raised when a mutation targets a read-only projection.
@@ -161,6 +168,32 @@ export class ScopedPartitionFacade implements IBrudFileSystem {
     const scopedPath = this.toMutableScopedPath(relativePath, 'deleteFile');
 
     await this.service.deleteFile(scopedPath);
+  }
+
+  async rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    const scopedSource = this.toMutableScopedPath(sourceRelativePath, 'rename');
+    const scopedDestination = this.toMutableScopedPath(destinationRelativePath, 'rename');
+
+    await this.service.rename(scopedSource, scopedDestination);
+  }
+
+  async copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    const scopedSource = this.toMutableScopedPath(sourceRelativePath, 'copy');
+    const scopedDestination = this.toMutableScopedPath(destinationRelativePath, 'copy');
+
+    await this.service.copy(scopedSource, scopedDestination);
+  }
+
+  async createDirectory(relativePath: string): Promise<void> {
+    const scopedPath = this.toMutableScopedPath(relativePath, 'createDirectory');
+
+    await this.service.createDirectory(scopedPath);
+  }
+
+  async deleteDirectory(relativePath: string): Promise<void> {
+    const scopedPath = this.toMutableScopedPath(relativePath, 'deleteDirectory');
+
+    await this.service.deleteDirectory(scopedPath);
   }
 
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {

@@ -14,7 +14,13 @@ export class FileAlreadyExistsError extends Error {
 export type FileSystemErrorCode =
   | 'CANNOT_WRITE_DIRECTORY'
   | 'CANNOT_DELETE_DIRECTORY'
-  | 'STAGING_CONFLICT';
+  | 'CANNOT_DELETE_FILE_AS_DIRECTORY'
+  | 'STAGING_CONFLICT'
+  | 'FILE_NOT_FOUND'
+  | 'PARENT_NOT_FOUND'
+  | 'CONFLICT'
+  | 'EACCES'
+  | 'UNSUPPORTED';
 
 /** Typed filesystem failure that is not a path or workspace violation. */
 export class FileSystemError extends Error {
@@ -67,4 +73,21 @@ export function hasErrorCode(error: unknown, code: string): boolean {
 
   const value: unknown = error.code;
   return value === code;
+}
+
+export function isErrnoError(error: unknown, code: string): boolean {
+  return hasErrorCode(error, code);
+}
+
+export function isPermissionError(error: unknown): boolean {
+  return hasErrorCode(error, 'EACCES')
+    || hasErrorCode(error, 'EPERM')
+    || hasErrorCode(error, 'EROFS');
+}
+
+export function isConflictError(error: unknown): boolean {
+  return hasErrorCode(error, 'EEXIST')
+    || hasErrorCode(error, 'ENOTEMPTY')
+    || hasErrorCode(error, 'EISDIR')
+    || hasErrorCode(error, 'ENOTDIR');
 }

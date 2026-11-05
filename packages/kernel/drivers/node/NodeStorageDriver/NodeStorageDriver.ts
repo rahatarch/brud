@@ -1,6 +1,7 @@
 import { constants } from 'node:fs';
 import {
   chmod,
+  cp,
   link,
   lstat,
   mkdir,
@@ -9,6 +10,7 @@ import {
   readFile,
   realpath,
   rename,
+  rm,
   stat,
   unlink,
   writeFile,
@@ -79,8 +81,26 @@ export class NodeStorageDriver implements IStorageDriver {
     await rename(sourcePath, targetPath);
   }
 
+  async copy(sourcePath: string, targetPath: string): Promise<void> {
+    await cp(sourcePath, targetPath, {
+      recursive: true,
+      preserveTimestamps: true,
+      force: false,
+      errorOnExist: true,
+      dereference: false,
+    });
+  }
+
   async mkdir(absoluteDirectoryPath: string, options?: { recursive?: boolean }): Promise<void> {
     await mkdir(absoluteDirectoryPath, { recursive: options?.recursive ?? false });
+  }
+
+  async createDirectory(absolutePath: string): Promise<void> {
+    await mkdir(absolutePath, { recursive: true });
+  }
+
+  async deleteDirectory(absolutePath: string): Promise<void> {
+    await rm(absolutePath, { recursive: true, force: false });
   }
 
   async readDir(absoluteDirectoryPath: string): Promise<readonly DirectoryEntry[]> {

@@ -4,6 +4,10 @@ export type { WriteAtomicOptions } from './write_atomic/writeAtomic.js';
 export { createFile } from './create_file/createFile.js';
 export type { CreateFileOptions } from './create_file/createFile.js';
 export { deleteFile } from './delete_file/deleteFile.js';
+export { rename } from './rename/rename.js';
+export { copy } from './copy/copy.js';
+export { createDirectory } from './create_directory/createDirectory.js';
+export { deleteDirectory } from './delete_directory/deleteDirectory.js';
 export { readDirectory } from './read_directory/readDirectory.js';
 export { statPath } from './stat_path/statPath.js';
 export {

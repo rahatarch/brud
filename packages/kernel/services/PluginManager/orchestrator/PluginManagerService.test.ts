@@ -51,6 +51,26 @@ class RecordingFileSystem implements IBrudFileSystem {
     return Promise.resolve();
   }
 
+  public rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    this.writes.push(sourceRelativePath, destinationRelativePath);
+    return Promise.resolve();
+  }
+
+  public copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    this.writes.push(sourceRelativePath, destinationRelativePath);
+    return Promise.resolve();
+  }
+
+  public createDirectory(relativePath: string): Promise<void> {
+    this.writes.push(relativePath);
+    return Promise.resolve();
+  }
+
+  public deleteDirectory(relativePath: string): Promise<void> {
+    this.writes.push(relativePath);
+    return Promise.resolve();
+  }
+
   public readDirectory(): Promise<readonly DirectoryEntry[]> {
     return Promise.resolve([]);
   }

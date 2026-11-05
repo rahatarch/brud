@@ -15,6 +15,14 @@ export interface IBrudFileSystem {
 
   deleteFile(relativePath: string): Promise<void>;
 
+  rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void>;
+
+  copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void>;
+
+  createDirectory(relativePath: string): Promise<void>;
+
+  deleteDirectory(relativePath: string): Promise<void>;
+
   readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]>;
 
   stat(relativePath: string): Promise<FileStats | null>;

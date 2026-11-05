@@ -32,7 +32,10 @@ export interface IStorageDriver {
 
   deleteFile(absolutePath: string): Promise<void>;
   rename(sourcePath: string, targetPath: string): Promise<void>;
+  copy(sourcePath: string, targetPath: string): Promise<void>;
   mkdir(absoluteDirectoryPath: string, options?: { recursive?: boolean }): Promise<void>;
+  createDirectory(absolutePath: string): Promise<void>;
+  deleteDirectory(absolutePath: string): Promise<void>;
   readDir(absoluteDirectoryPath: string): Promise<readonly DirectoryEntry[]>;
   stat(absolutePath: string): Promise<FileStats | null>;
   exists(absolutePath: string): Promise<boolean>;

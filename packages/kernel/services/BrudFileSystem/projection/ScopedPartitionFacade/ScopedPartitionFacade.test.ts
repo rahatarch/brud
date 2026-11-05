@@ -67,6 +67,24 @@ describe('ScopedPartitionFacade', () => {
     assert.equal(await service.exists('sessions/one.json'), false);
   });
 
+  it('scopes rename, copy, createDirectory, and deleteDirectory', async () => {
+    const { facade, service } = await createFacade();
+
+    await facade.createDirectory('tree/nested');
+    await facade.writeAtomic('tree/nested/source.txt', 'payload');
+    await facade.copy('tree/nested/source.txt', 'tree/nested/copied.txt');
+    await facade.rename('tree/nested/copied.txt', 'tree/nested/renamed.txt');
+
+    assert.equal(
+      await service.readText('.brud/work/tree/nested/renamed.txt'),
+      'payload',
+    );
+    assert.equal(await service.exists('tree/nested/renamed.txt'), false);
+
+    await facade.deleteDirectory('tree');
+    assert.equal(await service.exists('.brud/work/tree'), false);
+  });
+
   it('scopes atomic writes, directory reads, stats, and deletion', async () => {
     const { facade } = await createFacade();
 
@@ -136,6 +154,10 @@ describe('ScopedPartitionFacade', () => {
     await assert.rejects(readOnly.writeAtomic('existing.txt', 'changed'), isReadOnlyViolation);
     await assert.rejects(readOnly.createFile('new.txt', 'new'), isReadOnlyViolation);
     await assert.rejects(readOnly.deleteFile('existing.txt'), isReadOnlyViolation);
+    await assert.rejects(readOnly.rename('existing.txt', 'renamed.txt'), isReadOnlyViolation);
+    await assert.rejects(readOnly.copy('existing.txt', 'copied.txt'), isReadOnlyViolation);
+    await assert.rejects(readOnly.createDirectory('directory'), isReadOnlyViolation);
+    await assert.rejects(readOnly.deleteDirectory('directory'), isReadOnlyViolation);
 
     assert.equal(await readOnly.readText('existing.txt'), 'keep');
     assert.equal(await readOnly.exists('new.txt'), false);

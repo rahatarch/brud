@@ -39,6 +39,30 @@ export class TrustedFileSystemProjection implements IBrudFileSystem {
     return this.service.deleteFileWithinScopes(relativePath, this.scopes);
   }
 
+  rename(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    return this.service.renameWithinScopes(
+      sourceRelativePath,
+      destinationRelativePath,
+      this.scopes,
+    );
+  }
+
+  copy(sourceRelativePath: string, destinationRelativePath: string): Promise<void> {
+    return this.service.copyWithinScopes(
+      sourceRelativePath,
+      destinationRelativePath,
+      this.scopes,
+    );
+  }
+
+  createDirectory(relativePath: string): Promise<void> {
+    return this.service.createDirectoryWithinScopes(relativePath, this.scopes);
+  }
+
+  deleteDirectory(relativePath: string): Promise<void> {
+    return this.service.deleteDirectoryWithinScopes(relativePath, this.scopes);
+  }
+
   readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
     return this.service.readDirectory(relativeDirectoryPath);
   }

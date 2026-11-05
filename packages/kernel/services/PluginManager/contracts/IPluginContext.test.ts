@@ -32,6 +32,22 @@ class UnusedFileSystem implements IBrudFileSystem {
     throw new Error('filesystem facade is not used in this test');
   }
 
+  async rename(): Promise<never> {
+    throw new Error('filesystem facade is not used in this test');
+  }
+
+  async copy(): Promise<never> {
+    throw new Error('filesystem facade is not used in this test');
+  }
+
+  async createDirectory(): Promise<never> {
+    throw new Error('filesystem facade is not used in this test');
+  }
+
+  async deleteDirectory(): Promise<never> {
+    throw new Error('filesystem facade is not used in this test');
+  }
+
   async readDirectory(): Promise<never> {
     throw new Error('filesystem facade is not used in this test');
   }

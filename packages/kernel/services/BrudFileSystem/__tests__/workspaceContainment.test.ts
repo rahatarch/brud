@@ -65,12 +65,27 @@ class CountingDriver implements IStorageDriver {
     await this.inner.rename(sourcePath, targetPath);
   }
 
+  async copy(sourcePath: string, targetPath: string): Promise<void> {
+    this.calls += 1;
+    await this.inner.copy(sourcePath, targetPath);
+  }
+
   async mkdir(
     absoluteDirectoryPath: string,
     options?: { recursive?: boolean },
   ): Promise<void> {
     this.calls += 1;
     await this.inner.mkdir(absoluteDirectoryPath, options);
+  }
+
+  async createDirectory(absolutePath: string): Promise<void> {
+    this.calls += 1;
+    await this.inner.createDirectory(absolutePath);
+  }
+
+  async deleteDirectory(absolutePath: string): Promise<void> {
+    this.calls += 1;
+    await this.inner.deleteDirectory(absolutePath);
   }
 
   async readDir(absoluteDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
