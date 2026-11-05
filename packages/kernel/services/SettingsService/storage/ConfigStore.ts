@@ -44,7 +44,7 @@ const DEFAULT_LOCK_RETRY_MS = 10;
 const ORPHAN_TEMP_TTL_MS = 5_000;
 
 /** Attempts made when a platform temporarily refuses an atomic rename. */
-const RENAME_ATTEMPTS = 10;
+const RENAME_ATTEMPTS = 25;
 
 /** Upper bound for the exponential rename backoff. */
 const MAX_RENAME_DELAY_MS = 200;
