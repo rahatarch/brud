@@ -138,6 +138,33 @@ Kernel-wide policy or state otherwise?        → Level-1 Service
 
 **References:** plan §Appendix G D-20 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), [UTILITY_VS_PLUGIN.md](./docs/architecture/UTILITY_VS_PLUGIN.md), D-19.
 
+## History Ledger — how plugins interact with it
+
+The UniversalHistory ledger is the codebase's memory. It records every workspace mutation, the content behind it, and the session that produced it. Plugins interact with that ledger, but they do not possess it. The threat this section addresses is exfiltration: the ledger holds your code history and the content of deleted secrets, so raw access to it would let a malicious plugin reconstruct the user's source tree without touching the filesystem.
+
+**Use the abstracted APIs.** Everything a plugin needs goes through `context.getHistory()`:
+
+- `beginSession({ targets })`, `commitSession(id, outcome)` — open and close a session.
+- `planReversal(id)`, `executeReversal(id)` — plan and perform a reversal.
+- `hasModified(path)`, `getSessionSummary(id)` — inspect what a session touched.
+- `saveMyState(key, value)`, `loadMyState<T>(key, schema)`, `hasMyState(key)`, `deleteMyState(key)` — persist typed state.
+
+The ledger is not a general-purpose read API. If a task seems to require reading raw history, it is a signal that the plugin is operating outside its namespace or that a new abstracted method is missing — stop and raise it rather than reaching around the boundary.
+
+**Raw byte access is prohibited.** No plugin receives raw SQLite rows, CAS blobs, or unvalidated JSON strings. The Kernel constructs every object that crosses the boundary. Namespace isolation is enforced by the Kernel: a session can only address the plugin's own namespace, and `brud.core.file` — the user's file mutation timeline — is never readable as raw bytes by any plugin. Cross-plugin namespace reads are rejected at the boundary, not filtered after the fact.
+
+**Use typed state for persistence.** `saveMyState` / `loadMyState` round-trips through the Kernel: the Kernel serializes on write, then deserializes and validates against your schema on read before returning a typed object. Do not store or parse serialized payloads yourself, and treat a validation failure as a real error — never fall back to parsing a string.
+
+```ts
+await history.saveMyState('cursor', { file: 'src/index.ts', line: 42 });
+
+const cursor = await history.loadMyState('cursor', CursorSchema);
+```
+
+**Reversal is bounded by the record.** Declared `targets` are routing hints, not authority. The ReversalEngine only reverts mutations the ledger recorded, using pre-states the ledger captured; it will not revert a path the session never touched.
+
+For the full model — access layers, namespace isolation, reversal safety, and the forward-looking viewer contract — see [docs/architecture/HISTORY_SECURITY_MODEL.md](./docs/architecture/HISTORY_SECURITY_MODEL.md).
+
 ## Pull Request Process
 
 1. Create a feature branch from `main`.
