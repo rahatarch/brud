@@ -934,10 +934,11 @@ flowchart TD
 
 ### 4.2 Catalog Overview
 
+**Utility:** `brud.core.utils` (not a plugin) — Level-1 service hosting pure stateless utilities. First utility: `resolveImports`. See D-19.
+
 | # | Plugin ID | Domain | Extracted from | Permissions | Dependencies | Phase |
 |---|---|---|---|---|---|---|
 | — | *(not a plugin)* | Brud Protocol v2 (`[BRUD]`) block parsing, cleaning and metadata live inside the Level-1 `BrudTools` service (`brud.core.tools`) | `parser/`, `cleaner/`, `types/patch.ts` → `packages/kernel/services/BrudTools/parser/` | — | — | 6 (service capability) |
-| 2 | `brud.codebase.imports` | Import resolution | `import-resolver/` | `fs:read` | — | 6 |
 | 3 | `brud.search` | File search and glob resolution | `search/` | `fs:read`, `tools:register` | — | 6 |
 | 4 | `brud.codebase.structure` | AST/structure and metadata extraction | `structure-extractor/`, `metadata-extractor/` | `fs:read`, `tools:register` | — | 6 |
 | 5 | `brud.prompts.library` | Static prompt library | `prompt-library/` | — | — | 6 |
@@ -948,7 +949,7 @@ flowchart TD
 | 10 | `brud.terminal` | Command execution adapter | `terminal/`, terminal branches | `terminal:execute`, `settings:read`, `tools:register` | — | 10 |
 | 11 | `brud.mcp.bridge` | MCP transport and JSON-RPC adapter | `packages/mcp` | `tools:execute`, `fs:read`, `telemetry:emit` | `brud.core.tools` (L1 service), `brud.tools.catalog` | 10 |
 
-**The registry is not a plugin, and neither is the block parser.** The table lists ten plugins plus one non-plugin capability; the live tool registry and the Brud block parser are not plugins. `BrudTools` (`brud.core.tools`) is a Level-1 core service (G-18) that boots before `PluginManager` and owns both the tool registry and the embedded parser (`parseInput` / `parseAndRoute`). Every operational plugin — `brud.tools.filesystem`, `brud.tools.reader`, `brud.terminal`, `brud.search`, `brud.codebase.structure`, and third-party packages such as `@vendor/git` — registers its tools into it through the exact same `context.registerTool(...)` API. There is no privileged registration path for official plugins; official status is a derived field, not a different contract.
+**The registry is not a plugin, and neither is the block parser.** The table lists nine plugins plus one non-plugin capability; the live tool registry and the Brud block parser are not plugins. Plugin numbering retains the original catalog ids for stability; there is no #2 after D-19 reclassified `brud.codebase.imports` as a utility. `BrudTools` (`brud.core.tools`) is a Level-1 core service (G-18) that boots before `PluginManager` and owns both the tool registry and the embedded parser (`parseInput` / `parseAndRoute`). Every operational plugin — `brud.tools.filesystem`, `brud.tools.reader`, `brud.terminal`, `brud.search`, `brud.codebase.structure`, and third-party packages such as `@vendor/git` — registers its tools into it through the exact same `context.registerTool(...)` API. There is no privileged registration path for official plugins; official status is a derived field, not a different contract.
 
 ### 4.3 Plugin Specifications
 
@@ -967,17 +968,9 @@ flowchart TD
 | Why Level-1 | Parsing is part of the execution contract: the router, the preview surfaces and the MCP bridge all need one parse result before any handler can run. A plugin would have to activate before the kernel is running or force a parent/child plugin hierarchy |
 | Legacy syntax | The 29-state FSM, the Git-diff syntax (`<<<<<<<`, `=======`, `>>>>>>>`) and the YAML format are removed and are not parseable in v0.2.0. The kernel ships no `js-yaml`, no YAML loader and no compatibility mode. See `.internal_docs/plans/2026-11-01_embed_parser_into_brudtools_plan.md` |
 
-#### 2. `brud.codebase.imports`
+#### 2. `brud.codebase.imports` — reclassified as a utility (D-19)
 
-| Field | Value |
-|---|---|
-| Purpose | Resolve module specifiers and follow imports across languages |
-| Source | `packages/core/src/import-resolver/` (`resolveImports`, `readFileWithImports`, `languagePatterns`) |
-| Permissions | `fs:read` |
-| Operations | None directly; exposes a capability used by the reader |
-| Failure mode | Unresolved imports are reported, not fatal; external packages are skipped |
-| Verify | Fixture parity for TS/JS/Python and custom import regexes; symlink containment through the filesystem facade |
-| Notes | Must consume kernel-relative paths; no `path.resolve` against `process.cwd()` |
+This is now a pure utility hosted by `brud.core.utils` (D-19). The `resolveImports` function lives at `packages/kernel/services/UtilityService/utilities/import-resolver/`. It is consumed via `context.getUtilities().resolveImports()`.
 
 #### 3. `brud.search`
 
@@ -1423,9 +1416,9 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 #### Phase 6 — Leaf Plugins and Embedded Parser
 
-**Objective:** move the five low-risk plugins out of core, proving the plugin contract, and embed the Brud Protocol v2 (`[BRUD]`) syntax engine in the Level-1 `BrudTools` service.
+**Objective:** move the four low-risk plugins out of core, proving the plugin contract, and embed the Brud Protocol v2 (`[BRUD]`) syntax engine in the Level-1 `BrudTools` service.
 
-**Plugins:** `brud.codebase.imports`, `brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`.
+**Plugins:** `brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`.
 
 **Non-plugin capability:** the `[BRUD]` block parser is **not** a plugin. It extracts `[BRUD]…[/BRUD]`, splits `[CALL tool]…[END]` calls, parses `key: value` parameters and `{param}…{/param}` protected regions, and lives in `packages/kernel/services/BrudTools/parser/`, exposed as `parseInput` / `parseAndRoute` on `IBrudToolsService`. The legacy 29-state FSM, Git-diff syntax and YAML parser are removed; there is no format sniffing. Matching (`findMatches`, `reconstructContent`, `singleMatch`) stays in `packages/core` until Phase 9.
 
@@ -1437,9 +1430,11 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 **Exit criteria (all met):** `[BRUD]` wrapper extraction works; call splitting works; parameters and protected regions parse; `parseAndRoute` validates against registered schema and dispatches through `executeTool`; no legacy grammar survives; kernel remains dependency-free.
 
-##### 6.B — Five Leaf Plugins and Legacy Import Repoint (NOT SATISFIED as of 2026-11-04)
+##### 6.B — Four Leaf Plugins and Legacy Import Repoint (NOT SATISFIED as of 2026-11-04)
 
-**Objective:** deliver the five leaf plugins (`brud.codebase.imports`, `brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`) as official plugins over the Phase 5 plugin runtime, AND repoint the 26 legacy `@brud/patchblocks` import sites to the migrated `BrudTools` capability.
+**Objective:** deliver the four leaf plugins (`brud.search`, `brud.codebase.structure`, `brud.prompts.library`, `brud.prompts.user`) as official plugins over the Phase 5 plugin runtime, AND repoint the 26 legacy `@brud/patchblocks` import sites to the migrated `BrudTools` capability.
+
+**D-19 note:** ImportResolver was reclassified as a utility per D-19 and is no longer a Phase 6.B plugin. It is hosted by `brud.core.utils` as `resolveImports`.
 
 **Work items:**
 
@@ -1447,7 +1442,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 2. Repoint the 23 legacy `@brud/patchblocks` imports in `apps/vscode` and the 3 in `tests/trace-issue11.test.ts` through a thin re-export in `@brud/vscode-adapter`. `apps/vscode` MUST NOT import `@brud/kernel` directly (§1.3 rule R1). The adapter's surface exposes `parseInput` / `parseAndRoute` equivalents backed by `IBrudToolsService`.
 3. Record the stale reference in `packages/core/QUARANTINE.md` (the fixture path `packages/plugins/brud.patchblocks/test/parity/**`) as historical debt. Under D-17, `packages/core/` is frozen and that file cannot be corrected in place. The stale path is documented here and in D-17's rationale. Phase 11 relocates the file intact into `deprecated/`, where it remains as historical record. No action is taken to modify `QUARANTINE.md` during any phase.
 4. Capture fixture parity for every leaf plugin; no unexplained diffs against the legacy implementations.
-5. Register official branding through the internal certifier for all five plugins.
+5. Register official branding through the internal certifier for all four plugins.
 6. Run each leaf plugin in shadow mode (`plugins.<id> = shadow`) first; only then promote to `active`.
 
 **Exit criteria:**
@@ -1462,7 +1457,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 **Dependency:** Phase 6.B depends on Phase 5 (plugin runtime) and Phase 5.H (unified history with O-3 closed) being satisfied. Phase 7 depends on 6.A + 6.B.
 
-**Rollback:** set the five leaf-plugin flags to `off`; the parser capability (6.A) is already landed and needs no rollback; the adapter re-export can be reverted by restoring the prior import form in `apps/vscode`.
+**Rollback:** set the four leaf-plugin flags to `off`; the parser capability (6.A) is already landed and needs no rollback; the adapter re-export can be reverted by restoring the prior import form in `apps/vscode`.
 
 **D-16:** the `@brud/patchblocks` package was migrated into Level-1 `BrudTools` as part of 6.A. The 26 remaining import sites are legacy paths, not a missing package. See §Appendix G, D-16.
 
@@ -1502,7 +1497,7 @@ A third-party manifest claiming `official: true` or a `brud.*` id fails with `Pl
 
 1. Implement the reader plugin over the read engine, with kernel-relative paths.
 2. Enforce the batch governor: concurrency bounds, file cap, aggregate-byte cap, progressive truncation, binary sniff.
-3. Compose with `brud.search` (glob candidates) and `brud.codebase.imports` (import graph) through `tools:execute`.
+3. Reader depends on `brud.core.utils.resolveImports` (Level-1 Utility Service per D-19) and `brud.search` (via `context.executeTool('search_files')`) for glob resolution.
 4. Honour abort signals and per-file skip reporting.
 5. Add the single-materialization envelope and structured result.
 6. Cut over `read_file`, `read_files`, `read_directory` per flag, read-only first.
@@ -1955,9 +1950,10 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | Phase 4 | Implemented; exit gate not ratified (`child_process` still in kernel at `ProcessManager.ts:1`) |
 | Phase 5 | Not satisfied — capability handles and G-7 FS primitives absent |
 | Phase 5.H | Partial — U-8 retention implemented; 5 open tests (O-3) block the gate |
-| Phase 6 | Split: 6.A satisfied (parser); 6.B not satisfied (five leaf plugins absent; 26 `@brud/patchblocks` imports need repoint) |
+| Phase 6 | Split: 6.A satisfied (parser); 6.B not satisfied (four leaf plugins absent; 26 `@brud/patchblocks` imports need repoint) |
+| Utility Service | Not started (D-19 introduced 2026-11-05) — must be built before Phase 8 Reader |
 | Phases 7–11 | Not started |
-| Next action | Close H4 immediately before Phase 6.B and Phase 5 open items; ratify Phases 1, 2, 4 evidence; close Phase 5.H O-3; execute Phase 6.B; then proceed to Phase 7 |
+| Next action | Close H4 immediately before Phase 6.B and Phase 5 open items; ratify Phases 1, 2, 4 evidence; close Phase 5.H O-3; introduce the `brud.core.utils` Utility Service (D-19) and reclassify ImportResolver; execute Phase 6.B (four leaf plugins); then proceed to Phase 7 |
 
 ## Appendix G — Decision Register
 
@@ -1981,6 +1977,8 @@ Neither escapes as `VALIDATION_ERROR`. The negative form (`NULL_BYTE`, reserved 
 | **D-16** | Migrate `@brud/patchblocks` into the Level-1 `BrudTools` service (2026-11-04). The package is not deleted; its parsing capability now lives at `packages/kernel/services/BrudTools/parser/` as `parseInput` / `parseAndRoute`. | The `[BRUD]` parser was always intended to be a Level-1 capability of `BrudTools` (per §3.1 G-18 and §4.3.1), not a plugin. The migration is complete; the remaining 26 legacy import sites (23 in `apps/vscode`, 3 in `tests/trace-issue11.test.ts`) are stale paths, not evidence of a missing package. | The 23 `apps/vscode` imports and the 3 test imports are repointed through a thin re-export in `@brud/vscode-adapter` (§1.3 rule R1). `apps/vscode` MUST NOT import `@brud/kernel` directly. Parser parity fixtures live at `packages/kernel/src/__tests__/`. `packages/core/QUARANTINE.md` references the fixture path that no longer reflects reality and must be corrected in Phase 6.B. The 29 current `apps/vscode` typecheck diagnostics are the expected symptom of stale imports, not a build-system regression. |
 | **D-17** | Freeze `packages/core/` from the date D-17 lands (2026-11-04) onward. `packages/core/` may be read as reference material but MUST NOT be modified, added to, or deleted from in any phase, for any reason. | `@brud/core` is being deleted in Phase 11 (D-14); every change made to it after the rollout starts is throwaway work and risks contaminating the parity evidence the rollout depends on. D-12 and D-13 already freeze consumer releases, so legacy behaviour is not a compatibility surface that requires maintenance. | Phase 11 relocates `packages/core/` into `deprecated/` **byte-identical** (physical move, not an edit). Any requirement that would have touched `packages/core/` is re-scoped to a non-core package or recorded as historical debt. Specifically, Phase 6.B work item 3 (correct `packages/core/QUARANTINE.md`) is retired — the stale reference is debt, not a fix. G-11 is superseded by Phase 10 replacement; G-13 is grandfathered (H1 predates D-17). **Effective date is prospective**: H1 and H2 (commit `25d94e3`) predate D-17 and stand as-is. |
 | **D-18** | Production-realistic, zero-mock, adversarial testing (2026-11-04). Contract implementations in this repository are exercised through real implementations on real environments, not test doubles. Filesystem tests use `DurableNodeStorageDriver` on real temporary directories. History tests use `UniversalHistory` on real SQLite files. Terminal tests use `TerminalService` spawning real processes. External services (LLM APIs, package registries, HTTP endpoints, external systems) are simulated with real-shape responses including errors, timeouts, rate limits, and malformed payloads — never mocked away with a happy-path substitute. Pure functions (parsers, hashers, schema validators) are tested directly; that is not a mock, it is the unit under test. Setup helpers that wire real implementations into a test harness (e.g., `realKernel.ts`, `kernelWorker.ts`) are permitted. Substitution helpers that replace a production contract with an in-memory or fake implementation (e.g., `InMemoryStorageDriver`, `MapPathPort`, `TestHistoryStore`) are forbidden outside `packages/core/` and are the subject of the de-mocking work that follows this decision. Adversarial coverage — injection, replay, token forgery, unauthorized access, malformed payloads, concurrent access, resource exhaustion — is mandatory for every phase's exit gate for the surfaces that phase introduces. | capability projection (§1.3 R3) is only as strong as the tests that exercise it; mocked tests pass while production fails under the same capability model. A test that never touches a real driver cannot detect a containment bug, a race, or a missing index. | the standard supersedes BEAS-0001 §6.1's sanction of "in-memory scratchpads for headless testing". `CONTRIBUTING.md`'s Testing Requirements section is rewritten to state this standard. The 2026-11-04 test-realism inventory (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`) is the evidence base. MCP's legacy bootstrap imports `TestHistoryStore` via `@brud/core/testing` today; MCP is a legacy-on-legacy path built on `bootCoreKernel` that Phase 10 rewrites as a kernel plugin (§4.2 item 11, D-4). This import is **scheduled for deletion**, not repair — it retires when the bootstrap is replaced wholesale. Any defect, finding, or debt recorded against the current MCP implementation is informational, not actionable; it is not fixed incrementally. The D-18 standard binds the surfaces that survive Phase 10 — the kernel, the daemon host, and the plugins built on them. |
+| **D-19** | Introduce Level-1 Utility Service (brud.core.utils) and reclassify ImportResolver from a plugin to a utility (2026-11-05). | ImportResolver is pure stateless logic (string → string[]). It has no I/O, no permissions, no lifecycle needs. Making it a plugin was a mislabeling in Phase 6.B. Third-party plugins cannot import utility source code from the monorepo (they have no repo access), and the Kernel has no plugin-to-plugin service registry (verified in .internal_docs/audits/2026-11-05_kernel_service_access_discovery.md). Building the 11-part service-access infrastructure for a pure utility is disproportionate. | New Level-1 service: brud.core.utils, exposed on IPluginContext as getUtilities(). It hosts pure stateless functions only (no I/O, no permissions, no side effects). ImportResolver moves from packages/plugins/ImportResolver/ to packages/kernel/services/UtilityService/utilities/import-resolver/. The plugins catalog drops from ten to nine (four leaf plugins become three: Search, Structure, UserPrompts). Third-party plugins consume utilities via context.getUtilities().resolveImports() — no npm install, no bundling. The boundary rule remains: plugins cannot import other plugins; utilities are Kernel-provided services. |
+| **D-20** | Utility vs. Plugin boundary (2026-11-05). | D-19 introduced brud.core.utils without a written rule for what belongs there. Without a boundary, the Kernel accumulates mislabeled features. The Discovery audit (2026-11-05_kernel_service_access_discovery.md) showed that plugin-to-plugin access was over-engineered for pure logic. Domain-specific pattern parsers must be classified by purity, not by language specificity. | A feature is a UTILITY if it satisfies all four: (1) pure function — same input, same output, no side effects; (2) zero ambient authority — runs with no permissions; (3) bounded computational budget — no ReDoS, no unbounded memory; (4) universal enough that more than one plugin may need it (soft guideline). A feature is a PLUGIN if it fails any of these: side effects (D1), AI invocation via tool registration (D2), or lifecycle control (D3). Domain-specific pattern parsers are utilities if pure. Reference document: docs/architecture/UTILITY_VS_PLUGIN.md. CONTRIBUTING.md contains a short section for plugin authors. The Kernel stays language-neutral: the Utility Service hosts the parsers, the plugins register the tools. **Zero Dependency (D-20 addition):** A utility MUST NOT call any plugin, Level-1 service, or Kernel context API. It depends only on (a) its own code, (b) other utilities in brud.core.utils, and (c) native language features (string methods, math, regex). It cannot receive a context handle, cannot call getFileSystem, getSettings, getTerminal, getHistory, or any executeTool. A utility that needs any of these is, by definition, a plugin. This rule makes brud.core.utils extractable as a standalone package without the Kernel. |
 
 
 

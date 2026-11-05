@@ -102,6 +102,42 @@ Capability projection (§1.3 R3 of the rollout plan) is only as strong as the te
 
 **For codebase learners.** A codebase that tests against real drivers, real SQLite files, real processes, and real transports — and that requires adversarial cases for every new surface — is telling you its quality posture directly: it expects production failures to be found in tests, not in production. The capability model is enforced by tests that would actually fail if containment, durability, or authorization regressed.
 
+## Utility vs. Plugin — where does my code go?
+
+The kernel stays language-neutral: pure helpers live in the Level-1 Utility Service (`brud.core.utils`), while plugins are runtime actors that touch the world. Use this filter before adding a capability.
+
+### Disqualifiers — if any apply, it is a plugin
+
+- **Side effects.** Touches disk, process, network, or SQLite → Plugin.
+- **AI invocation.** Registers a tool for the AI to call → Plugin.
+- **Lifecycle.** Needs a settings flag, shadow mode, or hot-swap → Plugin.
+- **Domain-specific is not a disqualifier.** A pure parser is a utility even if it knows TypeScript, Python, or YAML.
+
+### Mandates — a utility must satisfy all of these
+
+- **Mathematical purity.** Same input → same output; no side effects.
+- **Zero ambient authority.** Runs with no permissions.
+- **Bounded computational budget.** No ReDoS, no unbounded memory.
+- **Reuse (soft).** More than one plugin may need it.
+- **Zero dependency.** A utility cannot call plugins, Level-1 services, or the Kernel context. It may only call its own code, other utilities, and native language features. No `context.getFileSystem()`, no `context.executeTool()`, no `context.getSettings()`. If it needs any of those, it is a plugin.
+
+### Decision tree
+
+```text
+Touches disk, process, network, or SQLite?   → Plugin
+Registers a tool for the AI to call?          → Plugin
+Needs a flag, shadow mode, or hot-swap?       → Plugin
+Pure function with no permissions?            → Utility (brud.core.utils)
+Kernel-wide policy or state otherwise?        → Level-1 Service
+```
+
+### Examples
+
+- **Utilities:** `resolveImports`, `formatBytes`, `escapeRegex`.
+- **Plugins:** `brud.search`, `brud.codebase.structure`, `brud.terminal`.
+
+**References:** plan §Appendix G D-20 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), [UTILITY_VS_PLUGIN.md](./docs/architecture/UTILITY_VS_PLUGIN.md), D-19.
+
 ## Pull Request Process
 
 1. Create a feature branch from `main`.
