@@ -1,10 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import {
-  EXECUTION_ARTIFACT,
   KERNEL_ROOT,
   REPO_ROOT,
   stripComments,
@@ -97,15 +96,18 @@ function runTestFile(relativePath: string): { readonly status: number | null; re
 }
 
 describe('B0 Goal 2 — every rewritten filesystem test exercises the real driver', () => {
-  it('records exactly the 33 rewritten files named by the execution artifact', async () => {
-    const artifact = await readFile(EXECUTION_ARTIFACT, 'utf8');
-
+  it('lists exactly 33 rewritten test files that all exist and use a real driver', async () => {
     assert.equal(REWRITTEN_TESTS.length, 33);
 
     for (const relativePath of REWRITTEN_TESTS) {
-      assert.ok(
-        artifact.includes(basename(relativePath)),
-        `${basename(relativePath)} must be listed in the execution artifact`,
+      const source = await readFile(join(REPO_ROOT, relativePath), 'utf8');
+      const code = stripComments(source);
+
+      assert.match(source, /mkdtemp/u, `${relativePath} must allocate a real temporary directory`);
+      assert.match(
+        code,
+        /(?:DurableNodeStorageDriver|NodeStorageDriver|createStandardKernel)/u,
+        `${relativePath} must construct a real driver or the standard kernel's durable default`,
       );
     }
   });

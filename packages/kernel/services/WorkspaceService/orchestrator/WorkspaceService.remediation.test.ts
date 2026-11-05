@@ -42,7 +42,7 @@ async function createRealService(workspace: string): Promise<WorkspaceService> {
   const service = new WorkspaceService({
     roots: [workspace],
     port: createStorageDriverPathPort(new NodeStorageDriver()),
-    flavor: 'posix',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
   });
 
   await service.initialize();
@@ -57,7 +57,7 @@ async function createLexicalService(
   const service = new WorkspaceService({
     roots,
     port: options?.port ?? createStorageDriverPathPort(new NodeStorageDriver()),
-    flavor: 'posix',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
     ...(options?.primaryRoot === undefined ? {} : { primaryRoot: options.primaryRoot }),
   });
 

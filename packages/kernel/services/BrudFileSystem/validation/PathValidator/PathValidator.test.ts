@@ -225,7 +225,7 @@ describe('PathValidator', () => {
     let rootDirectory = '';
 
     before(async () => {
-      rootDirectory = await mkdtemp(join(tmpdir(), 'brud-validator-'));
+      rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-validator-')));
     });
 
     after(async () => {
@@ -324,7 +324,7 @@ describe('PathValidator', () => {
       const workspace = join(rootDirectory, 'nearest-workspace');
       await mkdir(join(workspace, 'existing'), { recursive: true });
 
-      const validator = new PathValidator(workspace, { flavor: 'posix' });
+      const validator = new PathValidator(workspace, { flavor: process.platform === 'win32' ? 'win32' : 'posix' });
       const resolved = await validator.resolveContained('existing/new/deep/file.txt', driver);
 
       assert.equal(
@@ -337,7 +337,7 @@ describe('PathValidator', () => {
       const workspace = join(rootDirectory, 'root-workspace');
       await mkdir(workspace, { recursive: true });
 
-      const validator = new PathValidator(workspace, { flavor: 'posix' });
+      const validator = new PathValidator(workspace, { flavor: process.platform === 'win32' ? 'win32' : 'posix' });
 
       assert.equal(await validator.resolveContained('', driver), await realpath(workspace));
     });

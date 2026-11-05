@@ -8,9 +8,9 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, normalize } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../src/contracts/accessBroker.js';
 import type { KernelLogger, ServiceContext } from '../../../src/contracts/lifecycle.js';
@@ -27,6 +27,21 @@ import type { TerminalValidatorPort } from '../orchestrator/TerminalService.js';
 
 const allowAll: TerminalValidatorPort = { validateCommand: () => ({ ok: true as const }) };
 
+/**
+ * Normalizes a printed working-directory path for comparison. On Windows a
+ * POSIX-shell `pwd` may print an MSYS drive path (`/c/Users/...`); convert it
+ * to the native drive form before normalizing.
+ */
+function comparablePath(value: string): string {
+  const trimmed = value.trim();
+  if (process.platform !== 'win32') {
+    return normalize(trimmed);
+  }
+  const msys = /^\/([a-zA-Z])(\/.*)?$/u.exec(trimmed);
+  const converted = msys === null ? trimmed : `${msys[1] as string}:${msys[2] ?? '\\'}`;
+  return normalize(converted).toLowerCase();
+}
+
 function recordingLogger(): KernelLogger & { readonly warnings: string[] } {
   const warnings: string[] = [];
 
@@ -42,7 +57,7 @@ function recordingLogger(): KernelLogger & { readonly warnings: string[] } {
 }
 
 async function withWorkspace(run: (workspace: string) => Promise<void>): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), 'brud-terminal-boot-'));
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), 'brud-terminal-boot-')));
 
   try {
     await run(workspace);
@@ -210,7 +225,7 @@ describe('TerminalService boot policy', () => {
       const { decision } = await runInStandardKernel(workspace, undefined, 'pwd', undefined);
 
       assert.ok(decision.ok, JSON.stringify(decision));
-      assert.equal((decision.result as TerminalRunOutcome).output.trim(), workspace);
+      assert.equal(comparablePath((decision.result as TerminalRunOutcome).output), comparablePath(workspace));
     });
   });
 });

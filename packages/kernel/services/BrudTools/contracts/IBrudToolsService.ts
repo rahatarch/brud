@@ -118,6 +118,11 @@ export interface IBrudToolsService {
   /**
    * Validates and dispatches one tool invocation.
    *
+   * Validation is performed against the target tool's registered
+   * `parametersSchema` only. There is no legacy operation-kind gate and no
+   * implicit `index`: a payload is accepted exactly when the tool's own
+   * schema accepts it.
+   *
    * Never throws for lookup or validation failures; those become `failed`
    * results. Handler faults propagate to the caller.
    *

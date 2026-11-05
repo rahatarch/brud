@@ -232,7 +232,7 @@ describe('LexicalPathEngine — migrated canonical rules', () => {
     let rootDirectory = '';
 
     before(async () => {
-      rootDirectory = await mkdtemp(join(tmpdir(), 'brud-lexical-engine-'));
+      rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-lexical-engine-')));
     });
 
     after(async () => {
@@ -308,7 +308,7 @@ describe('LexicalPathEngine — migrated canonical rules', () => {
       const workspace = join(rootDirectory, 'nearest-ws');
       await mkdir(join(workspace, 'existing'), { recursive: true });
 
-      const engine = new LexicalPathEngine(workspace, { flavor: 'posix' });
+      const engine = new LexicalPathEngine(workspace, { flavor: process.platform === 'win32' ? 'win32' : 'posix' });
 
       assert.equal(
         await engine.resolveContained('existing/new/deep/file.txt', driver),

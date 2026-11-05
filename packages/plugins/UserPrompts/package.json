@@ -1,0 +1,28 @@
+{
+  "name": "@brud/plugin-user-prompts",
+  "version": "0.0.1",
+  "description": "Isolated personal prompt vault for Brud workspaces",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}

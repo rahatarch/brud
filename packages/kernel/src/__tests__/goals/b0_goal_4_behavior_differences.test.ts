@@ -19,7 +19,7 @@ const UUID_A = '00000000-0000-4000-8000-000000000000';
 const UUID_B = '11111111-1111-4111-8111-111111111111';
 
 async function makeRoot(prefix: string): Promise<string> {
-  return mkdtemp(join(tmpdir(), `brud-goal4-${prefix}-`));
+  return realpath(await mkdtemp(join(tmpdir(), `brud-goal4-${prefix}-`)));
 }
 
 function errnoCode(error: unknown): string | undefined {
@@ -93,7 +93,8 @@ describe('B0 Goal 4 — the seven recorded behaviour differences are real', () =
       await chmod(file, 0o600);
       const after = await driver.stat(file);
 
-      assert.equal(after?.mode, 0o600);
+      // Windows synthesizes 0o666 for files and ignores chmod mode changes.
+      assert.equal(after?.mode, process.platform === 'win32' ? 0o666 : 0o600);
       assert.notEqual(after?.mode, 0o644, 'the deleted in-memory driver reported a fixed 0o644');
     } finally {
       await rm(root, { recursive: true, force: true });

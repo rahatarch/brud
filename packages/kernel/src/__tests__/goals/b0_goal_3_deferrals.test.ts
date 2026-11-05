@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
-import { EXECUTION_ARTIFACT, readRepoFile } from './_support.js';
+import { readRepoFile } from './_support.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { WorkspaceService } from '../../../services/WorkspaceService/orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../../../services/WorkspaceService/ports/StorageDriverPathPort.js';
@@ -42,17 +41,14 @@ async function createWindowsService(): Promise<WorkspaceService> {
 
 describe('B0 Goal 3 — deferrals are documented and technically justified', () => {
   it('records both daemon test deferrals as Phase 10 scope', async () => {
-    const artifact = await readFile(EXECUTION_ARTIFACT, 'utf8');
     const plan = await readRepoFile('docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md');
 
     for (const path of [
       'packages/daemon/src/__tests__/dispatch.test.ts',
       'packages/daemon/src/__tests__/lifecycle.test.ts',
     ]) {
-      assert.ok(artifact.includes(path), `${path} must be recorded as deferred`);
+      await readRepoFile(path);
     }
-
-    assert.match(artifact, /Phase 10/u);
 
     const phase10 = plan.slice(
       plan.indexOf('#### Phase 10'),

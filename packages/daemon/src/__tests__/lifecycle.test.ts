@@ -42,7 +42,7 @@ after(async () => {
 describe('daemon lifecycle', () => {
   it('boots, enforces single-instance locking, and tears down cleanly', async (t) => {
     const kernelModule = await import('@brud/kernel');
-    const storageDriver: IStorageDriver = new kernelModule.InMemoryStorageDriver();
+    const storageDriver: IStorageDriver = new kernelModule.NodeStorageDriver();
     const daemon = await createDaemon({ workspaceRoot: workspace, storageDriver });
 
     t.after(async () => {

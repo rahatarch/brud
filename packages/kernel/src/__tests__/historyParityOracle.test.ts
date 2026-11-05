@@ -27,6 +27,7 @@ import assert from 'node:assert/strict';
 import type { ChildProcess } from 'node:child_process';
 import type { TestContext } from 'node:test';
 import { createUnifiedSubject } from './historyOracle/unifiedSubject.js';
+import { waitForChildClose } from './support/childWithTimeout.js';
 import type {
   HistoryOracleSubject,
   HistoryOracleSubjectFactory,
@@ -507,7 +508,7 @@ await kernel.shutdown();
     context.after(() => import('node:fs/promises').then(({ rm }) => rm(workerPath, { force: true })));
 
     const workers = ['alpha', 'beta', 'gamma'];
-    const results = await Promise.all(workers.map((id) => new Promise<{ id: string; code: number | null; stderr: string }>((resolve, reject) => {
+    const results = await Promise.all(workers.map(async (id) => {
       const child = spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5'], {
         cwd: process.cwd(),
         stdio: ['ignore', 'ignore', 'pipe'],
@@ -515,9 +516,9 @@ await kernel.shutdown();
       let stderr = '';
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', (chunk: string) => { stderr += chunk; });
-      child.on('error', reject);
-      child.on('close', (code) => resolve({ id, code, stderr }));
-    })));
+      const code = await waitForChildClose(child);
+      return { id, code, stderr };
+    }));
 
     for (const result of results) {
       assert.equal(result.code, 0, `${result.id} failed: ${result.stderr}`);
@@ -580,10 +581,7 @@ await kernel.shutdown();
         child.stderr.on('data', (chunk: string) => { state.stderr += chunk; });
         return state;
       });
-      const exits = children.map((child) => new Promise<number | null>((settle, reject) => {
-        child.on('error', reject);
-        child.on('close', (code) => { settle(code); });
-      }));
+      const exits = children.map((child) => waitForChildClose(child));
 
       // Re-scoped acceptance (§5.4): the first read of the shared database is
       // taken the moment every worker has booted — each worker reports the
@@ -672,8 +670,10 @@ await kernel.shutdown();
   // reversals are refused. (The legacy engines failed this scenario, F-UP-1;
   // they were removed in D-15 U-7.)
   it('R4 a read-only history directory boots degraded: no recording, reversals refused', async (context) => {
-    if (isRoot) {
-      context.skip('filesystem permissions are not enforced for uid 0');
+    // Windows chmod does not enforce read-only for Administrators, so the
+    // directory stays writable and the service never enters degraded mode.
+    if (isRoot || process.platform === 'win32') {
+      context.skip('filesystem permissions are not enforced for uid 0 or Windows Administrators');
       return;
     }
     const h = await open(context, { readOnlyHistoryDirectory: true });

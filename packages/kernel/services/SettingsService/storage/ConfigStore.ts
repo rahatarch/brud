@@ -44,7 +44,10 @@ const DEFAULT_LOCK_RETRY_MS = 10;
 const ORPHAN_TEMP_TTL_MS = 5_000;
 
 /** Attempts made when a platform temporarily refuses an atomic rename. */
-const RENAME_ATTEMPTS = 3;
+const RENAME_ATTEMPTS = 25;
+
+/** Upper bound for the exponential rename backoff. */
+const MAX_RENAME_DELAY_MS = 200;
 
 /** Errno codes that indicate a rename may succeed on a later attempt. */
 const RETRYABLE_RENAME_CODES = new Set(['EPERM', 'EBUSY', 'EACCES']);
@@ -524,7 +527,14 @@ export class ConfigStore implements IConfigStore {
         }
 
         if (attempt < RENAME_ATTEMPTS - 1) {
-          await delay(this.lockRetryMs);
+          // Windows can refuse a rename over a target that another process
+          // still has open. Back off exponentially, with a floor of 10 ms so a
+          // small configured `lockRetryMs` still yields a usable budget.
+          const backoff = Math.min(
+            MAX_RENAME_DELAY_MS,
+            Math.max(this.lockRetryMs, 10) * Math.pow(2, attempt),
+          );
+          await delay(backoff);
         }
       }
     }

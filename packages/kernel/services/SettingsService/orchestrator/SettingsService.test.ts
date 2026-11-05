@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -366,7 +366,7 @@ describe('SettingsService', () => {
   });
 
   it('sweeps orphaned staging files during initialize', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-settings-init-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-settings-init-')));
 
     context.after(async () => {
       await rm(root, { recursive: true, force: true });

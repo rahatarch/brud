@@ -18,11 +18,11 @@ describe('NodeStorageDriver', () => {
   let caseDirectory = '';
 
   before(async () => {
-    rootDirectory = await mkdtemp(join(tmpdir(), 'brud-node-driver-'));
+    rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-node-driver-')));
   });
 
   beforeEach(async () => {
-    caseDirectory = await mkdtemp(join(rootDirectory, 'case-'));
+    caseDirectory = await realpath(await mkdtemp(join(rootDirectory, 'case-')));
   });
 
   afterEach(async () => {

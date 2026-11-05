@@ -5,7 +5,7 @@
  * covered by the parity oracle or another unified suite is pinned here before
  * the legacy tests are deleted. The source of each case is named in its title.
  */
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -29,7 +29,7 @@ import {
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 
 async function workspace(context: TestContext): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-carry-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-carry-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   return root;
 }

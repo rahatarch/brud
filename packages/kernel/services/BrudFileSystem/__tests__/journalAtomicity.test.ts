@@ -1,7 +1,7 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { access, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, rm, utimes, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
@@ -40,7 +40,7 @@ async function flushJournal(): Promise<void> {
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-journal-atomicity-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-journal-atomicity-')));
 });
 
 afterEach(async () => {
@@ -132,7 +132,7 @@ describe('startup staging sweep (V-8)', () => {
   });
 
   it('sweeps old staging files even when the pid was reused', async () => {
-    const sweepRoot = await mkdtemp(join(tmpdir(), 'brud-sweep-old-'));
+    const sweepRoot = await realpath(await mkdtemp(join(tmpdir(), 'brud-sweep-old-')));
 
     try {
       const oldStaging = join(sweepRoot, `.old.txt.${process.pid}.${randomUUID()}.tmp`);

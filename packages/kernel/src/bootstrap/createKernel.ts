@@ -225,9 +225,11 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // (including conditional branches) through the frozen gate before spawning,
   // and owns the only process-spawn site in the kernel.
   kernel.register(createTerminalDescriptor(options?.terminal));
-  // BrudTools (brud.core.tools) is the Level-1 tool routing table. It boots
-  // after validation (its schema gate) and before the plugin manager, so the
-  // registry is RUNNING before any plugin activates and registers into it.
+  // BrudTools (brud.core.tools) is the Level-1 tool routing table. It
+  // validates payloads against each registered tool's own JSON Schema through
+  // the zero-dependency compiler, so it declares no validation-service
+  // dependency. It sits before the plugin manager, so the registry is RUNNING
+  // before any plugin activates and registers into it.
   kernel.register(createBrudToolsDescriptor(options?.tools));
   const history = createUnifiedHistoryDescriptors({
     driver: storageDriver,

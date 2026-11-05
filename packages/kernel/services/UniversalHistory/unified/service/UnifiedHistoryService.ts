@@ -755,11 +755,12 @@ export class UnifiedHistoryService {
       payload,
       createdAt: event.timestamp,
     });
-    // A requested session that is unknown, foreign or no longer active must
-    // never be re-used: fall back to this process's own implicit session
+    // A requested session that is unknown or no longer active must never be
+    // re-used: fall back to this process's own implicit session. An active
+    // explicit session selected by attribution is a valid target
     // (D-15 F2, S2 family).
     const requested = this.options.store.getSession(sessionId);
-    if (requested === undefined || requested.status !== 'active' || requested.implicit !== true) {
+    if (requested === undefined || requested.status !== 'active') {
       sessionId = this.ensureImplicitSession();
     }
     this.options.store.appendEntries(sessionId, [prepared], { truncateRedoTail: true, advanceCursor: true });

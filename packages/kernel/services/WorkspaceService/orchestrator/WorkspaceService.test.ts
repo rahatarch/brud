@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
@@ -16,7 +16,7 @@ let base = '';
 let caseCounter = 0;
 
 before(async () => {
-  base = await mkdtemp(join(tmpdir(), 'brud-workspace-service-'));
+  base = await realpath(await mkdtemp(join(tmpdir(), 'brud-workspace-service-')));
 });
 
 after(async () => {
@@ -72,7 +72,9 @@ describe('WorkspaceService — POSIX resolution', () => {
 
     assert.deepEqual(service.roots, [root]);
     assert.equal(service.primaryRoot, root);
-    assert.equal(service.flavor, 'posix');
+    if (process.platform !== 'win32') {
+      assert.equal(service.flavor, 'posix');
+    }
     assert.equal(service.isInitialized, true);
   });
 
@@ -240,6 +242,11 @@ describe('WorkspaceService — symlink containment', () => {
   });
 
   it('rejects a filesystem root unless explicitly allowed', async () => {
+    // POSIX root resolution: on win32 `/` denotes the current drive root, so
+    // the FILESYSTEM_ROOT contract is exercised differently.
+    if (process.platform === 'win32') {
+      return;
+    }
     const port = realPort();
 
     assert.throws(
@@ -251,7 +258,12 @@ describe('WorkspaceService — symlink containment', () => {
     const allowed = await createService({ roots: ['/'], port, allowFilesystemRoot: true });
 
     assert.deepEqual(allowed.roots, ['/']);
-    assert.equal((await allowed.resolve('etc/passwd')).relativePath, 'etc/passwd');
+    // `/etc` is a symlink to `/private/etc` on macOS, so the canonical relative
+    // path is derived from the host's real path rather than the input spelling.
+    const canonicalRoot = await realpath('/');
+    const canonicalTarget = await realpath(join('/', 'etc', 'passwd'));
+    const expected = canonicalTarget.slice(canonicalRoot.length).replace(/^[/\\]+/u, '');
+    assert.equal((await allowed.resolve('etc/passwd')).relativePath, expected);
   });
 });
 

@@ -13,8 +13,10 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { waitForChildClose } from '../../../../src/__tests__/support/childWithTimeout.js';
+import { safeRm } from '../../../../src/__tests__/support/cleanup.js';
 import { appendFileSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -79,9 +81,8 @@ function readCount(workspaceRoot: string, sql: string): number {
   }
 }
 
-async function makeWorkspace(context: TestContext, prefix: string): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), prefix));
-  context.after(() => rm(root, { recursive: true, force: true }));
+async function makeWorkspace(_context: TestContext, prefix: string): Promise<string> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
   return root;
 }
 
@@ -231,10 +232,7 @@ async function bootWorker(context: TestContext, workspaceRoot: string, name: str
   child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
   child.stdout?.resume();
 
-  const exited = new Promise<number | null>((resolve, reject) => {
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code));
-  });
+  const exited = waitForChildClose(child, LINE_TIMEOUT_MS);
 
   const drain = async (): Promise<void> => {
     let text = '';
@@ -413,6 +411,7 @@ describe('history retention — a live peer\'s implicit row survives a peer\'s r
     assert.equal(readCount(root, `SELECT COUNT(*) AS n FROM entries WHERE session_id = '${live}' AND file_path = 'probe.txt'`), 1,
       `the released write did not land in the live row; rows: ${JSON.stringify(readSessions(root))}`);
     await stop(gamma.worker, { expectCleanRecording: true });
+    context.after(() => safeRm(root));
   });
 
   it('T-1.2: a worker\'s first mutation still lands in its live row after a peer\'s retention', async (context) => {
@@ -436,6 +435,7 @@ describe('history retention — a live peer\'s implicit row survives a peer\'s r
     assert.equal(readCount(root, `SELECT COUNT(*) AS n FROM entries WHERE session_id = '${live}' AND file_path IN ('live/one.txt', 'live/two.txt')`), 2,
       `the live worker's writes did not land in its own row; rows: ${JSON.stringify(readSessions(root))}, entries: ${JSON.stringify(sqlRows(root, 'SELECT seq, session_id, file_path FROM entries'))}`);
     await stop(worker, { expectCleanRecording: true });
+    context.after(() => safeRm(root));
   });
 
   it('T-1.3: a worker\'s replacement recording row survives a peer\'s retention before its first append', async (context) => {
@@ -459,6 +459,7 @@ describe('history retention — a live peer\'s implicit row survives a peer\'s r
     assert.equal(readCount(root, `SELECT COUNT(*) AS n FROM entries WHERE session_id = '${replacement}' AND file_path = 'after/one.txt'`), 1,
       'the replacement row lost its first entry');
     await stop(worker);
+    context.after(() => safeRm(root));
   });
 
   it('T-1.5: a live worker\'s checkpoint and reversal survive a peer\'s retention; a closed one\'s do not', async (context) => {
@@ -504,5 +505,6 @@ describe('history retention — a live peer\'s implicit row survives a peer\'s r
       'a closed worker\'s checkpoint was not reclaimed');
     assert.equal(readCount(root, 'SELECT COUNT(*) AS n FROM reversals'), 0,
       'a closed worker\'s reversal was not reclaimed');
+    context.after(() => safeRm(root));
   });
 });

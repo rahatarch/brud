@@ -30,8 +30,9 @@ import {
 } from '../parser/scanner.js';
 import type { BrudOperation } from '../parser/types/operations.js';
 import { ToolRegistry, type RegisteredToolEntry } from '../registry/ToolRegistry.js';
+import type { JsonSchemaViolation } from '../../ValidationService/engine/jsonSchema/index.js';
 import { compiledSchemaFor } from './schemaValidator.js';
-import type { BrudToolsDependencies, ToolSchemaDecision } from './types.js';
+import type { BrudToolsDependencies } from './types.js';
 
 /**
  * Level-1 BrudTools orchestrator.
@@ -115,18 +116,13 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
       return failed(toolFailureMessage(new ToolDisposedError()));
     }
 
-    let entry: RegisteredToolEntry;
+    const tool = this.registry.getTool(name);
 
-    try {
-      entry = this.registry.getExecutable(name);
-    } catch (error) {
-      if (error instanceof ToolNotFoundError) {
-        return failed(toolFailureMessage(error));
-      }
-
-      throw error;
+    if (tool === undefined) {
+      return failed(toolFailureMessage(new ToolNotFoundError(name)));
     }
 
+    const entry: RegisteredToolEntry = this.registry.getExecutable(name);
     const missing = missingPermissions(entry.requiredPermissions, callerContext.permissions);
 
     if (missing.length > 0) {
@@ -135,36 +131,29 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
       ));
     }
 
-    const input = normalizeInput(rawInput);
-    const validateInput = this.dependencies.validateInput;
+    // The registered schema is the only payload contract. There is no legacy
+    // operation-kind gate and no implicit `index` requirement: a tool accepts
+    // exactly what its own `parametersSchema` declares.
+    const compiled = compiledSchemaFor(tool.parametersSchema);
 
-    if (validateInput !== undefined) {
-      let decision: ToolSchemaDecision;
+    if (!compiled.ok) {
+      const detail = compiled.errors.map((error) => error.message).join('; ');
+      const message = `SCHEMA_INVALID: ${detail}`;
 
-      try {
-        decision = validateInput(entry.name, input);
-      } catch (error) {
-        // A gate fault is a deployment fault, not a caller fault. It must not
-        // become a silent `TOOL_VALIDATION_ERROR`, so it fails closed and is
-        // reported through the injected sink.
-        const message = `schema gate unavailable for tool "${name}": ${describe(error)}`;
+      this.warn(message, { tool: name });
 
-        this.warn(message, { tool: name });
-
-        return failed(message);
-      }
-
-      if (!decision.ok) {
-        const reason = decision.friendly ?? decision.code ?? 'input does not match schema';
-        const rejection = new ToolValidationError(name, reason, {
-          ...(decision.code === undefined ? {} : { validationCode: decision.code }),
-        });
-
-        return failed(toolFailureMessage(rejection));
-      }
+      return failed(message);
     }
 
-    return entry.execute(input, callerContext);
+    const validation = compiled.schema.validate(rawInput);
+
+    if (!validation.valid) {
+      return failed(toolFailureMessage(
+        new ToolValidationError(name, formatViolations(validation.violations)),
+      ));
+    }
+
+    return entry.execute(normalizeInput(rawInput), callerContext);
   }
 
   parseInput(rawInput: string, options: ParseOptions = {}): ParseResult {
@@ -320,9 +309,12 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
       }
 
       try {
+        // Dispatch a shallow copy so a handler that mutates its input cannot
+        // corrupt the frozen parsed operation. Only the protocol `index` is
+        // deliberately not injected: the tool's own schema is the contract.
         const result = await this.executeTool(
           operation.toolName,
-          { ...operation.parameters, index: operation.index },
+          { ...operation.parameters },
           callerContext,
         );
 
@@ -489,6 +481,17 @@ function aggregateStatus(
 /** Renders an unknown thrown value for a diagnostic message. */
 function describe(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+/** Renders schema violations without echoing the rejected value. */
+function formatViolations(violations: readonly JsonSchemaViolation[]): string {
+  return violations
+    .map((violation) => {
+      const instancePath = violation.instancePath === '' ? '/' : violation.instancePath;
+
+      return `${violation.keyword} at ${instancePath}: ${violation.message}`;
+    })
+    .join('; ');
 }
 
 /** Whether a handler returned a structurally valid {@link OperationResult}. */

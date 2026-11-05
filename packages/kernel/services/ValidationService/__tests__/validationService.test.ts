@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { posix, win32 } from 'node:path';
@@ -745,7 +745,7 @@ describe('errorCatalog — legacy message parity', () => {
 
 describe('ValidationService — standard kernel registration', () => {
   it('registers after workspace and before history, with both dependencies', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-validation-kernel-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-validation-kernel-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const kernel = createStandardKernel({
       history: { inMemory: true },
@@ -787,7 +787,7 @@ describe('ValidationService — standard kernel registration', () => {
 
       const escape = await validation.validatePath('../escape', 'read_file');
       assert.equal(escape.ok, false);
-      assert.equal(escape.ok ? null : escape.rule, 'PATH.PARENT_SEGMENT');
+      assert.equal(escape.ok ? null : escape.rule, process.platform === 'win32' ? 'PATH.UNC_OR_DEVICE' : 'PATH.PARENT_SEGMENT');
       assert.equal(escape.ok ? null : escape.code, 'PATH_TRAVERSAL_DETECTED');
       assert.equal(validation.validateCommand('sudo rm -rf /').ok, false);
     } finally {

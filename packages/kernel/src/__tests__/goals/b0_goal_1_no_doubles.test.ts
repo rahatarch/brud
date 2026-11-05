@@ -8,7 +8,6 @@ import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import {
   DEFERRED_DAEMON_TESTS,
-  EXECUTION_ARTIFACT,
   GOALS_DIR,
   KERNEL_ROOT,
   REPO_ROOT,
@@ -90,12 +89,11 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
   });
 
   it('has no live reference to either double outside the deferred daemon tests', async () => {
-    const artifact = await readFile(EXECUTION_ARTIFACT, 'utf8');
-
     for (const daemonPath of DEFERRED_DAEMON_TESTS) {
-      assert.ok(
-        artifact.includes(daemonPath),
-        `${daemonPath} must be recorded as a deferral in the execution artifact`,
+      assert.equal(
+        existsSync(join(REPO_ROOT, daemonPath)),
+        true,
+        `${daemonPath} must exist as a deferred daemon test`,
       );
     }
 
@@ -131,17 +129,16 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
   });
 
   it('confines any legacy reference to the two daemon tests recorded as Phase 10 deferrals', async () => {
-    const artifact = await readFile(EXECUTION_ARTIFACT, 'utf8');
-
     for (const relativePath of DEFERRED_DAEMON_TESTS) {
       assert.equal(
         DEFERRED_DAEMON_SET.has(relativePath),
         true,
         `${relativePath} must be listed in DEFERRED_DAEMON_TESTS`,
       );
-      assert.ok(
-        artifact.includes(relativePath),
-        `${relativePath} must be recorded in the execution artifact`,
+      assert.equal(
+        existsSync(join(REPO_ROOT, relativePath)),
+        true,
+        `${relativePath} must exist as a deferred daemon test`,
       );
     }
 

@@ -1,10 +1,11 @@
-import { chmod, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
+import { safeRm } from '../../../../src/__tests__/support/cleanup.js';
 import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
@@ -42,8 +43,7 @@ interface Harness {
 }
 
 async function harness(context: TestContext): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-'));
-  context.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-')));
   const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
   const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
@@ -57,7 +57,10 @@ async function harness(context: TestContext): Promise<Harness> {
     onError: (error, ctx) => errors.push({ error, context: { ...ctx } }),
   });
   await service.start();
-  context.after(() => service.dispose());
+  context.after(async () => {
+    await service.dispose();
+    await safeRm(root);
+  });
   return { service, fs, store, errors };
 }
 
@@ -91,9 +94,8 @@ interface KernelHandle {
   readonly warnings: string[];
 }
 
-async function workspace(context: TestContext): Promise<Workspace> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-d15-service-'));
-  context.after(() => rm(root, { recursive: true, force: true }));
+async function workspace(_context: TestContext): Promise<Workspace> {
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-d15-service-')));
   return { root };
 }
 
@@ -209,8 +211,7 @@ describe('UnifiedHistoryService — automatic recording (brud.core.file)', () =>
   });
 
   it('reports recording failures to the error sink and keeps recording (legacy F5)', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-'));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-')));
     const driver = new DurableNodeStorageDriver();
     const journal = createFileMutationJournal();
     const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
@@ -223,7 +224,10 @@ describe('UnifiedHistoryService — automatic recording (brud.core.file)', () =>
       onError: (error) => errors.push(error),
     });
     await service.start();
-    context.after(() => service.dispose());
+    context.after(async () => {
+      await service.dispose();
+      await safeRm(root);
+    });
 
     journal.publish({
       mutationId: 'bad',
@@ -337,8 +341,7 @@ describe('UnifiedHistoryService — registration and validation', () => {
   });
 
   it('keeps persisted schemas enforceable after the producer is gone and after restart', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-'));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-')));
     const historyRoot = join(root, '.brud', 'history');
     const make = (): UnifiedHistoryService => new UnifiedHistoryService({
       store: new UnifiedHistoryStore({ dbPath: join(historyRoot, 'universal.db'), historyRoot, driver: new DurableNodeStorageDriver() }),
@@ -359,7 +362,10 @@ describe('UnifiedHistoryService — registration and validation', () => {
 
     const second = make();
     await second.start();
-    context.after(() => second.dispose());
+    context.after(async () => {
+      await second.dispose();
+      await safeRm(root);
+    });
     const handle = second.forNamespace('acme.notes');
     const session = await handle.beginSession('after restart');
     await assert.rejects(() => handle.recordEntry(session, { type: 'note', schemaVersion: 1, payload: {} }), UnifiedEntryValidationError);
@@ -425,15 +431,13 @@ describe('UnifiedHistoryService — namespace isolation (D3, D10)', () => {
 });
 
 describe('UnifiedHistoryService — degraded storage', () => {
-  it('starts degraded on read-only storage: no recording, explicit writes refused', { skip: isRoot ? 'permissions are not enforced for uid 0' : false }, async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-degraded-'));
+  // Windows chmod does not enforce read-only for Administrators, so the
+  // directory stays writable and the service never enters degraded mode.
+  it('starts degraded on read-only storage: no recording, explicit writes refused', { skip: isRoot || process.platform === 'win32' ? 'filesystem permissions are not enforced for uid 0 or Windows Administrators' : false }, async (context) => {
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-degraded-')));
     const historyRoot = join(root, '.brud', 'history');
     await mkdir(historyRoot, { recursive: true });
     await chmod(historyRoot, 0o555);
-    context.after(async () => {
-      await chmod(historyRoot, 0o755);
-      await rm(root, { recursive: true, force: true });
-    });
     const driver = new DurableNodeStorageDriver();
     const journal = createFileMutationJournal();
     const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
@@ -444,7 +448,11 @@ describe('UnifiedHistoryService — degraded storage', () => {
       journal,
     });
     await service.start();
-    context.after(() => service.dispose());
+    context.after(async () => {
+      await service.dispose();
+      await chmod(historyRoot, 0o755).catch(() => undefined);
+      await safeRm(root);
+    });
 
     assert.equal(service.isDegraded, true);
     await fs.writeAtomic('src/x.txt', 'payload');
@@ -457,8 +465,8 @@ describe('UnifiedHistoryService — degraded storage', () => {
 
 describe('UnifiedHistoryService — dispose', () => {
   it('closes the implicit session and releases reversal callbacks without unregistering the type', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-dispose-'));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-dispose-')));
+    context.after(() => safeRm(root));
     const driver = new DurableNodeStorageDriver();
     const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver });
     const service = new UnifiedHistoryService({ store, fileSystem: () => { throw new Error('unused'); } });
@@ -513,6 +521,7 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     assert.equal(sessionOf(a, aId as string)?.status, 'active');
     assert.deepEqual(a.codes, [], `A reported: ${a.codes.join(', ')}`);
     assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+    context.after(() => safeRm(ws.root));
   });
 
   it('A2 a later service never adopts a committed implicit row from a disposed process (F3)', async (context) => {
@@ -549,6 +558,7 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     assert.equal((await entriesIn(b, bId as string)).filter((row) => row.filePath === 'b/after.txt').length, 1);
     assert.equal((await entriesIn(b, aId)).filter((row) => row.filePath === 'b/after.txt').length, 0);
     assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+    context.after(() => safeRm(ws.root));
   });
 
   it('A3 a lost implicit session is recovered once, loudly, and the mutation is still recorded (F2)', async (context) => {
@@ -579,6 +589,7 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
 
     assert.equal(a.codes.filter((code) => code === 'HISTORY_SESSION_RECOVERED').length, 1, `recovery reported exactly once: ${a.codes.join(', ')}`);
     assert.equal(a.codes.includes('HISTORY_RECORDING_FAILED'), false, 'a recovery is not a recording failure');
+    context.after(() => safeRm(ws.root));
   });
 
   it('A4 a session that closes after attribution is replaced at the append, never re-used (F2, S2 family)', async (context) => {
@@ -593,13 +604,15 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     a.codes.length = 0;
 
     // A real write: `attribute()` selects the declared explicit session, then
-    // the recording is queued. Closing the session before the queue drains
-    // makes the requested id non-active at the `recordMutation` liveness check
-    // — exactly the `:613-615` path A4 targets. No error may surface, and the
-    // entry must land in this process's live implicit session.
+    // the recording is queued. Closing the session directly on the store
+    // before the queue drains makes the requested id non-active at the
+    // `recordMutation` liveness check — exactly the append-time fallback A4
+    // targets. `commitSession` would flush first and mask the race. No error
+    // may surface, and the entry must land in this process's live implicit
+    // session.
     const write = a.fs.writeAtomic('a/mid-write.txt', 'between attribute and append\n');
     await write;
-    await a.service.commitSession(explicit, 'completed');
+    a.service.store.transitionSession(explicit, ['active'], 'committed', Date.now());
     await a.service.flush();
 
     assert.equal(a.codes.includes('HISTORY_RECORDING_FAILED'), false, `recording failed: ${a.codes.join(', ')}`);
@@ -607,6 +620,7 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     assert.equal((await entriesIn(a, explicit)).filter((row) => row.filePath === 'a/mid-write.txt').length, 0);
     assert.equal((await entriesIn(a, implicit)).filter((row) => row.filePath === 'a/mid-write.txt').length, 1, 'recorded, not dropped');
     assert.equal(a.service.implicitSession, implicit, 'the live implicit session was stable');
+    context.after(() => safeRm(ws.root));
   });
 
   it('A5 a second kernel booted while a foreign implicit row is active never registers it (F3, resolution site)', async (context) => {
@@ -643,6 +657,7 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     const aEntries = await entriesIn(a, aId);
     assert.deepEqual(aEntries.map((row) => row.filePath), ['a', 'a/live.txt'], 'A recorded only its own mutations');
     assert.deepEqual(b.codes, [], `B reported: ${b.codes.join(', ')}`);
+    context.after(() => safeRm(ws.root));
   });
 
   it('A7 a checkpoint on the boot-time implicit session has a real active session id (INV-2)', async (context) => {
@@ -664,5 +679,6 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     assert.equal(stored.sessionId, a.service.implicitSession);
     assert.equal(sessionOf(a, stored.sessionId)?.status, 'active');
     assert.equal(sessionOf(a, stored.sessionId)?.implicit, true);
+    context.after(() => safeRm(ws.root));
   });
 });

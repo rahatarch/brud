@@ -5,7 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,6 +13,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
+import { safeRm } from '../../../../src/__tests__/support/cleanup.js';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import type { KernelLogger, ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import type { BrudKernel } from '../../../../src/engine/BrudKernel.js';
@@ -98,8 +99,8 @@ interface FixtureManifest {
  * made before any import, so source hashes are taken after this step.
  */
 async function legacyFixture(context: TestContext): Promise<Fixture> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-import-'));
-  context.after(() => rm(root, { recursive: true, force: true }));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-import-')));
+  void context;
   await cp(join(FIXTURE_DIR, 'workspace'), root, { recursive: true });
   await cp(join(FIXTURE_DIR, 'history'), join(root, '.brud', 'history'), { recursive: true });
   const manifest = JSON.parse(await readFile(join(FIXTURE_DIR, 'manifest.json'), 'utf8')) as FixtureManifest;
@@ -182,6 +183,7 @@ describe('legacy history import (G-U5)', () => {
     assert.equal(unifiedCounts(fixture.root).entries, first.entries);
     assert.deepEqual(await sourceHashes(fixture.root), before);
     assert.deepEqual(again.warnings.filter((w) => w.meta?.code === 'HISTORY_IMPORT_FAILED'), []);
+    context.after(() => safeRm(fixture.root));
   });
 
   it('reports a legacy source that changed after import and does not import it again', async (context) => {
@@ -201,6 +203,7 @@ describe('legacy history import (G-U5)', () => {
     assert.equal(changed[0]?.meta?.source, 'ledger.db');
     assert.equal(changed[0]?.meta?.status, 'source-changed');
     assert.equal(unifiedCounts(fixture.root).entries, counts.entries);
+    context.after(() => safeRm(fixture.root));
   });
 
   it('rebuilds text sessions from the legacy diff when the journal holds no copy', async (context) => {
@@ -220,11 +223,12 @@ describe('legacy history import (G-U5)', () => {
     assert.equal(plan.isExecutable, true, JSON.stringify(plan.conflicts));
     await unified.sessions.executeReversal(plan);
     assert.equal(await unified.fs.readText('src/app.txt'), 'line1\nline2\n');
+    context.after(() => safeRm(fixture.root));
   });
 
   it('boots without legacy files and records no imports', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-noimport-'));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-noimport-')));
+    context.after(() => safeRm(root));
     const unified = await boot(root);
     await unified.kernel.shutdown();
     assert.equal(existsSync(join(root, '.brud', 'history', 'ledger.db')), false);

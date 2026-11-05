@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,7 +20,7 @@ interface Outbox {
 
 describe('real child-process concurrency', () => {
   it('three kernels boot, execute, write and exit cleanly', { timeout: 120_000 }, async (t) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-concurrency-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-concurrency-')));
     t.after(() => rm(root, { recursive: true, force: true }));
 
     const outboxes = WORKERS.map((workerId) => join(root, `outbox-${workerId}.json`));

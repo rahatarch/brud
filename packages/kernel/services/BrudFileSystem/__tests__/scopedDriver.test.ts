@@ -1,8 +1,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
@@ -10,7 +10,7 @@ import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-scoped-driver-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-scoped-driver-')));
 });
 
 afterEach(async () => {
@@ -91,6 +91,8 @@ function sortEntries<T extends { name: string }>(entries: readonly T[]): T[] {
   return [...entries].sort((left, right) => left.name.localeCompare(right.name));
 }
 
+const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 describe('BrudFileSystem scoped storage driver', () => {
   it('stages, flushes, renames, and flushes the containing directory for writes', async () => {
     const { service, driver } = await createHarness();
@@ -99,12 +101,13 @@ describe('BrudFileSystem scoped storage driver', () => {
 
     const [mkdirCall, writeCall, syncCall, renameCall, syncDirectoryCall] = driver.calls;
 
-    assert.equal(mkdirCall, `mkdir:${root}/reports`);
-    assert.match(writeCall ?? '', new RegExp(`^writeFile:${root}/reports/\\.summary\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
+    const reports = join(root, 'reports');
+    assert.equal(mkdirCall, `mkdir:${reports}`);
+    assert.match(writeCall ?? '', new RegExp(`^writeFile:${escapeRegExp(reports)}${escapeRegExp(sep)}\\.summary\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
     const temporaryPath = (writeCall ?? '').slice('writeFile:'.length);
     assert.equal(syncCall, `syncFile:${temporaryPath}`);
-    assert.equal(renameCall, `rename:${temporaryPath}->${root}/reports/summary.txt`);
-    assert.equal(syncDirectoryCall, `syncDirectory:${root}/reports`);
+    assert.equal(renameCall, `rename:${temporaryPath}->${join(reports, 'summary.txt')}`);
+    assert.equal(syncDirectoryCall, `syncDirectory:${reports}`);
     assert.equal(driver.calls.length, 5);
     assert.equal(await service.readText('reports/summary.txt'), 'payload');
     assert.equal(await driver.exists(temporaryPath), false);
@@ -118,27 +121,27 @@ describe('BrudFileSystem scoped storage driver', () => {
     const [mkdirCall, writeCall, syncCall, renameCall, syncDirectoryCall] = driver.calls;
 
     assert.equal(mkdirCall, `mkdir:${root}`);
-    assert.match(writeCall ?? '', new RegExp(`^writeFile:${root}/\\.created\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
+    assert.match(writeCall ?? '', new RegExp(`^writeFile:${escapeRegExp(root)}${escapeRegExp(sep)}\\.created\\.txt\\.\\d+\\.[0-9a-f-]{36}\\.tmp$`, 'u'));
     const temporaryPath = (writeCall ?? '').slice('writeFile:'.length);
     assert.equal(syncCall, `syncFile:${temporaryPath}`);
-    assert.equal(renameCall, `rename:${temporaryPath}->${root}/created.txt`);
+    assert.equal(renameCall, `rename:${temporaryPath}->${join(root, 'created.txt')}`);
     assert.equal(syncDirectoryCall, `syncDirectory:${root}`);
     assert.equal(driver.calls.length, 5);
-    assert.equal(driver.calls.includes(`writeFile:${root}/created.txt`), false);
+    assert.equal(driver.calls.includes(`writeFile:${join(root, 'created.txt')}`), false);
   });
 
   it('flushes the containing directory after a delete', async () => {
     const { service, driver } = await createHarness();
 
-    await driver.mkdir(`${root}/reports`, { recursive: true });
-    await driver.writeFile(`${root}/reports/old.txt`, 'old');
+    await driver.mkdir(join(root, 'reports'), { recursive: true });
+    await driver.writeFile(join(root, 'reports', 'old.txt'), 'old');
     driver.reset();
 
     await service.deleteFile('reports/old.txt');
 
     assert.deepEqual(driver.calls, [
-      `deleteFile:${root}/reports/old.txt`,
-      `syncDirectory:${root}/reports`,
+      `deleteFile:${join(root, 'reports', 'old.txt')}`,
+      `syncDirectory:${join(root, 'reports')}`,
     ]);
     assert.equal(await service.exists('reports/old.txt'), false);
   });
