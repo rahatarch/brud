@@ -74,7 +74,9 @@ describe('metadata preservation (V-10)', () => {
     await service.writeAtomic('run.sh', '#!/bin/sh\necho new\n');
 
     const stats = await stat(scriptPath);
-    assert.equal(stats.mode & 0o777, 0o755);
+    // Windows does not expose POSIX permission bits: files are synthesized as
+    // 0o666 and chmod mode changes are ignored.
+    assert.equal(stats.mode & 0o777, process.platform === 'win32' ? 0o666 : 0o755);
   });
 
   it('defaults new files to safe permissions', async () => {
@@ -87,7 +89,8 @@ describe('metadata preservation (V-10)', () => {
     await service.writeAtomic('fresh.txt', 'payload');
 
     const stats = await stat(join(workspace, 'fresh.txt'));
-    assert.equal(stats.mode & 0o777, 0o644);
+    // Windows synthesizes 0o666 for files instead of the POSIX default.
+    assert.equal(stats.mode & 0o777, process.platform === 'win32' ? 0o666 : 0o644);
   });
 
   it('preserves an existing file mode as well', async () => {
@@ -103,6 +106,7 @@ describe('metadata preservation (V-10)', () => {
 
     await service.writeAtomic('tool', 'v2');
 
-    assert.equal((await service.stat('tool'))?.mode, 0o755);
+    // Windows does not preserve POSIX mode bits across replacement either.
+    assert.equal((await service.stat('tool'))?.mode, process.platform === 'win32' ? 0o666 : 0o755);
   });
 });

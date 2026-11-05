@@ -1,4 +1,4 @@
-import { posix } from 'node:path';
+import { posix, win32 } from 'node:path';
 import { after, before, beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, symlink, writeFile, realpath } from 'node:fs/promises';
@@ -7,6 +7,8 @@ import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { CanonicalizationCache, canonicalizeNearestExisting } from './canonicalization.js';
+
+const pathMod = process.platform === 'win32' ? win32 : posix;
 
 let base = '';
 let root = '';
@@ -37,7 +39,7 @@ describe('canonicalizeNearestExisting', () => {
     await mkdir(join(root, 'notes'));
     await writeFile(join(root, 'notes/a.md'), 'a');
 
-    const outcome = await canonicalizeNearestExisting(port, posix, join(root, 'notes/a.md'));
+    const outcome = await canonicalizeNearestExisting(port, pathMod, join(root, 'notes/a.md'));
 
     assert.deepEqual(outcome, {
       ok: true,
@@ -51,7 +53,7 @@ describe('canonicalizeNearestExisting', () => {
     const port = realPort();
     await mkdir(join(root, 'notes'));
 
-    const outcome = await canonicalizeNearestExisting(port, posix, join(root, 'notes/deep/new/file.txt'));
+    const outcome = await canonicalizeNearestExisting(port, pathMod, join(root, 'notes/deep/new/file.txt'));
 
     assert.deepEqual(outcome, {
       ok: true,
@@ -66,7 +68,7 @@ describe('canonicalizeNearestExisting', () => {
     await mkdir(join(root, 'real'));
     await symlink(join(root, 'real'), join(root, 'link'));
 
-    const outcome = await canonicalizeNearestExisting(port, posix, join(root, 'link/a.md'));
+    const outcome = await canonicalizeNearestExisting(port, pathMod, join(root, 'link/a.md'));
 
     assert.equal(outcome.ok, true);
     assert.equal(outcome.ok ? outcome.canonical : '', join(root, 'real/a.md'));
@@ -78,17 +80,20 @@ describe('canonicalizeNearestExisting', () => {
     await symlink(join(base, 'missing-target'), join(root, 'dangling'));
 
     assert.deepEqual(
-      await canonicalizeNearestExisting(port, posix, join(root, 'dangling/file.txt')),
+      await canonicalizeNearestExisting(port, pathMod, join(root, 'dangling/file.txt')),
       { ok: false, reason: 'DANGLING_SYMLINK' },
     );
   });
 
   it('walks to the filesystem root when nothing exists', async () => {
     const port = realPort();
-    const outcome = await canonicalizeNearestExisting(port, posix, '/nothing/here');
+    const missing = process.platform === 'win32'
+      ? pathMod.join(pathMod.parse(root).root, `brud-missing-${process.pid}-${Date.now()}`)
+      : '/nothing/here';
+    const outcome = await canonicalizeNearestExisting(port, pathMod, missing);
 
     assert.equal(outcome.ok, true);
-    assert.equal(outcome.ok ? outcome.canonical : '', '/nothing/here');
+    assert.equal(outcome.ok ? outcome.canonical : '', missing);
   });
 });
 
@@ -98,8 +103,8 @@ describe('CanonicalizationCache', () => {
     await writeFile(join(root, 'a.md'), 'a');
     const cache = new CanonicalizationCache();
 
-    await cache.canonicalize(port, posix, join(root, 'a.md'));
-    await cache.canonicalize(port, posix, join(root, 'a.md'));
+    await cache.canonicalize(port, pathMod, join(root, 'a.md'));
+    await cache.canonicalize(port, pathMod, join(root, 'a.md'));
 
     assert.equal(cache.misses, 1);
     assert.equal(cache.hits, 1);
@@ -110,8 +115,8 @@ describe('CanonicalizationCache', () => {
     const port = realPort();
     const cache = new CanonicalizationCache();
 
-    await cache.canonicalize(port, posix, join(root, 'new/deep.txt'));
-    await cache.canonicalize(port, posix, join(root, 'new/deep.txt'));
+    await cache.canonicalize(port, pathMod, join(root, 'new/deep.txt'));
+    await cache.canonicalize(port, pathMod, join(root, 'new/deep.txt'));
 
     assert.equal(cache.misses, 2);
     assert.equal(cache.hits, 0);
@@ -123,8 +128,8 @@ describe('CanonicalizationCache', () => {
     await symlink(join(base, 'missing-target'), join(root, 'link'));
     const cache = new CanonicalizationCache();
 
-    const first = await cache.canonicalize(port, posix, join(root, 'link'));
-    const second = await cache.canonicalize(port, posix, join(root, 'link'));
+    const first = await cache.canonicalize(port, pathMod, join(root, 'link'));
+    const second = await cache.canonicalize(port, pathMod, join(root, 'link'));
 
     assert.equal(first.ok, false);
     assert.equal(second.ok, false);
@@ -136,9 +141,9 @@ describe('CanonicalizationCache', () => {
     await writeFile(join(root, 'a.md'), 'a');
     const cache = new CanonicalizationCache();
 
-    await cache.canonicalize(port, posix, join(root, 'a.md'));
+    await cache.canonicalize(port, pathMod, join(root, 'a.md'));
     cache.clear();
-    await cache.canonicalize(port, posix, join(root, 'a.md'));
+    await cache.canonicalize(port, pathMod, join(root, 'a.md'));
 
     assert.equal(cache.size, 1);
     assert.equal(cache.misses, 2);

@@ -15,6 +15,7 @@ import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import { waitForChildClose, waitForChildData } from '../../../../src/__tests__/support/childWithTimeout.js';
+import { safeRm } from '../../../../src/__tests__/support/cleanup.js';
 import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
@@ -45,7 +46,6 @@ async function harness(context: TestContext): Promise<Harness> {
   const now = (): number => clock.now;
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-retention-')));
   const history = join(root, '.brud/history');
-  context.after(() => rm(root, { recursive: true, force: true }));
   const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
   const fs = new BrudFileSystem(root, driver, { mutationJournal: journal });
@@ -53,7 +53,10 @@ async function harness(context: TestContext): Promise<Harness> {
   const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: history, driver, now });
   const service = new UnifiedHistoryService({ store, fileSystem: () => fs, journal, now });
   await service.start();
-  context.after(() => service.dispose());
+  context.after(async () => {
+    await service.dispose();
+    await safeRm(root);
+  });
   const engine = new ReversalEngine({ service, fileSystem: () => fs, now });
   return { clock, root, history, driver, fs, store, service, engine };
 }
@@ -280,22 +283,24 @@ describe('history garbage collection (D-15 U-8)', () => {
   });
 
   it('skips retention and collection while degraded', async (context) => {
-    if (isRoot) {
-      context.skip('filesystem permissions are not enforced for uid 0');
+    // Windows chmod does not enforce read-only for Administrators, so the
+    // directory stays writable and the store never enters degraded mode.
+    if (isRoot || process.platform === 'win32') {
+      context.skip('filesystem permissions are not enforced for uid 0 or Windows Administrators');
       return;
     }
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-ro-')));
     const historyRoot = join(root, '.brud', 'history');
     await mkdir(historyRoot, { recursive: true });
     await chmod(historyRoot, 0o555);
-    context.after(async () => {
-      await chmod(historyRoot, 0o755);
-      await rm(root, { recursive: true, force: true });
-    });
     const store = new UnifiedHistoryStore({ dbPath: join(historyRoot, 'universal.db'), historyRoot, driver: new DurableNodeStorageDriver() });
     const service = new UnifiedHistoryService({ store, fileSystem: () => { throw new Error('unused'); } });
     await service.start();
-    context.after(() => service.dispose());
+    context.after(async () => {
+      await service.dispose();
+      await chmod(historyRoot, 0o755).catch(() => undefined);
+      await safeRm(root);
+    });
 
     assert.equal(service.isDegraded, true);
     assert.deepEqual(await service.runRetention({ retentionDays: 90, minUndoEntries: 1 }), { skipped: 'degraded' });
@@ -305,7 +310,6 @@ describe('history garbage collection (D-15 U-8)', () => {
 describe('history retention — INV-3 keeps the live implicit session (D-15 A6)', () => {
   it('A6 retention keeps the implicit session this process is recording into, even after it had to be replaced', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-d15-a6-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
     const driver = new DurableNodeStorageDriver();
@@ -316,7 +320,10 @@ describe('history retention — INV-3 keeps the live implicit session (D-15 A6)'
     const store = new UnifiedHistoryStore({ dbPath, historyRoot, driver });
     const service = new UnifiedHistoryService({ store, fileSystem: () => fs, journal });
     await service.start();
-    context.after(() => service.dispose());
+    context.after(async () => {
+      await service.dispose();
+      await safeRm(root);
+    });
 
     // A second, empty implicit row that belongs to no live process; it is the
     // row retention is free to reclaim.
@@ -348,7 +355,7 @@ describe('history retention — INV-3 keeps the live implicit session (D-15 A6)'
 describe('history retention at boot through settings (D-15 U-8)', () => {
   it('runs after RUNNING with the frozen settings: a longer user retention keeps what the default removes', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-boot-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    context.after(() => safeRm(root));
     const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', workspaceRoot: root };
     const boot = async (user: Record<string, unknown> | null): Promise<ReturnType<typeof createStandardKernel>> => {
       const kernel = createStandardKernel({
@@ -389,7 +396,6 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
   /** A real store over a real database file under `mkdtemp`. */
   async function fileStore(context: TestContext, prefix: string): Promise<{ root: string; dbPath: string; store: UnifiedHistoryStore }> {
     const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
-    context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
     const store = new UnifiedHistoryStore({ dbPath, historyRoot, driver: new DurableNodeStorageDriver() });
@@ -443,7 +449,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
   }
 
   it('T-2.2: the claim is published by the same INSERT as the row', async (context) => {
-    const { dbPath, store } = await fileStore(context, 'brud-rl-t22-');
+    const { root, dbPath, store } = await fileStore(context, 'brud-rl-t22-');
     const live = store.createSession({
       prompt: 'automatic recording',
       implicit: true,
@@ -457,6 +463,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     assert.equal(metadata.brudHistoryClaim?.alive, 1);
     assert.equal(metadata.brudHistoryClaim?.releasedAt, null);
     assert.deepEqual(metadata.declaredTargets, ['kept.txt']);
+    context.after(() => safeRm(root));
   });
 
   it('T-2.2-b: while the insert waits on another writer no reader can observe the row', async (context) => {
@@ -507,11 +514,12 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     assert.deepEqual(rows.map((row) => row.session_id), [inserted.sessionId]);
     const metadata = JSON.parse(rows[0]?.metadata ?? '{}') as { brudHistoryClaim?: { alive?: number } };
     assert.equal(metadata.brudHistoryClaim?.alive, 1);
+    context.after(() => safeRm(root));
   });
 
   it('T-2.3: dispose and rotation release the claim on the row itself', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t23-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    context.after(() => safeRm(root));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
     const driver = new DurableNodeStorageDriver();
@@ -545,7 +553,6 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
 
   it('T-2.4: a SIGKILLed owner\'s claim is released and its row reclaimed on the next boot', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t24-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
     // A real process that boots a kernel, leaves an unclaimed-entry row behind,
@@ -591,10 +598,11 @@ await new Promise(() => {});
     const report = store.applyRetention({ cutoffMs: Date.now(), minUndoEntries: 1 });
     assert.ok(report.sessionsRemoved >= 1, `retention removed ${report.sessionsRemoved} sessions`);
     assert.deepEqual(rawSessions(dbPath), [], 'the crashed owner\'s empty row survived retention');
+    context.after(() => safeRm(root));
   });
 
   it('T-2.2-c: the row and its claim are committed by exactly one transaction', async (context) => {
-    const { dbPath, store } = await fileStore(context, 'brud-rl-t22c-');
+    const { root, dbPath, store } = await fileStore(context, 'brud-rl-t22c-');
     // A reader connection independent of the store's own.
     const reader = new DatabaseSync(dbPath);
     context.after(() => reader.close());
@@ -635,11 +643,11 @@ await new Promise(() => {});
     assert.equal(metadata.brudHistoryClaim?.alive, 1);
     assert.equal(metadata.brudHistoryClaim?.releasedAt, null);
     assert.deepEqual(metadata.declaredTargets, ['kept.txt']);
+    context.after(() => safeRm(root));
   });
 
   it('T-2.4-b: the reducer inside applyRetention releases a crashed owner\'s claim, not the boot sweep', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t24b-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
     // A real process boots a kernel, leaves a claimed empty row behind, and is
@@ -694,10 +702,11 @@ await new Promise(() => {});
     const liveClaim = (JSON.parse(liveRow.metadata ?? '{}') as { brudHistoryClaim?: { alive?: number; releasedAt?: number | null } }).brudHistoryClaim;
     assert.equal(liveClaim?.alive, 1, 'the reducer released a claim whose owner is alive');
     assert.equal(liveClaim?.releasedAt, null);
+    context.after(() => safeRm(root));
   });
 
   it('N-1: a live claim pasted into metadata does not make an unclaimed row live', async (context) => {
-    const { dbPath, store } = await fileStore(context, 'brud-rl-n1-');
+    const { root, dbPath, store } = await fileStore(context, 'brud-rl-n1-');
     const live = store.createSession({ prompt: 'automatic recording', implicit: true, now: Date.now(), claim: claim(process.pid) });
     const liveRow = rawSessions(dbPath).find((row) => row.session_id === live.sessionId);
     const parsedMetadata = JSON.parse(liveRow?.metadata ?? '{}') as { brudHistoryClaim?: Record<string, unknown> };
@@ -721,5 +730,6 @@ await new Promise(() => {});
     assert.equal(survivors.includes(impostor.sessionId), false,
       'a row whose metadata merely contains a live claim was treated as live');
     assert.equal(survivors.includes(live.sessionId), true, 'the claimed row was removed');
+    context.after(() => safeRm(root));
   });
 });

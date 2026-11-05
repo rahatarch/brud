@@ -156,7 +156,7 @@ async function createHarness(): Promise<{
     roots: [root],
     primaryRoot: root,
     port: createStorageDriverPathPort(driver),
-    flavor: 'posix',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
   });
 
   await inner.initialize();

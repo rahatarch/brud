@@ -670,8 +670,10 @@ await kernel.shutdown();
   // reversals are refused. (The legacy engines failed this scenario, F-UP-1;
   // they were removed in D-15 U-7.)
   it('R4 a read-only history directory boots degraded: no recording, reversals refused', async (context) => {
-    if (isRoot) {
-      context.skip('filesystem permissions are not enforced for uid 0');
+    // Windows chmod does not enforce read-only for Administrators, so the
+    // directory stays writable and the service never enters degraded mode.
+    if (isRoot || process.platform === 'win32') {
+      context.skip('filesystem permissions are not enforced for uid 0 or Windows Administrators');
       return;
     }
     const h = await open(context, { readOnlyHistoryDirectory: true });

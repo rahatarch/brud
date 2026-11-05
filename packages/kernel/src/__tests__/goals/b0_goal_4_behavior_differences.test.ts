@@ -93,7 +93,8 @@ describe('B0 Goal 4 — the seven recorded behaviour differences are real', () =
       await chmod(file, 0o600);
       const after = await driver.stat(file);
 
-      assert.equal(after?.mode, 0o600);
+      // Windows synthesizes 0o666 for files and ignores chmod mode changes.
+      assert.equal(after?.mode, process.platform === 'win32' ? 0o666 : 0o600);
       assert.notEqual(after?.mode, 0o644, 'the deleted in-memory driver reported a fixed 0o644');
     } finally {
       await rm(root, { recursive: true, force: true });

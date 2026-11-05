@@ -40,7 +40,7 @@ async function createAdapter(workspace: string): Promise<WorkspacePathAdapter> {
   const service = new WorkspaceService({
     roots: [workspace],
     port: createStorageDriverPathPort(new NodeStorageDriver()),
-    flavor: 'posix',
+    flavor: process.platform === 'win32' ? 'win32' : 'posix',
   });
   await service.initialize();
 

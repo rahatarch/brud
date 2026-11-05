@@ -55,6 +55,9 @@ function outcomeOf(result: TerminalRunOutcome | TerminalGroupOutcome): TerminalR
   return Array.isArray(group.results) ? (group.results[0] as TerminalRunOutcome) : (result as TerminalRunOutcome);
 }
 
+// POSIX shell syntax; ShellAdapter uses cmd.exe on win32.
+const skipPosixShell = process.platform === 'win32';
+
 /**
  * Builds an engine-isolation harness: no validation authority is bound, so the
  * test-only flag is required and every assertion below still exercises the
@@ -119,7 +122,7 @@ describe('TerminalService security and limits', () => {
     await service.dispose();
   });
 
-  it('F-2: does not inherit host secrets into the child environment', async () => {
+  it('F-2: does not inherit host secrets into the child environment', { skip: skipPosixShell }, async () => {
     const service = harness({ workspaceRoot: workspace });
     const previous = process.env.GITHUB_TOKEN;
     process.env.GITHUB_TOKEN = 'ghp_secret_value';
@@ -159,7 +162,7 @@ describe('TerminalService security and limits', () => {
     await service.dispose();
   });
 
-  it('F-9: drops dangerous environment overrides instead of applying them', async () => {
+  it('F-9: drops dangerous environment overrides instead of applying them', { skip: skipPosixShell }, async () => {
     const service = harness({ workspaceRoot: workspace });
     const decision = await service.run({
       command: 'printf "%s" "${LD_PRELOAD:-unset}:${NODE_OPTIONS:-unset}"',
@@ -172,7 +175,7 @@ describe('TerminalService security and limits', () => {
     await service.dispose();
   });
 
-  it('F-3: bounds output at the ceiling and reports truncation', async () => {
+  it('F-3: bounds output at the ceiling and reports truncation', { skip: skipPosixShell }, async () => {
     const service = harness({
       policy: { ...DEFAULT_TERMINAL_POLICY, maxOutputBytes: 4096 },
       workspaceRoot: workspace,
@@ -211,7 +214,7 @@ describe('TerminalService security and limits', () => {
     await service.dispose();
   });
 
-  it('F-5: interactive sessions register, stream and can be cancelled', async () => {
+  it('F-5: interactive sessions register, stream and can be cancelled', { skip: skipPosixShell }, async () => {
     const scriptPath = path.join(workspace, 'ask.sh');
     await fs.writeFile(scriptPath, '#!/bin/bash\nprintf "Name?"\nread name\necho "Hello, $name!"\n');
     await fs.chmod(scriptPath, 0o755);
@@ -428,7 +431,7 @@ describe('TerminalService collaborator boundary isolation', () => {
     await service.dispose();
   });
 
-  it('M-1: a throwing onChunk consumer does not crash the run and output is still collected', async () => {
+  it('M-1: a throwing onChunk consumer does not crash the run and output is still collected', { skip: skipPosixShell }, async () => {
     const service = harness({ workspaceRoot: workspace });
 
     const decision = await service.run(
@@ -445,7 +448,7 @@ describe('TerminalService collaborator boundary isolation', () => {
     await service.dispose();
   });
 
-  it('M-1: a throwing onChunk consumer preserves the exit status of a failed command', async () => {
+  it('M-1: a throwing onChunk consumer preserves the exit status of a failed command', { skip: skipPosixShell }, async () => {
     const service = harness({ workspaceRoot: workspace });
 
     const decision = await service.run(

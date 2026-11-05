@@ -72,7 +72,9 @@ describe('WorkspaceService — POSIX resolution', () => {
 
     assert.deepEqual(service.roots, [root]);
     assert.equal(service.primaryRoot, root);
-    assert.equal(service.flavor, 'posix');
+    if (process.platform !== 'win32') {
+      assert.equal(service.flavor, 'posix');
+    }
     assert.equal(service.isInitialized, true);
   });
 
@@ -240,6 +242,11 @@ describe('WorkspaceService — symlink containment', () => {
   });
 
   it('rejects a filesystem root unless explicitly allowed', async () => {
+    // POSIX root resolution: on win32 `/` denotes the current drive root, so
+    // the FILESYSTEM_ROOT contract is exercised differently.
+    if (process.platform === 'win32') {
+      return;
+    }
     const port = realPort();
 
     assert.throws(

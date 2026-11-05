@@ -50,7 +50,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     assert.equal(service.primaryRoot, await realpath(fixture.workspace));
@@ -70,7 +70,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     const location = await service.resolve('new/deep/file.txt');
@@ -85,7 +85,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     await assert.rejects(service.resolve(join(fixture.outside, 'secret.txt')), (error: unknown) => ruleOf(error) === 'OUTSIDE_ROOT');
@@ -102,7 +102,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
 
     await symlink(fixture.outside, join(fixture.workspace, 'escape'), 'dir');
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     await assert.rejects(service.resolve('escape/secret.txt'), (error: unknown) => ruleOf(error) === 'SYMLINK_ESCAPE');
@@ -122,7 +122,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
 
     await symlink(join(fixture.outside, 'missing'), join(fixture.workspace, 'dangling'), 'file');
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     await assert.rejects(service.resolve('dangling/x.txt'), (error: unknown) => ruleOf(error) === 'SYMLINK_ESCAPE');
@@ -137,7 +137,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
     await symlink(join(fixture.workspace, 'notes'), join(fixture.workspace, 'alias'), 'dir');
     await symlink(join(fixture.workspace, 'notes', 'draft.md'), join(fixture.workspace, 'draft-link.md'), 'file');
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     const viaDirectory = await service.resolve('alias/draft.md');
@@ -162,7 +162,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
       roots: [fixture.workspace, second],
       primaryRoot: fixture.workspace,
       port,
-      flavor: 'posix',
+      flavor: process.platform === 'win32' ? 'win32' : 'posix',
     });
     await service.initialize();
 
@@ -183,7 +183,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
       await rm(fixture.base, { recursive: true, force: true });
     });
 
-    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [fixture.workspace], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
     const batch = service.createBatch();
 
@@ -210,7 +210,7 @@ describe('WorkspaceService containment on a real filesystem', () => {
     const linkedRoot = join(fixture.base, 'linked-root');
     await symlink(fixture.workspace, linkedRoot, 'dir');
 
-    const service = new WorkspaceService({ roots: [linkedRoot], port, flavor: 'posix' });
+    const service = new WorkspaceService({ roots: [linkedRoot], port, flavor: process.platform === 'win32' ? 'win32' : 'posix' });
     await service.initialize();
 
     assert.equal(service.primaryRoot, await realpath(fixture.workspace));

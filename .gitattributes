@@ -1,0 +1,3 @@
+# Frozen legacy fixtures record hashes over their exact LF bytes. `-text`
+# disables line-ending translation so a Windows checkout keeps those bytes.
+packages/kernel/services/UniversalHistory/unified/__tests__/fixtures/** -text

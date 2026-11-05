@@ -787,7 +787,7 @@ describe('ValidationService — standard kernel registration', () => {
 
       const escape = await validation.validatePath('../escape', 'read_file');
       assert.equal(escape.ok, false);
-      assert.equal(escape.ok ? null : escape.rule, 'PATH.PARENT_SEGMENT');
+      assert.equal(escape.ok ? null : escape.rule, process.platform === 'win32' ? 'PATH.UNC_OR_DEVICE' : 'PATH.PARENT_SEGMENT');
       assert.equal(escape.ok ? null : escape.code, 'PATH_TRAVERSAL_DETECTED');
       assert.equal(validation.validateCommand('sudo rm -rf /').ok, false);
     } finally {

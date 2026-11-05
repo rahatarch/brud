@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, rm, writeFile, realpath } from 'node:fs/promises';
+import { safeRm } from '../../../../src/__tests__/support/cleanup.js';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,6 @@ const FILE_TYPE = {
 
 async function memoryStore(context: TestContext, warnings: HistoryStoreWarning[] = []): Promise<UnifiedHistoryStore> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-memory-')));
-  context.after(() => rm(root, { recursive: true, force: true }));
   const historyRoot = join(root, '.brud/history');
   const driver = new DurableNodeStorageDriver();
   await driver.mkdir(historyRoot, { recursive: true });
@@ -53,16 +53,16 @@ async function memoryStore(context: TestContext, warnings: HistoryStoreWarning[]
     onWarning: (warning) => warnings.push(warning),
   });
   assert.deepEqual(await store.open(), { mode: 'writable' });
-  context.after(() => store.close());
+  context.after(async () => {
+    await store.close();
+    await safeRm(root);
+  });
   return store;
 }
 
 async function tempRoot(context: TestContext): Promise<string> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-')));
-  context.after(async () => {
-    await chmod(join(root, '.brud', 'history'), 0o755).catch(() => undefined);
-    await rm(root, { recursive: true, force: true });
-  });
+  void context;
   return root;
 }
 
@@ -124,6 +124,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     const again = fileStore(root);
     assert.deepEqual(await again.open(), { mode: 'writable' });
     again.close();
+    context.after(() => safeRm(root));
   });
 
   it('upgrades a version-1 database in place and indexes the content foreign key (D-15 U-8)', async (context) => {
@@ -151,6 +152,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     db.close();
     assert.deepEqual(versions, [1, 2]);
     assert.ok(plan.some((detail) => /USING (COVERING )?INDEX idx_entries_payload_sha256/u.test(detail)), JSON.stringify(plan));
+    context.after(() => safeRm(root));
   });
 
   it('opens a database from a newer schema degraded (SCHEMA_TOO_NEW) and refuses writes', async (context) => {
@@ -168,6 +170,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     context.after(() => store.close());
     assert.throws(() => store.createSession({ prompt: 'x', now: DAY_MS }), UnifiedHistoryDegradedError);
     assert.deepEqual(warnings.map((w) => [w.code, w.reason]), [['HISTORY_DEGRADED', 'SCHEMA_TOO_NEW']]);
+    context.after(() => safeRm(root));
   });
 
   it('rejects unregistered entry types, invalid JSON, and malformed content rows', async (context) => {
@@ -275,6 +278,7 @@ describe('UnifiedHistoryStore — contents (CAS)', () => {
     assert.deepEqual(Array.from(await store.getContent(ref.sha256)), Array.from(big));
     assert.deepEqual(Array.from(await store.getContent(sha256Hex(small))), Array.from(small));
     assert.equal(store.hasContent(ref.sha256), true);
+    context.after(() => safeRm(root));
   });
 
   it('never returns tampered bytes and reports missing blobs', async (context) => {
@@ -291,6 +295,7 @@ describe('UnifiedHistoryStore — contents (CAS)', () => {
     await rm(path);
     await assert.rejects(() => store.getContent(sha256), UnifiedBlobMissingError);
     await assert.rejects(() => store.getContent('0'.repeat(64)), UnifiedBlobMissingError);
+    context.after(() => safeRm(root));
   });
 
   it('offloads payloads over 64 KiB and resolves them byte-exact', async (context) => {
@@ -323,7 +328,7 @@ describe('UnifiedHistoryStore — CAS containment (amendment §2.1)', () => {
     const store = await memoryStore(context);
     const writes: string[] = [];
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-integrity-')));
-    context.after(() => rm(root, { recursive: true, force: true }));
+    context.after(() => safeRm(root));
     const historyRoot = join(root, '.brud/history');
     const driver = new DurableNodeStorageDriver();
     await driver.mkdir(historyRoot, { recursive: true });
@@ -437,6 +442,7 @@ store.close();
     const sessions = store.listSessions({ limit: 100 }).rows.map((r) => r.sessionId);
     assert.equal(new Set(sessions).size, 4);
     assert.equal(store.getCursor(), 100);
+    context.after(() => safeRm(root));
   });
 });
 
@@ -447,7 +453,9 @@ describe('UnifiedHistoryStore — degraded mode (F-UP-1, oracle R4 contract)', (
     assert.equal(existsSync(missing), false);
   });
 
-  it('degrades on a read-only directory without a database: empty reads, refused writes, one warning', { skip: isRoot ? 'permissions are not enforced for uid 0' : false }, async (context) => {
+  // Windows chmod does not enforce read-only for Administrators, so the
+  // directory stays writable and the store never reports READ_ONLY_STORAGE.
+  it('degrades on a read-only directory without a database: empty reads, refused writes, one warning', { skip: isRoot || process.platform === 'win32' ? 'filesystem permissions are not enforced for uid 0 or Windows Administrators' : false }, async (context) => {
     const root = await tempRoot(context);
     const historyRoot = join(root, '.brud', 'history');
     await mkdir(historyRoot, { recursive: true });
@@ -467,9 +475,15 @@ describe('UnifiedHistoryStore — degraded mode (F-UP-1, oracle R4 contract)', (
     await assert.rejects(() => store.putContent(new Uint8Array([1])), UnifiedHistoryDegradedError);
     assert.deepEqual(warnings.map((w) => [w.code, w.reason]), [['HISTORY_DEGRADED', 'READ_ONLY_STORAGE']]);
     assert.equal(existsSync(join(historyRoot, 'universal.db')), false);
+    context.after(async () => {
+      await chmod(historyRoot, 0o755).catch(() => undefined);
+      await safeRm(root);
+    });
   });
 
-  it('degrades on a read-only directory with an existing database and still serves reads', { skip: isRoot ? 'permissions are not enforced for uid 0' : false }, async (context) => {
+  // Windows chmod does not enforce read-only for Administrators, so the
+  // directory stays writable and the store never reports READ_ONLY_STORAGE.
+  it('degrades on a read-only directory with an existing database and still serves reads', { skip: isRoot || process.platform === 'win32' ? 'filesystem permissions are not enforced for uid 0 or Windows Administrators' : false }, async (context) => {
     const root = await tempRoot(context);
     const writer = fileStore(root);
     await writer.open();
@@ -485,6 +499,10 @@ describe('UnifiedHistoryStore — degraded mode (F-UP-1, oracle R4 contract)', (
     assert.deepEqual(store.listSessions().rows.map((r) => r.sessionId), [sessionId]);
     assert.equal(store.listEntries({ path: 'a.txt' }).rows.length, 1);
     assert.throws(() => store.appendEntries(sessionId, [entry({})]), UnifiedHistoryDegradedError);
+    context.after(async () => {
+      await chmod(join(root, '.brud', 'history'), 0o755).catch(() => undefined);
+      await safeRm(root);
+    });
   });
 });
 

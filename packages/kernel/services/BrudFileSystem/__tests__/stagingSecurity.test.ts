@@ -2,7 +2,7 @@ import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { createStagingPath } from '../operations/shared/staging.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
@@ -29,7 +29,7 @@ describe('staging path security (V-1, V-2, V-4)', () => {
     const second = createStagingPath('/workspace/notes.md');
 
     assert.notEqual(first, '/workspace/notes.md.tmp');
-    assert.match(first.slice(first.lastIndexOf('/') + 1), STAGING_PATTERN);
+    assert.match(basename(first), STAGING_PATTERN);
     assert.notEqual(first, second);
   });
 
