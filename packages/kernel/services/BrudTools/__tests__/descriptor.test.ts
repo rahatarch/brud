@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
-import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { IBrudToolsService, ToolRegistrationOptions } from '../contracts/IBrudToolsService.js';
 import {
   BRUD_TOOLS_SERVICE_TIER,
@@ -28,11 +27,14 @@ function caller(): ServiceContext {
   return { callerId: 'test', tier: 'core', workspaceRoot };
 }
 
-function tool(name: string, schema = 'object'): ToolRegistrationOptions {
+function tool(
+  name: string,
+  schema: string | Record<string, unknown> = 'object',
+): ToolRegistrationOptions {
   return {
     name,
     description: `${name} description`,
-    parametersSchema: { type: 'object', title: schema },
+    parametersSchema: typeof schema === 'string' ? { type: 'object', title: schema } : schema,
     execute: async (input): Promise<OperationResult> => ({ status: 'success', data: input }),
   };
 }
@@ -42,17 +44,17 @@ describe('BrudTools descriptor', () => {
     assert.strictEqual(BrudToolsToken.id, 'brud.core.tools');
   });
 
-  it('declares the validation dependency and core tier', () => {
+  it('declares the core tier and no validation-service dependency', () => {
     const descriptor = createBrudToolsDescriptor();
 
     assert.strictEqual(descriptor.token, BrudToolsToken);
     assert.strictEqual(descriptor.tier, BRUD_TOOLS_SERVICE_TIER);
     assert.strictEqual(descriptor.tier, 'core');
-    assert.ok(descriptor.dependencies.includes(ValidationToken));
+    assert.deepStrictEqual(descriptor.dependencies, []);
     assert.deepStrictEqual(descriptor.accessPolicy, { deniedCallers: [] });
   });
 
-  it('boots after validation and resolves through the kernel', async () => {
+  it('boots and resolves through the kernel', async () => {
     const kernel = createStandardKernel({
       history: { inMemory: true },
     });
@@ -63,14 +65,19 @@ describe('BrudTools descriptor', () => {
 
     assert.deepStrictEqual(tools.listTools(), []);
 
-    const disposable = tools.registerTool('brud.a', true, tool('read_file', 'read_file'));
-    const result = await tools.executeTool('read_file', { index: '1', path: 'a.ts' }, {
+    const disposable = tools.registerTool('brud.a', true, tool('read_file', {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    }));
+    const result = await tools.executeTool('read_file', { path: 'a.ts' }, {
       workspaceRoot,
       callerId: 'test',
     });
 
     assert.strictEqual(result.status, 'success');
-    assert.deepStrictEqual(result.data, { index: '1', path: 'a.ts' });
+    assert.deepStrictEqual(result.data, { path: 'a.ts' });
 
     await disposable.dispose();
     assert.strictEqual(tools.getTool('read_file'), undefined);
@@ -122,21 +129,28 @@ describe('BrudTools descriptor', () => {
     await kernel.shutdown();
   });
 
-  it('rejects a payload the boot validation policy refuses', async () => {    const kernel = createStandardKernel({
+  it('rejects a payload that violates the registered schema', async () => {
+    const kernel = createStandardKernel({
       history: { inMemory: true },
     });
 
     await kernel.boot({ workspaceRoot });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
-    tools.registerTool('brud.a', true, tool('read_file', 'read_file'));
-    const result = await tools.executeTool('read_file', { path: 'a.ts' }, {
+    tools.registerTool('brud.a', true, tool('read_file', {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    }));
+    const result = await tools.executeTool('read_file', {}, {
       workspaceRoot,
       callerId: 'test',
     });
 
     assert.strictEqual(result.status, 'failed');
     assert.match(String(result.error), /^TOOL_VALIDATION_ERROR: /);
+    assert.match(String(result.error), /required/u);
 
     await kernel.shutdown();
   });
@@ -160,26 +174,34 @@ describe('BrudTools descriptor', () => {
     await kernel.shutdown();
   });
 
-  it('gates payloads through the injected validator', async () => {
+  it('validates against the registered schema without a validator service', async () => {
     const descriptor = createBrudToolsDescriptor();
     const service = descriptor.factory(
       { callerId: 'kernel', tier: 'kernel', workspaceRoot },
-      {
-        requestAccess: () => ({
-          validateInput: (_schema: string, input: unknown) => (input === undefined
-            ? { ok: true as const }
-            : { ok: false as const, code: 'INVALID_FIELD', friendly: 'field rejected' }),
-        }),
-      } as never,
+      {} as never,
     );
 
-    service.registerTool('brud.a', true, tool('read_file'));
-    const result = await service.executeTool('read_file', { path: 'a.ts' }, {
+    service.registerTool('brud.a', true, tool('strict_tool', {
+      type: 'object',
+      properties: { path: { type: 'string' } },
+      required: ['path'],
+      additionalProperties: false,
+    }));
+
+    const rejected = await service.executeTool('strict_tool', {}, {
       workspaceRoot,
       callerId: 'test',
     });
 
-    assert.strictEqual(result.status, 'failed');
-    assert.match(String(result.error), /^TOOL_VALIDATION_ERROR: /);
+    assert.strictEqual(rejected.status, 'failed');
+    assert.match(String(rejected.error), /^TOOL_VALIDATION_ERROR: /);
+
+    const accepted = await service.executeTool('strict_tool', { path: 'a.ts' }, {
+      workspaceRoot,
+      callerId: 'test',
+    });
+
+    assert.strictEqual(accepted.status, 'success');
+    assert.deepStrictEqual(accepted.data, { path: 'a.ts' });
   });
 });

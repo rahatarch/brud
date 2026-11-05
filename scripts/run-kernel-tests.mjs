@@ -10,6 +10,7 @@ const kernelRoot = resolve(scriptDirectory, '..', 'packages', 'kernel');
 const TARGETS = [
   { directory: 'src/__tests__', recursive: false },
   { directory: 'src/__tests__/goals', recursive: false },
+  { directory: 'src/__tests__/plugins', recursive: false },
   { directory: 'drivers', recursive: true },
   { directory: 'services', recursive: true },
 ];

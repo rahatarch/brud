@@ -155,6 +155,7 @@ describe('Brud Protocol v2 parser', () => {
   it('routes end-to-end: parses, validates against the registered schema and executes', async () => {
     const service = new BrudToolsService();
     let invocations = 0;
+    let observedIndex: unknown = 'not-called';
 
     service.registerTool('brud.tools.test', true, tool('echo', {
       type: 'object',
@@ -163,10 +164,11 @@ describe('Brud Protocol v2 parser', () => {
       additionalProperties: false,
     }, async (input): Promise<OperationResult> => {
       invocations += 1;
+      observedIndex = input.index;
 
       return {
         status: 'success',
-        data: { text: input.text, index: input.index },
+        data: { text: input.text },
       };
     }));
 
@@ -187,6 +189,7 @@ describe('Brud Protocol v2 parser', () => {
 
     assert.equal(outcome?.status, 'success');
     assert.equal(outcome?.operationIndex, '1');
-    assert.deepEqual(outcome?.result?.data, { text: 'routed', index: '1' });
+    assert.equal(observedIndex, undefined, 'the protocol index must not be injected into handler input');
+    assert.deepEqual(outcome?.result?.data, { text: 'routed' });
   });
 });
