@@ -9,6 +9,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { waitForChildClose } from '../../../../src/__tests__/support/childWithTimeout.js';
 import {
   CAS_DIRECTORY,
   MAX_SESSIONS_PER_DAY,
@@ -414,14 +415,14 @@ for (let i = 0; i < 25; i += 1) {
 store.close();
 `, 'utf8');
 
-    const results = await Promise.all(['alpha', 'beta', 'gamma', 'delta'].map((id) => new Promise<{ code: number | null; stderr: string }>((done, fail) => {
+    const results = await Promise.all(['alpha', 'beta', 'gamma', 'delta'].map(async (id) => {
       const child = spawn(process.execPath, ['--import', 'tsx', workerPath, historyRoot, id], { stdio: ['ignore', 'ignore', 'pipe'] });
       let stderr = '';
       child.stderr.setEncoding('utf8');
       child.stderr.on('data', (chunk: string) => { stderr += chunk; });
-      child.on('error', fail);
-      child.on('close', (code) => done({ code, stderr }));
-    })));
+      const code = await waitForChildClose(child);
+      return { code, stderr };
+    }));
 
     for (const result of results) {
       assert.equal(result.code, 0, result.stderr);

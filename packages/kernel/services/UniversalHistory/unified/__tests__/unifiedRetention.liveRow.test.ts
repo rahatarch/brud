@@ -13,6 +13,7 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcess } from 'node:child_process';
+import { waitForChildClose } from '../../../../src/__tests__/support/childWithTimeout.js';
 import { appendFileSync } from 'node:fs';
 import { mkdtemp, readFile, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -231,10 +232,7 @@ async function bootWorker(context: TestContext, workspaceRoot: string, name: str
   child.stderr?.on('data', (chunk: string) => { stderr += chunk; });
   child.stdout?.resume();
 
-  const exited = new Promise<number | null>((resolve, reject) => {
-    child.on('error', reject);
-    child.on('close', (code) => resolve(code));
-  });
+  const exited = waitForChildClose(child, LINE_TIMEOUT_MS);
 
   const drain = async (): Promise<void> => {
     let text = '';

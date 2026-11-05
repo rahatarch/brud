@@ -14,6 +14,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { createStandardKernel } from '../../../../src/bootstrap/index.js';
+import { waitForChildClose, waitForChildData } from '../../../../src/__tests__/support/childWithTimeout.js';
 import type { ServiceContext } from '../../../../src/contracts/lifecycle.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
@@ -478,7 +479,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
       dbPath,
     ], { stdio: ['ignore', 'pipe', 'inherit'] });
     context.after(() => { holder.kill('SIGKILL'); });
-    await new Promise<void>((resolve) => { holder.stdout.once('data', () => { resolve(); }); });
+    await waitForChildData(holder);
 
     const store = new UnifiedHistoryStore({ dbPath, historyRoot, driver: new DurableNodeStorageDriver() });
     context.after(() => store.close());
@@ -494,7 +495,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     }, 10);
     const inserted = store.createSession({ prompt: 'automatic recording', implicit: true, now: Date.now(), claim: claim(process.pid) });
     clearInterval(poll);
-    await new Promise<void>((resolve) => { holder.on('close', () => { resolve(); }); });
+    await waitForChildClose(holder);
 
     assert.equal(sightings.includes('unclaimed'), false, `a reader saw an unclaimed row: ${JSON.stringify(sightings)}`);
     const rows = rawSessions(dbPath);
@@ -556,12 +557,12 @@ await new Promise(() => {});
     context.after(() => rm(scriptPath, { force: true }));
     const victim = spawn(process.execPath, ['--import', 'tsx', scriptPath, root], { stdio: ['ignore', 'pipe', 'ignore'] });
     context.after(() => { victim.kill('SIGKILL'); });
-    await new Promise<void>((resolve) => { victim.stdout.once('data', () => { resolve(); }); });
+    await waitForChildData(victim);
 
     const beforeCrash = rawSessions(dbPath);
     assert.equal(beforeCrash.length, 1, 'the victim created no implicit row');
     victim.kill('SIGKILL');
-    await new Promise<void>((resolve) => { victim.on('close', () => { resolve(); }); });
+    await waitForChildClose(victim);
     // Crash cleanup is asynchronous: the chained helper exits within one poll
     // interval of its owner dying, so wait (bounded) for both pids to be gone.
     const claimPid = (JSON.parse(beforeCrash[0]?.metadata ?? '{}') as { brudHistoryClaim?: { pid?: number; helperPid?: number } }).brudHistoryClaim;
@@ -651,7 +652,7 @@ await new Promise(() => {});
     context.after(() => rm(scriptPath, { force: true }));
     const victim = spawn(process.execPath, ['--import', 'tsx', scriptPath, root], { stdio: ['ignore', 'pipe', 'ignore'] });
     context.after(() => { victim.kill('SIGKILL'); });
-    await new Promise<void>((resolve) => { victim.stdout.once('data', () => { resolve(); }); });
+    await waitForChildData(victim);
 
     const beforeCrash = rawSessions(dbPath);
     assert.equal(beforeCrash.length, 1, 'the victim created no implicit row');
@@ -659,7 +660,7 @@ await new Promise(() => {});
     const deadClaim = (JSON.parse(beforeCrash[0]?.metadata ?? '{}') as { brudHistoryClaim?: { pid?: number; helperPid?: number; alive?: number } }).brudHistoryClaim;
     assert.equal(deadClaim?.alive, 1, 'the victim published no live claim');
     victim.kill('SIGKILL');
-    await new Promise<void>((resolve) => { victim.on('close', () => { resolve(); }); });
+    await waitForChildClose(victim);
     for (const pid of [deadClaim?.pid, deadClaim?.helperPid]) {
       for (let waited = 0; pid !== undefined && waited < 3000; waited += 25) {
         try { process.kill(pid, 0); } catch { break; }
