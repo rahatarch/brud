@@ -93,13 +93,23 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
 
   async planReversal(sessionId: string, options?: PlanReversalOptions): Promise<ReversalPlan> {
     const native = await this.engine.planSessionReversal(sessionId, options?.targetState ?? 'pre');
-    const actions: FileReversalAction[] = native.fileActions.map((action) => ({
-      relativePath: action.path,
-      action: action.action,
-      targetBytes: action.targetBytes,
-      expectedCurrentSha256: action.expectedCurrentSha256 ?? '',
-      actualCurrentSha256: action.actualCurrentSha256,
-    }));
+    const actions: FileReversalAction[] = native.fileActions.map((action) => {
+      // Directory actions stay within the legacy action vocabulary: a
+      // directory restore is a restore with no bytes, a removal is a delete.
+      const kind: FileReversalAction['action'] = action.action === 'mkdir'
+        ? 'restore'
+        : action.action === 'rmdir'
+          ? 'delete'
+          : action.action;
+
+      return {
+        relativePath: action.path,
+        action: kind,
+        targetBytes: action.targetBytes,
+        expectedCurrentSha256: action.expectedCurrentSha256 ?? '',
+        actualCurrentSha256: action.actualCurrentSha256,
+      };
+    });
     const conflicts: ReversalConflict[] = native.conflicts.map((conflict) => ({
       relativePath: conflict.path ?? `#${String(conflict.seq)}`,
       code: conflict.code as ReversalConflict['code'],

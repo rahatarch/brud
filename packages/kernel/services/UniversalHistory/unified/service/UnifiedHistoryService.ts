@@ -54,7 +54,13 @@ export function verificationServiceFor(history: unknown): unknown {
 }
 
 import { createNamespaceHandle } from './NamespaceHandle.js';
-import { isBinaryContent, isHistoryPath, normalizeTargetPath, normalizeTargets } from './targets.js';
+import {
+  DIRECTORY_STATE_SHA256,
+  isBinaryContent,
+  isHistoryPath,
+  normalizeTargetPath,
+  normalizeTargets,
+} from './targets.js';
 import type {
   Disposable,
   EntryRecordInput,
@@ -450,7 +456,7 @@ export class UnifiedHistoryService {
     for (const target of metadata.declaredTargets) {
       const before = metadata.baseline[target] as TargetBaseline;
       const after = await this.captureCurrent(target, true);
-      if (before.exists === after.exists && before.sha256 === after.sha256) {
+      if (before.exists === after.exists && before.sha256 === after.sha256 && before.size === after.size) {
         continue;
       }
       const payload: SessionTargetPayload = {
@@ -809,8 +815,17 @@ export class UnifiedHistoryService {
   /** Reads a target's current state; stores its bytes when `store` is true. */
   private async captureCurrent(target: string, store: boolean): Promise<TargetBaseline> {
     const fs = this.options.fileSystem();
-    if (!(await fs.exists(target))) {
+    const stats = await fs.stat(target);
+    if (stats === null) {
       return { exists: false, sha256: null, size: 0, isBinary: false };
+    }
+    if (stats.isDirectory) {
+      return {
+        exists: true,
+        sha256: DIRECTORY_STATE_SHA256,
+        size: 0,
+        isBinary: false,
+      };
     }
     const bytes = await fs.readFile(target);
     if (store) {

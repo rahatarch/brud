@@ -23,6 +23,8 @@ import { CORE_NAMESPACE, FILE_ENTRY_TYPE, SESSION_TARGET_ENTRY_TYPE } from '../s
 import type { FileEntryPayload, SessionTargetPayload } from '../service/builtinTypes.js';
 import type { UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
 import type { EntryView } from '../service/types.js';
+import { DIRECTORY_STATE_SHA256, classifyTargetState } from '../service/targets.js';
+import type { TargetStateKind } from '../service/targets.js';
 import {
   UnifiedCheckpointNotFoundError,
   UnifiedReversalConflictError,
@@ -42,10 +44,12 @@ export interface UnifiedRollbackReport {
 
 export interface FileReversalStep {
   readonly path: string;
-  readonly action: 'restore' | 'delete';
+  readonly action: 'restore' | 'delete' | 'mkdir' | 'rmdir';
   readonly targetBytes: Uint8Array | null;
   readonly expectedCurrentSha256: string | null;
   readonly actualCurrentSha256: string | null;
+  readonly expectedCurrentKind: TargetStateKind;
+  readonly actualCurrentKind: TargetStateKind;
 }
 
 export interface EntryReversalStep {
@@ -218,18 +222,35 @@ export class ReversalEngine {
       if (entry.namespace === CORE_NAMESPACE && entry.type === SESSION_TARGET_ENTRY_TYPE.type) {
         const target = await this.service.resolvePayload(entry) as SessionTargetPayload;
         const desired = targetState === 'pre' ? target.preSha256 : target.postSha256;
+        const desiredSize = targetState === 'pre' ? target.preSize : target.postSize;
         const expected = targetState === 'pre' ? target.postSha256 : target.preSha256;
-        const actual = await this.currentSha(target.path);
+        const expectedSize = targetState === 'pre' ? target.postSize : target.preSize;
+        const desiredKind = classifyTargetState(desired, desiredSize);
+        const expectedKind = classifyTargetState(expected, expectedSize);
+        const actualState = await this.currentState(target.path);
+        const actual = actualState.sha;
         let targetBytes: Uint8Array | null = null;
 
-        if (actual !== expected) {
+        if (actual !== expected || actualState.kind !== expectedKind) {
           conflicts.push({
             code: 'STALE_BASELINE_CONFLICT',
             path: target.path,
             expectedSha256: expected,
             actualSha256: actual,
-            message: `"${target.path}" changed after the session; expected ${expected ?? 'no file'}, found ${actual ?? 'no file'}`,
+            message: `"${target.path}" changed after the session; expected ${expectedKind}, found ${actualState.kind}`,
           });
+        }
+        if (desiredKind === 'directory') {
+          fileActions.push({
+            path: target.path,
+            action: 'mkdir',
+            targetBytes: null,
+            expectedCurrentSha256: expected,
+            actualCurrentSha256: actual,
+            expectedCurrentKind: expectedKind,
+            actualCurrentKind: actualState.kind,
+          });
+          continue;
         }
         if (desired !== null) {
           try {
@@ -249,10 +270,14 @@ export class ReversalEngine {
         }
         fileActions.push({
           path: target.path,
-          action: desired === null ? 'delete' : 'restore',
+          action: desired === null
+            ? actualState.kind === 'directory' ? 'rmdir' : 'delete'
+            : 'restore',
           targetBytes,
           expectedCurrentSha256: expected,
           actualCurrentSha256: actual,
+          expectedCurrentKind: expectedKind,
+          actualCurrentKind: actualState.kind,
         });
         continue;
       }
@@ -302,10 +327,12 @@ export class ReversalEngine {
       }
     }
 
+    const orderedFileActions = [...fileActions].sort(compareFileReversalSteps);
+
     return Object.freeze({
       sessionId,
       targetState,
-      fileActions: Object.freeze(fileActions),
+      fileActions: Object.freeze(orderedFileActions),
       entryActions: Object.freeze(entryActions),
       conflicts: Object.freeze(conflicts),
       isExecutable: conflicts.length === 0,
@@ -337,9 +364,9 @@ export class ReversalEngine {
         stale.push({ code: 'BLOB_NOT_FOUND', path: action.path, message: `Restore action for "${action.path}" has no target bytes` });
         continue;
       }
-      const actual = await this.currentSha(action.path);
-      if (actual !== action.expectedCurrentSha256) {
-        stale.push({ code: 'STALE_BASELINE_CONFLICT', path: action.path, expectedSha256: action.expectedCurrentSha256, actualSha256: actual, message: `"${action.path}" changed since planning` });
+      const state = await this.currentState(action.path);
+      if (state.sha !== action.expectedCurrentSha256 || state.kind !== action.expectedCurrentKind) {
+        stale.push({ code: 'STALE_BASELINE_CONFLICT', path: action.path, expectedSha256: action.expectedCurrentSha256, actualSha256: state.sha, message: `"${action.path}" changed since planning` });
       }
     }
     for (const action of plan.entryActions) {
@@ -353,11 +380,33 @@ export class ReversalEngine {
     }
 
     await this.service.flush();
-    const applied: { path: string; prior: Uint8Array | null }[] = [];
+    const applied: {
+      path: string;
+      priorKind: 'missing' | 'file' | 'directory';
+      prior: Uint8Array | null;
+    }[] = [];
     let filesRestored = 0;
     let filesDeleted = 0;
     try {
       for (const action of plan.fileActions) {
+        if (action.action === 'mkdir') {
+          const state = await this.currentState(action.path);
+          if (state.kind === 'missing') {
+            await this.fs.createDirectory(action.path);
+          }
+          filesRestored += 1;
+          applied.push({ path: action.path, priorKind: state.kind, prior: null });
+          continue;
+        }
+        if (action.action === 'rmdir') {
+          const state = await this.currentState(action.path);
+          if (state.kind === 'directory') {
+            await this.fs.deleteDirectory(action.path);
+          }
+          filesDeleted += 1;
+          applied.push({ path: action.path, priorKind: state.kind, prior: null });
+          continue;
+        }
         const prior = await this.readIfFile(action.path);
         if (action.action === 'delete') {
           if (prior !== null) {
@@ -368,7 +417,11 @@ export class ReversalEngine {
           await this.fs.writeAtomic(action.path, action.targetBytes as Uint8Array);
           filesRestored += 1;
         }
-        applied.push({ path: action.path, prior });
+        applied.push({
+          path: action.path,
+          priorKind: prior === null ? 'missing' : 'file',
+          prior,
+        });
       }
     } catch (error) {
       await this.compensate(applied);
@@ -543,7 +596,11 @@ export class ReversalEngine {
       };
     }
 
-    const applied: { path: string; prior: Uint8Array | null }[] = [];
+    const applied: {
+      path: string;
+      priorKind: 'missing' | 'file' | 'directory';
+      prior: Uint8Array | null;
+    }[] = [];
     const restored: string[] = [];
     for (const { payload } of steps) {
       const expected = hashText(direction === 'undo' ? payload.postSha256 : payload.preSha256);
@@ -560,7 +617,11 @@ export class ReversalEngine {
         } else {
           await this.fs.writeAtomic(payload.path, bytesByHash.get(target) as Uint8Array);
         }
-        applied.push({ path: payload.path, prior });
+        applied.push({
+          path: payload.path,
+          priorKind: prior === null ? 'missing' : 'file',
+          prior,
+        });
         restored.push(payload.path);
       } catch {
         await this.compensate(applied);
@@ -570,15 +631,30 @@ export class ReversalEngine {
     return { ...emptyReport(), restoredPaths: [...new Set(restored)] };
   }
 
-  private async compensate(applied: readonly { path: string; prior: Uint8Array | null }[]): Promise<void> {
+  private async compensate(
+    applied: readonly {
+      path: string;
+      priorKind: 'missing' | 'file' | 'directory';
+      prior: Uint8Array | null;
+    }[],
+  ): Promise<void> {
     for (const step of [...applied].reverse()) {
       try {
-        if (step.prior === null) {
-          if (await this.fs.exists(step.path)) {
-            await this.fs.deleteFile(step.path);
-          }
-        } else {
+        if (step.priorKind === 'file' && step.prior !== null) {
           await this.fs.writeAtomic(step.path, step.prior);
+          continue;
+        }
+        if (step.priorKind === 'directory') {
+          if (!(await this.fs.exists(step.path))) {
+            await this.fs.createDirectory(step.path);
+          }
+          continue;
+        }
+        const state = await this.currentState(step.path);
+        if (state.kind === 'directory') {
+          await this.fs.deleteDirectory(step.path);
+        } else if (state.kind === 'file') {
+          await this.fs.deleteFile(step.path);
         }
       } catch {
         // Best effort, as in the legacy engine.
@@ -603,6 +679,31 @@ export class ReversalEngine {
       return bytes === null ? null : sha256Hex(bytes);
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Classifies a target for session reversal.
+   *
+   * Directories are represented by the reserved directory digest rather than
+   * bytes, so a directory created or removed by a session is a first-class
+   * reversible state.
+   */
+  private async currentState(
+    path: string,
+  ): Promise<{ readonly kind: 'missing' | 'file' | 'directory'; readonly sha: string | null }> {
+    try {
+      const stats = await this.fs.stat(path);
+      if (stats === null) {
+        return { kind: 'missing', sha: null };
+      }
+      if (stats.isDirectory) {
+        return { kind: 'directory', sha: DIRECTORY_STATE_SHA256 };
+      }
+      const bytes = await this.fs.readFile(path);
+      return { kind: 'file', sha: sha256Hex(bytes) };
+    } catch {
+      return { kind: 'missing', sha: null };
     }
   }
 
@@ -633,6 +734,46 @@ export class ReversalEngine {
       clearTimeout(timer);
     }
   }
+}
+
+function depthOfPath(path: string): number {
+  return path.split('/').filter((segment) => segment.length > 0).length;
+}
+
+function actionRank(action: FileReversalStep['action']): number {
+  switch (action) {
+    case 'delete':
+      return 0;
+    case 'rmdir':
+      return 1;
+    case 'mkdir':
+      return 2;
+    default:
+      return 3;
+  }
+}
+
+/**
+ * Orders reversal actions so directory operations are legal.
+ *
+ * Files are deleted first, then directories deepest-first (a directory is only
+ * removable once it is empty); directories are created shallowest-first, then
+ * files are restored (the filesystem also creates missing parents).
+ */
+function compareFileReversalSteps(a: FileReversalStep, b: FileReversalStep): number {
+  const rank = actionRank(a.action) - actionRank(b.action);
+  if (rank !== 0) {
+    return rank;
+  }
+  if (a.action === 'rmdir') {
+    const byDepth = depthOfPath(b.path) - depthOfPath(a.path);
+    return byDepth !== 0 ? byDepth : a.path.localeCompare(b.path);
+  }
+  if (a.action === 'mkdir') {
+    const byDepth = depthOfPath(a.path) - depthOfPath(b.path);
+    return byDepth !== 0 ? byDepth : a.path.localeCompare(b.path);
+  }
+  return a.path.localeCompare(b.path);
 }
 
 function stepCount(steps: number | undefined): number {
