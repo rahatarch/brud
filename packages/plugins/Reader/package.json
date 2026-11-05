@@ -1,0 +1,28 @@
+{
+  "name": "@brud/plugin-reader",
+  "version": "0.0.1",
+  "description": "Bounded read tools (read_file, read_files, read_directory) for Brud",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}
