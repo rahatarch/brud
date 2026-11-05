@@ -2,7 +2,7 @@ name: Cross-Platform Tests
 
 on:
   push:
-    branches: [main, 'feat/**', 'feature/**']
+    branches: [main, 'feat/**', 'feature/**', 'ci/**']
     paths:
       - 'packages/kernel/**'
       - 'packages/core/**'
