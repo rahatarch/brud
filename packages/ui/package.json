@@ -6,7 +6,6 @@
     "build": "vite build"
   },
   "dependencies": {
-    "@brud/core": "*",
     "@brud/protocol": "*",
     "lucide-react": "latest",
     "react": "^19.0.0",

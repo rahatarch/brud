@@ -1,0 +1,632 @@
+{
+  "fails loudly when the legacy engine cannot be loaded": {
+    "readFiles": "function",
+    "readDirectoryFiles": "function"
+  },
+  "matches a single unsliced file read": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "line one\nline two\n",
+        "size": 18,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 18,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a single file with a line slice": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "two\nthree\n",
+        "size": 10,
+        "startLine": 2,
+        "endLine": 3,
+        "totalLines": 4
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 10,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a start-only line slice": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "two\nthree\n",
+        "size": 10,
+        "startLine": 2,
+        "endLine": 3,
+        "totalLines": 3
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 10,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an end-only line slice": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "one\ntwo\n",
+        "size": 8,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 3
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 8,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a slice whose end line clamps to EOF": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "two\nthree\n",
+        "size": 10,
+        "startLine": 2,
+        "endLine": 3,
+        "totalLines": 3
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 10,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a file without a trailing newline": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "one\ntwo",
+        "size": 7,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 7,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an empty file": {
+    "files": [
+      {
+        "path": "src/empty.txt",
+        "content": "",
+        "size": 0,
+        "startLine": 1,
+        "endLine": 0,
+        "totalLines": 0
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 0,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a file containing only a newline": {
+    "files": [
+      {
+        "path": "src/newline.txt",
+        "content": "\n",
+        "size": 1,
+        "startLine": 1,
+        "endLine": 0,
+        "totalLines": 0
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 1,
+    "skips": [],
+    "truncated": false
+  },
+  "matches CRLF line endings": {
+    "files": [
+      {
+        "path": "src/crlf.txt",
+        "content": "one\ntwo\n",
+        "size": 10,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 10,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a UTF-8 file with surrogate pairs": {
+    "files": [
+      {
+        "path": "src/emoji.txt",
+        "content": "rocket \ud83d\ude80\nline two\n",
+        "size": 21,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 21,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a binary file containing a null byte": {
+    "files": [
+      {
+        "path": "src/image.bin",
+        "size": 4,
+        "startLine": 0,
+        "endLine": 0,
+        "totalLines": 0,
+        "isBinary": true
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 4,
+    "skips": [
+      {
+        "path": "src/image.bin",
+        "reason": "binary"
+      }
+    ],
+    "truncated": false
+  },
+  "matches a missing file": {
+    "files": [],
+    "totalFiles": 0,
+    "totalSize": 0,
+    "skips": [
+      {
+        "path": "src/missing.txt",
+        "reason": "unreadable",
+        "error": "<error>"
+      }
+    ],
+    "truncated": false
+  },
+  "matches an invalid line range failure code and message": {
+    "code": "INVALID_LINE_RANGE",
+    "friendly": "Invalid line range specified for file read.",
+    "details": "Requested line range 9-? is invalid for file with 2 lines (1-indexed).",
+    "path": "/tmp/brud-reader-verify-jGcy6y/src/a.ts",
+    "name": "BrudError",
+    "message": "Requested line range 9-? is invalid for file with 2 lines (1-indexed)."
+  },
+  "matches a single-root import read": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { b } from './b';\nexport const a = true;\n",
+        "size": 48,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      },
+      {
+        "path": "src/b.ts",
+        "content": "export const b = true;\n",
+        "size": 23,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 71,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an import read with maxDepth 1": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { b } from './b';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "import { c } from './c';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 50,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an import read with maxDepth 2": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { b } from './b';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "import { c } from './c';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      },
+      {
+        "path": "src/c.ts",
+        "content": "import { d } from './d';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 3,
+    "totalSize": 75,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an import read with an excluded import": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { b } from './b';\nimport { c } from './c';\n",
+        "size": 50,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      },
+      {
+        "path": "src/c.ts",
+        "content": "export const c = true;\n",
+        "size": 23,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 73,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an import read with a cycle": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { b } from './b';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "import { a } from './a';\n",
+        "size": 25,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 50,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an import read with a binary import": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "import { image } from './image.bin';\n",
+        "size": 37,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/image.bin",
+        "size": 3,
+        "startLine": 0,
+        "endLine": 0,
+        "totalLines": 0,
+        "isImported": true,
+        "importedFrom": "src/a.ts",
+        "isBinary": true
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 40,
+    "skips": [
+      {
+        "path": "src/image.bin",
+        "reason": "binary"
+      }
+    ],
+    "truncated": false
+  },
+  "matches an import read with a custom pattern": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "@load ./b\n",
+        "size": 10,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "export const b = true;\n",
+        "size": 23,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1,
+        "isImported": true,
+        "importedFrom": "src/a.ts"
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 33,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a batch of files": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/c.ts",
+        "content": "c\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 3,
+    "totalSize": 6,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a batch with mixed readable, binary, and missing files": {
+    "files": [
+      {
+        "path": "src/a.txt",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/bin.dat",
+        "size": 2,
+        "startLine": 0,
+        "endLine": 0,
+        "totalLines": 0,
+        "isBinary": true
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 4,
+    "skips": [
+      {
+        "path": "src/bin.dat",
+        "reason": "binary"
+      },
+      {
+        "path": "src/missing.txt",
+        "reason": "unreadable",
+        "error": "<error>"
+      }
+    ],
+    "truncated": false
+  },
+  "matches a non-recursive directory read": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 4,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a recursive directory read": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/nested/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/nested/deeper/c.ts",
+        "content": "c\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 3,
+    "totalSize": 6,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a recursive directory read with an exclude": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/nested/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 4,
+    "skips": [],
+    "truncated": false
+  },
+  "matches an empty directory": {
+    "files": [],
+    "totalFiles": 0,
+    "totalSize": 0,
+    "skips": [],
+    "truncated": false
+  },
+  "matches a missing directory": {
+    "files": [],
+    "totalFiles": 0,
+    "totalSize": 0,
+    "skips": [],
+    "truncated": false
+  },
+  "documents the stricter binary sniff divergence": {
+    "legacyContentType": "string"
+  },
+  "matches the read_file tool envelope for a representative file": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "one\ntwo\n",
+        "size": 8,
+        "startLine": 1,
+        "endLine": 2,
+        "totalLines": 2
+      }
+    ],
+    "totalFiles": 1,
+    "totalSize": 8,
+    "skips": [],
+    "truncated": false
+  },
+  "matches the read_files tool envelope for a representative pattern": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 4,
+    "skips": [],
+    "truncated": false
+  },
+  "matches the read_directory tool envelope for a representative directory": {
+    "files": [
+      {
+        "path": "src/a.ts",
+        "content": "a\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      },
+      {
+        "path": "src/b.ts",
+        "content": "b\n",
+        "size": 2,
+        "startLine": 1,
+        "endLine": 1,
+        "totalLines": 1
+      }
+    ],
+    "totalFiles": 2,
+    "totalSize": 4,
+    "skips": [],
+    "truncated": false
+  }
+}

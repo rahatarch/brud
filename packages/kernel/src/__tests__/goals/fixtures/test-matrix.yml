@@ -2,13 +2,11 @@ name: Cross-Platform Tests
 
 on:
   push:
-    branches: [main, 'feat/**', 'feature/**']
+    branches: [main, 'feat/**', 'feature/**', 'ci/**']
     paths:
       - 'packages/kernel/**'
-      - 'packages/core/**'
       - 'packages/protocol/**'
       - 'packages/daemon/**'
-      - 'packages/adapters/**'
       - 'packages/ui/**'
       - 'scripts/**'
       - 'package.json'
@@ -18,10 +16,8 @@ on:
     branches: [main]
     paths:
       - 'packages/kernel/**'
-      - 'packages/core/**'
       - 'packages/protocol/**'
       - 'packages/daemon/**'
-      - 'packages/adapters/**'
       - 'packages/ui/**'
       - 'scripts/**'
       - 'package.json'
@@ -50,26 +46,13 @@ jobs:
       - run: npm ci
 
       - name: Build workspace packages
-        run: npm run build:protocol && npm run build:core && npm run build:kernel && npm run build:adapter
+        run: npm run build:protocol && npm run build:kernel
 
-      - name: Kernel tests (informational while O-3 is open)
-        # Five pre-existing UniversalHistory failures (O-3) keep the combined
-        # kernel suite red. The suite still runs on every matrix cell; the B0
-        # goal tests below are the blocking kernel gate.
-        continue-on-error: true
+      - name: Kernel tests (blocking)
         run: npm run test:kernel
 
       - name: B0 goal tests (blocking)
         run: node --import tsx --test "packages/kernel/src/__tests__/goals/*.test.ts"
-
-      - name: Core tests
-        run: npm run test:core
-
-      - name: Core integration tests
-        run: npm run test:integration
-
-      - name: Adapter tests
-        run: npm run test:adapter
 
       - name: Check package boundaries
         run: npm run check:boundaries

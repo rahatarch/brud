@@ -13,7 +13,7 @@ import { scanCommand, normalizeCommand } from './commandPatterns.js';
 /**
  * Hardened command scanner.
  *
- * Migrated from `packages/core/src/api/index.ts:187-244` and closes the nine
+ * Migrated from the quarantined legacy engine's `api/index.ts:187-244` and closes the nine
  * audited bypasses:
  *
  * - B-1/B-2: `rm -r -f /` and `rm --recursive --force /` are seen as the same

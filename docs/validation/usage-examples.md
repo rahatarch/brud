@@ -1,5 +1,7 @@
 # Usage Examples
 
+> **As of Phase 11 (2026-11-05), this document is historical.** The examples import `BrudAPI` and `FileSystem` from `@brud/core`, which was archived at `deprecated/packages/core/` (D-14/D-17/D-22). Live consumers use `@brud/kernel` services (`ValidationService`, `WorkspaceService`, `BrudFileSystem`, `BrudTools`) or an official plugin. `deprecated/` is not maintained.
+
 ## Validating a File Path
 
 ```typescript

@@ -6,7 +6,7 @@ import type { ValidationRule } from '../contracts/rules.js';
  * Rule traits and message templates.
  *
  * `friendly` strings are reproduced verbatim from
- * `packages/core/src/api/errors.ts` so the legacy facade keeps producing the
+ * the quarantined legacy engine's `api/errors.ts` so the legacy facade keeps producing the
  * exact text its callers, tests and UI already show. Actionability and
  * retryability are the audited §2 last column: a value that appears nowhere in
  * the legacy code base but is required by the `ValidationDecision` contract.

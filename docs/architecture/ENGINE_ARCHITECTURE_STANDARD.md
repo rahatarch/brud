@@ -38,7 +38,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
                                             ▼ (Strict Protocol Messages)
                 ┌────────────────────────────────────────────────────────┐
                 │                 Sovereign Engine Core                  │
-                │        @brud/kernel  •  @brud/core  •  @brud/protocol  │
+                │   @brud/kernel  •  official plugins  •  @brud/protocol │
                 └────────────────────────────────────────────────────────┘
 
 ```
@@ -50,7 +50,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
 1. **Single Source of Truth:** All AST manipulations, validation algorithms, state transitions, diff calculations, patch generators, and pipeline orchestrations belong exclusively in the engine (`packages/kernel`, `packages/protocol`, and the official plugins that replace the legacy core).
    - `packages/protocol`: Owns message schemas, IPC payloads, and serializable protocol contracts.
    - `packages/kernel`: Owns the execution pipeline, dependency injection container, lifecycle arbitration, Level-1 services, and the `BrudTools` tool registry and parser.
-   - `packages/core`: Frozen reference material under D-17 (2026-11-04) and scheduled for quarantine in Phase 11 of ROLLOUT-0001. It is not a live owner of new logic.
+   - `packages/core`: Archived at `deprecated/packages/core/` in Phase 11 (2026-11-05, D-14/D-17). It was frozen reference material under D-17 and is no longer part of the live codebase. The live engine is `packages/kernel` plus the official plugins under `packages/plugins/`.
    - `brud.tools.filesystem`: Owns diffing and patch generation in Phase 9, operating over `BrudTools.parseAndRoute` and the patch matcher moved into that plugin.
 2. **Prohibition of Duplicate Business Logic:** If a capability is required by multiple surfaces (for example, both a future CLI binary and the VS Code panel), implementing that capability within the adapter layer is strictly forbidden. The logic must be implemented in the core engine, exposed via `@brud/protocol`, and consumed uniformly.
 3. **The Deletion Invariant:** If any adapter (such as `apps/vscode`) is removed in its entirety, zero core domain logic, verification contracts, or execution capabilities are lost.
@@ -87,9 +87,9 @@ The kernel serves as the central orchestrator, dependency container, and capabil
 
 ### 4.1 FileSystem Port & VFS Target
 
-In the current baseline, file input/output is abstracted through the `FileSystem` interface (`packages/core/src/types/filesystem.ts`), registered in the kernel container at boot as `brud.core.filesystem` (`FileSystemToken` in `packages/kernel/services/BrudFileSystem/descriptor/tokens.ts`).
+In the live engine, file input/output is abstracted through the kernel `FileSystem` service (`FileSystemToken` in `packages/kernel/services/BrudFileSystem/descriptor/tokens.ts`), registered in the kernel container at boot as `brud.core.filesystem`. The legacy `FileSystem` interface formerly at `packages/core/src/types/filesystem.ts` is archived in `deprecated/` and is not maintained.
 
-- **Current Invariant:** Domain services and operation handlers must interact with disk resources via the injected `FileSystem` port rather than calling Node.js `fs` or `fs/promises` directly. Legacy direct filesystem calls remain in `packages/core/`, which is frozen under D-17 (2026-11-04); that refactor is retired and the package is scheduled for quarantine in Phase 11.
+- **Current Invariant:** Domain services and operation handlers must interact with disk resources via the injected `FileSystem` port rather than calling Node.js `fs` or `fs/promises` directly. Legacy direct filesystem calls remain only in the archived engine at `deprecated/packages/core/` (frozen under D-17, relocated byte-identical in Phase 11 under D-14); that refactor is retired.
 - **Target Rollout:** The engine is transitioning to a sovereign Virtual File System (VFS) gateway managed directly by the kernel, enabling transparent sandboxing, in-memory virtual layers, path remapping, and granular file access auditing.
 
 ### 4.2 Inter-Service Communication & The No-Peer Invariant

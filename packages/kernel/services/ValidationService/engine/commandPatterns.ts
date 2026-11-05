@@ -4,7 +4,7 @@ import type { CommandRule } from '../contracts/rules.js';
  * Dangerous-command pattern catalog.
  *
  * `LEGACY_PATTERNS` is a byte-for-byte copy of
- * `packages/core/src/api/index.ts:105-123`. It is kept verbatim so the legacy
+ * the quarantined legacy engine's `api/index.ts:105-123`. It is kept verbatim so the legacy
  * `validation/terminal.test.ts` gate stays green; the facade runs it first and
  * reports the first match exactly as the old implementation did.
  *

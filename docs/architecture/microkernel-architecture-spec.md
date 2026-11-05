@@ -9,6 +9,9 @@ Brud Code is an extensible orchestration engine supporting multiple host targets
 3. **Brud Prime:** Flagship commercial product offering autonomous LLM execution loops directly inside the environment.
 
 ### The Inversion Invariant & Pure Orchestrator
+
+> **Historical as of Phase 11 (2026-11-05):** the orchestrator described here as `@brud/core` was archived at `deprecated/packages/core/` (D-14/D-17). The live orchestrator is `@brud/kernel` plus the official plugins; this subsection is retained as historical design context.
+
 Core (`@brud/core`) is a pure, zero-dependency TypeScript orchestrator. It does not import `node:fs`, `node:child_process`, or `vscode`. It runs identically across any JavaScript/TypeScript host:
 - VS Code Extension
 - Terminal CLI

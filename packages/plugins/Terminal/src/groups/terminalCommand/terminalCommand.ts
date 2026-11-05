@@ -22,7 +22,7 @@ import type { TerminalOperationResult } from '../shared/terminalResult.js';
 /**
  * JSON Schema for `terminal_command`.
  *
- * Mirrors the legacy discovery audit (`packages/core/src/tool-registry/init.ts`
+ * Mirrors the legacy discovery audit (the quarantined legacy engine's `tool-registry/init.ts`
  * lines 465-492): every field is optional because the tool dispatches one of
  * single, batch, or conditional mode from the supplied fields.
  */

@@ -190,7 +190,7 @@ describe('WorkspaceService remediation — root round-trip and nested hints (F5)
     const { base } = await createRoots([]);
     context.after(() => rm(base, { recursive: true, force: true }));
     const repo = join(base, 'repo');
-    const core = join(repo, 'packages/core');
+    const core = join(repo, 'packages/legacy');
     await mkdir(core, { recursive: true });
 
     const service = await createLexicalService([repo, core]);

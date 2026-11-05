@@ -1,12 +1,11 @@
 /**
  * Legacy parity checks.
  *
- * The frozen legacy engine cannot be imported in a bare Node process (it
- * depends on the VS Code host), so parity is asserted against the legacy
+ * The frozen legacy engine was quarantined to `deprecated/` in
+ * Phase 11 (D-14/D-17), so parity is asserted against captured legacy outputs
+ * frozen in `fixtures/legacy-outputs.json` before the move, plus the legacy
  * registrations and branch messages documented in
- * `.internal_docs/audits/2026-11-05_phase_9_filesystem_discovery.md`, and the
- * pure match helpers are compared directly against
- * `packages/core/src/types/legacy.ts`.
+ * `.internal_docs/audits/2026-11-05_phase_9_filesystem_discovery.md`.
  *
  * Intentional divergences:
  * - `create_file` on an existing target reports `CONFLICT` (legacy:
@@ -20,11 +19,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OperationResult } from '@brud/kernel';
 import { NodeStorageDriver } from '../../../../kernel/drivers/node/index.js';
-import {
-  applySingleMatch as legacyApply,
-  findSingleMatch as legacyFind,
-  stripNumericLinePrefixes as legacyStrip,
-} from '../../../../core/src/types/legacy.js';
+import fixture from './fixtures/legacy-outputs.json' with { type: 'json' };
 import { appendFile } from '../groups/file/appendFile/index.js';
 import { copyFile } from '../groups/file/copyFile/index.js';
 import { createFile } from '../groups/file/createFile/index.js';
@@ -74,27 +69,40 @@ function assertCommitted(result: OperationResult): void {
 
 describe('legacy parity', () => {
   it('matches the frozen pure match helpers', () => {
-    const cases: Array<{ content: string; search: string; replace: string }> = [
-      { content: 'alpha beta gamma', search: 'beta', replace: 'BETA' },
-      { content: 'alpha beta', search: 'missing', replace: 'x' },
-      { content: 'foo bar foo', search: 'foo', replace: 'bar' },
-      { content: '1 | alpha\n2 | beta', search: '1 | alpha', replace: 'first' },
-    ];
+    interface LegacyMatchFailure { readonly code: string; readonly message: string }
+    interface LegacyFind {
+      readonly ok: boolean;
+      readonly value?: { readonly index: number };
+      readonly error?: LegacyMatchFailure;
+    }
+    interface LegacyApplied {
+      readonly ok: boolean;
+      readonly value?: { readonly content: string };
+      readonly error?: LegacyMatchFailure;
+    }
+    interface HelperCase {
+      readonly content: string;
+      readonly search: string;
+      readonly replace: string;
+      readonly find: LegacyFind;
+      readonly applied: LegacyApplied;
+    }
+
+    const { cases, strip } = fixture.matchHelpers as unknown as {
+      readonly cases: readonly HelperCase[];
+      readonly strip: readonly { readonly input: string; readonly output: string }[];
+    };
 
     for (const testCase of cases) {
-      const legacy = legacyFind(testCase.content, testCase.search);
+      const legacy = testCase.find;
       const current = findSingleMatch(testCase.content, testCase.search);
 
       assert.equal(current.ok, legacy.ok);
       if (!current.ok && !legacy.ok) {
-        assert.equal(current.code, legacy.error.code);
+        assert.equal(current.code, legacy.error?.code);
       }
 
-      const legacyApplied = legacyApply(
-        testCase.content,
-        testCase.search,
-        testCase.replace,
-      );
+      const legacyApplied = testCase.applied;
       const currentApplied = applySingleMatch(
         testCase.content,
         testCase.search,
@@ -103,12 +111,12 @@ describe('legacy parity', () => {
 
       assert.equal(currentApplied.ok, legacyApplied.ok);
       if (currentApplied.ok && legacyApplied.ok) {
-        assert.equal(currentApplied.value.content, legacyApplied.value.content);
+        assert.equal(currentApplied.value.content, legacyApplied.value?.content);
       }
     }
 
-    for (const text of ['1 | a\n2 | b', '10 | x\n20 | y', 'no prefixes']) {
-      assert.equal(stripNumericLinePrefixes(text), legacyStrip(text));
+    for (const sample of strip) {
+      assert.equal(stripNumericLinePrefixes(sample.input), sample.output);
     }
   });
 

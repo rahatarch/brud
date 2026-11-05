@@ -7,11 +7,12 @@ This document defines how to write and maintain READMEs for individual packages 
 ## When to Write a Package README
 
 **Required for:**
-- Every top-level package (`packages/core`, `packages/protocol`, `packages/ui`, `packages/adapters/*`)
+- Every top-level package (`packages/kernel`, `packages/daemon`, `packages/protocol`, `packages/ui`, `packages/plugins/*`)
 - Every app (`apps/vscode`)
 
 **Optional for:**
-- Complex child modules within a package (e.g., `packages/core/src/history/`)
+- Complex child modules within a package (e.g., `packages/kernel/services/UniversalHistory/`)
+- Archived packages under `deprecated/` are **not** maintained and do not require README updates
 - Only when the module has enough complexity that a README genuinely helps navigation
 
 **Skip for:**

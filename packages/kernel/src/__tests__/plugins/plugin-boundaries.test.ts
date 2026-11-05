@@ -13,6 +13,8 @@ const PLUGIN_PACKAGES = [
   'UserPrompts',
   'Structure',
   'Search',
+  'Reader',
+  'Filesystem',
   'Terminal',
   'MCPBridge',
 ] as const;

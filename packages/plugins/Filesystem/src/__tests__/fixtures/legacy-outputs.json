@@ -1,0 +1,193 @@
+{
+  "matchHelpers": {
+    "cases": [
+      {
+        "content": "alpha beta gamma",
+        "search": "beta",
+        "replace": "BETA",
+        "find": {
+          "ok": true,
+          "value": {
+            "index": 6
+          }
+        },
+        "applied": {
+          "ok": true,
+          "value": {
+            "content": "alpha BETA gamma"
+          }
+        }
+      },
+      {
+        "content": "alpha beta",
+        "search": "missing",
+        "replace": "x",
+        "find": {
+          "ok": false,
+          "error": {
+            "code": "SEARCH_NOT_FOUND",
+            "message": "Search text was not found in the document."
+          }
+        },
+        "applied": {
+          "ok": false,
+          "error": {
+            "code": "SEARCH_NOT_FOUND",
+            "message": "Search text was not found in the document."
+          }
+        }
+      },
+      {
+        "content": "foo bar foo",
+        "search": "foo",
+        "replace": "bar",
+        "find": {
+          "ok": false,
+          "error": {
+            "code": "MULTIPLE_MATCHES",
+            "message": "Search text matched more than once in the document."
+          }
+        },
+        "applied": {
+          "ok": false,
+          "error": {
+            "code": "MULTIPLE_MATCHES",
+            "message": "Search text matched more than once in the document."
+          }
+        }
+      },
+      {
+        "content": "1 | alpha\n2 | beta",
+        "search": "1 | alpha",
+        "replace": "first",
+        "find": {
+          "ok": true,
+          "value": {
+            "index": 0
+          }
+        },
+        "applied": {
+          "ok": true,
+          "value": {
+            "content": "first\n2 | beta"
+          }
+        }
+      }
+    ],
+    "strip": [
+      {
+        "input": "1 | a\n2 | b",
+        "output": "a\nb"
+      },
+      {
+        "input": "10 | x\n20 | y",
+        "output": "x\ny"
+      },
+      {
+        "input": "no prefixes",
+        "output": "no prefixes"
+      }
+    ]
+  },
+  "probe": {
+    "successCases": {
+      "create_file": {
+        "message": "Created parity/create/a.txt.",
+        "status": "success",
+        "tree": "[[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}]]"
+      },
+      "delete_file": {
+        "message": "Deleted parity/delete/a.txt.",
+        "status": "success",
+        "tree": "[[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}]]"
+      },
+      "rename_file": {
+        "message": "Renamed rename/from.txt to rename/to.txt.",
+        "status": "success",
+        "tree": "[[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "move_file": {
+        "message": "Moved move/from.txt to move/nested/to.txt.",
+        "status": "success",
+        "tree": "[[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "copy_file": {
+        "message": "Copied copy/from.txt to copy/nested/to.txt.",
+        "status": "success",
+        "tree": "[[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "append_file": {
+        "message": "Appended content to append/target.txt.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "create_directory": {
+        "message": "Created directory parity/dir with 2 files.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "delete_directory": {
+        "message": "Deleted directory seed and all its contents.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "move_directory": {
+        "message": "Moved directory seed to moved.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"moved\",{\"kind\":\"directory\"}],[\"moved/a.txt\",{\"kind\":\"file\",\"sha256\":\"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\",\"size\":1}],[\"moved/nested\",{\"kind\":\"directory\"}],[\"moved/nested/b.txt\",{\"kind\":\"file\",\"sha256\":\"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d\",\"size\":1}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "append_file_multi": {
+        "message": "Appended content to 2 files.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"moved\",{\"kind\":\"directory\"}],[\"moved/a.txt\",{\"kind\":\"file\",\"sha256\":\"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\",\"size\":1}],[\"moved/nested\",{\"kind\":\"directory\"}],[\"moved/nested/b.txt\",{\"kind\":\"file\",\"sha256\":\"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d\",\"size\":1}],[\"multi\",{\"kind\":\"directory\"}],[\"multi/a.txt\",{\"kind\":\"file\",\"sha256\":\"b870a52a8dad96e9a6684adcac925dad8625c14b3d7cc6767e55f56b3ebbd025\",\"size\":4}],[\"multi/b.txt\",{\"kind\":\"file\",\"sha256\":\"a2dadd963a42b10fe4cc48babc38abd319f52e39e4abd22705751790edd4c968\",\"size\":4}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}]]"
+      },
+      "search_replace": {
+        "message": "Patched replace/target.txt.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"moved\",{\"kind\":\"directory\"}],[\"moved/a.txt\",{\"kind\":\"file\",\"sha256\":\"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\",\"size\":1}],[\"moved/nested\",{\"kind\":\"directory\"}],[\"moved/nested/b.txt\",{\"kind\":\"file\",\"sha256\":\"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d\",\"size\":1}],[\"multi\",{\"kind\":\"directory\"}],[\"multi/a.txt\",{\"kind\":\"file\",\"sha256\":\"b870a52a8dad96e9a6684adcac925dad8625c14b3d7cc6767e55f56b3ebbd025\",\"size\":4}],[\"multi/b.txt\",{\"kind\":\"file\",\"sha256\":\"a2dadd963a42b10fe4cc48babc38abd319f52e39e4abd22705751790edd4c968\",\"size\":4}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}],[\"replace\",{\"kind\":\"directory\"}],[\"replace/target.txt\",{\"kind\":\"file\",\"sha256\":\"0d4668e550295e13a5850e41171370f4b9bf545e4da3d4e212999c2a862143b2\",\"size\":16}]]"
+      },
+      "search_replace_multi": {
+        "message": "Patched 2 files. Skipped 1 files.",
+        "status": "success",
+        "tree": "[[\"append\",{\"kind\":\"directory\"}],[\"append/target.txt\",{\"kind\":\"file\",\"sha256\":\"b7631870bc35cf85ce823b6ed0ec8fc128ce24de6340dc28bbcf9434c80eb644\",\"size\":15}],[\"copy\",{\"kind\":\"directory\"}],[\"copy/from.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"copy/nested\",{\"kind\":\"directory\"}],[\"copy/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"b96bc03276c92cbda3e311e384f7ab799863526ee39d55dd086887a9fc673003\",\"size\":7}],[\"move\",{\"kind\":\"directory\"}],[\"move/nested\",{\"kind\":\"directory\"}],[\"move/nested/to.txt\",{\"kind\":\"file\",\"sha256\":\"ac9ac4c3caf6ed37d4fb1aaa0a81a95fb639b03413243d3b6dd324c5d8c42464\",\"size\":7}],[\"moved\",{\"kind\":\"directory\"}],[\"moved/a.txt\",{\"kind\":\"file\",\"sha256\":\"ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb\",\"size\":1}],[\"moved/nested\",{\"kind\":\"directory\"}],[\"moved/nested/b.txt\",{\"kind\":\"file\",\"sha256\":\"3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d\",\"size\":1}],[\"multi\",{\"kind\":\"directory\"}],[\"multi-replace\",{\"kind\":\"directory\"}],[\"multi-replace/a.txt\",{\"kind\":\"file\",\"sha256\":\"a8c6f64d2d22a831b85c2ebbf66f921a6873df24ea8738fb7f74983f73b6ae40\",\"size\":5}],[\"multi-replace/b.txt\",{\"kind\":\"file\",\"sha256\":\"3b737213e2a39cd009f4a6f0feb67ca338eb528bcdd937539f19f89901c15bad\",\"size\":5}],[\"multi-replace/skip.txt\",{\"kind\":\"file\",\"sha256\":\"1785cfc3bc6ac7738e8b38cdccd1af12563c2b9070e07af336a1bf8c0f772b6a\",\"size\":7}],[\"multi/a.txt\",{\"kind\":\"file\",\"sha256\":\"b870a52a8dad96e9a6684adcac925dad8625c14b3d7cc6767e55f56b3ebbd025\",\"size\":4}],[\"multi/b.txt\",{\"kind\":\"file\",\"sha256\":\"a2dadd963a42b10fe4cc48babc38abd319f52e39e4abd22705751790edd4c968\",\"size\":4}],[\"parity\",{\"kind\":\"directory\"}],[\"parity/create\",{\"kind\":\"directory\"}],[\"parity/create/a.txt\",{\"kind\":\"file\",\"sha256\":\"559aead08264d5795d3909718cdd05abd49572e84fe55590eef31a88a08fdffd\",\"size\":1}],[\"parity/delete\",{\"kind\":\"directory\"}],[\"parity/dir\",{\"kind\":\"directory\"}],[\"parity/dir/nested\",{\"kind\":\"directory\"}],[\"parity/dir/nested/two.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"parity/dir/one.txt\",{\"kind\":\"file\",\"sha256\":\"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\",\"size\":0}],[\"rename\",{\"kind\":\"directory\"}],[\"rename/to.txt\",{\"kind\":\"file\",\"sha256\":\"ea045dd95e0f7260f5984da55a2faab7c4a412ad47fe8ca5fe46645f2e0e11eb\",\"size\":9}],[\"replace\",{\"kind\":\"directory\"}],[\"replace/target.txt\",{\"kind\":\"file\",\"sha256\":\"0d4668e550295e13a5850e41171370f4b9bf545e4da3d4e212999c2a862143b2\",\"size\":16}]]"
+      }
+    },
+    "multiSkip": [
+      "multi-replace/a.txt",
+      "multi-replace/b.txt",
+      "multi-replace/skip.txt"
+    ],
+    "missingDeleteMessage": "parity/missing.txt does not exist. Nothing to delete.",
+    "historyRecorded": true,
+    "divergences": {
+      "createFileConflict": {
+        "status": "aborted",
+        "code": "FILE_ALREADY_EXISTS",
+        "content": "original"
+      },
+      "moveDirectoryConflict": {
+        "status": "aborted",
+        "code": "DIRECTORY_ALREADY_EXISTS"
+      },
+      "deleteFileAsDirectory": {
+        "status": "success"
+      },
+      "searchReplaceMissing": {
+        "status": "failed",
+        "code": "UNEXPECTED_ERROR"
+      },
+      "abortedOnlyAggregate": {
+        "status": "aborted",
+        "success": true
+      },
+      "createDirectoryOverwrite": {
+        "success": true,
+        "status": "success",
+        "content": ""
+      },
+      "appendFileStart": {
+        "content": "first\n\noriginal"
+      }
+    }
+  }
+}

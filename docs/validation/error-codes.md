@@ -53,7 +53,7 @@ class BrudError extends Error {
 ## BATCH_LIMIT_EXCEEDED
 
 - **Code:** `BATCH_LIMIT_EXCEEDED`
-- **Factory:** `batchLimitExceededError(requested, limit)` in `packages/core/src/api/errors.ts`, re-exported from `@brud/core` and reachable as `BrudAPI.errors.batchLimitExceededError`.
+- **Factory:** `batchLimitExceededError(requested, limit)` in `packages/core/src/api/errors.ts`, re-exported from `@brud/core` and reachable as `BrudAPI.errors.batchLimitExceededError`. **Historical as of Phase 11 (2026-11-05):** the engine is archived at `deprecated/packages/core/`; live code uses kernel error contracts.
 - **Friendly message:** `Read batch too large.`
 - **Trigger:** a direct `read_file` / `read_files` / `read_directory` expansion asks for more files than the resolved batch ceiling. The default ceiling is `MAX_BATCH_FILES` (100). `readMaxBatchFiles` may lower that ceiling but the core clamp keeps it at or below 100, so the refusal also applies when a settings override is configured.
 - **When it fires:** before any file body is read. The refusal is atomic — no file is opened and no partial content is returned. The offending operation is recorded as `failed` with this error in `errors[]`; sibling operations in the same paste block still run.
@@ -61,7 +61,7 @@ class BrudError extends Error {
 
 ## EXECUTION_FAILED
 - **Code:** `EXECUTION_FAILED`
-- **Factories:** `executionFailedError(message)` for aggregate operation failures, and `commandFailedError(command, exitCode, output?)` for terminal exits in `packages/core/src/api/errors.ts`. Both are re-exported from `@brud/core`.
+- **Factories:** `executionFailedError(message)` for aggregate operation failures, and `commandFailedError(command, exitCode, output?)` for terminal exits in `packages/core/src/api/errors.ts`. Both are re-exported from `@brud/core`. **Historical as of Phase 11 (2026-11-05):** the engine is archived at `deprecated/packages/core/`; live code uses kernel error contracts.
 - **Friendly message:** `Execution failed.` (`executionFailedError`) or `Command failed (exit code ${exitCode}).` (`commandFailedError`).
 - **Trigger:** a terminal command or interactive session that finishes with a non-zero exit code and is not `interrupted`; a multi-file `append_file_multi` / `search_replace_multi` operation where at least one matched file could not be read or written.
 - **When it fires:** after the command or file pass completes. Terminal failures preserve the execution `data` (stdout/stderr, exit code, duration) and attach `code` and `details` to the operation result. Multi-file failures preserve `modified`, `skipped`, and `failed` lists and add `fileResults.fileErrors` with the per-file cause.

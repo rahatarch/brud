@@ -47,11 +47,13 @@ Before submitting a bug report, please check the [issue tracker](https://github.
 
 Brud Code is organized as a monorepo with npm workspaces. Key directories:
 
-- `packages/core/` — Core patching logic, history, and file operations (no VS Code API dependencies)
+- `packages/kernel/` — Microkernel, Level-1 services, plugin runtime, and the `BrudTools` registry/parser
 - `packages/protocol/` — Protocol definitions and data structures
-- `packages/adapters/` — Platform-specific adapters (e.g., VS Code)
+- `packages/plugins/` — Official leaf plugins (Search, Structure, UserPrompts, Catalog, Reader, Filesystem, Terminal, MCPBridge)
+- `packages/daemon/` — Host transport and JSON-RPC dispatch
 - `packages/ui/` — Webview-based user interface
 - `apps/` — Application entry points
+- `deprecated/` — Archived legacy engine and adapter (Phase 11). **Not maintained.** Do not add files or import from it.
 
 Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the architecture and design decisions.
 
@@ -60,11 +62,11 @@ Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the ar
 - **TypeScript** — All code must be written in TypeScript with strict type checking enabled.
 - **Formatting** — Use the project's ESLint configuration. Run `npm run lint` before committing.
 - **Atomic Changes** — Each change must be minimal and context-aware. Changes should be designed to apply as a single transaction.
-- **Decoupled Core** — Core patching logic in `packages/core/` must remain free of VS Code API dependencies. Platform-specific concerns belong in the adapter layer.
+- **Decoupled Engine** — Core patching logic in `packages/kernel/` and the official plugins must remain free of VS Code API dependencies. Platform-specific concerns belong in the host/daemon layer. The legacy engine is archived in `deprecated/` and is not a contribution target.
 
 ## Testing Requirements
 
-Capability projection (§1.3 R3 of the rollout plan) is only as strong as the tests that exercise it. Mocked tests pass while production fails under the same capability model: a test that never touches a real driver cannot detect a containment bug, a race, or a missing index. The repository therefore enforces production-realistic, zero-mock, adversarial testing under **D-18**, and `packages/core/` is frozen reference material under **D-17** — it is not a test target and it is scheduled for removal. New tests belong in the package that owns the surface.
+Capability projection (§1.3 R3 of the rollout plan) is only as strong as the tests that exercise it. Mocked tests pass while production fails under the same capability model: a test that never touches a real driver cannot detect a containment bug, a race, or a missing index. The repository therefore enforces production-realistic, zero-mock, adversarial testing under **D-18**. The legacy engine is frozen reference material under **D-17**, archived at `deprecated/packages/core/` in Phase 11 (D-14/D-22) — it is not a test target and `deprecated/` is not maintained. New tests belong in the package that owns the surface.
 
 **The standard (D-18):**
 
@@ -82,9 +84,9 @@ Capability projection (§1.3 R3 of the rollout plan) is only as strong as the te
 **Do not use substitutions:**
 
 - `InMemoryStorageDriver`, `MapPathPort`, or `TestHistoryStore` as replacements for a production contract.
-- Any in-memory or fake implementation of a production contract outside `packages/core/`. These are the subject of the de-mocking work that follows D-18.
+- Any in-memory or fake implementation of a production contract outside the archived legacy engine (`deprecated/`). These are the subject of the de-mocking work that follows D-18.
 
-**Setup helpers versus substitution helpers.** A setup helper wires real implementations into a test harness and is permitted; `packages/kernel/src/__tests__/support/realKernel.ts` and `packages/kernel/src/__tests__/fixtures/kernelWorker.ts` are the canonical examples. A substitution helper replaces a production contract with an in-memory or fake implementation and is forbidden outside `packages/core/`.
+**Setup helpers versus substitution helpers.** A setup helper wires real implementations into a test harness and is permitted; `packages/kernel/src/__tests__/support/realKernel.ts` and `packages/kernel/src/__tests__/fixtures/kernelWorker.ts` are the canonical examples. A substitution helper replaces a production contract with an in-memory or fake implementation and is forbidden outside the archived legacy engine (`deprecated/`, not maintained).
 
 **Adversarial categories and examples:**
 
@@ -98,7 +100,7 @@ Capability projection (§1.3 R3 of the rollout plan) is only as strong as the te
 
 **Running the suite.** Run the suite that owns the surface you changed: `npm run test:core`, `npm run test:mcp`, `npm run test:daemon`, `npm run test:adapter`, or `npm run test --workspace @brud/kernel`. All tests must pass before submitting a pull request. The CI pipeline (`npm run ci`) runs `build:all`, `test:kernel`, `test:core`, `test:mcp`, `test:extension`, `check:boundaries`, and `lint`; it does not run `test:integration`, `test:daemon`, or `test:adapter`, so run those separately.
 
-**References.** D-17 (packages/core frozen), D-18 (the standard), plan §5.5 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), evidence base (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`).
+**References.** D-14/D-22 (quarantine and adapter archive), D-17 (legacy core frozen and relocated byte-identical), D-18 (the standard), plan §5.5 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), evidence base (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`).
 
 **For codebase learners.** A codebase that tests against real drivers, real SQLite files, real processes, and real transports — and that requires adversarial cases for every new surface — is telling you its quality posture directly: it expects production failures to be found in tests, not in production. The capability model is enforced by tests that would actually fail if containment, durability, or authorization regressed.
 

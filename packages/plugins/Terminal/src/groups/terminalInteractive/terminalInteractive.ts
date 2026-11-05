@@ -19,7 +19,7 @@ import type { TerminalOperationResult } from '../shared/terminalResult.js';
 /**
  * JSON Schema for `terminal_interactive`.
  *
- * Mirrors the legacy discovery audit (`packages/core/src/tool-registry/init.ts`
+ * Mirrors the legacy discovery audit (the quarantined legacy engine's `tool-registry/init.ts`
  * lines 440-463). Both `command` and `answers` are required; an empty array is
  * accepted because it means "run interactively without supplying answers".
  */

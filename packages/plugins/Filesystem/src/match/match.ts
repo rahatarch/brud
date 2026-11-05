@@ -1,6 +1,6 @@
 /**
  * Pure single-match helpers, reimplemented from the frozen legacy surface
- * (`packages/core/src/types/legacy.ts:9-50`). They perform no I/O.
+ * (the quarantined legacy engine's `types/legacy.ts:9-50`). They perform no I/O.
  */
 
 export type MatchErrorCode = 'SEARCH_NOT_FOUND' | 'MULTIPLE_MATCHES';

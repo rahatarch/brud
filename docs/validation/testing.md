@@ -1,5 +1,7 @@
 # Testing
 
+> **As of Phase 11 (2026-11-05), this document is historical.** It describes the legacy engine, which was archived at `deprecated/packages/core/`. The live suites are the kernel suite (`npm run test:kernel`, which also runs the plugin tests) and the daemon suite. `deprecated/` is not built, tested, or maintained.
+
 ## Existing Test Coverage
 
 ### `terminal.test.ts`
@@ -54,19 +56,17 @@ Located at `packages/core/src/read-engine/read.test.ts`.
 
 ## How to Run Validation Tests
 
+The legacy commands below no longer apply. `packages/core` was archived in Phase 11 (D-14/D-17), and `deprecated/` is not a workspace or a test target.
+
 ```bash
-# From the packages/core directory:
-cd packages/core
+# From the repository root — live kernel + plugin suites:
+npm run test:kernel
 
-# Run the terminal validation tests only
-npx node --test src/validation/terminal.test.ts
-
-# Run all core tests
-npx node --test src/**/*.test.ts
-
-# From the project root (if configured):
-npm test
+# Live daemon suite:
+npm run test --workspace @brud/daemon
 ```
+
+The archived engine's tests remain in `deprecated/packages/core/` as historical reference only and are intentionally not executed.
 
 ## How to Write New Validation Tests
 

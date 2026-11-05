@@ -66,7 +66,7 @@ The read path (`read_file`, `read_files`, `read_directory`, and import fan-out) 
 
 Related constants: `BINARY_SAMPLE_BYTES` (8192) is the leading raw-byte window inspected for a `0x00` octet before a file is treated as binary and skipped.
 
-The constants and defaults are exported from `@brud/core` settings types. The MCP server reads the same settings through its live settings proxy, so a `refreshSettings()` call is visible to the next tool call without rebuilding the container.
+The constants and defaults were exported from `@brud/core` settings types. **As of Phase 11 (2026-11-05), `@brud/core` is archived at `deprecated/packages/core/` (D-14/D-17/D-22); this describes the archived engine.** The live settings surface is the kernel `SettingsService`, and the MCP bridge reads settings through the daemon service snapshot, so a settings refresh is visible to the next tool call without rebuilding the container.
 
 ## Read Result Envelope
 

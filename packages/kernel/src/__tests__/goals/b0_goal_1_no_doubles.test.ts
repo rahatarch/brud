@@ -98,7 +98,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
     }
 
     const files = await walkSourceFiles(REPO_ROOT, {
-      skipPaths: [join(REPO_ROOT, 'packages/core'), GOALS_DIR],
+      skipPaths: [join(REPO_ROOT, 'deprecated'), GOALS_DIR],
     });
 
     const violations: string[] = [];
@@ -180,7 +180,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
 
   it('has no definition of either double anywhere outside the frozen core', async () => {
     const files = await walkSourceFiles(REPO_ROOT, {
-      skipPaths: [join(REPO_ROOT, 'packages/core'), GOALS_DIR],
+      skipPaths: [join(REPO_ROOT, 'deprecated'), GOALS_DIR],
     });
     const violations: string[] = [];
 
