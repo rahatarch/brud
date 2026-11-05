@@ -36,6 +36,8 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
+      - name: Build workspace packages (protocol, kernel)
+        run: npm run build:protocol && npm run build:kernel
       - name: Typecheck workspace packages (excluding apps/vscode)
         run: npm run typecheck:ci
       - name: Typecheck apps/vscode (D-16 Phase 6.B known failure)
