@@ -3,6 +3,21 @@ import type { ChildProcess } from 'node:child_process';
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 /**
+ * Best-effort termination so a timed-out child cannot keep the test-file
+ * process alive (a live piped child blocks `node --test` from exiting even
+ * after the test itself has failed).
+ */
+function terminate(child: ChildProcess): void {
+  try {
+    child.kill('SIGKILL');
+  } catch {
+    // The child has already exited.
+  }
+  child.stdout?.destroy();
+  child.stderr?.destroy();
+}
+
+/**
  * Resolves with the first chunk written to the child's stdout.
  *
  * Rejects if the child emits `error` or does not write within `timeoutMs`, so a
@@ -21,7 +36,8 @@ export function waitForChildData(child: ChildProcess, timeoutMs = DEFAULT_TIMEOU
 
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error(`waitForChildData: child produced no stdout data within ${timeoutMs}ms`));
+      terminate(child);
+      reject(new Error(`waitForChildData: child produced no stdout data within ${timeoutMs}ms; terminated it`));
     }, timeoutMs);
 
     const onData = (chunk: Buffer | string): void => {
@@ -58,7 +74,8 @@ export function waitForChildClose(child: ChildProcess, timeoutMs = DEFAULT_TIMEO
   return new Promise<number | null>((resolve, reject) => {
     const timer = setTimeout(() => {
       cleanup();
-      reject(new Error(`waitForChildClose: child did not close within ${timeoutMs}ms`));
+      terminate(child);
+      reject(new Error(`waitForChildClose: child did not close within ${timeoutMs}ms; terminated it`));
     }, timeoutMs);
 
     const onClose = (code: number | null): void => {
