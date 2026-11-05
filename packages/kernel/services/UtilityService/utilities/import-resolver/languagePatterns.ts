@@ -58,11 +58,29 @@ export const languagePatternsRegistry: LanguageImportPatterns[] = [
 ];
 
 export function getPatternsForFile(filePath: string): LanguageImportPatterns {
-  const ext = Object.values(filePath.match(/\.\w+$/) || []).join('');
+  // `String.prototype.match` returns an array with `index`, `input`, and
+  // `groups` properties; use the matched extension itself, never every value.
+  const ext = filePath.match(/\.\w+$/)?.[0] ?? '';
   for (const entry of languagePatternsRegistry) {
     if (entry.extensions.includes(ext)) {
       return entry;
     }
   }
   return typescriptPatterns;
+}
+
+/**
+ * Returns the import pattern table for an explicit language hint.
+ *
+ * This hint overrides file-extension detection when a caller knows the
+ * language. Matching is case-insensitive. Extension detection also recognizes
+ * `.py` on the default path; the hint remains available for extensionless
+ * input or explicit overrides.
+ *
+ * @param language - Language name, e.g. `python` or `typescript`.
+ * @returns The matching pattern table, or `undefined` for an unknown language.
+ */
+export function getPatternsForLanguage(language: string): LanguageImportPatterns | undefined {
+  const normalized = language.toLowerCase();
+  return languagePatternsRegistry.find((entry) => entry.language === normalized);
 }

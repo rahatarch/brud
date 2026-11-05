@@ -1,6 +1,7 @@
 import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { PluginError, PluginDependencyError } from '../contracts/errors.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../contracts/IPluginContext.js';
@@ -15,6 +16,8 @@ export interface PluginManagerRuntimeDependencies {
   readonly universalHistory?: () => IUniversalHistoryService;
 
   readonly brudTools?: () => IBrudToolsService;
+
+  readonly utilities?: () => IUtilityService;
 }
 
 export interface InternalPluginRecord {

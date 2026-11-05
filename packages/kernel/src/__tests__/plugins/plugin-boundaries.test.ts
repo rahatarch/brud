@@ -8,7 +8,7 @@ import * as ts from 'typescript';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
 
-const PLUGIN_PACKAGES = ['ImportResolver', 'UserPrompts', 'Structure', 'Search'] as const;
+const PLUGIN_PACKAGES = ['Catalog', 'UserPrompts', 'Structure', 'Search'] as const;
 
 const FORBIDDEN_SPECIFIERS = new Set([
   'node:fs',
@@ -108,6 +108,12 @@ async function collectSourceFiles(directory: string): Promise<string[]> {
     const absolutePath = join(directory, entry.name);
 
     if (entry.isDirectory()) {
+      // The invariant covers plugin runtime source. Test files legitimately
+      // boot a kernel and touch `node:fs`, so they are out of scope.
+      if (entry.name === '__tests__') {
+        continue;
+      }
+
       files.push(...await collectSourceFiles(absolutePath));
     } else if (entry.isFile() && entry.name.endsWith('.ts')) {
       files.push(absolutePath);

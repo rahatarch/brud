@@ -9,6 +9,7 @@ import type {
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import { PluginPermissionError } from './errors.js';
 import type {
@@ -39,6 +40,9 @@ export interface PluginCapabilityProviders {
 
   /** Resolves the live `brud.core.tools` registry. */
   readonly brudTools?: () => IBrudToolsService;
+
+  /** Resolves the pure `brud.core.utils` service. */
+  readonly utilities?: () => IUtilityService;
 }
 
 /** Construction options for {@link PluginContext}. */
@@ -98,6 +102,8 @@ export class PluginContext implements IPluginContext {
   private history: NamespaceHistoryHandle | undefined;
 
   private brudToolsReader: IBrudToolsReader | undefined;
+
+  private utilities: IUtilityService | undefined;
 
   constructor(options: PluginContextOptions) {
     this.pluginId = options.pluginId;
@@ -162,6 +168,24 @@ export class PluginContext implements IPluginContext {
     }
 
     return this.history;
+  }
+
+  /**
+   * Returns the utility service without a permission check.
+   *
+   * D-20 classifies utilities as pure functions with zero ambient authority,
+   * so a plugin needs no manifest permission to call `resolveImports`.
+   */
+  public getUtilities(): IUtilityService {
+    const utilities = this.capabilities.utilities;
+
+    if (utilities === undefined) {
+      throw new Error('Utility service is not available in this context');
+    }
+
+    this.utilities ??= Object.freeze(utilities());
+
+    return this.utilities;
   }
 
   public registerTool(options: ToolRegistrationOptions): IPluginDisposable {

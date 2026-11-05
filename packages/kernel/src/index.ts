@@ -7,6 +7,7 @@ export * from '../services/UniversalHistory/index.js';
 export * from '../services/PluginManager/index.js';
 export * from '../services/SettingsService/index.js';
 export * from '../services/TerminalService/index.js';
+export * from '../services/UtilityService/index.js';
 export * from '../services/ValidationService/index.js';
 
 // Path semantics are owned by the validation engine and re-exported under the

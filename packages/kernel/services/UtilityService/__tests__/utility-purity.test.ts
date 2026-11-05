@@ -2,13 +2,23 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import * as ts from 'typescript';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
-const IMPORT_RESOLVER_ROOT = join(PLUGINS_ROOT, 'ImportResolver');
-const IMPORT_RESOLVER_SRC = join(IMPORT_RESOLVER_ROOT, 'src');
+const UTILITY_ROOT = resolve(HERE, '..', 'utilities', 'import-resolver');
+
+const FORBIDDEN_IMPORT_PREFIXES = ['node:fs', 'node:process'];
+const FORBIDDEN_IMPORT_SPECIFIERS = ['@brud/core'];
+const FORBIDDEN_CONTEXT_REFERENCES = [
+  'context',
+  'getFileSystem',
+  'getSettings',
+  'getTerminal',
+  'getHistory',
+  'executeTool',
+  'registerTool',
+];
 
 interface ImportReference {
   readonly specifier: string;
@@ -109,79 +119,66 @@ async function collectSourceFiles(directory: string): Promise<string[]> {
   return files.sort();
 }
 
-describe('ImportResolver purity invariant', () => {
-  it('imports no host, process, core, or kernel runtime dependency', async () => {
-    const sourceFiles = await collectSourceFiles(IMPORT_RESOLVER_SRC);
+describe('brud.core.utils Zero Dependency invariant', () => {
+  it('scans every import-resolver source file', async () => {
+    const sourceFiles = await collectSourceFiles(UTILITY_ROOT);
 
     assert.deepEqual(
-      sourceFiles.map((file) => relative(IMPORT_RESOLVER_ROOT, file).replace(/\\/gu, '/')),
-      ['src/errors.ts', 'src/index.ts', 'src/languagePatterns.ts'],
-      'the invariant must scan every ImportResolver source file',
+      sourceFiles.map((file) => relative(UTILITY_ROOT, file).replace(/\\/gu, '/')),
+      ['errors.ts', 'index.ts', 'languagePatterns.ts'],
     );
+  });
 
-    const forbidden = new Set(['node:fs', 'node:process', '@brud/core', '@brud/kernel']);
+  it('imports no filesystem, process, core, kernel, or plugin dependency', async () => {
+    const sourceFiles = await collectSourceFiles(UTILITY_ROOT);
     const violations: string[] = [];
 
     for (const file of sourceFiles) {
       const source = await readFile(file, 'utf8');
 
       for (const reference of collectImportReferences(file, source)) {
-        if (!forbidden.has(reference.specifier)) {
+        const { specifier } = reference;
+        const location = `${relative(UTILITY_ROOT, file).replace(/\\/gu, '/')}:${reference.line}`;
+
+        if (FORBIDDEN_IMPORT_PREFIXES.some((prefix) => specifier.startsWith(prefix))) {
+          violations.push(`${location} imports ${JSON.stringify(specifier)}`);
           continue;
         }
 
-        if (reference.specifier === '@brud/kernel' && reference.typeOnly) {
+        if (FORBIDDEN_IMPORT_SPECIFIERS.includes(specifier)) {
+          violations.push(`${location} imports ${JSON.stringify(specifier)}`);
           continue;
         }
 
-        violations.push(
-          `${relative(IMPORT_RESOLVER_ROOT, file).replace(/\\/gu, '/')}:${reference.line} `
-          + `imports ${JSON.stringify(reference.specifier)}`,
-        );
+        if (specifier === '@brud/kernel' && !reference.typeOnly) {
+          violations.push(`${location} value-imports ${JSON.stringify(specifier)}`);
+          continue;
+        }
+
+        if (specifier.startsWith('@brud/plugin-')) {
+          violations.push(`${location} imports plugin ${JSON.stringify(specifier)}`);
+        }
       }
     }
 
-    assert.deepEqual(violations, [], 'ImportResolver must stay a pure, host-independent SDK');
+    assert.deepEqual(violations, [], 'utilities must stay pure and host-independent');
   });
 
-  it('resolves real local imports without touching the filesystem itself', async () => {
-    const entry = pathToFileURL(join(IMPORT_RESOLVER_SRC, 'index.ts')).href;
-    const module = await import(entry) as {
-      resolveImports(
-        content: string,
-        filePath: string,
-        fileExists: (path: string) => Promise<boolean>,
-      ): Promise<string[]>;
-    };
+  it('contains no reference to kernel context or Level-1 service capabilities', async () => {
+    const sourceFiles = await collectSourceFiles(UTILITY_ROOT);
+    const violations: string[] = [];
 
-    const virtualRoot = resolve('/virtual/import-resolver-fixture');
-    const sourceDirectory = join(virtualRoot, 'src');
-    const filePath = join(sourceDirectory, 'a.ts');
+    for (const file of sourceFiles) {
+      const source = await readFile(file, 'utf8');
+      const displayFile = relative(UTILITY_ROOT, file).replace(/\\/gu, '/');
 
-    const existingFiles = new Set([
-      join(sourceDirectory, 'b.ts'),
-      join(sourceDirectory, 'c', 'index.ts'),
-      join(sourceDirectory, 'd.ts'),
-    ]);
+      for (const token of FORBIDDEN_CONTEXT_REFERENCES) {
+        if (source.includes(token)) {
+          violations.push(`${displayFile} references ${JSON.stringify(token)}`);
+        }
+      }
+    }
 
-    const content = [
-      "import { helper } from './b';",
-      "import { index } from './c';",
-      "import type { Shape } from './types';",
-      "import React from 'react';",
-      "const mod = await import('./d');",
-    ].join('\n');
-
-    const resolved = await module.resolveImports(
-      content,
-      filePath,
-      async (candidate) => existingFiles.has(candidate),
-    );
-
-    assert.deepEqual(resolved, [
-      join(sourceDirectory, 'b.ts'),
-      join(sourceDirectory, 'c', 'index.ts'),
-      join(sourceDirectory, 'd.ts'),
-    ]);
+    assert.deepEqual(violations, [], 'a utility must never receive a kernel context or service handle');
   });
 });

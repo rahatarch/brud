@@ -18,7 +18,6 @@ import { safeRm } from '../support/cleanup.js';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
 
-const IMPORT_RESOLVER_ID = 'akkhar-labs.plugin.import-resolver';
 const USER_PROMPTS_ID = 'akkhar-labs.plugin.user-prompts';
 const STRUCTURE_ID = 'akkhar-labs.plugin.structure';
 const SEARCH_ID = 'akkhar-labs.plugin.search';
@@ -33,10 +32,6 @@ interface SearchModule {
 
 interface UserPromptsModule {
   createUserPromptsPlugin(): IBrudPlugin;
-}
-
-interface ImportResolverModule {
-  importResolverPlugin: IBrudPlugin;
 }
 
 async function loadPluginModule<T>(packageName: string): Promise<T> {
@@ -73,12 +68,10 @@ describe('plugin lifecycle invariant', () => {
       const manager = kernel.requestAccess(caller, PluginManagerToken) as PluginManagerService;
       const tools = kernel.requestAccess(caller, BrudToolsToken);
 
-      const importResolver = await loadPluginModule<ImportResolverModule>('ImportResolver');
       const userPrompts = await loadPluginModule<UserPromptsModule>('UserPrompts');
       const structure = await loadPluginModule<StructureModule>('Structure');
       const search = await loadPluginModule<SearchModule>('Search');
 
-      manager.register(importResolver.importResolverPlugin);
       manager.register(userPrompts.createUserPromptsPlugin());
       manager.register(structure.createStructurePlugin());
       manager.register(search.createSearchPlugin());
@@ -89,7 +82,7 @@ describe('plugin lifecycle invariant', () => {
         'registration must stay passive: no tool may appear before activation',
       );
 
-      const expectedIds = [IMPORT_RESOLVER_ID, USER_PROMPTS_ID, STRUCTURE_ID, SEARCH_ID];
+      const expectedIds = [USER_PROMPTS_ID, STRUCTURE_ID, SEARCH_ID];
       assert.deepEqual([...manager.resolveActivationOrder()].sort(), [...expectedIds].sort());
 
       await manager.activateAll();
@@ -107,7 +100,6 @@ describe('plugin lifecycle invariant', () => {
         'extract_structure',
       ]);
       assert.deepEqual(toolNamesOwnedBy(tools, SEARCH_ID), ['search_files']);
-      assert.deepEqual(toolNamesOwnedBy(tools, IMPORT_RESOLVER_ID), []);
       assert.deepEqual(toolNamesOwnedBy(tools, USER_PROMPTS_ID), []);
       assert.equal(tools.listTools().length, 3);
 

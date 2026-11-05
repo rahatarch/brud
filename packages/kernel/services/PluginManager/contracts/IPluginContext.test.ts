@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { PluginPermissionError } from './errors.js';
 import type { IPluginLogger, IPluginSubscriptions } from './IPluginContext.js';
 import { PluginContext } from './PluginContext.js';
@@ -90,7 +91,12 @@ interface ProviderCounts {
   fileSystem: number;
   universalHistory: number;
   history?: number;
+  utilities?: number;
 }
+
+const UNUSED_UTILITIES: IUtilityService = Object.freeze({
+  resolveImports: async (): Promise<string[]> => [],
+});
 
 let disposedEntryTypes = 0;
 const UNUSED_NAMESPACE_HANDLE = Object.freeze({
@@ -114,6 +120,10 @@ function createProviders(counts: ProviderCounts): PluginCapabilityProviders {
     history: (): NamespaceHistoryHandle => {
       counts.history = (counts.history ?? 0) + 1;
       return UNUSED_NAMESPACE_HANDLE;
+    },
+    utilities: (): IUtilityService => {
+      counts.utilities = (counts.utilities ?? 0) + 1;
+      return UNUSED_UTILITIES;
     },
   };
 }
@@ -277,6 +287,18 @@ describe('IPluginContext contract', () => {
       assert.equal(first, second);
       assert.equal(counts.history, 1);
     }
+  });
+
+  it('returns a memoized utility service without requiring a permission', () => {
+    const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
+    const context = createContext([], counts);
+
+    const first = context.getUtilities();
+    const second = context.getUtilities();
+
+    assert.equal(first, UNUSED_UTILITIES);
+    assert.equal(first, second);
+    assert.equal(counts.utilities, 1);
   });
 
   it('disposes entry types registered through getHistory() with the plugin subscriptions', async () => {

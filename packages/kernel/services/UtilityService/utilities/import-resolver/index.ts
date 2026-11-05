@@ -1,11 +1,12 @@
 import * as path from 'node:path';
-import { getPatternsForFile } from './languagePatterns.js';
+import { getPatternsForFile, getPatternsForLanguage } from './languagePatterns.js';
 import type { ImportPattern } from './languagePatterns.js';
-import { invalidImportSyntaxError } from './errors.js';
+import { invalidImportSyntaxError, ImportResolutionError } from './errors.js';
 
 export { ImportResolutionError, invalidImportSyntaxError } from './errors.js';
 export {
   getPatternsForFile,
+  getPatternsForLanguage,
   goPatterns,
   languagePatternsRegistry,
   pythonPatterns,
@@ -57,20 +58,23 @@ async function resolveModulePath(
  *
  * The function performs no filesystem access of its own: callers supply the
  * file contents and an `exists` probe, which keeps the resolver usable from
- * any host (kernel plugin, editor adapter, or test).
+ * any host (kernel utility, editor adapter, or test).
  *
  * @param content - Source text to scan.
  * @param filePath - Path of the source file, used as the resolution base.
  * @param fileExists - Async existence probe supplied by the caller.
  * @param customPatterns - Optional replacement regex sources; capture group 1
  * must contain the module specifier.
+ * @param language - Optional explicit language hint. When omitted, the file
+ * extension selects the pattern table exactly as the legacy resolver does.
  * @returns Resolved local paths, in discovery order, without duplicates.
  */
 export async function resolveImports(
   content: string,
   filePath: string,
   fileExists: (path: string) => Promise<boolean>,
-  customPatterns?: string[],
+  customPatterns?: readonly string[],
+  language?: string,
 ): Promise<string[]> {
   const imports: string[] = [];
   const matches = new Set<string>();
@@ -88,6 +92,14 @@ export async function resolveImports(
         throw invalidImportSyntaxError(message);
       }
     }
+  } else if (language !== undefined) {
+    const entry = getPatternsForLanguage(language);
+
+    if (entry === undefined) {
+      throw new ImportResolutionError('INVALID_FIELD', `Unknown import language: ${language}`);
+    }
+
+    patterns = entry.patterns;
   } else {
     patterns = getPatternsForFile(filePath).patterns;
   }
@@ -143,8 +155,8 @@ export async function readFileWithImports(
   reader: ImportContentReader,
   filePath: string,
   maxDepth: number,
-  excludePatterns?: string[],
-  importSyntax?: string[],
+  excludePatterns?: readonly string[],
+  importSyntax?: readonly string[],
 ): Promise<{ files: Map<string, string>; errors: ReadError[] }> {
   const result = new Map<string, string>();
   const visited = new Set<string>();
@@ -181,32 +193,3 @@ export async function readFileWithImports(
   await readRecursive(filePath, maxDepth);
   return { files: result, errors };
 }
-
-/**
- * Declarative plugin metadata.
- *
- * ImportResolver is a pure SDK: it registers no tools and requests no
- * capabilities. It is exported as a plugin so hosts may still activate it.
- */
-export const importResolverManifest = {
-  id: 'akkhar-labs.plugin.import-resolver',
-  name: 'Import Resolver',
-  version: '0.0.1',
-  description: 'Pure local-import resolution library; registers no tools.',
-  permissions: [] as const,
-};
-
-export interface ImportResolverPlugin {
-  readonly manifest: typeof importResolverManifest;
-  activate(): void;
-}
-
-/** Plugin facade for the pure resolver library. */
-export const importResolverPlugin: ImportResolverPlugin = {
-  manifest: importResolverManifest,
-  activate(): void {
-    // Pure SDK: nothing to initialize and no capabilities to acquire.
-  },
-};
-
-export default importResolverPlugin;

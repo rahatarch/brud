@@ -11,6 +11,8 @@ import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
+import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
@@ -51,6 +53,16 @@ export interface PluginManagerDescriptorOptions {
    * registered.
    */
   readonly withTools?: boolean;
+
+  /**
+   * Declares {@link UtilityToken} as a boot dependency.
+   *
+   * Defaults to `false`, so base compositions keep their existing dependency
+   * list. The standard kernel opts in so plugins can call
+   * `context.getUtilities()` during activation. Regardless of this flag, the
+   * utility handle is only exposed when the token is actually registered.
+   */
+  readonly withUtilities?: boolean;
 }
 
 /**
@@ -71,6 +83,7 @@ export function createPluginManagerDescriptor(
   const initialPlugins = options?.initialPlugins ?? [];
   const withUniversalHistory = options?.withUniversalHistory ?? false;
   const withTools = options?.withTools ?? false;
+  const withUtilities = options?.withUtilities ?? false;
 
   const dependencies: ServiceToken<unknown>[] = withUniversalHistory
     ? [FileSystemToken, UniversalHistoryToken]
@@ -78,6 +91,10 @@ export function createPluginManagerDescriptor(
 
   if (withTools) {
     dependencies.push(BrudToolsToken);
+  }
+
+  if (withUtilities) {
+    dependencies.push(UtilityToken);
   }
 
   return {
@@ -106,11 +123,17 @@ export function createPluginManagerDescriptor(
           ? (): IBrudToolsService => broker.requestAccess(caller, BrudToolsToken)
           : undefined;
 
+      const utilities: (() => IUtilityService) | undefined =
+        withUtilities && broker.hasService(UtilityToken)
+          ? (): IUtilityService => broker.requestAccess(caller, UtilityToken)
+          : undefined;
+
       const manager = new PluginManagerService({
         workspaceRoot: context.workspaceRoot,
         fileSystem,
         ...(universalHistory === undefined ? {} : { universalHistory }),
         ...(brudTools === undefined ? {} : { brudTools }),
+        ...(utilities === undefined ? {} : { utilities }),
       });
 
       for (const plugin of initialPlugins) {

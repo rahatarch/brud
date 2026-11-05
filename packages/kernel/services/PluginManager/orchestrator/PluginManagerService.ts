@@ -523,6 +523,15 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
 
           return accessor();
         },
+        utilities: () => {
+          const accessor = this.dependencies.utilities;
+
+          if (accessor === undefined) {
+            throw new Error(`Utility service is unavailable for plugin "${record.manifest.id}"`);
+          }
+
+          return accessor();
+        },
       },
     });
   }

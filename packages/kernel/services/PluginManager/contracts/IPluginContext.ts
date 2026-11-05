@@ -6,6 +6,7 @@ import type {
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { PluginPermission } from './permissions.js';
 
@@ -138,6 +139,18 @@ export interface IPluginContext {
    * @throws PluginPermissionError when neither permission was declared.
    */
   getHistory(): NamespaceHistoryHandle;
+
+  /**
+   * Returns the `brud.core.utils` Level-1 utility service.
+   *
+   * Utilities are pure, stateless functions (D-19/D-20), so this method
+   * requires no permission: resolving it grants no filesystem, process,
+   * settings, history, or tool authority. The service exposes only
+   * {@link IUtilityService.resolveImports}.
+   *
+   * @returns The shared utility service instance.
+   */
+  getUtilities(): IUtilityService;
 
   /**
    * Registers a tool into the live `brud.core.tools` registry on behalf of

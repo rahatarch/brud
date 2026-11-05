@@ -20,6 +20,7 @@ import {
   pinTerminalPolicies,
   type TerminalDescriptorOptions,
 } from '../../services/TerminalService/descriptor/TerminalDescriptor.js';
+import { createUtilityDescriptor } from '../../services/UtilityService/descriptor/UtilityServiceDescriptor.js';
 import {
   createValidationDescriptor,
   pinBootPolicies,
@@ -152,9 +153,10 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  * The returned kernel accepts additional service registrations before
  * {@link BrudKernel.boot} is called.
  *
- * Boot order is structural: settings, settings reader, workspace, filesystem,
- * validation, terminal, history, then plugins. Workspace precedes the filesystem service so the
- * canonical root identity exists before any content service initializes.
+ * Boot order is structural: settings, settings reader, utilities, workspace,
+ * filesystem, validation, terminal, tools, history, then plugins. Workspace
+ * precedes the filesystem service so the canonical root identity exists before
+ * any content service initializes.
  *
  * @param options - Optional driver, workspace, history, and plugin overrides for testing or alternate backends.
  * @returns A kernel instance ready to boot.
@@ -178,6 +180,11 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   const mutationJournal = options?.mutationJournal ?? createFileMutationJournal();
   kernel.register(createSettingsDescriptor(options?.settings));
   kernel.register(createSettingsReaderDescriptor());
+  // brud.core.utils is a Level-1 utility service (D-19). It declares no
+  // dependencies and receives no broker, so its pure functions are extractable
+  // from the kernel. The plugin manager declares it as a dependency, so the
+  // service is RUNNING before any plugin activates and calls getUtilities().
+  kernel.register(createUtilityDescriptor());
   // Capture the workspace instance built by its descriptor so the filesystem
   // descriptor receives the same canonical authority instead of constructing
   // a second, divergent path model. Topological order guarantees the workspace
@@ -243,6 +250,7 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
     initialPlugins: options?.initialPlugins,
     withUniversalHistory: true,
     withTools: true,
+    withUtilities: true,
   }));
 
   const boot = kernel.boot.bind(kernel);

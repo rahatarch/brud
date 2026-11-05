@@ -8,6 +8,7 @@ import type {
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
+import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { PluginPermissionError } from './errors.js';
 import type { IBrudPlugin } from './IBrudPlugin.js';
 import type { IPluginContext, IPluginDisposable } from './IPluginContext.js';
@@ -62,6 +63,9 @@ function createContext(pluginId: string): IPluginContext {
     },
     getBrudTools: (): IBrudToolsReader => {
       throw new PluginPermissionError(pluginId, 'getBrudTools', ['tools:register', 'tools:execute']);
+    },
+    getUtilities: (): IUtilityService => {
+      throw new Error('utility service is not used in this test');
     },
     executeTool: (): Promise<OperationResult> => {
       throw new PluginPermissionError(pluginId, 'executeTool', ['tools:register', 'tools:execute']);
