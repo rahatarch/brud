@@ -1,7 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OperationResult } from '../../../src/contracts/handler.js';
-import type { ToolRegistrationOptions } from '../../BrudTools/contracts/index.js';
+import type {
+  IBrudToolsReader,
+  ToolRegistrationOptions,
+} from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
@@ -56,6 +59,9 @@ function createContext(pluginId: string): IPluginContext {
     },
     registerTool: (): IPluginDisposable => {
       throw new PluginPermissionError(pluginId, 'registerTool', ['tools:register', 'tools:execute']);
+    },
+    getBrudTools: (): IBrudToolsReader => {
+      throw new PluginPermissionError(pluginId, 'getBrudTools', ['tools:register', 'tools:execute']);
     },
     executeTool: (): Promise<OperationResult> => {
       throw new PluginPermissionError(pluginId, 'executeTool', ['tools:register', 'tools:execute']);

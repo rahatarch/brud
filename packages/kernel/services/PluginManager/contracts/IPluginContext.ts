@@ -1,4 +1,5 @@
 import type {
+  IBrudToolsReader,
   IPluginExecutionContext,
   ToolRegistrationOptions,
 } from '../../BrudTools/contracts/index.js';
@@ -153,6 +154,19 @@ export interface IPluginContext {
    * @throws PluginPermissionError when `tools:register` was not declared.
    */
   registerTool(options: ToolRegistrationOptions): IPluginDisposable;
+
+  /**
+   * Returns a read-only view of the live tool registry.
+   *
+   * Requires `tools:register` or `tools:execute`. The view exposes only
+   * `getTool` and `listTools`: it grants no registration or dispatch authority,
+   * so catalog-style plugins can describe the registry without acquiring the
+   * ability to mutate or invoke it.
+   *
+   * @returns Read-only registry projection.
+   * @throws PluginPermissionError when no tools permission was declared.
+   */
+  getBrudTools(): IBrudToolsReader;
 
   /**
    * Validates and dispatches a registered tool through `brud.core.tools`.

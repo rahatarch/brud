@@ -1,4 +1,5 @@
 export type {
+  IBrudToolsReader,
   IBrudToolsService,
   IPluginExecutionContext,
   RegisteredToolInfo,
@@ -12,6 +13,7 @@ export {
   ToolNotFoundError,
   ToolPermissionError,
   ToolQuotaExceededError,
+  ToolRegistrationError,
   ToolValidationError,
   toolFailureMessage,
 } from './errors.js';

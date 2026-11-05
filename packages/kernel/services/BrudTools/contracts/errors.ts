@@ -5,7 +5,8 @@ export type BrudToolsErrorCode =
   | 'TOOL_VALIDATION_ERROR'
   | 'TOOL_PERMISSION_DENIED'
   | 'TOOL_DISPOSED'
-  | 'TOOL_QUOTA_EXCEEDED';
+  | 'TOOL_QUOTA_EXCEEDED'
+  | 'TOOL_REGISTRATION_ERROR';
 
 /**
  * Base class for every BrudTools domain failure.
@@ -63,6 +64,37 @@ export class ToolNotFoundError extends BrudToolsError {
     super(`Tool "${toolName}" is not registered`);
     this.name = 'ToolNotFoundError';
     this.toolName = toolName;
+  }
+}
+
+/**
+ * Raised when a tool definition is rejected before it enters the registry.
+ *
+ * Registration validates the caller-provided schema up front: it must be plain
+ * JSON (no cycles or non-JSON values), it must compile under the same subset
+ * compiler dispatch uses, and it must not depend on external or recursive
+ * `$ref` resolution. Rejecting at registration keeps an unusable tool out of
+ * the catalog instead of failing later at execution.
+ */
+export class ToolRegistrationError extends BrudToolsError {
+  public readonly code = 'TOOL_REGISTRATION_ERROR' as const;
+
+  /** Name of the tool whose registration was rejected. */
+  public readonly toolName: string;
+
+  /** Stable sub-code naming the rejected schema property. */
+  public readonly reasonCode: string;
+
+  /**
+   * @param toolName - Tool whose registration was rejected.
+   * @param reasonCode - Stable sub-code such as `SCHEMA_CIRCULAR`.
+   * @param message - Human-readable failure description.
+   */
+  constructor(toolName: string, reasonCode: string, message: string) {
+    super(message);
+    this.name = 'ToolRegistrationError';
+    this.toolName = toolName;
+    this.reasonCode = reasonCode;
   }
 }
 

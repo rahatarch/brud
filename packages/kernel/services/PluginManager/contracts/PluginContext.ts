@@ -1,6 +1,9 @@
 import type {
+  IBrudToolsReader,
   IBrudToolsService,
   IPluginExecutionContext,
+  ListToolsFilter,
+  RegisteredToolInfo,
   ToolRegistrationOptions,
 } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
@@ -94,6 +97,8 @@ export class PluginContext implements IPluginContext {
 
   private history: NamespaceHistoryHandle | undefined;
 
+  private brudToolsReader: IBrudToolsReader | undefined;
+
   constructor(options: PluginContextOptions) {
     this.pluginId = options.pluginId;
     this.workspaceRoot = options.workspaceRoot;
@@ -171,6 +176,26 @@ export class PluginContext implements IPluginContext {
     this.subscriptions.add(disposable);
 
     return disposable;
+  }
+
+  public getBrudTools(): IBrudToolsReader {
+    this.assertCapability('getBrudTools', 'tools');
+
+    if (this.brudToolsReader === undefined) {
+      const tools = this.resolveBrudTools();
+
+      // `ToolRegistry` stores a deep-frozen canonical schema and returns that
+      // same object on every projection. Forwarding it here is therefore safe
+      // and allocation-free: a reader cannot mutate nested schema properties,
+      // and no defensive clone is needed on the read path (F-1).
+      this.brudToolsReader = Object.freeze({
+        getTool: (name: string): RegisteredToolInfo | undefined => tools.getTool(name),
+        listTools: (filter?: ListToolsFilter): readonly RegisteredToolInfo[] =>
+          tools.listTools(filter),
+      });
+    }
+
+    return this.brudToolsReader;
   }
 
   public async executeTool(

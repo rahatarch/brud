@@ -1,8 +1,14 @@
 import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
+import { deepFreeze } from '../../SettingsService/model/deepFreeze.js';
+import {
+  compileJsonSchema,
+  type JsonSchemaDefinitionError,
+} from '../../ValidationService/engine/jsonSchema/index.js';
 import {
   ToolDuplicateError,
   ToolNotFoundError,
   ToolQuotaExceededError,
+  ToolRegistrationError,
 } from '../contracts/errors.js';
 import type {
   IPluginExecutionContext,
@@ -67,10 +73,16 @@ export class ToolRegistry {
       throw new ToolDuplicateError(options.name, existing.ownerPluginId);
     }
 
+    // The caller keeps its own mutable schema object. Registration stores an
+    // isolated, canonical JSON copy and deep-freezes it once, so a later read
+    // through `IBrudToolsReader` cannot reach back into the registry and
+    // mutate another plugin's dispatch contract (F-1).
+    const parametersSchema = canonicalizeSchema(options.name, options.parametersSchema);
+
     const entry: RegisteredToolEntry = Object.freeze({
       name: options.name,
       description: options.description,
-      parametersSchema: Object.freeze({ ...options.parametersSchema }),
+      parametersSchema,
       requiredPermissions: options.requiredPermissions === undefined
         ? undefined
         : Object.freeze([...options.requiredPermissions]),
@@ -183,6 +195,90 @@ export class ToolRegistry {
 
     return count;
   }
+}
+
+/**
+ * Produces the immutable schema copied into the registry.
+ *
+ * The schema is cloned through JSON so the registry never aliases the
+ * caller's object graph, compiled with the dispatch-time compiler so a schema
+ * that could never execute is rejected up front, and then deep-frozen once.
+ * Reads return this same frozen object; no per-read cloning is performed.
+ *
+ * @param toolName - Tool being registered, used in failure messages.
+ * @param schema - Caller-provided schema, or `undefined` for an open schema.
+ * @returns The canonical, deeply frozen schema.
+ * @throws ToolRegistrationError when the schema is circular, not plain JSON,
+ * contains an unresolvable `$ref`, or otherwise fails compilation.
+ */
+function canonicalizeSchema(
+  toolName: string,
+  schema: Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  const source: unknown = schema === undefined ? {} : schema;
+  let canonical: unknown;
+
+  try {
+    canonical = JSON.parse(JSON.stringify(source));
+  } catch (error) {
+    if (isCircularSerializationError(error)) {
+      throw new ToolRegistrationError(
+        toolName,
+        'SCHEMA_CIRCULAR',
+        `SCHEMA_CIRCULAR: Tool ${toolName} has a circular schema.`,
+      );
+    }
+
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new ToolRegistrationError(
+      toolName,
+      'SCHEMA_NOT_JSON',
+      `SCHEMA_NOT_JSON: Tool ${toolName} schema must be plain JSON: ${detail}`,
+    );
+  }
+
+  // Compile with the dispatch-time JSON Schema compiler. Its default limits
+  // (`DEFAULT_JSON_SCHEMA_LIMITS` in
+  // `services/ValidationService/engine/jsonSchema/types.ts`) cap a schema at
+  // 1000 nodes, counting the root object as one node. A flat object schema can
+  // therefore declare at most 999 properties; the 1000th property is rejected
+  // with SCHEMA_LIMIT_EXCEEDED, which this function surfaces as SCHEMA_INVALID.
+  const compiled = compileJsonSchema(canonical);
+
+  if (!compiled.ok) {
+    const detail = compiled.errors.map(formatSchemaError).join('; ');
+    const hasReference = compiled.errors.some(
+      (error) => error.message.includes('$ref') || error.message.includes('$dynamicRef'),
+    );
+
+    if (hasReference) {
+      throw new ToolRegistrationError(
+        toolName,
+        'SCHEMA_REF_UNRESOLVED',
+        `SCHEMA_REF_UNRESOLVED: Tool ${toolName} uses an unresolvable $ref; only self-contained schemas are allowed: ${detail}`,
+      );
+    }
+
+    throw new ToolRegistrationError(
+      toolName,
+      'SCHEMA_INVALID',
+      `SCHEMA_INVALID: Tool ${toolName} has an invalid schema: ${detail}`,
+    );
+  }
+
+  return deepFreeze(canonical as Record<string, unknown>);
+}
+
+/** Whether a JSON serialization failure was caused by an object cycle. */
+function isCircularSerializationError(error: unknown): boolean {
+  return error instanceof TypeError && /circular/iu.test(error.message);
+}
+
+/** Renders one compiler diagnostic with its schema pointer. */
+function formatSchemaError(error: JsonSchemaDefinitionError): string {
+  return error.schemaPath === ''
+    ? error.message
+    : `${error.schemaPath}: ${error.message}`;
 }
 
 /**

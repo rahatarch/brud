@@ -5,7 +5,9 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const kernelRoot = resolve(scriptDirectory, '..', 'packages', 'kernel');
+const packagesRoot = resolve(scriptDirectory, '..', 'packages');
+const kernelRoot = join(packagesRoot, 'kernel');
+const pluginsRoot = join(packagesRoot, 'plugins');
 
 const TARGETS = [
   { directory: 'src/__tests__', recursive: false },
@@ -49,6 +51,34 @@ async function collectTestFiles(directory, recursive) {
   return files;
 }
 
+async function collectPluginTestFiles(root) {
+  let entries;
+
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const files = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    files.push(
+      ...await collectTestFiles(join(root, entry.name, 'src', '__tests__'), true),
+    );
+  }
+
+  return files;
+}
+
 const discovered = [];
 
 for (const target of TARGETS) {
@@ -56,6 +86,8 @@ for (const target of TARGETS) {
     ...await collectTestFiles(join(kernelRoot, target.directory), target.recursive),
   );
 }
+
+discovered.push(...await collectPluginTestFiles(pluginsRoot));
 
 const testFiles = [...new Set(discovered)].sort();
 

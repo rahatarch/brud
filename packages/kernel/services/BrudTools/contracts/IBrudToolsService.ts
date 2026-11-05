@@ -160,3 +160,13 @@ export interface IBrudToolsService {
    */
   parseAndRoute(rawInput: string, options?: ParseOptions): Promise<RouteResult>;
 }
+
+/**
+ * Read-only projection of the tool registry.
+ *
+ * Handlers such as the Catalog plugin need to describe the registry without
+ * acquiring registration or dispatch authority. This slice exposes exactly
+ * the two lookup operations, so callers cannot mutate the registry or invoke a
+ * tool through the facade.
+ */
+export type IBrudToolsReader = Pick<IBrudToolsService, 'getTool' | 'listTools'>;
