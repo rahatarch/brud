@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/index.js';
@@ -17,7 +17,7 @@ import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-bootstrap-integration-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-bootstrap-integration-')));
 });
 
 afterEach(async () => {

@@ -225,7 +225,7 @@ describe('PathValidator', () => {
     let rootDirectory = '';
 
     before(async () => {
-      rootDirectory = await mkdtemp(join(tmpdir(), 'brud-validator-'));
+      rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-validator-')));
     });
 
     after(async () => {

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -38,7 +38,7 @@ describe('SettingsService concurrent updates', () => {
     'persists every key from 20 concurrent processes with zero lost updates',
     { timeout: 120_000 },
     async (context) => {
-      const root = await mkdtemp(join(tmpdir(), 'brud-settings-update-'));
+      const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-settings-update-')));
       const home = join(root, 'home');
 
       context.after(async () => {

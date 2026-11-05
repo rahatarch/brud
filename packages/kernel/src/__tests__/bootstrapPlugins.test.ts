@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { IStorageDriver } from '../../drivers/contracts/index.js';
@@ -36,7 +36,7 @@ import { LifecycleStateError } from '../engine/errors.js';
 let WORKSPACE_ROOT = '';
 
 beforeEach(async () => {
-  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-bootstrap-plugins-'));
+  WORKSPACE_ROOT = await realpath(await mkdtemp(join(tmpdir(), 'brud-bootstrap-plugins-')));
 });
 
 afterEach(async () => {

@@ -5,7 +5,7 @@
  * sweep's clock is moved past them where a test needs an old file.
  */
 import { spawn } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile, realpath } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -42,7 +42,7 @@ interface Harness {
 async function harness(context: TestContext): Promise<Harness> {
   const clock = { now: Date.now() };
   const now = (): number => clock.now;
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-retention-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-retention-')));
   const history = join(root, '.brud/history');
   context.after(() => rm(root, { recursive: true, force: true }));
   const driver = new DurableNodeStorageDriver();
@@ -283,7 +283,7 @@ describe('history garbage collection (D-15 U-8)', () => {
       context.skip('filesystem permissions are not enforced for uid 0');
       return;
     }
-    const root = await mkdtemp(join(tmpdir(), 'brud-retention-ro-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-ro-')));
     const historyRoot = join(root, '.brud', 'history');
     await mkdir(historyRoot, { recursive: true });
     await chmod(historyRoot, 0o555);
@@ -303,7 +303,7 @@ describe('history garbage collection (D-15 U-8)', () => {
 
 describe('history retention — INV-3 keeps the live implicit session (D-15 A6)', () => {
   it('A6 retention keeps the implicit session this process is recording into, even after it had to be replaced', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-d15-a6-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-d15-a6-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
@@ -346,7 +346,7 @@ describe('history retention — INV-3 keeps the live implicit session (D-15 A6)'
 
 describe('history retention at boot through settings (D-15 U-8)', () => {
   it('runs after RUNNING with the frozen settings: a longer user retention keeps what the default removes', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-retention-boot-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-boot-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', workspaceRoot: root };
     const boot = async (user: Record<string, unknown> | null): Promise<ReturnType<typeof createStandardKernel>> => {
@@ -387,7 +387,7 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
 describe('history retention — live-row claims (U-8 corrective, RL)', () => {
   /** A real store over a real database file under `mkdtemp`. */
   async function fileStore(context: TestContext, prefix: string): Promise<{ root: string; dbPath: string; store: UnifiedHistoryStore }> {
-    const root = await mkdtemp(join(tmpdir(), prefix));
+    const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
@@ -504,7 +504,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
   });
 
   it('T-2.3: dispose and rotation release the claim on the row itself', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-rl-t23-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t23-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
@@ -538,7 +538,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
   });
 
   it('T-2.4: a SIGKILLed owner\'s claim is released and its row reclaimed on the next boot', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-rl-t24-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t24-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');
@@ -632,7 +632,7 @@ await new Promise(() => {});
   });
 
   it('T-2.4-b: the reducer inside applyRetention releases a crashed owner\'s claim, not the boot sweep', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-rl-t24b-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-rl-t24b-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const dbPath = join(historyRoot, 'universal.db');

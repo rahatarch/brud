@@ -1,6 +1,6 @@
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -41,7 +41,7 @@ let caseCounter = 0;
 
 function nextWorkspaceRoot(): string {
   caseCounter += 1;
-  const root = mkdtempSync(join(tmpdir(), `brud-plugin-manager-${caseCounter}-`));
+  const root = realpathSync(mkdtempSync(join(tmpdir(), `brud-plugin-manager-${caseCounter}-`)));
   workspaceRoots.push(root);
   return root;
 }

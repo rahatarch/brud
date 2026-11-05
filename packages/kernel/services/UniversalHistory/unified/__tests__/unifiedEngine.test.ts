@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
@@ -22,7 +22,7 @@ interface Harness {
 }
 
 async function harness(context: TestContext, callbackTimeoutMs = 2_000): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-engine-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-engine-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();

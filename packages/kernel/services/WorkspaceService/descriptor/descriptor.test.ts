@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
@@ -19,7 +19,7 @@ let clientRoot = '';
 let serverRoot = '';
 
 before(async () => {
-  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-workspace-descriptor-'));
+  WORKSPACE_ROOT = await realpath(await mkdtemp(join(tmpdir(), 'brud-workspace-descriptor-')));
   clientRoot = join(WORKSPACE_ROOT, 'client');
   serverRoot = join(WORKSPACE_ROOT, 'server');
   await mkdir(clientRoot, { recursive: true });

@@ -5,7 +5,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -98,7 +98,7 @@ interface FixtureManifest {
  * made before any import, so source hashes are taken after this step.
  */
 async function legacyFixture(context: TestContext): Promise<Fixture> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-import-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-import-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   await cp(join(FIXTURE_DIR, 'workspace'), root, { recursive: true });
   await cp(join(FIXTURE_DIR, 'history'), join(root, '.brud', 'history'), { recursive: true });
@@ -223,7 +223,7 @@ describe('legacy history import (G-U5)', () => {
   });
 
   it('boots without legacy files and records no imports', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-noimport-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-noimport-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const unified = await boot(root);
     await unified.kernel.shutdown();

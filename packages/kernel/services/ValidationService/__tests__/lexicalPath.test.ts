@@ -232,7 +232,7 @@ describe('LexicalPathEngine — migrated canonical rules', () => {
     let rootDirectory = '';
 
     before(async () => {
-      rootDirectory = await mkdtemp(join(tmpdir(), 'brud-lexical-engine-'));
+      rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-lexical-engine-')));
     });
 
     after(async () => {

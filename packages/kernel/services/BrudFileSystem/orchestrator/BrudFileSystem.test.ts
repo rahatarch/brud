@@ -1,7 +1,7 @@
 import { after, before, beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
-import { mkdir, mkdtemp, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, stat, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
@@ -30,7 +30,7 @@ function isSymlinkEscape(error: unknown): boolean {
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-fs-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-fs-')));
 });
 
 afterEach(async () => {
@@ -194,7 +194,7 @@ describe('BrudFileSystem', () => {
     let rootDirectory = '';
 
     before(async () => {
-      rootDirectory = await mkdtemp(join(tmpdir(), 'brud-fs-symlink-'));
+      rootDirectory = await realpath(await mkdtemp(join(tmpdir(), 'brud-fs-symlink-')));
     });
 
     after(async () => {

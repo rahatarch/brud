@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
@@ -9,7 +9,7 @@ import { readDirectory } from './readDirectory.js';
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-read-directory-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-read-directory-')));
 });
 
 afterEach(async () => {

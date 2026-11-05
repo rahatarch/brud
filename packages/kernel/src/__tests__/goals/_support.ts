@@ -11,15 +11,6 @@ export const KERNEL_ROOT = resolve(GOALS_DIR, '../../..');
 /** Absolute path to the repository root. */
 export const REPO_ROOT = resolve(KERNEL_ROOT, '../..');
 
-/** Absolute path to the execution artifact under verification. */
-export const EXECUTION_ARTIFACT = join(
-  REPO_ROOT,
-  '.internal_docs/executions/2026-11-04_b0_de_mock_filesystem.md',
-);
-
-/** Absolute path to the registry. */
-export const REGISTRY = join(REPO_ROOT, '.internal_docs/REGISTRY.md');
-
 /** Absolute path to the cross-platform CI workflow. */
 export const CI_WORKFLOW = join(REPO_ROOT, '.github/workflows/test-matrix.yml');
 

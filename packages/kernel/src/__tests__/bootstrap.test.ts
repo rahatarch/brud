@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
@@ -15,7 +15,7 @@ import { LifecycleStateError } from '../engine/errors.js';
 let workspaceRoot = '';
 
 beforeEach(async () => {
-  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-bootstrap-'));
+  workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), 'brud-bootstrap-')));
 });
 
 afterEach(async () => {

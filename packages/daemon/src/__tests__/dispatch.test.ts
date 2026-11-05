@@ -215,7 +215,7 @@ async function openHandshakenClient(): Promise<TestClient> {
 describe('DaemonServer dispatch', () => {
   before(async () => {
     const kernelModule = await import('@brud/kernel');
-    const storageDriver = new kernelModule.InMemoryStorageDriver();
+    const storageDriver = new kernelModule.NodeStorageDriver();
 
     const createdKernel = kernelModule.createStandardKernel({
       storageDriver,

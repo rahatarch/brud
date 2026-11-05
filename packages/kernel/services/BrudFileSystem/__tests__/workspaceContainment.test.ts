@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
@@ -22,7 +22,7 @@ import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-workspace-containment-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-workspace-containment-')));
 });
 
 afterEach(async () => {

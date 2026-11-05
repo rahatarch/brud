@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
@@ -16,7 +16,7 @@ let base = '';
 let caseCounter = 0;
 
 before(async () => {
-  base = await mkdtemp(join(tmpdir(), 'brud-workspace-service-'));
+  base = await realpath(await mkdtemp(join(tmpdir(), 'brud-workspace-service-')));
 });
 
 after(async () => {

@@ -19,7 +19,7 @@ const UUID_A = '00000000-0000-4000-8000-000000000000';
 const UUID_B = '11111111-1111-4111-8111-111111111111';
 
 async function makeRoot(prefix: string): Promise<string> {
-  return mkdtemp(join(tmpdir(), `brud-goal4-${prefix}-`));
+  return realpath(await mkdtemp(join(tmpdir(), `brud-goal4-${prefix}-`)));
 }
 
 function errnoCode(error: unknown): string | undefined {

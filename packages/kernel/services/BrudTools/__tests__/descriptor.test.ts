@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
@@ -17,7 +17,7 @@ import { BrudToolsToken } from '../descriptor/tokens.js';
 let workspaceRoot = '';
 
 before(async () => {
-  workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-tools-descriptor-'));
+  workspaceRoot = await realpath(await mkdtemp(join(tmpdir(), 'brud-tools-descriptor-')));
 });
 
 after(async () => {

@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
@@ -10,7 +10,7 @@ import { deleteFile } from './deleteFile.js';
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-delete-file-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-delete-file-')));
 });
 
 afterEach(async () => {

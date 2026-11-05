@@ -1,7 +1,7 @@
 import { posix } from 'node:path';
 import { after, before, beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
@@ -12,7 +12,7 @@ let base = '';
 let root = '';
 
 before(async () => {
-  base = await mkdtemp(join(tmpdir(), 'brud-canonicalization-'));
+  base = await realpath(await mkdtemp(join(tmpdir(), 'brud-canonicalization-')));
 });
 
 after(async () => {
@@ -20,7 +20,7 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  root = await mkdtemp(join(base, 'case-'));
+  root = await realpath(await mkdtemp(join(base, 'case-')));
 });
 
 afterEach(async () => {

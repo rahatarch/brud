@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
@@ -12,7 +12,7 @@ const STAGING_PATTERN = /^\..+\.\d+\.[0-9a-f-]{36}\.tmp$/u;
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-staging-security-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-staging-security-')));
 });
 
 afterEach(async () => {
@@ -39,7 +39,7 @@ describe('staging path security (V-1, V-2, V-4)', () => {
       return;
     }
 
-    const base = await mkdtemp(join(tmpdir(), 'brud-staging-symlink-'));
+    const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-staging-symlink-')));
     const workspace = join(base, 'workspace');
     const outside = join(base, 'outside.txt');
 
@@ -69,7 +69,7 @@ describe('staging path security (V-1, V-2, V-4)', () => {
       return;
     }
 
-    const base = await mkdtemp(join(tmpdir(), 'brud-staging-excl-'));
+    const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-staging-excl-')));
     const workspace = join(base, 'workspace');
     const outside = join(base, 'outside.txt');
 

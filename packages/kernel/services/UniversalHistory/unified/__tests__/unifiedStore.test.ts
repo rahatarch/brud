@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, rm, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -39,7 +39,7 @@ const FILE_TYPE = {
 };
 
 async function memoryStore(context: TestContext, warnings: HistoryStoreWarning[] = []): Promise<UnifiedHistoryStore> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-store-memory-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-memory-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   const historyRoot = join(root, '.brud/history');
   const driver = new DurableNodeStorageDriver();
@@ -57,7 +57,7 @@ async function memoryStore(context: TestContext, warnings: HistoryStoreWarning[]
 }
 
 async function tempRoot(context: TestContext): Promise<string> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-store-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-')));
   context.after(async () => {
     await chmod(join(root, '.brud', 'history'), 0o755).catch(() => undefined);
     await rm(root, { recursive: true, force: true });
@@ -321,7 +321,7 @@ describe('UnifiedHistoryStore — CAS containment (amendment §2.1)', () => {
   it('refuses to write bytes that do not match their address, before touching the driver', async (context) => {
     const store = await memoryStore(context);
     const writes: string[] = [];
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-store-integrity-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-store-integrity-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud/history');
     const driver = new DurableNodeStorageDriver();

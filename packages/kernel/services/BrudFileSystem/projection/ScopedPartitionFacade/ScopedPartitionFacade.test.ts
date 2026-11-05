@@ -1,6 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
@@ -12,7 +12,7 @@ let root = '';
 let caseCounter = 0;
 
 before(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-scoped-partition-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-scoped-partition-')));
 });
 
 after(async () => {

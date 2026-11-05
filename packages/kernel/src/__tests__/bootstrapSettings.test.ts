@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, afterEach, describe, it } from 'node:test';
@@ -17,7 +17,7 @@ import type { BrudKernel } from '../engine/BrudKernel.js';
 let WORKSPACE_ROOT = '';
 
 beforeEach(async () => {
-  WORKSPACE_ROOT = await mkdtemp(join(tmpdir(), 'brud-bootstrap-settings-ws-'));
+  WORKSPACE_ROOT = await realpath(await mkdtemp(join(tmpdir(), 'brud-bootstrap-settings-ws-')));
 });
 
 afterEach(async () => {
@@ -63,7 +63,7 @@ describe('createStandardKernel settings boot', () => {
   });
 
   it('boots when both settings directories are missing', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-settings-boot-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-settings-boot-')));
 
     context.after(async () => {
       await rm(root, { recursive: true, force: true });

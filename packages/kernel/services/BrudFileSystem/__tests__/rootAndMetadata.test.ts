@@ -1,6 +1,6 @@
 import { after, before, beforeEach, afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmod, mkdir, mkdtemp, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, stat, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
@@ -17,7 +17,7 @@ function isRule(error: unknown, rule: string): boolean {
 let root = '';
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'brud-root-metadata-'));
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-root-metadata-')));
 });
 
 afterEach(async () => {
@@ -53,7 +53,7 @@ describe('metadata preservation (V-10)', () => {
   let metadataRoot = '';
 
   before(async () => {
-    metadataRoot = await mkdtemp(join(tmpdir(), 'brud-mode-'));
+    metadataRoot = await realpath(await mkdtemp(join(tmpdir(), 'brud-mode-')));
   });
 
   after(async () => {

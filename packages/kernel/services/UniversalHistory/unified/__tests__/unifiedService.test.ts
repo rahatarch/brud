@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
@@ -42,7 +42,7 @@ interface Harness {
 }
 
 async function harness(context: TestContext): Promise<Harness> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   const driver = new DurableNodeStorageDriver();
   const journal = createFileMutationJournal();
@@ -92,7 +92,7 @@ interface KernelHandle {
 }
 
 async function workspace(context: TestContext): Promise<Workspace> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-d15-service-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-d15-service-')));
   context.after(() => rm(root, { recursive: true, force: true }));
   return { root };
 }
@@ -209,7 +209,7 @@ describe('UnifiedHistoryService — automatic recording (brud.core.file)', () =>
   });
 
   it('reports recording failures to the error sink and keeps recording (legacy F5)', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const driver = new DurableNodeStorageDriver();
     const journal = createFileMutationJournal();
@@ -337,7 +337,7 @@ describe('UnifiedHistoryService — registration and validation', () => {
   });
 
   it('keeps persisted schemas enforceable after the producer is gone and after restart', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const historyRoot = join(root, '.brud', 'history');
     const make = (): UnifiedHistoryService => new UnifiedHistoryService({
@@ -426,7 +426,7 @@ describe('UnifiedHistoryService — namespace isolation (D3, D10)', () => {
 
 describe('UnifiedHistoryService — degraded storage', () => {
   it('starts degraded on read-only storage: no recording, explicit writes refused', { skip: isRoot ? 'permissions are not enforced for uid 0' : false }, async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-degraded-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-degraded-')));
     const historyRoot = join(root, '.brud', 'history');
     await mkdir(historyRoot, { recursive: true });
     await chmod(historyRoot, 0o555);
@@ -457,7 +457,7 @@ describe('UnifiedHistoryService — degraded storage', () => {
 
 describe('UnifiedHistoryService — dispose', () => {
   it('closes the implicit session and releases reversal callbacks without unregistering the type', async (context) => {
-    const root = await mkdtemp(join(tmpdir(), 'brud-unified-service-dispose-'));
+    const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-dispose-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const driver = new DurableNodeStorageDriver();
     const store = new UnifiedHistoryStore({ dbPath: ':memory:', historyRoot: join(root, '.brud/history'), driver });

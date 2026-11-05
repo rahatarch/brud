@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import {
+  realpath,
   mkdir,
   mkdtemp,
   readFile,
@@ -55,7 +56,7 @@ async function createWorkspace(context: { after: (callback: () => Promise<void>)
   root: string;
   home: string;
 }> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-settings-'));
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-settings-')));
   const home = join(root, 'home');
 
   context.after(async () => {

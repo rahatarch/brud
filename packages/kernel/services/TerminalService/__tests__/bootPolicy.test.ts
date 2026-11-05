@@ -8,7 +8,7 @@
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
@@ -42,7 +42,7 @@ function recordingLogger(): KernelLogger & { readonly warnings: string[] } {
 }
 
 async function withWorkspace(run: (workspace: string) => Promise<void>): Promise<void> {
-  const workspace = await mkdtemp(join(tmpdir(), 'brud-terminal-boot-'));
+  const workspace = await realpath(await mkdtemp(join(tmpdir(), 'brud-terminal-boot-')));
 
   try {
     await run(workspace);

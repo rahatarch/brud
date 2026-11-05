@@ -72,7 +72,7 @@ describe('TerminalService security and limits', () => {
   let workspace: string;
 
   before(async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-security-'));
+    workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-security-')));
   });
 
   after(async () => {
@@ -402,7 +402,7 @@ describe('TerminalService collaborator boundary isolation', () => {
   let workspace: string;
 
   before(async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-boundary-'));
+    workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-boundary-')));
   });
 
   after(async () => {

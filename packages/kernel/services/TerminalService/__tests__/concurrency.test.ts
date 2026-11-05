@@ -9,7 +9,7 @@ import type { TerminalGroupOutcome } from '../contracts/ITerminalService.js';
 
 describe('TerminalService concurrency governor', () => {
   it('never exceeds the child-process ceiling inside one parallel batch', async () => {
-    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-concurrency-'));
+    const workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-concurrency-')));
     const probe = path.join(workspace, 'probe.sh');
     const ledger = path.join(workspace, 'ledger');
     // Each child records its start, sleeps briefly, then records its end; the
@@ -57,7 +57,7 @@ echo end >> "${ledger}"
   });
 
   it('queues a second request until the first child frees its slot', async () => {
-    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-queue-'));
+    const workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-queue-')));
     const service = new TerminalService({
       policy: { ...DEFAULT_TERMINAL_POLICY, concurrency: 1 },
       workspaceRoot: workspace,

@@ -27,7 +27,7 @@ describe('TerminalService parity', () => {
   let workspace: string;
 
   before(async () => {
-    workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-parity-'));
+    workspace = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'brud-terminal-parity-')));
   });
 
   after(async () => {
