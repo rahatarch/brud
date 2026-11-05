@@ -189,6 +189,9 @@ describe('history retention (D-15 U-8)', () => {
     const early = await h.engine.recordCheckpoint('early');
     await write(h, 'k.txt', 'k2\n');
     await write(h, 'k.txt', 'k3\n');
+    // Rotate the recording session so `early` belongs to a closed, unclaimed
+    // implicit row: INV-RL-CK shields only checkpoints of live sessions.
+    h.service.openRecordingSession('rotate');
     h.clock.now += 100 * DAY;
     await write(h, 'k.txt', 'k4\n');
     const late = await h.engine.recordCheckpoint('late');

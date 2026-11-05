@@ -593,13 +593,15 @@ describe('UnifiedHistoryService — implicit attribution across processes (D-15 
     a.codes.length = 0;
 
     // A real write: `attribute()` selects the declared explicit session, then
-    // the recording is queued. Closing the session before the queue drains
-    // makes the requested id non-active at the `recordMutation` liveness check
-    // — exactly the `:613-615` path A4 targets. No error may surface, and the
-    // entry must land in this process's live implicit session.
+    // the recording is queued. Closing the session directly on the store
+    // before the queue drains makes the requested id non-active at the
+    // `recordMutation` liveness check — exactly the append-time fallback A4
+    // targets. `commitSession` would flush first and mask the race. No error
+    // may surface, and the entry must land in this process's live implicit
+    // session.
     const write = a.fs.writeAtomic('a/mid-write.txt', 'between attribute and append\n');
     await write;
-    await a.service.commitSession(explicit, 'completed');
+    a.service.store.transitionSession(explicit, ['active'], 'committed', Date.now());
     await a.service.flush();
 
     assert.equal(a.codes.includes('HISTORY_RECORDING_FAILED'), false, `recording failed: ${a.codes.join(', ')}`);
