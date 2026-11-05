@@ -2,7 +2,7 @@ import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import type {
   DirectoryEntry,
   FileStats,
@@ -197,16 +197,17 @@ describe('BrudFileSystem workspace containment', () => {
     await service.readDirectory('notes');
     await service.deleteFile('notes/other.md');
 
-    const stagingPaths = workspace.resolvedPaths.filter((path) => path.startsWith(`${root}/notes/.`));
+    const stagingPrefix = `${join(root, 'notes')}${sep}`;
+    const stagingPaths = workspace.resolvedPaths.filter((path) => path.startsWith(stagingPrefix));
 
     assert.equal(stagingPaths.length, 2);
 
     for (const stagingPath of stagingPaths) {
-      assert.match(stagingPath, /^\/.+\/\..+\.\d+\.[0-9a-f-]{36}\.tmp$/u);
+      assert.match(basename(stagingPath), /^\..+\.\d+\.[0-9a-f-]{36}\.tmp$/u);
     }
 
     assert.deepEqual(
-      workspace.resolvedPaths.filter((path) => !path.startsWith(`${root}/notes/.`)),
+      workspace.resolvedPaths.filter((path) => !path.startsWith(stagingPrefix)),
       [
         'notes/draft.md',
         'notes/draft.md',

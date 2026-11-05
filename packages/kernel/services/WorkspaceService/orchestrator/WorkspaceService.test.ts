@@ -258,7 +258,12 @@ describe('WorkspaceService — symlink containment', () => {
     const allowed = await createService({ roots: ['/'], port, allowFilesystemRoot: true });
 
     assert.deepEqual(allowed.roots, ['/']);
-    assert.equal((await allowed.resolve('etc/passwd')).relativePath, 'etc/passwd');
+    // `/etc` is a symlink to `/private/etc` on macOS, so the canonical relative
+    // path is derived from the host's real path rather than the input spelling.
+    const canonicalRoot = await realpath('/');
+    const canonicalTarget = await realpath(join('/', 'etc', 'passwd'));
+    const expected = canonicalTarget.slice(canonicalRoot.length).replace(/^[/\\]+/u, '');
+    assert.equal((await allowed.resolve('etc/passwd')).relativePath, expected);
   });
 });
 
