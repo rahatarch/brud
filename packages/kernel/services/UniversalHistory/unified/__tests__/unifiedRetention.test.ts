@@ -493,8 +493,13 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
       const [row] = rawSessions(dbPath);
       sightings.push(row === undefined ? null : (JSON.parse(row.metadata ?? '{}') as { brudHistoryClaim?: { alive?: number } }).brudHistoryClaim?.alive === 1 ? 'claimed' : 'unclaimed');
     }, 10);
-    const inserted = store.createSession({ prompt: 'automatic recording', implicit: true, now: Date.now(), claim: claim(process.pid) });
-    clearInterval(poll);
+    const inserted: ReturnType<typeof store.createSession> = (() => {
+      try {
+        return store.createSession({ prompt: 'automatic recording', implicit: true, now: Date.now(), claim: claim(process.pid) });
+      } finally {
+        clearInterval(poll);
+      }
+    })();
     await waitForChildClose(holder);
 
     assert.equal(sightings.includes('unclaimed'), false, `a reader saw an unclaimed row: ${JSON.stringify(sightings)}`);
