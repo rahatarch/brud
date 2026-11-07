@@ -1,12 +1,12 @@
 # Brud
 
-**An AI-Native Runtime for AI agents.**
+**The open foundation for AI-native software.**
 
-Build the agent. Brud handles the runtime.
+Build the agent. Brud handles the foundation.
 
 Brud provides the primitives an agent needs to modify a workspace with control and traceability: file operations, terminal execution, a reversible history ledger, and capability-scoped plugins, exposed through a local JSON-RPC interface.
 
-Brud is a runtime layer built on top of Node.js, providing the missing primitives for safe, deterministic AI agent execution.
+Brud is an open foundation for building AI-native software. It provides the daemon, the plugins, the capability gates, and the UI framework that local AI agents need to interact with a workspace safely.
 
 If Node.js has NPM packages, Brud has capability-scoped Plugins.
 

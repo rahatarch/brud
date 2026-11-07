@@ -71,6 +71,9 @@ function createContext(pluginId: string): IPluginContext {
     executeTool: (): Promise<OperationResult> => {
       throw new PluginPermissionError(pluginId, 'executeTool', ['tools:register', 'tools:execute']);
     },
+    registerAction: (): IPluginDisposable => {
+      throw new PluginPermissionError(pluginId, 'registerAction', ['actions:register']);
+    },
   };
 }
 

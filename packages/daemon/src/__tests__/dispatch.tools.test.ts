@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as Protocol from '@brud/protocol';
-import type { RpcRequest, RpcResponse } from '@brud/protocol';
+import type { DaemonCallerTier, RpcRequest, RpcResponse } from '@brud/protocol';
 import type {
   BrudKernel,
   IBrudToolsService,
@@ -104,6 +104,8 @@ class TestSession implements DispatchSession {
 
   public handshaken = false;
 
+  public tier: DaemonCallerTier | undefined;
+
   constructor(public readonly connectionId: string) {}
 
   markHandshaken(): void {
@@ -124,6 +126,7 @@ function connectRequest(root: string, id: number): RpcRequest {
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
       token: TOKEN,
       workspaceRoot: root,
+      tier: 'ui',
     },
   };
 }

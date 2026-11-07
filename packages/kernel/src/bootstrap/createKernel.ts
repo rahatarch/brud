@@ -1,5 +1,6 @@
 import { realpathSync } from 'node:fs';
 import type { IStorageDriver } from '../../drivers/contracts/index.js';
+import { createActionManagerDescriptor } from '../../services/ActionManager/descriptor/index.js';
 import { createFileSystemDescriptor } from '../../services/BrudFileSystem/descriptor/descriptor.js';
 import { DurableNodeStorageDriver } from '../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from '../../services/BrudFileSystem/events/FileMutationJournal.js';
@@ -281,6 +282,12 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // dependency. It sits before the plugin manager, so the registry is RUNNING
   // before any plugin activates and registers into it.
   kernel.register(createBrudToolsDescriptor(options?.tools));
+  // Actions are the UI-only fourth primitive. The descriptor declares
+  // validation and tools as ordering dependencies, so both gates exist before
+  // any action registers or dispatches. It boots before history and the plugin
+  // manager, and the plugin manager opts into it below so `registerAction` can
+  // reach the registry during activation.
+  kernel.register(createActionManagerDescriptor());
   const history = createUnifiedHistoryDescriptors({
     driver: storageDriver,
     journal: mutationJournal,
@@ -298,6 +305,7 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
     withTools: true,
     withUtilities: true,
     withTerminal: true,
+    withActions: true,
   }));
 
   const boot = kernel.boot.bind(kernel);

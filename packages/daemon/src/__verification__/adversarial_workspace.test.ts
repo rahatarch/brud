@@ -83,6 +83,7 @@ describe('Attack 13 — The Rogue Workspace Connect', () => {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         token: daemon.token,
         workspaceRoot: '/',
+        tier: 'ui',
       });
       const text = rendered(response);
 
@@ -112,6 +113,7 @@ describe('Attack 13 — The Rogue Workspace Connect', () => {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         token: daemon.token,
         workspaceRoot: '/etc',
+        tier: 'ui',
       });
       const text = rendered(response);
 

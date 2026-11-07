@@ -178,6 +178,7 @@ function createConnectRequest(overrides?: Partial<DaemonConnectParams>): RpcRequ
     protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
     token: TOKEN,
     workspaceRoot,
+    tier: 'ui',
     ...overrides,
   };
 

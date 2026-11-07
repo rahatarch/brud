@@ -4,6 +4,7 @@ import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import type {
   BrudKernel,
+  IActionManager,
   IBrudToolsService,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
@@ -52,18 +53,24 @@ export class DaemonServer {
 
   static async create(config: DaemonServerConfig): Promise<DaemonServer> {
     const kernelModule = await loadKernelModule();
-    return new DaemonServer(config, kernelModule.BrudToolsToken);
+    return new DaemonServer(
+      config,
+      kernelModule.BrudToolsToken,
+      kernelModule.ActionManagerToken,
+    );
   }
 
   private constructor(
     config: DaemonServerConfig,
     toolsToken: ServiceToken<IBrudToolsService>,
+    actionsToken: ServiceToken<IActionManager>,
   ) {
     this.socketPath = config.socketPath;
     this.dispatcher = new RequestDispatcher({
       ...(config.registry === undefined ? {} : { registry: config.registry }),
       ...(config.kernel === undefined ? {} : { kernel: config.kernel }),
       toolsToken,
+      actionsToken,
       token: config.token,
       workspaceRoot: config.workspaceRoot,
       serverName: config.serverName ?? DaemonVersion.DAEMON_SERVER_NAME,

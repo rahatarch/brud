@@ -52,6 +52,7 @@ export function activate(context: vscode.ExtensionContext) {
     ? Promise.resolve(undefined)
     : connectToDaemon({
       workspaceRoot,
+      tier: 'ui',
       clientInfo: { name: 'brud-vscode', version: __BRUD_EXTENSION_VERSION__ },
     })
       .then((client) => {

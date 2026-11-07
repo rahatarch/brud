@@ -1,4 +1,8 @@
 import type {
+  ActionRegistrationOptions,
+  IActionManager,
+} from '../../ActionManager/contracts/index.js';
+import type {
   IBrudToolsReader,
   IBrudToolsService,
   IPluginExecutionContext,
@@ -43,6 +47,14 @@ export interface PluginCapabilityProviders {
 
   /** Resolves the live `brud.core.tools` registry. */
   readonly brudTools?: () => IBrudToolsService;
+
+  /**
+   * Resolves the UI-only `brud.core.actions` manager.
+   *
+   * The context uses this accessor solely to forward `registerAction`; the
+   * manager instance is never returned to the plugin.
+   */
+  readonly actionManager?: () => IActionManager;
 
   /** Resolves the pure `brud.core.utils` service. */
   readonly utilities?: () => IUtilityService;
@@ -108,6 +120,8 @@ export class PluginContext implements IPluginContext {
   private history: NamespaceHistoryHandle | undefined;
 
   private brudToolsReader: IBrudToolsReader | undefined;
+
+  private actionManager: IActionManager | undefined;
 
   private utilities: IUtilityService | undefined;
 
@@ -285,6 +299,39 @@ export class PluginContext implements IPluginContext {
     };
 
     return this.resolveBrudTools().executeTool(name, rawInput, context);
+  }
+
+  /**
+   * Registers a UI-only action on behalf of this plugin.
+   *
+   * The manager is used only as a registration sink. Neither the manager
+   * instance nor a handler-free reader is exposed, so a plugin can never list
+   * or execute actions.
+   */
+  public registerAction(options: ActionRegistrationOptions): IPluginDisposable {
+    this.assertPermission('registerAction', 'actions:register');
+
+    const disposable = this.resolveActionManager().registerAction(this.pluginId, options);
+
+    this.subscriptions.add(disposable);
+
+    return disposable;
+  }
+
+  private resolveActionManager(): IActionManager {
+    if (this.actionManager !== undefined) {
+      return this.actionManager;
+    }
+
+    const actionManager = this.capabilities.actionManager;
+
+    if (actionManager === undefined) {
+      throw new Error('ActionManager capability is not available in this context');
+    }
+
+    this.actionManager = actionManager();
+
+    return this.actionManager;
   }
 
   private resolveBrudTools(): IBrudToolsService {

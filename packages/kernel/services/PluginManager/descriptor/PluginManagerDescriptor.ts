@@ -5,6 +5,8 @@ import type {
 } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
+import type { IActionManager } from '../../ActionManager/contracts/index.js';
+import { ActionManagerToken } from '../../ActionManager/descriptor/tokens.js';
 import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
@@ -57,6 +59,16 @@ export interface PluginManagerDescriptorOptions {
   readonly withTools?: boolean;
 
   /**
+   * Declares {@link ActionManagerToken} as a boot dependency.
+   *
+   * Defaults to `false`, so base compositions keep their existing dependency
+   * list. The standard kernel opts in so plugins holding `actions:register`
+   * can call `context.registerAction`. Regardless of this flag, the action
+   * handle is only exposed when the token is actually registered.
+   */
+  readonly withActions?: boolean;
+
+  /**
    * Declares {@link UtilityToken} as a boot dependency.
    *
    * Defaults to `false`, so base compositions keep their existing dependency
@@ -95,6 +107,7 @@ export function createPluginManagerDescriptor(
   const initialPlugins = options?.initialPlugins ?? [];
   const withUniversalHistory = options?.withUniversalHistory ?? false;
   const withTools = options?.withTools ?? false;
+  const withActions = options?.withActions ?? false;
   const withUtilities = options?.withUtilities ?? false;
   const withTerminal = options?.withTerminal ?? false;
 
@@ -104,6 +117,10 @@ export function createPluginManagerDescriptor(
 
   if (withTools) {
     dependencies.push(BrudToolsToken);
+  }
+
+  if (withActions) {
+    dependencies.push(ActionManagerToken);
   }
 
   if (withUtilities) {
@@ -140,6 +157,11 @@ export function createPluginManagerDescriptor(
           ? (): IBrudToolsService => broker.requestAccess(caller, BrudToolsToken)
           : undefined;
 
+      const actionManager: (() => IActionManager) | undefined =
+        withActions && broker.hasService(ActionManagerToken)
+          ? (): IActionManager => broker.requestAccess(caller, ActionManagerToken)
+          : undefined;
+
       const utilities: (() => IUtilityService) | undefined =
         withUtilities && broker.hasService(UtilityToken)
           ? (): IUtilityService => broker.requestAccess(caller, UtilityToken)
@@ -155,6 +177,7 @@ export function createPluginManagerDescriptor(
         fileSystem,
         ...(universalHistory === undefined ? {} : { universalHistory }),
         ...(brudTools === undefined ? {} : { brudTools }),
+        ...(actionManager === undefined ? {} : { actionManager }),
         ...(utilities === undefined ? {} : { utilities }),
         ...(terminal === undefined ? {} : { terminal }),
       });

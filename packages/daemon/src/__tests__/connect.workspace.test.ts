@@ -4,7 +4,7 @@ import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as Protocol from '@brud/protocol';
-import type { RpcRequest } from '@brud/protocol';
+import type { DaemonCallerTier, RpcRequest } from '@brud/protocol';
 import type {
   BrudKernel,
   IBrudToolsService,
@@ -40,6 +40,8 @@ class TestSession implements DispatchSession {
 
   public handshaken = false;
 
+  public tier: DaemonCallerTier | undefined;
+
   constructor(public readonly connectionId: string) {}
 
   markHandshaken(): void {
@@ -56,7 +58,8 @@ function connectRequest(params: Record<string, unknown>, id: number): RpcRequest
     jsonrpc: '2.0',
     id,
     method: Protocol.DAEMON_CONNECT,
-    params,
+    // Existing fixtures are UI callers unless a test overrides the tier.
+    params: { tier: 'ui', ...params },
   };
 }
 
@@ -96,6 +99,52 @@ describe('daemon.connect workspace routing', () => {
 
     assert.ok(Protocol.isRpcErrorResponse(response));
     assert.equal(response.error.code, Protocol.INVALID_PARAMS);
+    assert.equal(session.handshaken, false);
+  });
+
+  it('rejects a handshake that omits tier', async () => {
+    const session = new TestSession('c_missing_tier');
+    const response = await dispatcher.dispatch(
+      {
+        jsonrpc: '2.0',
+        id: 10,
+        method: Protocol.DAEMON_CONNECT,
+        params: {
+          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
+          token: TOKEN,
+          workspaceRoot: join(tmpdir(), 'brud-connect-missing-tier'),
+        },
+      },
+      session,
+    );
+
+    assert.ok(Protocol.isRpcErrorResponse(response));
+    assert.equal(response.error.code, Protocol.INVALID_PARAMS);
+    assert.equal(response.error.data?.errorCode, 'INVALID_TIER');
+    assert.equal(session.tier, undefined);
+    assert.equal(session.handshaken, false);
+  });
+
+  it('rejects an unknown tier value', async () => {
+    const session = new TestSession('c_invalid_tier');
+    const response = await dispatcher.dispatch(
+      connectRequest(
+        {
+          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
+          token: TOKEN,
+          workspaceRoot: join(tmpdir(), 'brud-connect-invalid-tier'),
+          tier: 'admin',
+        },
+        11,
+      ),
+      session,
+    );
+
+    assert.ok(Protocol.isRpcErrorResponse(response));
+    assert.equal(response.error.code, Protocol.INVALID_PARAMS);
+    assert.equal(response.error.data?.errorCode, 'INVALID_TIER');
+    assert.equal(response.error.data?.actual, 'admin');
+    assert.equal(session.tier, undefined);
     assert.equal(session.handshaken, false);
   });
 
@@ -197,7 +246,9 @@ describe('daemon.connect workspace routing', () => {
     assert.equal(result.workspaceId, root);
     assert.equal(result.workspaceRoot, root);
     assert.equal(result.kernelState, 'running');
+    assert.equal(result.tier, 'ui');
     assert.equal(session.workspaceRoot, root);
+    assert.equal(session.tier, 'ui');
     assert.equal(session.handshaken, true);
     assert.equal(registry.get(root)?.clients.has('c_valid'), true);
     assert.equal(spawnedRoots.filter((entry) => entry === root).length, 1);

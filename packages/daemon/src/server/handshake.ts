@@ -3,6 +3,7 @@ import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, posix, resolve, sep, win32 } from 'node:path';
 import * as Protocol from '@brud/protocol';
 import type {
+  DaemonCallerTier,
   DaemonClientIdentity,
   DaemonConnectParams,
   RpcErrorCode,
@@ -107,6 +108,8 @@ export interface HandshakeFailure {
 export interface HandshakeSuccess {
   readonly ok: true;
   readonly params: DaemonConnectParams;
+  /** Validated caller tier, copied onto the dispatch session by `daemon.connect`. */
+  readonly tier: DaemonCallerTier;
 }
 
 export type HandshakeOutcome = HandshakeSuccess | HandshakeFailure;
@@ -181,6 +184,7 @@ export class HandshakeValidator {
     const protocolVersion = value.protocolVersion;
     const token = value.token;
     const workspaceRoot = value.workspaceRoot;
+    const tier = value.tier;
 
     if (typeof protocolVersion !== 'string') {
       return failure(Protocol.INVALID_PARAMS, 'protocolVersion must be a string');
@@ -192,6 +196,19 @@ export class HandshakeValidator {
 
     if (typeof workspaceRoot !== 'string') {
       return failure(Protocol.INVALID_PARAMS, 'workspaceRoot must be a string');
+    }
+
+    // `tier` is deliberately mandatory: defaulting it would let a caller omit
+    // the field and slip past UI-only guards.
+    if (tier !== 'ui' && tier !== 'ai') {
+      return failure(
+        Protocol.INVALID_PARAMS,
+        'tier is required and must be "ui" or "ai"',
+        {
+          errorCode: 'INVALID_TIER',
+          ...(typeof tier === 'string' ? { actual: tier } : { reason: 'missing' }),
+        },
+      );
     }
 
     if (!enforcePrimaryRoot && !isAbsolute(workspaceRoot)) {
@@ -253,12 +270,13 @@ export class HandshakeValidator {
       protocolVersion,
       token,
       workspaceRoot: candidateRoot,
+      tier,
       ...(client === undefined ? {} : { client }),
       ...(clientInfo === undefined ? {} : { clientInfo }),
       ...(capabilities === undefined ? {} : { capabilities }),
     };
 
-    return { ok: true, params };
+    return { ok: true, params, tier };
   }
 
   private tokensMatch(candidate: string): boolean {

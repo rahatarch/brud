@@ -1,3 +1,4 @@
+import type { IActionManager } from '../../ActionManager/contracts/index.js';
 import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
@@ -17,6 +18,13 @@ export interface PluginManagerRuntimeDependencies {
   readonly universalHistory?: () => IUniversalHistoryService;
 
   readonly brudTools?: () => IBrudToolsService;
+
+  /**
+   * Lazy accessor for the UI-only action manager.
+   *
+   * Used exclusively as a registration sink for `context.registerAction`.
+   */
+  readonly actionManager?: () => IActionManager;
 
   readonly utilities?: () => IUtilityService;
 

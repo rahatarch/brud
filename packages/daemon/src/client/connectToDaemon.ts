@@ -1,5 +1,5 @@
 import * as Protocol from '@brud/protocol';
-import type { DaemonClientIdentity } from '@brud/protocol';
+import type { DaemonCallerTier, DaemonClientIdentity } from '@brud/protocol';
 import {
   canonicalizeDaemonWorkspaceRoot,
   resolveEndpoint,
@@ -30,6 +30,8 @@ export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 export interface ConnectDaemonOptions {
   readonly workspaceRoot: string;
+  /** Caller tier asserted during the handshake. Required to prevent bypass. */
+  readonly tier: DaemonCallerTier;
   readonly spawnIfMissing?: boolean;
   readonly timeoutMs?: number;
   readonly handshakeTimeoutMs?: number;
@@ -67,6 +69,7 @@ async function openClient(
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         token,
         workspaceRoot: endpoint.workspaceRoot,
+        tier: options.tier,
         client: options.clientInfo
           ?? options.client
           ?? { name: DAEMON_CLIENT_NAME, version: DAEMON_CLIENT_VERSION },

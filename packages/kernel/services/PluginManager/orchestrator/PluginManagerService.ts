@@ -1,3 +1,4 @@
+import type { IActionManager } from '../../ActionManager/contracts/index.js';
 import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
@@ -520,6 +521,15 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
 
           if (accessor === undefined) {
             throw new Error(`Tools service is unavailable for plugin "${record.manifest.id}"`);
+          }
+
+          return accessor();
+        },
+        actionManager: (): IActionManager => {
+          const accessor = this.dependencies.actionManager;
+
+          if (accessor === undefined) {
+            throw new Error(`ActionManager service is unavailable for plugin "${record.manifest.id}"`);
           }
 
           return accessor();

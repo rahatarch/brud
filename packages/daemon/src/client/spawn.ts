@@ -115,6 +115,8 @@ async function probeDaemonReadiness(
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
         token,
         workspaceRoot: endpoint.workspaceRoot,
+        // Readiness probe only; the real caller connects with its own tier.
+        tier: 'ui',
         client: { name: DAEMON_CLIENT_NAME, version: DAEMON_CLIENT_VERSION },
         capabilities: [...DAEMON_CLIENT_CAPABILITIES],
       },

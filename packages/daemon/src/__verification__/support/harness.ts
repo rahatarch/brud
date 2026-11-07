@@ -331,6 +331,7 @@ export async function connectSocketClient(
     protocolVersion: DAEMON_PROTOCOL_VERSION,
     token,
     workspaceRoot,
+    tier: 'ui',
     clientInfo: { name: 'brud-verification-socket-client', version: '0.0.1' },
   });
 

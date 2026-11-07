@@ -186,6 +186,11 @@ export function formatFailure(result: OperationResult, workspaceRoot?: string): 
 /**
  * Builds the MCP server exposed over a daemon-provided transport.
  *
+ * This bridge is in-process: it receives an {@link IPluginContext} from the
+ * daemon and never opens a socket of its own. If a socket-based MCP bridge is
+ * added later, it MUST perform `daemon.connect` with `tier: 'ai'` because the
+ * bridge represents an autonomous AI caller and UI-only methods reject it.
+ *
  * Tool failures are MCP tool-level errors (`isError: true`), never JSON-RPC
  * errors: only malformed request envelopes reach the SDK's protocol error
  * channel. Every dispatch goes through {@link IPluginContext.executeTool}, so

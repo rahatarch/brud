@@ -299,7 +299,7 @@ after(async () => {
 
 describe('daemon client', () => {
   it('connects to an already-running daemon and completes the handshake', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
+    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
@@ -312,6 +312,7 @@ describe('daemon client', () => {
     assert.equal(handshake.workspaceRoot, await realpath(runningWorkspace));
     assert.equal(handshake.server.pid, process.pid);
     assert.equal(handshake.protocolVersion, Protocol.DAEMON_PROTOCOL_VERSION);
+    assert.equal(handshake.tier, 'ui');
     assert.equal('fs' in handshake.capabilities, false);
     assert.equal('history' in handshake.capabilities, false);
 
@@ -328,6 +329,7 @@ describe('daemon client', () => {
   it('reuses a responsive daemon when spawnIfMissing is disabled', async (t) => {
     const client = await connectToDaemon({
       workspaceRoot: runningWorkspace,
+      tier: 'ui',
       spawnIfMissing: false,
     });
 
@@ -340,7 +342,7 @@ describe('daemon client', () => {
   });
 
   it('translates wire errors into typed DaemonRpcError instances', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
+    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
@@ -447,7 +449,7 @@ describe('daemon client', () => {
     const canonicalRoot = await realpath(idleWorkspace);
 
     await assert.rejects(
-      () => connectToDaemon({ workspaceRoot: idleWorkspace, spawnIfMissing: false }),
+      () => connectToDaemon({ workspaceRoot: idleWorkspace, tier: 'ui', spawnIfMissing: false }),
       (error: unknown) => {
         assert.ok(error instanceof DaemonNotRunningError);
         assert.equal(error.workspaceRoot, canonicalRoot);
@@ -466,7 +468,7 @@ describe('daemon client', () => {
       await stopSpawnedDaemon(coldWorkspace);
     });
 
-    client = await connectToDaemon({ workspaceRoot: coldWorkspace, timeoutMs: 10_000 });
+    client = await connectToDaemon({ workspaceRoot: coldWorkspace, tier: 'ui', timeoutMs: 10_000 });
 
     assert.ok(client.handshake !== undefined);
     assert.notEqual(client.handshake.server.pid, process.pid);
@@ -487,6 +489,7 @@ describe('daemon client', () => {
 
     secondClient = await connectToDaemon({
       workspaceRoot: coldWorkspace,
+      tier: 'ui',
       spawnIfMissing: false,
     });
 

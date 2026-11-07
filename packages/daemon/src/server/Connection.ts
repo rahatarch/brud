@@ -1,6 +1,6 @@
 import type { Socket } from 'node:net';
 import * as Protocol from '@brud/protocol';
-import type { RpcResponse } from '@brud/protocol';
+import type { DaemonCallerTier, RpcResponse } from '@brud/protocol';
 import { FrameError, NdjsonFramingStream } from './framing.js';
 import type { FrameResult } from './framing.js';
 import type { DispatchSession, RequestDispatcher } from './dispatch.js';
@@ -15,6 +15,9 @@ export class Connection implements DispatchSession {
   readonly connectionId: string;
 
   workspaceRoot: string | undefined;
+
+  /** Populated from the validated handshake; undefined until `daemon.connect`. */
+  tier: DaemonCallerTier | undefined;
 
   private readonly socket: Socket;
 

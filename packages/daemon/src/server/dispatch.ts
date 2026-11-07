@@ -1,5 +1,6 @@
 import type {
   BrudKernel,
+  IActionManager,
   IBrudToolsService,
   IPluginExecutionContext,
   OperationResult,
@@ -8,6 +9,9 @@ import type {
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import * as Protocol from '@brud/protocol';
 import type {
+  ActionsListResult,
+  ActionsExecuteResult,
+  DaemonCallerTier,
   DaemonHandshakeResult,
   DaemonInfoResult,
   DaemonPingResult,
@@ -28,8 +32,48 @@ export interface DispatchSession {
   readonly handshaken: boolean;
   /** Workspace the connection attached to during `daemon.connect`. */
   workspaceRoot: string | undefined;
+  /** Caller tier asserted during `daemon.connect`; undefined before handshake. */
+  tier: DaemonCallerTier | undefined;
   markHandshaken(): void;
 }
+
+/**
+ * Rejects a session whose tier does not match the required tier.
+ *
+ * Throws a structured JSON-RPC error (`-32003` / `UNAUTHORIZED_TIER`) carrying
+ * both the required and actual tiers. `tools.*` methods are intentionally not
+ * guarded: both `ui` and `ai` callers may use them.
+ */
+export function requireTier(
+  session: DispatchSession,
+  required: DaemonCallerTier,
+): void {
+  const actual = session.tier;
+
+  if (actual === required) {
+    return;
+  }
+
+  throw new MethodError(
+    -32003,
+    'UNAUTHORIZED_TIER',
+    {
+      errorCode: 'UNAUTHORIZED_TIER',
+      expected: required,
+      actual: actual ?? 'unknown',
+    },
+  );
+}
+
+/**
+ * Caller id the dispatcher presents when resolving the ActionManager token.
+ *
+ * The ActionManager's access-policy allowlist names this exact value, so the
+ * UI RPC path can reach the service while arbitrary internal callers cannot.
+ * It is deliberately not the connection id: the connection id identifies a
+ * client, not a host authority.
+ */
+const ACTION_MANAGER_CALLER_ID = 'brud.host.daemon';
 
 export interface RequestDispatcherOptions {
   /**
@@ -40,6 +84,7 @@ export interface RequestDispatcherOptions {
   /** Legacy single-kernel composition. */
   readonly kernel?: BrudKernel;
   readonly toolsToken?: ServiceToken<IBrudToolsService>;
+  readonly actionsToken?: ServiceToken<IActionManager>;
   readonly token: string;
   readonly workspaceRoot: string;
   readonly serverName?: string;
@@ -108,6 +153,8 @@ export class RequestDispatcher {
 
   private readonly toolsToken: ServiceToken<IBrudToolsService> | undefined;
 
+  private readonly actionsToken: ServiceToken<IActionManager> | undefined;
+
   private readonly defaultWorkspaceRoot: string;
 
   private readonly enforcePrimaryWorkspaceRoot: boolean;
@@ -131,6 +178,7 @@ export class RequestDispatcher {
     }
 
     this.toolsToken = options.toolsToken;
+    this.actionsToken = options.actionsToken;
     this.defaultWorkspaceRoot = options.workspaceRoot;
     this.enforcePrimaryWorkspaceRoot = options.registry === undefined;
     this.handshake = new HandshakeValidator({
@@ -184,6 +232,12 @@ export class RequestDispatcher {
         return success(request.id, this.listTools(session));
       case Protocol.TOOLS_EXECUTE:
         return success(request.id, await this.executeTool(request.params, session));
+      case Protocol.ACTIONS_LIST:
+        requireTier(session, 'ui');
+        return success(request.id, this.listActions(session));
+      case Protocol.ACTIONS_EXECUTE:
+        requireTier(session, 'ui');
+        return success(request.id, await this.executeAction(request.params, session));
       default:
         throw new MethodError(
           Protocol.METHOD_NOT_FOUND,
@@ -219,12 +273,14 @@ export class RequestDispatcher {
 
     this.registry.attachClient(workspaceRoot, session.connectionId);
     session.workspaceRoot = workspaceRoot;
+    session.tier = outcome.tier;
     session.markHandshaken();
 
     return {
       connectionId: session.connectionId,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
       workspaceRoot,
+      tier: outcome.tier,
       workspaceId: workspace.root,
       kernelState: 'running',
       capabilities: {
@@ -304,6 +360,34 @@ export class RequestDispatcher {
     const workspace = this.workspaceEntry(session);
     const caller: ServiceContext = {
       callerId: session.connectionId,
+      tier: 'core',
+      workspaceRoot: workspace.root,
+    };
+
+    return workspace.kernel.requestAccess(caller, token);
+  }
+
+  /**
+   * Resolves the UI-only ActionManager for the caller workspace.
+   *
+   * The caller id is the fixed host authority, not the connection id, so the
+   * ActionManager's allowlist admits exactly this path and rejects arbitrary
+   * internal callers.
+   */
+  private actions(session: DispatchSession): IActionManager {
+    const token = this.actionsToken;
+
+    if (token === undefined) {
+      throw new MethodError(
+        Protocol.INTERNAL_ERROR,
+        'The actions service token is not configured',
+        { errorCode: 'ACTIONS_UNAVAILABLE' },
+      );
+    }
+
+    const workspace = this.workspaceEntry(session);
+    const caller: ServiceContext = {
+      callerId: ACTION_MANAGER_CALLER_ID,
       tier: 'core',
       workspaceRoot: workspace.root,
     };
@@ -392,6 +476,31 @@ export class RequestDispatcher {
     return { result: toProtocolOperationResult(result) };
   }
 
+  private listActions(session: DispatchSession): ActionsListResult {
+    return this.actions(session).listActions().map((action) => ({
+      name: action.name,
+      description: action.description,
+      parametersSchema: action.parametersSchema,
+      ownerPluginId: action.ownerPluginId,
+    }));
+  }
+
+  private async executeAction(
+    value: unknown,
+    session: DispatchSession,
+  ): Promise<ActionsExecuteResult> {
+    const params = asParams(value);
+    const name = requireString(params, 'name');
+    const input = params.input;
+    const workspace = this.workspaceEntry(session);
+    const result = await this.actions(session).executeAction(name, input, {
+      workspaceRoot: workspace.root,
+      callerId: session.connectionId,
+      origin: 'daemon-rpc',
+    });
+
+    return toProtocolOperationResult(result);
+  }
 }
 
 const WORKSPACE_KERNEL_STATES: Readonly<

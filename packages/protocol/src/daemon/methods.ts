@@ -11,6 +11,9 @@ export const WORKSPACE_DISPOSE = 'workspace.dispose';
 export const TOOLS_LIST = 'tools.list';
 export const TOOLS_EXECUTE = 'tools.execute';
 
+export const ACTIONS_LIST = 'actions.list';
+export const ACTIONS_EXECUTE = 'actions.execute';
+
 export const DAEMON_METHODS = [DAEMON_CONNECT, DAEMON_PING, DAEMON_INFO] as const;
 export type DaemonMethod = (typeof DAEMON_METHODS)[number];
 
@@ -24,15 +27,33 @@ export type WorkspaceMethod = (typeof WORKSPACE_METHODS)[number];
 export const TOOLS_METHODS = [TOOLS_LIST, TOOLS_EXECUTE] as const;
 export type ToolsMethod = (typeof TOOLS_METHODS)[number];
 
+export const ACTIONS_METHODS = [ACTIONS_LIST, ACTIONS_EXECUTE] as const;
+export type ActionsMethod = (typeof ACTIONS_METHODS)[number];
+
 export interface DaemonClientIdentity {
   readonly name: string;
   readonly version: string;
 }
 
+/**
+ * Caller capability tier presented during `daemon.connect`.
+ *
+ * `ui` identifies a human-facing client (for example the editor UI) and `ai`
+ * identifies an autonomous caller (for example an MCP bridge). UI-only RPC
+ * families are gated on this value.
+ */
+export type DaemonCallerTier = 'ui' | 'ai';
+
 export interface DaemonConnectParams {
   readonly protocolVersion: string;
   readonly token: string;
   readonly workspaceRoot: string;
+  /**
+   * Caller tier. Required for every new client: omitting `tier` is rejected as
+   * `INVALID_PARAMS` rather than defaulted, so a caller cannot accidentally
+   * bypass a UI-only guard. Legacy internal fixtures must send it explicitly.
+   */
+  readonly tier: DaemonCallerTier;
   /** Client identity supplied by newer clients. */
   readonly clientInfo?: DaemonClientIdentity;
   /** Legacy client identity field retained for wire compatibility. */
@@ -55,6 +76,8 @@ export interface DaemonHandshakeResult {
   readonly connectionId: string;
   readonly protocolVersion: DaemonProtocolVersion;
   readonly workspaceRoot: string;
+  /** Validated caller tier recorded on the daemon session. */
+  readonly tier: DaemonCallerTier;
   /** Canonical workspace root the connection is attached to. */
   readonly workspaceId: string;
   /** Kernel lifecycle state for the attached workspace. */
@@ -143,6 +166,40 @@ export interface ToolsExecuteResult {
   readonly result: ToolOperationResult;
 }
 
+/**
+ * Handler-free projection of a registered UI-only action.
+ *
+ * Mirrors the kernel's `RegisteredActionInfo` on the wire without importing
+ * the kernel package. Actions never appear in `tools.list` and carry no
+ * execution handle.
+ */
+export interface RegisteredActionInfo {
+  readonly name: string;
+  readonly description: string;
+  readonly parametersSchema: Readonly<Record<string, unknown>>;
+  readonly ownerPluginId: string;
+}
+
+/**
+ * `actions.list` returns the registered action projections directly.
+ *
+ * The result is an array, not an envelope, so the UI can render the palette
+ * without unwrapping a second object.
+ */
+export type ActionsListResult = readonly RegisteredActionInfo[];
+
+export interface ActionsExecuteParams {
+  readonly name: string;
+  readonly input?: unknown;
+}
+
+/**
+ * `actions.execute` returns the kernel `OperationResult` directly.
+ *
+ * `error` is flattened to text because a thrown `Error` cannot cross the wire.
+ */
+export type ActionsExecuteResult = ToolOperationResult;
+
 export interface DaemonPingParams {
   readonly nonce?: string;
 }
@@ -188,6 +245,14 @@ export interface DaemonMethodMap {
   readonly 'tools.execute': {
     readonly params: ToolsExecuteParams;
     readonly result: ToolsExecuteResult;
+  };
+  readonly 'actions.list': {
+    readonly params: DaemonEmptyParams;
+    readonly result: ActionsListResult;
+  };
+  readonly 'actions.execute': {
+    readonly params: ActionsExecuteParams;
+    readonly result: ActionsExecuteResult;
   };
 }
 

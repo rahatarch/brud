@@ -1,3 +1,4 @@
+import type { ActionRegistrationOptions } from '../../ActionManager/contracts/index.js';
 import type {
   IBrudToolsReader,
   IPluginExecutionContext,
@@ -221,4 +222,23 @@ export interface IPluginContext {
     rawInput: unknown,
     contextOverride?: Partial<IPluginExecutionContext>,
   ): Promise<OperationResult>;
+
+  /**
+   * Registers a UI-only action into the live `brud.core.actions` registry on
+   * behalf of this plugin.
+   *
+   * Requires `actions:register`. The owning plugin identifier is supplied by
+   * the kernel; the caller cannot assert it. The returned disposable is added
+   * to {@link IPluginContext.subscriptions} so the action leaves the UI
+   * catalog when the plugin deactivates.
+   *
+   * This is the only ActionManager surface a plugin receives. There is
+   * deliberately no `executeAction`, no `getActionManager`, and no action
+   * reader: execution belongs exclusively to the UI-facing daemon.
+   *
+   * @param options - Action definition and handler.
+   * @returns Disposable that removes the action exactly once.
+   * @throws PluginPermissionError when `actions:register` was not declared.
+   */
+  registerAction(options: ActionRegistrationOptions): IPluginDisposable;
 }

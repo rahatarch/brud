@@ -582,6 +582,7 @@ export async function startAttackDaemon(
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
       token,
       workspaceRoot,
+      tier: 'ui',
       clientInfo: { name: 'brud-redteam-client', version: '0.0.1' },
     });
 
