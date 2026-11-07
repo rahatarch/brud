@@ -1,6 +1,6 @@
 # Brud
 
-**An AI-Native Runtime for local agents.**
+**An AI-Native Runtime for AI agents.**
 
 Build the agent. Brud handles the runtime.
 
