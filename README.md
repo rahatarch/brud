@@ -92,10 +92,10 @@ await client.close();
 |:---|:---|
 | **Kernel** | The in-process core that owns the service graph, policy enforcement, and execution pipeline. |
 | **Service** | A privileged built-in component that provides a core capability, such as workspace resolution, file I/O, validation, history, settings, or terminal execution. Brud refers to these as Level-1 services. |
-| **ActionManager** | The Level-1 service that owns the ActionRegistry and enforces the UI-only boundary. Only the daemon resolves it; no plugin or other service can execute an Action. |
+| **ActionManager** | The internal engine that secures Actions and guarantees they are never exposed to the AI. |
 | **Plugin** | A module that registers tools and actions and declares the permissions it requires. |
-| **Tool** | A named operation **for the AI**: an agent invokes it, such as `create_file`, `search_replace`, or `terminal_command`. Tools appear in the catalog and the MCP surface and are executed through `tools.execute`. |
-| **Action** | A UI-only endpoint registered by a plugin through `context.registerAction()`. Actions are executed by the client (UI) through `actions.execute` and are hidden from the AI's Tool list. |
+| **Tool** | A capability exposed to the AI. The agent invokes Tools to perform actions in the workspace. Tools are visible to the AI model. |
+| **Action** | A capability exposed only to the User Interface. The client uses Actions to fetch data or trigger UI updates. Actions are completely invisible to the AI model. |
 | **Daemon** | The local process that hosts the kernel and exposes tools and actions over JSON-RPC. |
 | **Ledger** | The SQLite history store that records mutation pre- and post-states and supports reversal. |
 
@@ -139,7 +139,7 @@ A request enters through the daemon, is authenticated, and is bound to a workspa
 | Prompt storage | User Prompts plugin | Workspace-scoped prompt vault |
 | UI Actions | ActionManager service | `actions.list`, `actions.execute`; UI-only endpoints such as `list_sessions`, `get_settings`, and `preview_diff` |
 
-Tools are the AI-facing surface: they appear in `tools.list`, the tool catalog, and the MCP surface, and an agent invokes them through `tools.execute`. UI Actions are the UI-facing surface: they appear only in `actions.list` and run only through `actions.execute` for `ui`-tier clients, so an AI caller cannot discover or invoke them.
+Tools are the AI-facing surface. The agent can discover and use them to modify the workspace. Actions are the UI-facing surface. They fetch data for the application (like session history or diff previews) and are strictly isolated from the AI. The Daemon enforces this separation using caller tiers.
 
 ## Security model
 
