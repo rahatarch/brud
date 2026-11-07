@@ -92,32 +92,37 @@ await client.close();
 |:---|:---|
 | **Kernel** | The in-process core that owns the service graph, policy enforcement, and execution pipeline. |
 | **Service** | A privileged built-in component that provides a core capability, such as workspace resolution, file I/O, validation, history, settings, or terminal execution. Brud refers to these as Level-1 services. |
-| **Plugin** | A module that registers tools and declares the permissions it requires. |
-| **Tool** | A named operation an agent invokes, such as `create_file`, `search_replace`, or `terminal_command`. |
-| **Daemon** | The local process that hosts the kernel and exposes tools over JSON-RPC. |
+| **ActionManager** | The Level-1 service that owns the ActionRegistry and enforces the UI-only boundary. Only the daemon resolves it; no plugin or other service can execute an Action. |
+| **Plugin** | A module that registers tools and actions and declares the permissions it requires. |
+| **Tool** | A named operation **for the AI**: an agent invokes it, such as `create_file`, `search_replace`, or `terminal_command`. Tools appear in the catalog and the MCP surface and are executed through `tools.execute`. |
+| **Action** | A UI-only endpoint registered by a plugin through `context.registerAction()`. Actions are executed by the client (UI) through `actions.execute` and are hidden from the AI's Tool list. |
+| **Daemon** | The local process that hosts the kernel and exposes tools and actions over JSON-RPC. |
 | **Ledger** | The SQLite history store that records mutation pre- and post-states and supports reversal. |
 
 ## Architecture
 
 ```text
-Agent or host application
-        │
-        │ JSON-RPC over a local socket or stdio
-        ▼
-Brud Daemon ── authenticates the client and scopes the workspace
-        │
-        ▼
+Agent (AI)                                Client (UI)
+      │                                        │
+      │ tools.execute                          │ actions.execute
+      │                                        │
+      └──────────────┬─────────────────────────┘
+                     │ JSON-RPC over a local socket or stdio
+                     ▼
+Brud Daemon ── authenticates the client, scopes the workspace, enforces caller tier
+                     │
+                     ▼
 Brud Kernel ── service graph, policy enforcement, execution pipeline
-        │
-        ├── Level-1 services
-        │   Workspace · FileSystem · Validation · History · Settings · Terminal
-        │
-        └── Plugins (capability-scoped)
-            Filesystem · Reader · Search · Structure · Catalog · Terminal
-            MCP Bridge · User Prompts
+                     │
+                     ├── Level-1 services
+                     │   Workspace · FileSystem · Validation · History · Settings · Terminal · ActionManager
+                     │
+                     └── Plugins (capability-scoped)
+                         Filesystem · Reader · Search · Structure · Catalog · Terminal
+                         MCP Bridge · User Prompts
 ```
 
-A request enters through the daemon, is authenticated and bound to a workspace, and is dispatched by the kernel. The kernel resolves the requested tool, applies the owning plugin's capability scope and the path and command policy, and executes the operation through the relevant service or plugin. Kernel-mediated file mutations are recorded in the history ledger before and after execution.
+A request enters through the daemon, is authenticated, and is bound to a workspace with a caller tier of `ai` or `ui`. The kernel resolves the requested **Tool** (for AI callers) or **Action** (for UI callers), applies the owning plugin's capability scope and the path and command policy, and executes the operation through the relevant service or plugin. `actions.execute` is gated to `ui` callers and is never listed in the tool catalog or exposed over MCP. Kernel-mediated file mutations are recorded in the history ledger before and after execution.
 
 ## Capabilities
 
@@ -132,6 +137,9 @@ A request enters through the daemon, is authenticated and bound to a workspace, 
 | History and reversal | Universal History service | SQLite ledger, content-addressed states, operation and session reversal |
 | MCP integration | MCP Bridge plugin | stdio and HTTP transports for the Model Context Protocol |
 | Prompt storage | User Prompts plugin | Workspace-scoped prompt vault |
+| UI Actions | ActionManager service | `actions.list`, `actions.execute`; UI-only endpoints such as `list_sessions`, `get_settings`, and `preview_diff` |
+
+Tools are the AI-facing surface: they appear in `tools.list`, the tool catalog, and the MCP surface, and an agent invokes them through `tools.execute`. UI Actions are the UI-facing surface: they appear only in `actions.list` and run only through `actions.execute` for `ui`-tier clients, so an AI caller cannot discover or invoke them.
 
 ## Security model
 
