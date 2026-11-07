@@ -1,179 +1,207 @@
-<p align="center">
-  <img src="assets/icons/brud_icon_rounded.png" width="120" alt="Brud Code Logo" />
-</p>
+# Brud
 
-<h1 align="center">Stop hand-copying AI code changes into your files.</h1>
+**A local execution engine for AI agents.**
 
-<p align="center">
-  Paste AI output → preview the diff → apply it. One click. Full undo, always.
-</p>
+Build the agent, not the execution layer.
 
-<p align="center">
-  <img src="https://img.shields.io/github/actions/workflow/status/rahatarch/brud/ci.yml?style=for-the-badge&logo=github&logoColor=white" alt="CI Status" />
-  <img src="https://img.shields.io/badge/VS%20Code-1.80%2B-blue?style=for-the-badge&logo=visualstudiocode&logoColor=white" alt="VS Code 1.136+" />
-  <img src="https://img.shields.io/badge/License-MIT-4CAF50?style=for-the-badge" alt="License MIT" />
-  <img src="https://img.shields.io/github/stars/rahatarch/brud?style=for-the-badge&logo=github&logoColor=white" alt="GitHub Stars" />
-</p>
+Brud provides the primitives an agent needs to modify a workspace with control and traceability: file operations, terminal execution, a reversible history ledger, and capability-scoped plugins, exposed through a local JSON-RPC interface.
 
-<p align="center">
-  <img src="assets/images/brud_editor_view.png" alt="Brud Code Editor View" width="100%" />
-</p>
+It is intended for teams building coding agents, editor integrations, and automation tools that need a dependable execution layer rather than a collection of scripts.
 
-<p align="center">
-  <b>No API keys. No subscription. Works with ChatGPT, Claude, Gemini — any chatbot.</b>
-</p>
+This repository contains the engine, the local daemon, the official plugins, and the Brud Code reference client.
+
+[![Quality Gate](https://github.com/rahatarch/brud/actions/workflows/quality.yml/badge.svg)](https://github.com/rahatarch/brud/actions/workflows/quality.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Status: developer preview](https://img.shields.io/badge/status-developer%20preview-orange.svg)](#project-status)
 
 ---
 
-If you use AI chatbots to write code, you already know the friction: copy a function, find the file, paste it, hope you didn't miss a line, repeat for the next file. **Brud Code removes that step.** Your AI outputs a change; Brud applies it — reviewed, logged, and reversible — in one click.
+## Why build on Brud
 
-## The whole workflow is one paste, one copy
+- **Workspace containment is enforced before execution.** Every file operation resolves to a canonical path and is checked against the workspace boundary, the protected-path policy, and the user's `.brudignore` rules.
+- **Mutations are reversible.** The history service records pre- and post-mutation states in a SQLite ledger backed by content-addressed storage, and can revert an operation or a complete session.
+- **Permissions are explicit.** Plugins declare the capabilities they require. The kernel exposes only the handles that a plugin declared, and undeclared access is rejected at the boundary.
+- **Hosts remain decoupled.** The kernel does not depend on an editor API. The daemon exposes one tool interface over a local socket or stdio, so a VS Code extension, a CLI, and a desktop application can share the same execution layer.
+- **The official plugin set is included.** Filesystem, reader, search, structure, catalog, terminal, MCP bridge, and prompt-vault plugins are maintained in this repository.
 
-Most AI coding tools stop at "apply the change." Brud closes the loop back to your AI too — so it always knows what actually happened, without you typing a status update by hand.
+## Quick start
 
-```txt
-File Path: src/utils.js
-<<<<<<< SEARCH [1]
-function calculateTotal(price, tax) {
-  return price + tax;
-}
-=======
-function calculateTotal(price, tax, discount = 0) {
-  return price + tax - discount;
-}
->>>>>>> REPLACE [1]
-```
+> **Developer preview.** The npm packages are not published yet. The commands below build the engine from source. Public interfaces may change before version 1.0.
 
-1. **Paste** — your AI hands you a Brud block like the one above. Drop it into the sidebar.
-2. **Execute** — Brud shows you the diff and applies it. Works identically whether it's 1 file or 1,000.
-3. **Copy All** — one click copies everything your AI needs back: status, file paths, messages, per-file results.
-4. **Paste it back** — drop that into the chat. Your AI now knows exactly what happened, and picks up right where it left off.
+### Prerequisites
 
-**One paste in. One copy out.** No retyping results, no re-explaining what changed, no switching back and forth to check if something failed.
+- Node.js 22.13 or newer, required by `node:sqlite`
 
-## Why people switch to Brud Code
-
-- 🆓 **Free, forever, no keys.** Works with any chatbot's web UI — nothing to configure, nothing to pay for.
-- 🔁 **One paste in, one copy out.** The AI's result — status, files, errors — comes back to it automatically, no manual re-explaining.
-- 👀 **You approve every change.** Nothing touches your files until you preview the diff and hit apply.
-- ⏪ **One-click undo, at any scale.** Revert a single edit or an entire thousand-file session in one action.
-- ⚡ **Built for bulk.** Create, patch, or restructure hundreds of files from a single AI-generated block.
-- 🔓 **No lock-in.** No Git required, no account, no server — your history lives in your own workspace.
-
-## Install it now
-
-**Fastest way:** [Download the latest release](https://github.com/rahatarch/brud/releases) and install the VSIX:
+### Build from source
 
 ```bash
-code --install-extension brud-code-*.vsix
+git clone https://github.com/rahatarch/brud.git
+cd brud
+npm install
+npm run build:all
+npm run build \
+  --workspace @brud/plugin-filesystem \
+  --workspace @brud/plugin-terminal \
+  --workspace @brud/plugin-reader \
+  --workspace @brud/plugin-search \
+  --workspace @brud/plugin-structure \
+  --workspace @brud/plugin-catalog \
+  --workspace @brud/plugin-user-prompts \
+  --workspace @brud/plugin-mcp-bridge
 ```
 
-Or from inside VS Code: `Ctrl+Shift+X` → search **Brud Code** → **Install**.
+### Start the daemon
 
-Once installed, open the **Prompt Library** in the sidebar, copy the Master Prompt into your favorite AI chatbot, and start pasting Brud blocks. You'll be applying your first AI-generated change in under two minutes.
+```bash
+node packages/daemon/dist/cli.js --workspace /path/to/project --stdio
+```
 
-## What it does
+The `--stdio` mode serves the MCP stdio transport. A custom application does not need to start the daemon manually; the client below starts it on demand.
 
-| | |
-|---|---|
-| **File Operations** | Create, delete, rename, move, copy, and append files — reviewed and reversible every time. |
-| **Bulk Operations** | Apply one transformation across hundreds or thousands of files in a single pass. |
-| **Code Discovery** | Give your AI a token-efficient map of your project so it writes changes that actually fit. |
-| **Terminal** | Run commands, chains, and interactive CLI tools, with output routed straight back to the AI. |
-| **Any AI, Any Time** | Works with ChatGPT, Claude, Gemini, DeepSeek, Grok, Llama — anything that can output text. |
-| **Settings** | Restrict Brud to your workspace and control which tools the AI is allowed to use. |
-| **My Prompts** | Save, version, and reuse your own prompts with dynamic fields that fill in on the fly. |
+### Connect a client
 
-## It's fast — and we proved it
+```ts
+import { connectToDaemon } from '@brud/daemon';
 
-Tested on a real 384K LOC codebase, manually verified end to end:
+const client = await connectToDaemon({ workspaceRoot: process.cwd() });
 
-| Benchmark | Scale | Result | Time |
-|---|---|---|---|
-| Create Files | 1,000 files | 1,000/1,000 created, unique content | Under 1 second |
-| Search & Replace | 467 files / 384K LOC | 467 patched, 0 failed | Milliseconds |
-| Append Multi | 467 files | 467 modified, 0 failed | Milliseconds |
-| Revert Session | 1,000 files | 1,000/1,000 reverted | Milliseconds |
-| Restore Session | 1,000 files | 1,000/1,000 restored | Milliseconds |
+const { result } = await client.request('tools.execute', {
+  name: 'create_file',
+  input: {
+    path: 'src/generated.ts',
+    content: 'export const ready = true;\n',
+  },
+});
 
-**100% success rate across every benchmark.** No manual per-file work — the AI generates one block, Brud handles the rest.
+if (result.status !== 'success') {
+  throw new Error(result.error ?? result.message ?? 'Tool execution failed');
+}
 
-## Your history, your machine
+await client.close();
+```
 
-Every session is automatically snapshotted before and after, stored locally in `.brud/history/` in your own workspace — no account, no cloud, no external service. Revert or restore any session instantly, even months later (deleted sessions get a 7-day recovery window before cleanup). Full technical details are in [ARCHITECTURE.md](ARCHITECTURE.md).
+`@brud/daemon` is a workspace package in this repository. External applications can send the same JSON-RPC methods over the local socket; no published client package is available yet.
 
-## Let your AI edit your files directly
+## Core concepts
 
-If your AI tool supports MCP (a standard way for assistants to use outside tools), Brud can plug into it. Instead of copying a change out of the chat and pasting it into your files, you connect Brud once and your assistant sends the change straight to Brud.
+| Term | Definition |
+|:---|:---|
+| **Kernel** | The in-process core that owns the service graph, policy enforcement, and execution pipeline. |
+| **Service** | A privileged built-in component that provides a core capability, such as workspace resolution, file I/O, validation, history, settings, or terminal execution. Brud refers to these as Level-1 services. |
+| **Plugin** | A module that registers tools and declares the permissions it requires. |
+| **Tool** | A named operation an agent invokes, such as `create_file`, `search_replace`, or `terminal_command`. |
+| **Daemon** | The local process that hosts the kernel and exposes tools over JSON-RPC. |
+| **Ledger** | The SQLite history store that records mutation pre- and post-states and supports reversal. |
 
-You keep the same safety net. Brud only touches the project you opened, every change is saved, and anything can be undone in one click from History.
+## Architecture
 
-**What you get:** ask your AI for a change, watch it land in your files, and undo it like any other Brud action — no copy-paste in between.
+```text
+Agent or host application
+        │
+        │ JSON-RPC over a local socket or stdio
+        ▼
+Brud Daemon ── authenticates the client and scopes the workspace
+        │
+        ▼
+Brud Kernel ── service graph, policy enforcement, execution pipeline
+        │
+        ├── Level-1 services
+        │   Workspace · FileSystem · Validation · History · Settings · Terminal
+        │
+        └── Plugins (capability-scoped)
+            Filesystem · Reader · Search · Structure · Catalog · Terminal
+            MCP Bridge · User Prompts
+```
 
-Setup lives in the extension. Open **Brud Code: Open Brud Code Management** and use the **MCP** tab: Start, Stop, a switch that decides whether Brud starts with your project, and a button that copies connection details you can paste into your AI tool. Brud starts on its own when you open a project unless you turn that switch off.
+A request enters through the daemon, is authenticated and bound to a workspace, and is dispatched by the kernel. The kernel resolves the requested tool, applies the owning plugin's capability scope and the path and command policy, and executes the operation through the relevant service or plugin. Kernel-mediated file mutations are recorded in the history ledger before and after execution.
 
-For now you install the extension from this repository rather than the marketplace; the [setup guide](docs/mcp/README.md) has the steps.
+## Capabilities
+
+| Capability | Provided by | Operations |
+|:---|:---|:---|
+| File mutation | Filesystem plugin | Create, delete, rename, move, copy, and append files; create, delete, and move directories; multi-file append; search and replace; multi-file search and replace |
+| File reading | Reader plugin | `read_file`, `read_files`, `read_directory` |
+| Search | Search plugin | `search_files` |
+| Project structure | Structure plugin | `extract_structure`, `codebase_metadata` |
+| Tool discovery | Catalog plugin | `get_tool_info` |
+| Terminal execution | Terminal plugin | `terminal_command`, `terminal_interactive` |
+| History and reversal | Universal History service | SQLite ledger, content-addressed states, operation and session reversal |
+| MCP integration | MCP Bridge plugin | stdio and HTTP transports for the Model Context Protocol |
+| Prompt storage | User Prompts plugin | Workspace-scoped prompt vault |
+
+## Security model
+
+Brud enforces policy at the kernel boundary, before an operation reaches the filesystem or a process.
+
+### Enforced controls
+
+- **Workspace boundary.** Paths are resolved to canonical absolute paths and checked for traversal and symlink escapes before execution.
+- **Protected paths.** The kernel denies access to `.git`, `.brud/history`, `.brud/settings.json`, and `.brudignore`, including all descendants.
+- **User policy.** `.brudignore` rules are loaded once per workspace and applied to every path evaluation. The kernel does not allow tools to read or modify the ignore file itself.
+- **Command validation.** Terminal commands are screened against a configurable denylist of destructive patterns. The policy is frozen at kernel boot.
+- **Capability-scoped plugins.** A plugin manifest declares permissions such as `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register`, `tools:execute`, `terminal:execute`, and `telemetry:emit`. The kernel exposes only the handles that the plugin declared.
+- **Daemon authentication.** On POSIX systems, the local runtime directory is user-private (`0700`), and clients complete a token-based handshake before issuing requests.
+- **History access control.** Plugins interact with the ledger through abstracted APIs. Raw ledger access is reserved for the client and for official plugins reading their own namespace.
+
+### Current boundaries
+
+- Plugins execute in the same process as the kernel. The kernel grants only the capabilities a plugin declared; this does not isolate hostile code.
+- Operating-system sandboxing is not implemented. Process isolation for plugins is deferred to a future design decision.
+- Terminal commands are screened by a denylist, not contained by an operating-system sandbox. A command that passes validation can write outside the workspace, and those writes are outside the history ledger.
+- History reversal covers kernel-mediated file operations. Unrecorded paths cannot be reverted, and directory-state reversal has documented limits.
+- The project is pre-1.0, and interfaces may change.
+
+## Repository layout
+
+The repository is an npm workspace monorepo. The engine packages, official plugins, and reference client are versioned together.
+
+| Path | Contents |
+|:---|:---|
+| `packages/kernel` | Microkernel: service container, capability enforcement, validation, execution pipeline, Level-1 services |
+| `packages/protocol` | JSON-RPC contracts and shared types |
+| `packages/daemon` | Local host, transport, authentication, CLI, and client |
+| `packages/plugins/*` | The eight official plugins |
+| `packages/ui` | React webview interface |
+| `apps/vscode` | Brud Code, the reference VS Code extension |
+| `apps/web` | Project website and documentation (Next.js static export) |
+| `tests` | Integration tests |
+| `docs` | Architecture, standards, and release documentation |
+| `deprecated` | Archived pre-microkernel engine, retained for reference only |
+
+## Project status
+
+Brud is in developer preview. The engine, daemon, protocol, and plugins are under active development, and public interfaces may change before version 1.0. No npm packages are published yet.
+
+The reference VS Code client, Brud Code, is being migrated from the archived engine to the daemon protocol. Until that migration completes, parts of the client use the code in `deprecated/`.
+
+## Development and testing
+
+```bash
+npm run typecheck
+npm run lint
+npm run test:kernel
+npm run test:daemon
+npm run ci
+```
+
+`npm run ci` builds the engine, runs the kernel test suite, checks package boundaries, and runs the linter. The default daemon suite covers protocol dispatch and client behavior; additional adversarial transport tests are located in `packages/daemon/src/__verification__/`.
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how the snapshot engine, diffing, and history system work internally
-- [PRIVACY.md](PRIVACY.md) — exactly what Brud sends, what it never sends, and how to verify it
+- [ARCHITECTURE.md](ARCHITECTURE.md) — repository and engine structure
+- [Engine architecture standard](docs/architecture/ENGINE_ARCHITECTURE_STANDARD.md) — service boundaries and kernel contracts
+- [Microkernel rollout plan](docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md) — migration record and design decisions
+- [History security model](docs/architecture/HISTORY_SECURITY_MODEL.md) — ledger access model and threat boundaries
+- [PRIVACY.md](PRIVACY.md) — data handling
 - [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
-- Prompt Library — bundled in the extension sidebar
-
-## FAQ
-
-<details>
-<summary><strong>Do I need an API key?</strong></summary>
-<br>
-No. Brud Code works with any chatbot's free web UI. Paste the AI's output directly — no keys, tokens, or subscriptions.
-</details>
-
-<details>
-<summary><strong>Does Brud send anything anywhere?</strong></summary>
-<br>
-Your project history and snapshots stay in your workspace. The extension does send anonymous operation records, including redacted diagnostics when something fails, so bugs can be found and fixed. <a href="PRIVACY.md">PRIVACY.md</a> lists the exact fields, the redaction rules and how to inspect the traffic yourself.
-</details>
-
-<details>
-<summary><strong>Is it really free?</strong></summary>
-<br>
-Yes — free and open source under the MIT license.
-</details>
-
-<details>
-<summary><strong>Which AI chatbots work with it?</strong></summary>
-<br>
-Any chatbot that outputs text: ChatGPT, Claude, Gemini, DeepSeek, Grok, Llama, and more.
-</details>
-
-<details>
-<summary><strong>Where did Brud Code come from?</strong></summary>
-<br>
-Brud Code is a fork of <a href="https://github.com/akkhar-labs/akkhar-code-patcher">Akkhar Code Patcher</a>, which is no longer maintained. Brud Code is its official continuation under a new identity.
-</details>
+- [CHANGELOG.md](CHANGELOG.md) — release history
 
 ## Contributing
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
-
-## Community
-
-- ⭐ Star the repo to support development
-- 🐛 Report bugs via [GitHub Issues](https://github.com/rahatarch/brud/issues)
-- 💡 Suggest features via [GitHub Discussions](https://github.com/rahatarch/brud/discussions)
-- 🔧 Contribute via [Pull Requests](https://github.com/rahatarch/brud/pulls)
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report security vulnerabilities privately to the maintainers rather than in a public issue.
 
 ## License
 
-[MIT](LICENSE)
+Brud is released under the [MIT License](LICENSE).
 
----
-
-**The AI decides. Brud executes. You bridge the gap with a single click.**
-
-<p align="center">
-  <a href="https://github.com/rahatarch/brud/releases"><b>⬇ Install Brud Code</b></a> ·
-  <a href="https://github.com/rahatarch/brud">⭐ Star on GitHub</a> ·
-  <a href="https://github.com/rahatarch/brud/issues">🐛 Report a Bug</a>
-</p>
+Brud is developed by Akkhar-Labs.
