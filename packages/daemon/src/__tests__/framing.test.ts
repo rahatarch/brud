@@ -126,4 +126,55 @@ describe('Ndjson framing', () => {
       },
     );
   });
+
+  it('isolates a malformed frame while decoding valid peers in the same chunk', () => {
+    const decoder = new Framing.FrameDecoder();
+    const chunk = Buffer.from(
+      [
+        JSON.stringify(request(1)),
+        '{"jsonrpc":"2.0","id":2,"method":',
+        JSON.stringify(request(3)),
+        '{broken}',
+        JSON.stringify(request(4)),
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const results = decoder.pushFrames(chunk);
+
+    assert.equal(results.length, 5);
+    assert.deepEqual(results[0], { ok: true, message: request(1) });
+    assert.equal(results[1]?.ok, false);
+    assert.deepEqual(results[2], { ok: true, message: request(3) });
+    assert.equal(results[3]?.ok, false);
+    assert.deepEqual(results[4], { ok: true, message: request(4) });
+
+    const failures = results.filter((result) => !result.ok);
+
+    assert.equal(failures.length, 2);
+    assert.deepEqual(
+      failures.map((result) => (result.ok ? null : result.frameId)),
+      [2, null],
+    );
+    assert.equal(decoder.pendingBytes, 0);
+  });
+
+  it('waits for the newline before parsing a partial frame', () => {
+    const decoder = new Framing.FrameDecoder();
+    const frame = Framing.encodeFrame(request(9));
+    const splitAt = frame.length - 1;
+
+    assert.deepEqual(decoder.pushFrames(frame.subarray(0, splitAt)), []);
+    assert.equal(decoder.pendingBytes, splitAt);
+
+    const results = decoder.pushFrames(frame.subarray(splitAt));
+
+    assert.equal(results.length, 1);
+    assert.deepEqual(results[0], { ok: true, message: request(9) });
+  });
+
+  it('anchors the payload ceiling at 8 MiB of raw socket bytes', () => {
+    assert.equal(Framing.MAX_FRAME_BYTES, 8 * 1024 * 1024);
+  });
 });

@@ -1,6 +1,5 @@
 import type { DirectoryEntry, FileStats } from '../../../../drivers/contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
-import { assertNotProtectedPath } from '../../security/protectedPaths.js';
 // Path rules come from the canonical validation engine; `validation/
 // PathValidator` is now only a deprecated alias for the same implementation.
 // The facade keeps the legacy `PathTraversalViolationError` at its boundary,
@@ -237,8 +236,6 @@ export class ScopedPartitionFacade implements IBrudFileSystem {
     }
 
     const scopedPath = this.toScopedPath(relativePath);
-
-    assertNotProtectedPath(scopedPath);
 
     return scopedPath;
   }

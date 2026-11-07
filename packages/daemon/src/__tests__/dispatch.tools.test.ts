@@ -114,8 +114,6 @@ class TestSession implements DispatchSession {
 let dispatcher: RequestDispatcher;
 let registry: WorkspaceRegistry;
 let toolsToken: ServiceToken<IBrudToolsService>;
-let fileSystemToken: ServiceToken<unknown>;
-let historyToken: ServiceToken<unknown>;
 
 function connectRequest(root: string, id: number): RpcRequest {
   return {
@@ -150,8 +148,6 @@ before(async () => {
   const { RequestDispatcher } = await import('../server/dispatch.js');
 
   toolsToken = kernelModule.BrudToolsToken;
-  fileSystemToken = kernelModule.FileSystemToken as ServiceToken<unknown>;
-  historyToken = kernelModule.UniversalHistoryToken as ServiceToken<unknown>;
 
   registry = new WorkspaceRegistry({
     kernelFactory: async ({ workspaceRoot }) =>
@@ -160,8 +156,6 @@ before(async () => {
 
   dispatcher = new RequestDispatcher({
     registry,
-    fileSystemToken: fileSystemToken as never,
-    historyToken: historyToken as never,
     toolsToken,
     token: TOKEN,
     workspaceRoot: PRIMARY_ROOT,

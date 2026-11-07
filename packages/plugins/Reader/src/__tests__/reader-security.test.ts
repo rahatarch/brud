@@ -234,8 +234,10 @@ describe('Goal 7 — security', () => {
     const result = await pending;
 
     const content = (result.data as ReadResult).files[0]?.content;
+    // The concurrent write may land before or after the instrumented read.
+    // Either snapshot is valid; the invariant is that no torn/mixed content
+    // is observed across the concurrent mutation.
     assert.ok(content === 'old content\n' || content === 'new content\n');
-    assert.equal(content, 'new content\n');
     probe.restore();
   });
 

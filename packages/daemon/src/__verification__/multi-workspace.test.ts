@@ -246,28 +246,6 @@ describe('Goal 7 — filesystem and history isolation', () => {
     assert.equal(existsSync(join(daemon.rootA, 'a-only.txt')), true);
     assert.equal(existsSync(join(daemon.rootB, 'a-only.txt')), false);
   });
-
-  it('keeps history rows in separate per-workspace ledgers', async () => {
-    await daemon.clientA.request(Protocol.HISTORY_BEGIN_SESSION, {
-      prompt: 'workspace A session',
-    });
-    const listA = await daemon.clientA.request<Protocol.HistoryListResult>(
-      Protocol.HISTORY_LIST,
-      {},
-    );
-    const listB = await daemon.clientB.request<Protocol.HistoryListResult>(
-      Protocol.HISTORY_LIST,
-      {},
-    );
-
-    assert.ok(
-      listA.sessions.some((session) => session.prompt === 'workspace A session'),
-      'workspace A must contain its own history session',
-    );
-    assert.equal(listB.sessions.length, 0);
-    assert.equal(existsSync(join(daemon.rootA, '.brud', 'history', 'universal.db')), true);
-    assert.equal(existsSync(join(daemon.rootB, '.brud', 'history', 'universal.db')), true);
-  });
 });
 
 describe('Goal 7 — workspace disposal', () => {

@@ -1,5 +1,6 @@
 import type { PathRule } from '../contracts/rules.js';
 import type {
+  OperationAccess,
   ValidatedPath,
   ValidationFlavor,
   ValidationWorkspacePort,
@@ -7,6 +8,8 @@ import type {
 import { PathViolationError } from '../contracts/errors.js';
 import type { InputSchemaEngine } from './InputSchemaEngine.js';
 import { LexicalPathEngine } from './LexicalPathEngine.js';
+import { isA10ProtectedPath } from '../model/policy.js';
+import type { IgnoreRulesRegistry } from '../model/ignoreRules.js';
 import {
   classifyPath,
   isContainedInRoot,
@@ -47,6 +50,7 @@ const RULE_PRECEDENCE: readonly PathRule[] = Object.freeze([
   'PATH.AMBIGUOUS_ROOT',
   'PATH.UNKNOWN_ROOT',
   'PATH.PROTECTED_DENY',
+  'PATH.USER_IGNORED',
   'PATH.ROOT_NOT_MUTABLE',
 ]);
 
@@ -65,6 +69,7 @@ const REASONS: Readonly<Partial<Record<PathRule, string>>> = Object.freeze({
   'PATH.NO_WORKSPACE': 'no workspace root is registered',
   'PATH.NON_STRING': 'path must be a string',
   'PATH.PROTECTED_DENY': 'the path is on the kernel protected-path denylist',
+  'PATH.USER_IGNORED': 'the path is ignored by the workspace .brudignore policy',
   'PATH.ROOT_NOT_MUTABLE': 'the workspace root is not a mutable target',
   'PATH.OUTSIDE_ROOT': 'the path is outside every workspace root',
 });
@@ -91,6 +96,18 @@ function precedence(rule: PathRule): number {
   const index = RULE_PRECEDENCE.indexOf(rule);
 
   return index < 0 ? RULE_PRECEDENCE.length : index;
+}
+
+/** Access aliases accepted in place of a catalogued operation kind. */
+const ACCESS_ALIASES: ReadonlySet<OperationAccess> = new Set<OperationAccess>([
+  'read',
+  'mutate',
+  'delete',
+  'catalog',
+]);
+
+function isAccessAlias(value: string): value is OperationAccess {
+  return ACCESS_ALIASES.has(value as OperationAccess);
 }
 
 function firstViolation(rules: readonly PathRule[]): PathRule | null {
@@ -128,22 +145,27 @@ export class PathEvaluationEngine {
 
   private readonly schema: InputSchemaEngine;
 
+  private readonly ignoreRules: IgnoreRulesRegistry;
+
   /**
    * @param workspace - Workspace containment authority.
    * @param flavor - Path flavor.
    * @param boundaryEnabled - Frozen `workspaceBoundaryEnabled`.
    * @param schema - Input engine used to classify operation kinds.
+   * @param ignoreRules - Frozen `.brudignore` policy registry.
    */
   constructor(
     workspace: ValidationWorkspacePort,
     flavor: ValidationFlavor,
     boundaryEnabled: boolean,
     schema: InputSchemaEngine,
+    ignoreRules: IgnoreRulesRegistry,
   ) {
     this.workspace = workspace;
     this.flavor = flavor;
     this.boundaryEnabled = boundaryEnabled;
     this.schema = schema;
+    this.ignoreRules = ignoreRules;
   }
 
   /**
@@ -170,16 +192,17 @@ export class PathEvaluationEngine {
       return { ok: false, rule: 'PATH.NO_WORKSPACE', path: String(input), reason: REASONS['PATH.NO_WORKSPACE'] ?? '' };
     }
 
-    if (operationKind !== undefined && !this.schema.isKnownOperation(operationKind)) {
+    const kind = this.resolveKind(operationKind);
+
+    if (kind === null) {
       return {
         ok: false,
         rule: 'PATH.NON_STRING',
         path: input,
-        reason: `unknown operation kind "${operationKind}"`,
+        reason: `unknown operation kind "${String(operationKind)}"`,
       };
     }
 
-    const kind = operationKind ?? 'read_file';
     const lexicalFailure = this.classifyLexical(input, kind);
 
     if (lexicalFailure !== null) {
@@ -212,11 +235,12 @@ export class PathEvaluationEngine {
       return { ok: false, rule: 'PATH.NO_WORKSPACE', path: String(input), reason: REASONS['PATH.NO_WORKSPACE'] ?? '' };
     }
 
-    if (operationKind !== undefined && !this.schema.isKnownOperation(operationKind)) {
-      return { ok: false, rule: 'PATH.NON_STRING', path: input, reason: `unknown operation kind "${operationKind}"` };
+    const kind = this.resolveKind(operationKind);
+
+    if (kind === null) {
+      return { ok: false, rule: 'PATH.NON_STRING', path: input, reason: `unknown operation kind "${String(operationKind)}"` };
     }
 
-    const kind = operationKind ?? 'read_file';
     const lexicalFailure = this.classifyLexical(input, kind);
 
     if (lexicalFailure !== null) {
@@ -246,14 +270,14 @@ export class PathEvaluationEngine {
 
     const relativePath = toForwardRelative(owningRoot, absolute, this.flavor);
 
-    if (this.isMutating(kind)) {
-      if (relativePath === '') {
-        return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
-      }
+    if (this.isMutating(kind) && relativePath === '') {
+      return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
+    }
 
-      if (!this.isMutableRelative(relativePath)) {
-        return { ok: false, rule: 'PATH.PROTECTED_DENY', path: input, reason: REASONS['PATH.PROTECTED_DENY'] ?? '' };
-      }
+    const policyFailure = this.classifyPolicySync(owningRoot, relativePath, input);
+
+    if (policyFailure !== null) {
+      return policyFailure;
     }
 
     return {
@@ -326,17 +350,6 @@ export class PathEvaluationEngine {
     const insideRoot = !relativePath.startsWith('..') && !splitSegments(relativePath).includes('..');
 
     if (!insideRoot) {
-      const protectedHit = classifyProtectedAbsolute(relativePath);
-
-      if (this.isMutating(kind) && protectedHit) {
-        return {
-          ok: false,
-          rule: 'PATH.PROTECTED_DENY',
-          path: input,
-          reason: REASONS['PATH.PROTECTED_DENY'] ?? '',
-        };
-      }
-
       return {
         ok: true,
         location: {
@@ -350,6 +363,16 @@ export class PathEvaluationEngine {
     }
 
     if (this.lexical === null) {
+      if (this.isMutating(kind) && relativePath === '') {
+        return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
+      }
+
+      const policyFailure = this.classifyPolicySync(this.workspace.primaryRoot, relativePath, input);
+
+      if (policyFailure !== null) {
+        return policyFailure;
+      }
+
       return {
         ok: true,
         location: {
@@ -367,9 +390,7 @@ export class PathEvaluationEngine {
     let absolutePath: string;
 
     try {
-      absolutePath = classification.kind === 'absolute'
-        ? this.lexical.resolve(relativePath)
-        : this.lexical.resolve(relativePath);
+      absolutePath = this.lexical.resolve(relativePath);
     } catch (error: unknown) {
       if (error instanceof PathViolationError) {
         return { ok: false, rule: error.rule as PathRule, path: input, reason: error.reason };
@@ -380,13 +401,14 @@ export class PathEvaluationEngine {
 
     const resolvedRelative = toForwardRelative(this.workspace.primaryRoot, absolutePath, this.flavor);
 
-    if (this.isMutating(kind) && !this.lexical.isMutableTarget(resolvedRelative)) {
-      return {
-        ok: false,
-        rule: resolvedRelative === '' ? 'PATH.ROOT_NOT_MUTABLE' : 'PATH.PROTECTED_DENY',
-        path: input,
-        reason: REASONS['PATH.PROTECTED_DENY'] ?? '',
-      };
+    if (this.isMutating(kind) && resolvedRelative === '') {
+      return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
+    }
+
+    const policyFailure = this.classifyPolicySync(this.workspace.primaryRoot, resolvedRelative, input);
+
+    if (policyFailure !== null) {
+      return policyFailure;
     }
 
     return {
@@ -432,14 +454,14 @@ export class PathEvaluationEngine {
       };
     }
 
-    if (this.isMutating(kind)) {
-      if (location.relativePath === '' || location.relativePath === '.') {
-        return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
-      }
+    if (this.isMutating(kind) && (location.relativePath === '' || location.relativePath === '.')) {
+      return { ok: false, rule: 'PATH.ROOT_NOT_MUTABLE', path: input, reason: REASONS['PATH.ROOT_NOT_MUTABLE'] ?? '' };
+    }
 
-      if (!this.isMutableRelative(location.relativePath)) {
-        return { ok: false, rule: 'PATH.PROTECTED_DENY', path: input, reason: REASONS['PATH.PROTECTED_DENY'] ?? '' };
-      }
+    const policyFailure = await this.classifyPolicy(location.root, location.relativePath, input);
+
+    if (policyFailure !== null) {
+      return policyFailure;
     }
 
     return {
@@ -454,30 +476,83 @@ export class PathEvaluationEngine {
     };
   }
 
-  private isMutableRelative(relativePath: string): boolean {
-    return this.lexical?.isMutableTarget(relativePath)
-      ?? !splitSegments(relativePath).some((segment) => segment === '.git');
+  private async classifyPolicy(
+    root: string,
+    relativePath: string,
+    input: string,
+  ): Promise<PathEvaluation | null> {
+    if (isA10ProtectedPath(relativePath)) {
+      return {
+        ok: false,
+        rule: 'PATH.PROTECTED_DENY',
+        path: input,
+        reason: REASONS['PATH.PROTECTED_DENY'] ?? '',
+      };
+    }
+
+    if (await this.ignoreRules.isIgnored(root, relativePath)) {
+      return {
+        ok: false,
+        rule: 'PATH.USER_IGNORED',
+        path: input,
+        reason: REASONS['PATH.USER_IGNORED'] ?? '',
+      };
+    }
+
+    return null;
+  }
+
+  private classifyPolicySync(
+    root: string,
+    relativePath: string,
+    input: string,
+  ): PathEvaluation | null {
+    if (isA10ProtectedPath(relativePath)) {
+      return {
+        ok: false,
+        rule: 'PATH.PROTECTED_DENY',
+        path: input,
+        reason: REASONS['PATH.PROTECTED_DENY'] ?? '',
+      };
+    }
+
+    if (this.ignoreRules.isIgnoredSync(root, relativePath)) {
+      return {
+        ok: false,
+        rule: 'PATH.USER_IGNORED',
+        path: input,
+        reason: REASONS['PATH.USER_IGNORED'] ?? '',
+      };
+    }
+
+    return null;
+  }
+
+  private resolveKind(operationKind?: string): string | null {
+    if (operationKind === undefined) {
+      return 'read_file';
+    }
+
+    if (isAccessAlias(operationKind)) {
+      return operationKind;
+    }
+
+    return this.schema.isKnownOperation(operationKind) ? operationKind : null;
+  }
+
+  private accessOf(kind: string): OperationAccess {
+    if (isAccessAlias(kind)) {
+      return kind;
+    }
+
+    return kindConstraint(kind)?.access ?? 'read';
   }
 
   private isMutating(kind: string): boolean {
-    const access = kindConstraint(kind)?.access ?? 'read';
+    const access = this.accessOf(kind);
 
     return access === 'mutate' || access === 'delete';
   }
-}
-
-/**
- * Reports whether a root-relative path (possibly climbing out) lands on an
- * A10 protected prefix.
- *
- * @param relativePath - Relative path as produced by `toForwardRelative`.
- */
-function classifyProtectedAbsolute(relativePath: string): boolean {
-  const normalized = relativePath.replace(/\\/gu, '/').replace(/^(?:\.\/)+/u, '');
-
-  return normalized === '.git'
-    || normalized.startsWith('.git/')
-    || normalized === '.brud/settings.json';
 }
 
 /**

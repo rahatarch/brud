@@ -2,6 +2,7 @@ import type { Socket } from 'node:net';
 import * as Protocol from '@brud/protocol';
 import type { RpcResponse } from '@brud/protocol';
 import { FrameError, NdjsonFramingStream } from './framing.js';
+import type { FrameResult } from './framing.js';
 import type { DispatchSession, RequestDispatcher } from './dispatch.js';
 import { createRpcErrorResponse } from './wireErrors.js';
 
@@ -93,16 +94,18 @@ export class Connection implements DispatchSession {
   }
 
   private async processChunk(chunk: Buffer): Promise<void> {
-    let messages: unknown[];
+    let results: FrameResult[];
 
     try {
-      messages = this.framing.push(chunk);
+      results = this.framing.pushFrames(chunk);
     } catch (error: unknown) {
       if (error instanceof FrameError) {
+        // A frame-length violation is fatal for the connection: the raw bytes
+        // are rejected before JSON parsing and the client must reconnect.
         this.send(createRpcErrorResponse(null, error.rpcCode, error.message));
 
         if (error.code === 'FRAME_OVERSIZE') {
-          this.destroy();
+          this.end();
         }
 
         return;
@@ -111,7 +114,18 @@ export class Connection implements DispatchSession {
       throw error;
     }
 
-    for (const message of messages) {
+    for (const result of results) {
+      if (!result.ok) {
+        // A malformed complete frame only fails itself. Valid frames that
+        // shared the same transport chunk are still processed below.
+        this.send(
+          createRpcErrorResponse(result.frameId, result.error.rpcCode, result.error.message),
+        );
+        continue;
+      }
+
+      const message = result.message;
+
       if (Protocol.isRpcNotification(message)) {
         continue;
       }

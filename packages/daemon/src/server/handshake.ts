@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { existsSync, realpathSync } from 'node:fs';
-import { isAbsolute, resolve, sep } from 'node:path';
+import { isAbsolute, posix, resolve, sep, win32 } from 'node:path';
 import * as Protocol from '@brud/protocol';
 import type {
   DaemonClientIdentity,
@@ -42,6 +42,59 @@ function canonicalizePath(input: string): string {
 
 export function canonicalizeWorkspaceRoot(input: string): string {
   return canonicalizePath(input);
+}
+
+/**
+ * Host directories that must never become a workspace root.
+ *
+ * These are compared exactly against the realpath-resolved root. Descendants
+ * are intentionally not rejected: on macOS, `/private` contains the per-user
+ * temporary roots, and developers legitimately keep projects below paths such
+ * as `/usr/local/src`. A root that *is* a system directory or the filesystem
+ * root is always a rogue attachment.
+ */
+const POSIX_SYSTEM_ROOTS: readonly string[] = [
+  '/etc',
+  '/usr',
+  '/bin',
+  '/sbin',
+  '/var',
+  '/sys',
+  '/proc',
+  '/dev',
+  '/boot',
+  '/private',
+];
+
+const WINDOWS_SYSTEM_ROOTS: readonly string[] = [
+  'C:\\Windows',
+  'C:\\Program Files',
+  'C:\\ProgramData',
+];
+
+function rootComparisonKey(value: string): string {
+  const trimmed = value.length > 1 && /[\\/]$/u.test(value) ? value.slice(0, -1) : value;
+
+  return process.platform === 'win32' ? trimmed.toLowerCase() : trimmed;
+}
+
+/**
+ * Reports whether a canonical root is the host filesystem root or a known
+ * system directory.
+ *
+ * @param canonicalRoot - Absolute path already passed through `realpath`.
+ */
+export function isDeniedWorkspaceRoot(canonicalRoot: string): boolean {
+  const api = process.platform === 'win32' ? win32 : posix;
+  const key = rootComparisonKey(canonicalRoot);
+
+  if (key === rootComparisonKey(api.parse(canonicalRoot).root)) {
+    return true;
+  }
+
+  const denied = process.platform === 'win32' ? WINDOWS_SYSTEM_ROOTS : POSIX_SYSTEM_ROOTS;
+
+  return denied.some((entry) => rootComparisonKey(entry) === key);
 }
 
 export interface HandshakeFailure {
@@ -164,7 +217,20 @@ export class HandshakeValidator {
       return failure(Protocol.AUTH_FAILED, 'Invalid daemon authentication token');
     }
 
+    const lexicalRoot = resolve(workspaceRoot);
     const candidateRoot = canonicalizeWorkspaceRoot(workspaceRoot);
+
+    // Check both the lexical root and the realpath-resolved root. The lexical
+    // check catches direct `/bin` or `/sbin` aliases that realpath rewrites
+    // into `/usr/...`; the resolved check catches a symlink anywhere on disk
+    // that points at a system directory.
+    if (isDeniedWorkspaceRoot(lexicalRoot) || isDeniedWorkspaceRoot(candidateRoot)) {
+      return failure(
+        Protocol.INVALID_PARAMS,
+        'ROGUE WORKSPACE ROOT REJECTED (INVALID_WORKSPACE_ROOT): the filesystem root or a system directory cannot be a workspace',
+        { errorCode: 'INVALID_WORKSPACE_ROOT', path: candidateRoot },
+      );
+    }
 
     if (enforcePrimaryRoot && candidateRoot !== this.canonicalWorkspaceRoot) {
       return failure(

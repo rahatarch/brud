@@ -1,26 +1,8 @@
-import { Buffer } from 'node:buffer';
 import type { Socket } from 'node:net';
 import * as Protocol from '@brud/protocol';
 import type {
   DaemonConnectParams,
   DaemonHandshakeResult,
-  FileEncoding,
-  FsExistsResult,
-  FsListEntry,
-  FsListResult,
-  FsReadFileResult,
-  FsStatResult,
-  FsWriteAtomicResult,
-  HistoryBeginSessionResult,
-  HistoryCommitOutcome,
-  HistoryCommitSessionResult,
-  HistoryGetResult,
-  HistoryListParams,
-  HistoryListResult,
-  HistoryReversalTargetState,
-  HistoryRevertResult,
-  HistorySessionManifest,
-  HistorySessionRow,
   JsonRpcId,
   RpcNotification,
   RpcRequest,
@@ -254,105 +236,6 @@ export class DaemonClient {
 
   cancel(requestId: JsonRpcId): void {
     this.notify(REQUEST_CANCEL_METHOD, { id: requestId });
-  }
-
-  async fsReadFile(path: string, encoding: FileEncoding = 'utf8'): Promise<string> {
-    const result = await this.request<FsReadFileResult>(Protocol.FS_READ_FILE, {
-      path,
-      encoding,
-    });
-
-    return result.data;
-  }
-
-  async fsWriteAtomic(
-    path: string,
-    data: Uint8Array | string,
-    encoding: FileEncoding = 'utf8',
-  ): Promise<FsWriteAtomicResult> {
-    const payload = typeof data === 'string' ? data : Buffer.from(data).toString('base64');
-    const payloadEncoding: FileEncoding = typeof data === 'string' ? encoding : 'base64';
-    const result = await this.request<FsWriteAtomicResult>(Protocol.FS_WRITE_ATOMIC, {
-      path,
-      data: payload,
-      encoding: payloadEncoding,
-    });
-
-    return result;
-  }
-
-  async fsExists(path: string): Promise<boolean> {
-    const result = await this.request<FsExistsResult>(Protocol.FS_EXISTS, { path });
-    return result.exists;
-  }
-
-  async fsStat(path: string): Promise<FsStatResult['stat']> {
-    const result = await this.request<FsStatResult>(Protocol.FS_STAT, { path });
-    return result.stat;
-  }
-
-  async fsList(path: string, limit?: number): Promise<readonly FsListEntry[]> {
-    if (limit !== undefined && (!Number.isInteger(limit) || limit < 0)) {
-      throw new RangeError('limit must be a non-negative integer');
-    }
-
-    const result = await this.request<FsListResult>(Protocol.FS_LIST, { path });
-
-    return limit === undefined ? result.entries : result.entries.slice(0, limit);
-  }
-
-  async historyBeginSession(
-    prompt: string,
-    targets?: readonly string[],
-  ): Promise<string> {
-    const result = await this.request<HistoryBeginSessionResult>(
-      Protocol.HISTORY_BEGIN_SESSION,
-      {
-        prompt,
-        ...(targets === undefined ? {} : { targets }),
-      },
-    );
-
-    return result.sessionId;
-  }
-
-  async historyCommitSession(
-    sessionId: string,
-    outcome: HistoryCommitOutcome = 'completed',
-  ): Promise<HistoryCommitSessionResult> {
-    return this.request<HistoryCommitSessionResult>(Protocol.HISTORY_COMMIT_SESSION, {
-      sessionId,
-      outcome,
-    });
-  }
-
-  async historyRevert(
-    sessionId: string,
-    targetState?: HistoryReversalTargetState,
-  ): Promise<HistoryRevertResult> {
-    return this.request<HistoryRevertResult>(Protocol.HISTORY_REVERT, {
-      sessionId,
-      ...(targetState === undefined ? {} : { targetState }),
-    });
-  }
-
-  async historyList(
-    filter?: HistoryListParams,
-  ): Promise<readonly HistorySessionRow[]> {
-    const result = await this.request<HistoryListResult>(
-      Protocol.HISTORY_LIST,
-      filter ?? {},
-    );
-
-    return result.sessions;
-  }
-
-  async historyGet(sessionId: string): Promise<HistorySessionManifest | null> {
-    const result = await this.request<HistoryGetResult>(Protocol.HISTORY_GET, {
-      sessionId,
-    });
-
-    return result.session;
   }
 
   async close(): Promise<void> {

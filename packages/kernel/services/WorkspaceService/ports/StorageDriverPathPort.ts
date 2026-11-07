@@ -7,7 +7,8 @@ import type { IWorkspacePathPort } from '../contracts/IWorkspaceService.js';
  *
  * Keeping the port at two methods means the workspace service cannot read or
  * write workspace content, and tests can substitute a tiny fake instead of a
- * full storage driver.
+ * full storage driver. `.brudignore` policy input is owned by
+ * `ValidationService` and is not routed through this port.
  *
  * @param driver - Storage driver backing the kernel.
  * @returns A `realpath`/`lstat` port over the driver.

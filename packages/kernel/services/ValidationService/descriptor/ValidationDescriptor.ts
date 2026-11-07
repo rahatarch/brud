@@ -16,6 +16,7 @@ import type {
   ValidationWorkspacePort,
 } from '../contracts/IValidationService.js';
 import { ValidationService } from '../orchestrator/ValidationService.js';
+import type { IgnoreFileReader } from '../model/ignoreRules.js';
 import { ValidationToken } from './tokens.js';
 
 /** Tier assigned to the validation descriptor. */
@@ -40,6 +41,14 @@ export interface ValidationDescriptorOptions {
 
   /** Home directory used to expand `~` in commands. Defaults to the host home. */
   readonly homeDirectory?: string;
+
+  /**
+   * Read-only port used to ingest `<root>/.brudignore` policy files.
+   *
+   * The standard kernel supplies the workspace storage driver's `readFile`.
+   * Standalone compositions omit it and therefore apply no user ignore rules.
+   */
+  readonly ignoreFileReader?: IgnoreFileReader;
 }
 
 /**
@@ -122,6 +131,9 @@ export function createValidationDescriptor(
             ?? (process.env.HOME ?? process.env.USERPROFILE ?? '/home'),
           flavor: options?.flavor ?? defaultValidationFlavor(),
         },
+        ...(options?.ignoreFileReader === undefined
+          ? {}
+          : { ignoreFileReader: options.ignoreFileReader }),
       });
 
       registerBootPinner(service, async (): Promise<void> => {

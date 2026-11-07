@@ -27,6 +27,7 @@ import {
   pinBootPolicies,
   type ValidationDescriptorOptions,
 } from '../../services/ValidationService/descriptor/ValidationDescriptor.js';
+import type { IValidationService } from '../../services/ValidationService/contracts/IValidationService.js';
 import { createUnifiedHistoryDescriptors } from '../../services/UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.js';
 import type { WorkspaceService } from '../../services/WorkspaceService/orchestrator/WorkspaceService.js';
 import {
@@ -218,6 +219,10 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
       return instance;
     },
   });
+  // Validation is constructed after the filesystem in the boot order, so the
+  // filesystem receives a lazy probe and only calls it after the kernel is
+  // RUNNING. The binding is the same instance every other caller resolves.
+  const validationBinding: { instance?: IValidationService } = {};
   kernel.register(createFileSystemDescriptor({
     driver: workspaceDriver,
     mutationJournal,
@@ -234,11 +239,38 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
 
       return instance;
     },
+    validation: () => {
+      const instance = validationBinding.instance;
+
+      if (instance === undefined) {
+        throw new Error(
+          'brud.core.validation must be constructed before a filesystem policy check',
+        );
+      }
+
+      return instance;
+    },
   }));
   // Validation sits after workspace (its containment authority) and before the
   // terminal and plugin layers. Its policy is the boot settings snapshot, read
-  // once at construction and never re-read.
-  kernel.register(createValidationDescriptor(options?.validation));
+  // once at construction and never re-read. `.brudignore` is read through the
+  // workspace storage driver, keeping policy input in the policy owner.
+  const validationDescriptor = createValidationDescriptor({
+    ...options?.validation,
+    ...(options?.validation?.ignoreFileReader === undefined
+      ? { ignoreFileReader: (absolutePath: string) => workspaceDriver.readFile(absolutePath) }
+      : {}),
+  });
+  kernel.register({
+    ...validationDescriptor,
+    factory: (context, broker) => {
+      const instance = validationDescriptor.factory(context, broker);
+
+      validationBinding.instance = instance;
+
+      return instance;
+    },
+  });
   // Terminal sits immediately after validation: it re-validates every command
   // (including conditional branches) through the frozen gate before spawning,
   // and owns the only process-spawn site in the kernel.

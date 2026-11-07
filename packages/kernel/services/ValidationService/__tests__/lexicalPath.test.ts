@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
-import { isProtectedWritePath } from '../../BrudFileSystem/security/protectedPaths.js';
+import { isA10ProtectedPath } from '../model/policy.js';
 import { PathViolationError } from '../contracts/errors.js';
 import { LexicalPathEngine } from '../engine/LexicalPathEngine.js';
 import { assertSafeRelativePath, classifyPath } from '../engine/pathLexicon.js';
@@ -220,9 +220,9 @@ describe('LexicalPathEngine — migrated canonical rules', () => {
       }
     });
 
-    it('agrees with the filesystem denylist for every protected pattern', () => {
+    it('agrees with the canonical A10 policy for every protected pattern', () => {
       for (const target of ['.brud/settings.json', '.brud/history', '.git', '.git/objects/x']) {
-        assert.equal(engine.isMutableTarget(target), !isProtectedWritePath(target));
+        assert.equal(engine.isMutableTarget(target), !isA10ProtectedPath(target));
       }
     });
   });

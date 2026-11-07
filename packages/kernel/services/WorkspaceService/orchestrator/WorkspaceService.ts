@@ -67,6 +67,11 @@ interface RootEntry {
 /**
  * Canonical workspace identity and path translation authority.
  *
+ * This service owns geometry only: root registry, `realpath`
+ * canonicalization, containment, system-root rejection, and kernel-relative
+ * translation. Policy decisions (the A10 denylist and `.brudignore`) belong to
+ * `ValidationService`; this class never imports or calls it.
+ *
  * Lifecycle: the constructor validates and registers the declared roots
  * synchronously; {@link initialize} canonicalizes them through `realpath` of
  * the nearest existing ancestor and is what the kernel calls at boot. Roots
@@ -206,9 +211,9 @@ export class WorkspaceService implements IWorkspaceService, IServiceLifecycle {
   /**
    * Strict resolver: canonicalizes, routes, and rejects any escape.
    *
-   * Alias of {@link resolve} with the containment contract spelled out, used
-   * by the legacy adapter and by kernels that want the word "contained" in
-   * their call site.
+   * Geometry only: this proves the target is inside a registered root after
+   * `realpath` canonicalization. Policy denials (A10, `.brudignore`) are owned
+   * by `ValidationService` and are not applied here.
    *
    * @param userPath - Absolute or relative user path.
    */
@@ -475,14 +480,15 @@ export class WorkspaceService implements IWorkspaceService, IServiceLifecycle {
     }
 
     const entry = this.routeCanonical(outcome.canonical, raw, logicalRoot, rootOverride);
+    const relativePath = toKernelSeparators(
+      relativeWithinRoot(entry.canonical, outcome.canonical, this.flavorValue),
+      this.flavorValue,
+    );
 
     return {
       root: entry.canonical,
       absolutePath: outcome.canonical,
-      relativePath: toKernelSeparators(
-        relativeWithinRoot(entry.canonical, outcome.canonical, this.flavorValue),
-        this.flavorValue,
-      ),
+      relativePath,
     };
   }
 

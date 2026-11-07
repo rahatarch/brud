@@ -5,6 +5,5 @@ export * from './events/index.js';
 export * from './validation/index.js';
 export * from './concurrency/index.js';
 export * from './operations/index.js';
-export * from './security/index.js';
 export * from './projection/index.js';
 export * from './orchestrator/index.js';

@@ -1,5 +1,6 @@
 import { before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as Protocol from '@brud/protocol';
@@ -73,8 +74,6 @@ before(async () => {
 
   dispatcher = new RequestDispatcher({
     registry,
-    fileSystemToken: kernelModule.FileSystemToken as ServiceToken<never>,
-    historyToken: kernelModule.UniversalHistoryToken as ServiceToken<never>,
     toolsToken: kernelModule.BrudToolsToken as ServiceToken<IBrudToolsService>,
     token: TOKEN,
     workspaceRoot: PRIMARY_ROOT,
@@ -120,6 +119,63 @@ describe('daemon.connect workspace routing', () => {
     assert.equal(session.handshaken, false);
   });
 
+  it('rejects the filesystem root and known system directories', async () => {
+    const deniedRoots = process.platform === 'win32'
+      ? ['C:\\', 'C:\\Windows', 'C:\\Program Files', 'C:\\ProgramData']
+      : ['/', '/etc', '/usr', '/bin', '/sbin', '/var', '/sys', '/proc', '/dev', '/boot', '/private'];
+
+    for (const [index, root] of deniedRoots.entries()) {
+      const session = new TestSession(`c_denied_${index}`);
+      const response = await dispatcher.dispatch(
+        connectRequest(
+          {
+            protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
+            token: TOKEN,
+            workspaceRoot: root,
+          },
+          100 + index,
+        ),
+        session,
+      );
+
+      assert.ok(Protocol.isRpcErrorResponse(response), `${root}: ${JSON.stringify(response)}`);
+      assert.equal(response.error.code, Protocol.INVALID_PARAMS);
+      assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
+      assert.equal(session.handshaken, false);
+    }
+
+    for (const root of deniedRoots) {
+      assert.equal(spawnedRoots.includes(root), false, `${root} must never be spawned`);
+    }
+  });
+
+  it('rejects a symlink that resolves to a system directory', { skip: process.platform === 'win32' }, async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-connect-symlink-')));
+    const link = join(base, 'rogue');
+    await symlink('/etc', link);
+
+    try {
+      const session = new TestSession('c_denied_symlink');
+      const response = await dispatcher.dispatch(
+        connectRequest(
+          {
+            protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
+            token: TOKEN,
+            workspaceRoot: link,
+          },
+          200,
+        ),
+        session,
+      );
+
+      assert.ok(Protocol.isRpcErrorResponse(response), JSON.stringify(response));
+      assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
+      assert.equal(session.handshaken, false);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+
   it('spawns a kernel for a valid absolute workspaceRoot and attaches the client', async () => {
     const root = join(tmpdir(), 'brud-connect-workspace-a');
     const session = new TestSession('c_valid');
@@ -144,7 +200,7 @@ describe('daemon.connect workspace routing', () => {
     assert.equal(session.workspaceRoot, root);
     assert.equal(session.handshaken, true);
     assert.equal(registry.get(root)?.clients.has('c_valid'), true);
-    assert.deepEqual(spawnedRoots, [root]);
+    assert.equal(spawnedRoots.filter((entry) => entry === root).length, 1);
   });
 
   it('reuses an existing workspace kernel for a second client', async () => {

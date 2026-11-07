@@ -32,6 +32,7 @@ const TRAITS: Readonly<Record<ValidationRule, RuleTraits>> = Object.freeze({
   'PATH.INVALID_ROOT': { actionable: false, retryable: false },
   'PATH.NO_WORKSPACE': { actionable: true, retryable: true },
   'PATH.PROTECTED_DENY': { actionable: true, retryable: false },
+  'PATH.USER_IGNORED': { actionable: true, retryable: false },
   'PATH.ROOT_NOT_MUTABLE': { actionable: true, retryable: false },
   'PATH.CWD_ESCAPE': { actionable: true, retryable: false },
   'PATH.CWD_DYNAMIC': { actionable: true, retryable: false },
@@ -153,6 +154,18 @@ export function legacyMessages(code: ValidationCode, values: MessageValues = {})
       return {
         friendly: values.reason ?? 'The path failed workspace validation.',
         details: values.reason ?? `The path "${path}" failed workspace validation.`,
+      };
+    case 'PROTECTED_PATH_DENIED':
+      return {
+        friendly: values.reason ?? 'The path is on the kernel protected-path denylist.',
+        details: values.reason
+          ?? `The path "${path}" is on the kernel protected-path denylist and cannot be accessed.`,
+      };
+    case 'PATH_IGNORED_BY_USER':
+      return {
+        friendly: values.reason ?? 'The path is ignored by the workspace .brudignore policy.',
+        details: values.reason
+          ?? `The path "${path}" is ignored by the workspace .brudignore policy.`,
       };
     case 'WORKSPACE_CONFIGURATION_INVALID':
       return {

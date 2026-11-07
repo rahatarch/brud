@@ -202,6 +202,8 @@ export function toWorkspaceRule(
       return 'ALTERNATE_DATA_STREAM';
     case 'PATH.PROTECTED_DENY':
       return 'PROTECTED_PATH_DENIED';
+    case 'PATH.USER_IGNORED':
+      return 'PATH_IGNORED_BY_USER';
     case 'PATH.ROOT_NOT_MUTABLE':
       return 'PATH_VIOLATION';
     case 'PATH.SIBLING_PREFIX':

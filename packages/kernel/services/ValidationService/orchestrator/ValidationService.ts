@@ -17,6 +17,8 @@ import { PathEvaluationEngine } from '../engine/PathEvaluationEngine.js';
 import { PolicyGateEngine } from '../engine/PolicyGateEngine.js';
 import { legacyMessages, ruleTraits } from '../engine/errorCatalog.js';
 import { kindConstraint } from '../engine/kindMatrix.js';
+import { IgnoreRulesRegistry } from '../model/ignoreRules.js';
+import type { IgnoreFileReader } from '../model/ignoreRules.js';
 
 /** Construction options for {@link ValidationService}. */
 export interface ValidationServiceOptions {
@@ -26,6 +28,12 @@ export interface ValidationServiceOptions {
   readonly workspace: ValidationWorkspacePort;
   /** Home directory and path flavor for command scanning. */
   readonly environment: ValidationEnvironment;
+  /**
+   * Read-only port used to load `<root>/.brudignore` policy files.
+   *
+   * When omitted (standalone unit constructions), no user ignore rules apply.
+   */
+  readonly ignoreFileReader?: IgnoreFileReader;
 }
 
 /** Service made available to the kernel while the boot snapshot is pinned. */
@@ -83,7 +91,8 @@ const PATH_BOUNDARY_CODE: Readonly<Record<PathRule, { readonly code: ValidationC
     'PATH.UNKNOWN_ROOT': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
     'PATH.INVALID_ROOT': { code: 'WORKSPACE_CONFIGURATION_INVALID', legacy: 'NO_WORKSPACE' },
     'PATH.NO_WORKSPACE': { code: 'NO_WORKSPACE', legacy: 'NO_WORKSPACE' },
-    'PATH.PROTECTED_DENY': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
+    'PATH.PROTECTED_DENY': { code: 'PROTECTED_PATH_DENIED', legacy: 'VALIDATION_ERROR' },
+    'PATH.USER_IGNORED': { code: 'PATH_IGNORED_BY_USER', legacy: 'VALIDATION_ERROR' },
     'PATH.ROOT_NOT_MUTABLE': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
     'PATH.CWD_ESCAPE': { code: 'CWD_ESCAPE', legacy: 'CWD_ESCAPE' },
     'PATH.CWD_DYNAMIC': { code: 'DYNAMIC_PATH', legacy: 'DYNAMIC_PATH' },
@@ -94,7 +103,6 @@ const PATH_BOUNDARY_CODE: Readonly<Record<PathRule, { readonly code: ValidationC
 
 /** Rules whose legacy rendering is the bare `VALIDATION_ERROR` pair. */
 const VALIDATION_ERROR_RULES: ReadonlySet<PathRule> = new Set<PathRule>([
-  'PATH.PROTECTED_DENY',
   'PATH.ROOT_NOT_MUTABLE',
   'PATH.SIBLING_PREFIX',
   'PATH.UNVERIFIABLE_LINEAGE',
@@ -576,6 +584,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       environment.flavor,
       this.gate.workspaceBoundaryEnabled,
       this.schema,
+      new IgnoreRulesRegistry(environment.flavor, this.pinnedOptions.ignoreFileReader),
     );
     this.commands = new CommandScannerEngine(workspace, environment);
   }

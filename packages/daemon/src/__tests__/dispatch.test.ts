@@ -13,7 +13,7 @@ import type {
   RpcRequest,
   RpcResponse,
 } from '@brud/protocol';
-import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { DaemonServer } from '../server/DaemonServer.js';
 
 const TOKEN = 'test-daemon-token-0123456789abcdef';
@@ -190,7 +190,6 @@ function createConnectRequest(overrides?: Partial<DaemonConnectParams>): RpcRequ
 }
 
 let kernel: BrudKernel | undefined;
-let driver: IStorageDriver | undefined;
 let server: DaemonServer | undefined;
 let workspaceRoot = '';
 let tempDirectory = '';
@@ -226,7 +225,6 @@ describe('DaemonServer dispatch', () => {
     });
     await createdKernel.boot({ workspaceRoot });
     kernel = createdKernel;
-    driver = storageDriver;
 
     socketPath = join(tempDirectory, 'daemon.sock');
 
@@ -268,7 +266,7 @@ describe('DaemonServer dispatch', () => {
     assert.equal(response.error.code, Protocol.AUTH_FAILED);
 
     const existsResponse = await client.call(
-      createRequest(Protocol.FS_EXISTS, { path: 'anything.txt' }),
+      createRequest(Protocol.TOOLS_LIST, {}),
     );
     assert.ok(Protocol.isRpcErrorResponse(existsResponse));
     assert.equal(existsResponse.error.code, Protocol.HANDSHAKE_REQUIRED);
@@ -302,313 +300,23 @@ describe('DaemonServer dispatch', () => {
     assert.ok(expectString(result, 'connectionId').startsWith('c_'));
 
     const capabilities = expectRecord(result.capabilities);
-    assert.deepEqual(capabilities.history, [...Protocol.HISTORY_CAPABILITIES]);
-    assert.deepEqual(capabilities.fs, [...Protocol.FS_METHODS]);
+    assert.equal(capabilities.protocolVersion, Protocol.DAEMON_PROTOCOL_VERSION);
+    assert.equal(capabilities.workspaceRoot, workspaceRoot);
+    assert.equal('fs' in capabilities, false);
+    assert.equal('history' in capabilities, false);
   });
 
-  it('writes, reads, and probes a file atomically', async (t) => {
+  it('returns METHOD_NOT_FOUND for removed Level-1 SPI methods', async (t) => {
     const client = await openHandshakenClient();
     t.after(async () => {
       await client.close();
     });
 
-    const content = 'héllo daemon';
-    const writeResponse = await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path: 'notes.md', data: content }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(writeResponse));
-    assert.deepEqual(writeResponse.result, {
-      path: 'notes.md',
-      bytesWritten: Buffer.byteLength(content, 'utf8'),
-    });
-
-    const readResponse = await client.call(
-      createRequest(Protocol.FS_READ_FILE, { path: 'notes.md' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(readResponse));
-    assert.deepEqual(readResponse.result, {
-      path: 'notes.md',
-      encoding: 'utf8',
-      data: content,
-    });
-
-    const base64Response = await client.call(
-      createRequest(Protocol.FS_READ_FILE, { path: 'notes.md', encoding: 'base64' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(base64Response));
-    const base64Result = expectRecord(base64Response.result);
-    const encoded = expectString(base64Result, 'data');
-    assert.equal(Buffer.from(encoded, 'base64').toString('utf8'), content);
-
-    const existsResponse = await client.call(
-      createRequest(Protocol.FS_EXISTS, { path: 'notes.md' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(existsResponse));
-    assert.deepEqual(existsResponse.result, { path: 'notes.md', exists: true });
-
-    const missingResponse = await client.call(
-      createRequest(Protocol.FS_EXISTS, { path: 'missing.md' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(missingResponse));
-    assert.deepEqual(missingResponse.result, { path: 'missing.md', exists: false });
-  });
-
-  it('lists directory contents through readDirectory', async (t) => {
-    assert.ok(driver !== undefined, 'Storage driver is not initialized');
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    await driver.mkdir(join(workspaceRoot, 'listing'));
-    await driver.mkdir(join(workspaceRoot, 'listing', 'nested'));
-
-    const writeResponse = await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, {
-        path: 'listing/alpha.txt',
-        data: 'alpha',
-      }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(writeResponse));
-
-    const listResponse = await client.call(
-      createRequest(Protocol.FS_LIST, { path: 'listing' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(listResponse));
-
-    const result = expectRecord(listResponse.result);
-    assert.equal(expectString(result, 'path'), 'listing');
-    const entries = result.entries;
-    assert.ok(isUnknownArray(entries));
-
-    const mapped = entries.map((entry: unknown) => {
-      const record = expectRecord(entry);
-      return {
-        name: expectString(record, 'name'),
-        isFile: record.isFile,
-        isDirectory: record.isDirectory,
-      };
-    });
-
-    assert.deepEqual(mapped, [
-      { name: 'alpha.txt', isFile: true, isDirectory: false },
-      { name: 'nested', isFile: false, isDirectory: true },
-    ]);
-  });
-
-  it('drives a history session end-to-end over the socket', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const path = 'history/phase4.txt';
-    await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'before\n' }),
-    );
-
-    const beginResponse = await client.call(
-      createRequest(Protocol.HISTORY_BEGIN_SESSION, {
-        prompt: 'daemon history lifecycle',
-        targets: [path],
-      }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(beginResponse));
-    const beginResult = expectRecord(beginResponse.result);
-    const sessionId = expectString(beginResult, 'sessionId');
-    assert.match(sessionId, /^BR-\d{8}-\d{3}$/u);
-
-    await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'after\n' }),
-    );
-
-    const commitResponse = await client.call(
-      createRequest(Protocol.HISTORY_COMMIT_SESSION, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(commitResponse));
-    const commitResult = expectRecord(commitResponse.result);
-    assert.equal(commitResult.sessionId, sessionId);
-    assert.equal(commitResult.committedFileCount, 1);
-
-    const getResponse = await client.call(
-      createRequest(Protocol.HISTORY_GET, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(getResponse));
-    const getResult = expectRecord(getResponse.result);
-    const manifest = expectRecord(getResult.session);
-    assert.equal(manifest.sessionId, sessionId);
-    assert.equal(manifest.status, 'committed');
-    assert.deepEqual(manifest.filesAffected, [path]);
-
-    const listResponse = await client.call(
-      createRequest(Protocol.HISTORY_LIST, { limit: 10 }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(listResponse));
-    const listResult = expectRecord(listResponse.result);
-    assert.ok(isUnknownArray(listResult.sessions));
-    const listed = listResult.sessions.map((entry: unknown) => expectRecord(entry));
-    assert.ok(listed.some((row) => row.session_id === sessionId));
-
-    const revertResponse = await client.call(
-      createRequest(Protocol.HISTORY_REVERT, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(revertResponse));
-    const revertResult = expectRecord(revertResponse.result);
-    assert.equal(revertResult.isExecutable, true);
-    assert.deepEqual(revertResult.conflicts, []);
-    const receipt = expectRecord(revertResult.receipt);
-    assert.equal(receipt.sessionId, sessionId);
-    assert.equal(receipt.targetState, 'pre');
-    assert.equal(receipt.filesRestored, 1);
-
-    const readResponse = await client.call(
-      createRequest(Protocol.FS_READ_FILE, { path }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(readResponse));
-    const readResult = expectRecord(readResponse.result);
-    assert.equal(expectString(readResult, 'data'), 'before\n');
-
-    const revertedResponse = await client.call(
-      createRequest(Protocol.HISTORY_GET, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(revertedResponse));
-    const revertedResult = expectRecord(revertedResponse.result);
-    const revertedManifest = expectRecord(revertedResult.session);
-    assert.equal(revertedManifest.status, 'reverted');
-  });
-
-  it('returns non-executable plans with conflicts when a reversal is stale', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const path = 'history/tampered.txt';
-    await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'before\n' }),
-    );
-
-    const beginResponse = await client.call(
-      createRequest(Protocol.HISTORY_BEGIN_SESSION, {
-        prompt: 'daemon stale reversal',
-        targets: [path],
-      }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(beginResponse));
-    const sessionId = expectString(expectRecord(beginResponse.result), 'sessionId');
-
-    await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'after\n' }),
-    );
-    const commitResponse = await client.call(
-      createRequest(Protocol.HISTORY_COMMIT_SESSION, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(commitResponse));
-
-    await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path, data: 'tampered\n' }),
-    );
-
-    const revertResponse = await client.call(
-      createRequest(Protocol.HISTORY_REVERT, { sessionId }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(revertResponse));
-    const result = expectRecord(revertResponse.result);
-    assert.equal(result.isExecutable, false);
-    assert.equal(result.receipt, null);
-    assert.ok(isUnknownArray(result.conflicts));
-    const conflicts = result.conflicts.map((entry: unknown) => expectRecord(entry));
-    assert.equal(conflicts.length, 1);
-    assert.equal(conflicts[0]?.code, 'STALE_BASELINE_CONFLICT');
-    assert.equal(conflicts[0]?.relativePath, path);
-  });
-
-  it('reports an unknown history session with a machine-readable errorCode', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const sessionId = 'BR-20000101-999';
-
-    const getResponse = await client.call(createRequest(Protocol.HISTORY_GET, { sessionId }));
-    assert.ok(Protocol.isRpcSuccessResponse(getResponse));
-    assert.equal(expectRecord(getResponse.result).session, null);
-
-    const revertResponse = await client.call(createRequest(Protocol.HISTORY_REVERT, { sessionId }));
-    assert.ok(Protocol.isRpcErrorResponse(revertResponse));
-    assert.equal(revertResponse.error.code, Protocol.INTERNAL_ERROR);
-    assert.ok(revertResponse.error.data !== undefined);
-    assert.equal(revertResponse.error.data.errorCode, 'SESSION_NOT_FOUND');
-  });
-
-  it('translates kernel path violations into JSON-RPC errors', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(
-      createRequest(Protocol.FS_READ_FILE, { path: '../escape.txt' }),
-    );
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.PATH_VIOLATION);
-    assert.ok(response.error.data !== undefined);
-    assert.equal(response.error.data.errorCode, 'PATH_TRAVERSAL_DETECTED');
-    assert.equal(response.error.data.rule, 'TRAVERSAL');
-  });
-
-  it('translates an absolute path outside the workspace into PATH_VIOLATION', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(
-      createRequest(Protocol.FS_READ_FILE, { path: '/etc/passwd' }),
-    );
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.PATH_VIOLATION);
-    assert.ok(response.error.data !== undefined);
-    assert.equal(response.error.data.errorCode, 'PATH_TRAVERSAL_DETECTED');
-    assert.equal(response.error.data.rule, 'OUTSIDE_ROOT');
-    assert.equal(response.error.data.path, '/etc/passwd');
-  });
-
-  it('translates a protected-path write into PATH_VIOLATION', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(
-      createRequest(Protocol.FS_WRITE_ATOMIC, { path: '.brud/settings.json', data: '{}' }),
-    );
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.PATH_VIOLATION);
-    assert.ok(response.error.data !== undefined);
-    assert.equal(response.error.data.errorCode, 'PATH_TRAVERSAL_DETECTED');
-    assert.equal(response.error.data.rule, 'PROTECTED_PATH_DENIED');
-    assert.equal(response.error.data.path, '.brud/settings.json');
-  });
-
-  it('reports file metadata through fs.stat', async (t) => {
-    const client = await openHandshakenClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(
-      createRequest(Protocol.FS_STAT, { path: 'notes.md' }),
-    );
-    assert.ok(Protocol.isRpcSuccessResponse(response));
-
-    const result = expectRecord(response.result);
-    assert.equal(expectString(result, 'path'), 'notes.md');
-    const stat = expectRecord(result.stat);
-    assert.equal(stat.isFile, true);
-    assert.equal(stat.isDirectory, false);
-    assert.ok(typeof stat.size === 'number');
-    assert.ok(typeof stat.mtimeMs === 'number');
+    for (const method of ['fs.readFile', 'fs.writeAtomic', 'history.beginSession']) {
+      const response = await client.call(createRequest(method, {}));
+      assert.ok(Protocol.isRpcErrorResponse(response));
+      assert.equal(response.error.code, Protocol.METHOD_NOT_FOUND);
+      assert.deepEqual(response.error.data, { method });
+    }
   });
 });

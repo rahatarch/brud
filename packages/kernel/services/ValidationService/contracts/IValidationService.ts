@@ -7,8 +7,9 @@ export type ValidationFlavor = 'posix' | 'win32';
 /**
  * Operation classification used by path validation.
  *
- * Only mutating kinds reach the A10 protected-path gate; read kinds may still
- * observe protected paths through the owning service.
+ * Every access class is checked against the A10 denylist and the user
+ * `.brudignore` policy. `mutate` and `delete` additionally reject the
+ * workspace root itself, because the root is not a mutable target.
  */
 export type OperationAccess = 'read' | 'mutate' | 'delete' | 'catalog';
 
@@ -91,11 +92,14 @@ export interface IValidationService {
    * Validates a path for an operation kind.
    *
    * Lexical integrity rules are always applied. Workspace containment is
-   * applied while `workspaceBoundaryEnabled` is frozen `true`. Read kinds
-   * skip the A10 protected-path gate; every mutating kind is denied.
+   * applied while `workspaceBoundaryEnabled` is frozen `true`. A10 protected
+   * paths are denied for reads as well as mutations, and `.brudignore`
+   * matches are denied for every access class. `operationKind` may also be an
+   * {@link OperationAccess} alias (`'read'`, `'mutate'`, `'delete'`,
+   * `'catalog'`) for execution layers that already know the access class.
    *
    * @param input - Absolute or workspace-relative path.
-   * @param operationKind - Operation kind (one of the 21 catalogued kinds).
+   * @param operationKind - Operation kind or access alias.
    */
   validatePath(input: string, operationKind?: string): Promise<ValidationDecision>;
 

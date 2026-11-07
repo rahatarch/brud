@@ -8,7 +8,7 @@ import type { IBrudFileSystem } from '../contracts/IBrudFileSystem/IBrudFileSyst
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import type { IFileMutationJournal } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
-import type { WorkspaceAuthority } from '../orchestrator/BrudFileSystem.js';
+import type { ValidationAuthority, WorkspaceAuthority } from '../orchestrator/BrudFileSystem.js';
 import { ReadOnlyFacade } from '../projection/ReadOnlyFacade/ReadOnlyFacade.js';
 import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
 import { FileSystemToken } from './tokens.js';
@@ -27,6 +27,17 @@ export interface FileSystemDescriptorOptions {
    * the filesystem remains usable in standalone compositions.
    */
   readonly workspace?: WorkspaceAuthority;
+
+  /**
+   * Policy authority injected by the kernel composition.
+   *
+   * The standard bootstrap supplies a probe that returns the already
+   * initialized `brud.core.validation` instance; validation is constructed
+   * after the filesystem in the boot order, so the probe is lazy. When
+   * omitted, the filesystem constructs a standalone validation service over
+   * its workspace authority.
+   */
+  readonly validation?: ValidationAuthority;
 
   /**
    * Canonical workspace root the service binds to when no workspace authority
@@ -90,6 +101,7 @@ export function createFileSystemDescriptor(
           ? {}
           : { mutationJournal: options.mutationJournal }),
         ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
+        ...(options?.validation === undefined ? {} : { validation: options.validation }),
       };
 
       if (options?.workspace !== undefined) {

@@ -13,6 +13,8 @@ export * from './engine/errorCatalog.js';
 export * from './engine/kindMatrix.js';
 export * from './engine/lineRange.js';
 export * from './engine/jsonSchema/index.js';
+export * from './model/policy.js';
+export * from './model/ignoreRules.js';
 export {
   NULL_BYTE_PATTERN,
   NT_OBJECT_PREFIX_PATTERN,

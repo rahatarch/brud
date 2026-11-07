@@ -222,7 +222,9 @@ describe('BrudFileSystem workspace containment', () => {
     }
 
     assert.deepEqual(
-      workspace.resolvedPaths.filter((path) => !path.startsWith(stagingPrefix)),
+      workspace.resolvedPaths.filter(
+        (path) => !path.startsWith(stagingPrefix) && !path.startsWith('resolve:'),
+      ),
       [
         'notes/draft.md',
         'notes/draft.md',
@@ -234,6 +236,10 @@ describe('BrudFileSystem workspace containment', () => {
         'notes/other.md',
       ],
     );
+
+    // ValidationService re-resolves the canonical target before applying
+    // policy, so every operation contributes one absolute resolve call.
+    assert.ok(workspace.resolvedPaths.some((path) => path.startsWith('resolve:')));
   });
 
   it('uses WorkspaceService.toAbsolutePath for implicit parent directories', async () => {

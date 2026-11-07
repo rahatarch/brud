@@ -105,12 +105,12 @@ function failure(decision: ValidationDecision): Extract<ValidationDecision, { re
 }
 
 describe('ValidationService — rule catalogue', () => {
-  it('catalogues exactly the 74 reconciled rules', () => {
-    assert.equal(VALIDATION_RULE_COUNT, 74);
+  it('catalogues exactly the 75 reconciled rules', () => {
+    assert.equal(VALIDATION_RULE_COUNT, 75);
     assert.equal(ALL_VALIDATION_RULES.length, new Set(ALL_VALIDATION_RULES).size);
   });
 
-  it('splits the catalogue 25 PATH / 11 CMD / 30 INPUT / 8 POLICY', () => {
+  it('splits the catalogue 26 PATH / 11 CMD / 30 INPUT / 8 POLICY', () => {
     const counts = ALL_VALIDATION_RULES.reduce<Record<string, number>>((accumulator, rule) => {
       const category = ruleCategory(rule);
       accumulator[category] = (accumulator[category] ?? 0) + 1;
@@ -118,7 +118,7 @@ describe('ValidationService — rule catalogue', () => {
       return accumulator;
     }, {});
 
-    assert.deepEqual(counts, { PATH: 25, CMD: 11, INPUT: 30, POLICY: 8 });
+    assert.deepEqual(counts, { PATH: 26, CMD: 11, INPUT: 30, POLICY: 8 });
   });
 
   it('describes every rule with actionability and retryability', () => {
@@ -236,25 +236,22 @@ describe('ValidationService — path decisions', () => {
 });
 
 describe('ValidationService — A10 across all kinds', () => {
-  const protectedPaths = ['.brud/settings.json', '.brud/history/x', '.git/HEAD', '.git/config', '.brud/history'];
+  const protectedPaths = [
+    '.brud/settings.json',
+    '.brud/history/x',
+    '.git/HEAD',
+    '.git/config',
+    '.brud/history',
+    '.brudignore',
+  ];
 
   for (const constraint of KIND_CONSTRAINTS) {
-    if (constraint.access !== 'mutate' && constraint.access !== 'delete') {
-      it(`${constraint.kind}: reads are allowed on protected paths`, async () => {
-        for (const target of protectedPaths) {
-          assert.deepEqual(await service().validatePath(target, constraint.kind), { ok: true }, target);
-        }
-      });
-
-      continue;
-    }
-
-    it(`${constraint.kind}: every protected path is denied`, async () => {
+    it(`${constraint.kind}: every protected path is denied (reads included)`, async () => {
       for (const target of protectedPaths) {
         const decision = failure(await service().validatePath(target, constraint.kind));
 
         assert.equal(decision.rule, 'PATH.PROTECTED_DENY', `${constraint.kind} ${target}`);
-        assert.equal(decision.code, 'WORKSPACE_PATH_VIOLATION');
+        assert.equal(decision.code, 'PROTECTED_PATH_DENIED');
         assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
       }
     });

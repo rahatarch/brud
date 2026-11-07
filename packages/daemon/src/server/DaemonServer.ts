@@ -4,9 +4,7 @@ import { createServer } from 'node:net';
 import type { Server, Socket } from 'node:net';
 import type {
   BrudKernel,
-  IBrudFileSystem,
   IBrudToolsService,
-  IUniversalHistoryService,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { Connection } from './Connection.js';
@@ -54,26 +52,17 @@ export class DaemonServer {
 
   static async create(config: DaemonServerConfig): Promise<DaemonServer> {
     const kernelModule = await loadKernelModule();
-    return new DaemonServer(
-      config,
-      kernelModule.FileSystemToken,
-      kernelModule.UniversalHistoryToken,
-      kernelModule.BrudToolsToken,
-    );
+    return new DaemonServer(config, kernelModule.BrudToolsToken);
   }
 
   private constructor(
     config: DaemonServerConfig,
-    fileSystemToken: ServiceToken<IBrudFileSystem>,
-    historyToken: ServiceToken<IUniversalHistoryService>,
     toolsToken: ServiceToken<IBrudToolsService>,
   ) {
     this.socketPath = config.socketPath;
     this.dispatcher = new RequestDispatcher({
       ...(config.registry === undefined ? {} : { registry: config.registry }),
       ...(config.kernel === undefined ? {} : { kernel: config.kernel }),
-      fileSystemToken,
-      historyToken,
       toolsToken,
       token: config.token,
       workspaceRoot: config.workspaceRoot,

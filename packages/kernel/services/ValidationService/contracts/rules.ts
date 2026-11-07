@@ -31,6 +31,7 @@ export type PathRule =
   | 'PATH.INVALID_ROOT'
   | 'PATH.NO_WORKSPACE'
   | 'PATH.PROTECTED_DENY'
+  | 'PATH.USER_IGNORED'
   | 'PATH.ROOT_NOT_MUTABLE'
   | 'PATH.CWD_ESCAPE'
   | 'PATH.CWD_DYNAMIC'
@@ -122,6 +123,7 @@ const PATH_RULES: readonly PathRule[] = Object.freeze([
   'PATH.INVALID_ROOT',
   'PATH.NO_WORKSPACE',
   'PATH.PROTECTED_DENY',
+  'PATH.USER_IGNORED',
   'PATH.ROOT_NOT_MUTABLE',
   'PATH.CWD_ESCAPE',
   'PATH.CWD_DYNAMIC',
@@ -208,7 +210,7 @@ export const ALL_VALIDATION_RULES: readonly ValidationRule[] = Object.freeze([
 /**
  * Total catalogued rule count.
  *
- * 74 = 25 `PATH.*` + 11 `CMD.*` + 30 `INPUT.*` + 8 `POLICY.*`.
+ * 75 = 26 `PATH.*` + 11 `CMD.*` + 30 `INPUT.*` + 8 `POLICY.*`.
  */
 export const VALIDATION_RULE_COUNT = ALL_VALIDATION_RULES.length;
 

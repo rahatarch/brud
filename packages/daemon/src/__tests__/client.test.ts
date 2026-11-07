@@ -144,7 +144,7 @@ class FakeDaemon {
       return;
     }
 
-    if (message.method === Protocol.FS_WRITE_ATOMIC) {
+    if (message.method === Protocol.TOOLS_EXECUTE) {
       this.acceptedWrites += 1;
       socket.destroy();
       return;
@@ -312,8 +312,8 @@ describe('daemon client', () => {
     assert.equal(handshake.workspaceRoot, await realpath(runningWorkspace));
     assert.equal(handshake.server.pid, process.pid);
     assert.equal(handshake.protocolVersion, Protocol.DAEMON_PROTOCOL_VERSION);
-    assert.deepEqual(handshake.capabilities.fs, [...Protocol.FS_METHODS]);
-    assert.deepEqual(handshake.capabilities.history, [...Protocol.HISTORY_CAPABILITIES]);
+    assert.equal('fs' in handshake.capabilities, false);
+    assert.equal('history' in handshake.capabilities, false);
 
     const ping = await client.request<DaemonPingResult>(Protocol.DAEMON_PING, {
       nonce: 'client-ping',
@@ -339,95 +339,6 @@ describe('daemon client', () => {
     assert.equal(client.handshake.server.pid, process.pid);
   });
 
-  it('reads, writes, probes, and lists through the typed filesystem helpers', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
-
-    t.after(async () => {
-      await client.close();
-    });
-
-    const text = 'héllo daemon client';
-
-    const writeResult = await client.fsWriteAtomic('notes/hello.md', text);
-    assert.equal(writeResult.path, 'notes/hello.md');
-    assert.equal(writeResult.bytesWritten, Buffer.byteLength(text, 'utf8'));
-
-    assert.equal(await client.fsReadFile('notes/hello.md'), text);
-    assert.equal(
-      Buffer.from(await client.fsReadFile('notes/hello.md', 'base64'), 'base64').toString('utf8'),
-      text,
-    );
-
-    assert.equal(await client.fsExists('notes/hello.md'), true);
-    assert.equal(await client.fsExists('notes/missing.md'), false);
-
-    const stat = await client.fsStat('notes/hello.md');
-    assert.ok(stat !== null);
-    assert.equal(stat.isFile, true);
-    assert.equal(stat.isDirectory, false);
-    assert.equal(stat.size, Buffer.byteLength(text, 'utf8'));
-    assert.equal(await client.fsStat('notes/missing.md'), null);
-
-    await client.fsWriteAtomic('notes/second.md', 'second');
-
-    const entries = await client.fsList('notes');
-    assert.deepEqual(
-      entries.map((entry) => entry.name).sort(),
-      ['hello.md', 'second.md'],
-    );
-    assert.equal(entries.find((entry) => entry.name === 'hello.md')?.isFile, true);
-
-    const limited = await client.fsList('notes', 1);
-    assert.equal(limited.length, 1);
-
-    const bytes = new Uint8Array([0, 1, 2, 255]);
-    await client.fsWriteAtomic('notes/blob.bin', bytes);
-    assert.equal(
-      await client.fsReadFile('notes/blob.bin', 'base64'),
-      Buffer.from(bytes).toString('base64'),
-    );
-  });
-
-  it('drives history sessions through the typed client helpers', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
-
-    t.after(async () => {
-      await client.close();
-    });
-
-    const path = 'history/client-session.txt';
-    await client.fsWriteAtomic(path, 'before\n');
-
-    const sessionId = await client.historyBeginSession('client history session', [path]);
-    assert.match(sessionId, /^BR-\d{8}-\d{3}$/u);
-
-    await client.fsWriteAtomic(path, 'after\n');
-
-    const commit = await client.historyCommitSession(sessionId, 'completed');
-    assert.equal(commit.sessionId, sessionId);
-    assert.equal(commit.committedFileCount, 1);
-
-    const manifest = await client.historyGet(sessionId);
-    assert.ok(manifest !== null);
-    assert.equal(manifest.status, 'committed');
-    assert.deepEqual(manifest.filesAffected, [path]);
-
-    const sessions = await client.historyList({ limit: 10 });
-    assert.ok(sessions.some((row) => row.session_id === sessionId));
-
-    const revert = await client.historyRevert(sessionId);
-    assert.equal(revert.isExecutable, true);
-    assert.deepEqual(revert.conflicts, []);
-    assert.ok(revert.receipt !== null);
-    assert.equal(revert.receipt.filesRestored, 1);
-
-    assert.equal(await client.fsReadFile(path), 'before\n');
-
-    const reverted = await client.historyGet(sessionId);
-    assert.ok(reverted !== null);
-    assert.equal(reverted.status, 'reverted');
-  });
-
   it('translates wire errors into typed DaemonRpcError instances', async (t) => {
     const client = await connectToDaemon({ workspaceRoot: runningWorkspace });
 
@@ -435,13 +346,15 @@ describe('daemon client', () => {
       await client.close();
     });
 
+    const removedMethod = 'fs.readFile';
+
     await assert.rejects(
-      () => client.request(Protocol.FS_READ_FILE, { path: '../escape.txt' }),
+      () => client.request(removedMethod, { path: '../escape.txt' }),
       (error: unknown) => {
         assert.ok(error instanceof DaemonRpcError);
-        assert.equal(error.code, Protocol.PATH_VIOLATION);
-        assert.equal(error.details?.rule, 'TRAVERSAL');
-        assert.equal(error.method, Protocol.FS_READ_FILE);
+        assert.equal(error.code, Protocol.METHOD_NOT_FOUND);
+        assert.deepEqual(error.details, { method: removedMethod });
+        assert.equal(error.method, removedMethod);
         return true;
       },
     );
@@ -501,7 +414,7 @@ describe('daemon client', () => {
     assert.deepEqual(fake.cancellations[0]?.params, { id: 1 });
   });
 
-  it('does not retry writes when the socket drops mid-request', async (t) => {
+  it('does not retry tool executions when the socket drops mid-request', async (t) => {
     const fake = await FakeDaemon.start(root);
     const client = await fake.connect();
 
@@ -510,8 +423,13 @@ describe('daemon client', () => {
       await fake.close();
     });
 
+    const execute = () => client.request(Protocol.TOOLS_EXECUTE, {
+      name: 'create_file',
+      input: { path: 'dropped.txt', content: 'payload' },
+    });
+
     await assert.rejects(
-      () => client.fsWriteAtomic('dropped.txt', 'payload'),
+      execute,
       (error: unknown) => {
         assert.ok(error instanceof DaemonDisconnectedError);
         return true;
@@ -521,10 +439,7 @@ describe('daemon client', () => {
     assert.equal(fake.writeCount, 1);
     assert.equal(client.isConnected, false);
 
-    await assert.rejects(
-      () => client.fsWriteAtomic('dropped.txt', 'payload'),
-      DaemonDisconnectedError,
-    );
+    await assert.rejects(execute, DaemonDisconnectedError);
     assert.equal(fake.writeCount, 1);
   });
 
@@ -557,8 +472,14 @@ describe('daemon client', () => {
     assert.notEqual(client.handshake.server.pid, process.pid);
     assert.equal(client.handshake.workspaceRoot, await realpath(coldWorkspace));
 
-    await client.fsWriteAtomic('cold/created.txt', 'spawned daemon');
-    assert.equal(await client.fsReadFile('cold/created.txt'), 'spawned daemon');
+    const write = await client.request<Protocol.ToolsExecuteResult>(
+      Protocol.TOOLS_EXECUTE,
+      {
+        name: 'create_file',
+        input: { path: 'cold/created.txt', content: 'spawned daemon' },
+      },
+    );
+    assert.equal(write.result.status, 'success', String(write.result.error));
     assert.equal(
       await readFile(join(coldWorkspace, 'cold', 'created.txt'), 'utf8'),
       'spawned daemon',

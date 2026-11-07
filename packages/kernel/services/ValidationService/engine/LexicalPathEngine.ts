@@ -3,7 +3,7 @@ import type { IStorageDriver } from '../../../drivers/contracts/index.js';
 import type { PathRule } from '../contracts/rules.js';
 import type { ValidationFlavor } from '../contracts/IValidationService.js';
 import { PathViolationError } from '../contracts/errors.js';
-import { isProtectedWritePath } from '../../BrudFileSystem/security/protectedPaths.js';
+import { isA10ProtectedPath } from '../model/policy.js';
 import {
   DRIVE_QUALIFIER_PATTERN,
   NULL_BYTE_PATTERN,
@@ -244,7 +244,7 @@ export class LexicalPathEngine {
       return false;
     }
 
-    return !isProtectedWritePath(relativePath);
+    return !isA10ProtectedPath(relativePath);
   }
 
   /**

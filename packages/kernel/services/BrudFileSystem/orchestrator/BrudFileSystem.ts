@@ -2,11 +2,19 @@ import { dirname } from 'node:path';
 import type { DirectoryEntry, FileStats, IStorageDriver } from '../../../drivers/contracts/index.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import type {
+  IValidationService,
+  OperationAccess,
+} from '../../ValidationService/contracts/IValidationService.js';
+import type { PathRule } from '../../ValidationService/contracts/rules.js';
+import { ValidationService } from '../../ValidationService/orchestrator/ValidationService.js';
+import { DEFAULT_VALIDATION_POLICY } from '../../ValidationService/model/policy.js';
+import type {
   IWorkspaceService,
   WorkspaceLocation,
   WorkspacePathFlavor,
 } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
+import { toWorkspaceRule } from '../../WorkspaceService/model/pathRules.js';
 import { WorkspaceService } from '../../WorkspaceService/orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../../WorkspaceService/ports/StorageDriverPathPort.js';
 import { KeyedWriteMutex } from '../concurrency/KeyedWriteMutex/KeyedWriteMutex.js';
@@ -42,13 +50,21 @@ import {
 import { createStagingPath, sweepStaleStagingFiles } from '../operations/shared/staging.js';
 import { statPath as statPathOperation } from '../operations/stat_path/statPath.js';
 import { writeAtomic as writeAtomicOperation } from '../operations/write_atomic/writeAtomic.js';
-import { assertNotProtectedPath } from '../security/protectedPaths.js';
 import { TrustedFileSystemProjection } from './TrustedFileSystemProjection.js';
 
 /** Minimal logger surface accepted by {@link BrudFileSystem}. */
 export interface IFileSystemLogger {
   warn(message: string, meta?: Record<string, unknown>): void;
 }
+
+/**
+ * Policy authority for path validation.
+ *
+ * The standard kernel injects the live `ValidationService`; standalone
+ * constructions may inject an instance. A probe lets the kernel build the
+ * filesystem before validation exists in the boot order.
+ */
+export type ValidationAuthority = IValidationService | (() => IValidationService);
 
 /** Configuration for {@link BrudFileSystem}. */
 export interface BrudFileSystemOptions {
@@ -59,6 +75,15 @@ export interface BrudFileSystemOptions {
   readonly root?: string;
 
   /**
+   * Policy authority used for every path decision.
+   *
+   * When omitted, a standalone `ValidationService` is constructed over this
+   * instance's workspace authority. The standard kernel always injects the
+   * live service so all callers share one frozen policy.
+   */
+  readonly validation?: ValidationAuthority;
+
+  /**
    * Pluggable history hook sink. Defaults to a private journal that stays
    * disabled until a listener subscribes through {@link BrudFileSystem.onMutation}.
    */
@@ -67,10 +92,8 @@ export interface BrudFileSystemOptions {
   /**
    * Protected prefixes this instance is the owning writer for.
    *
-   * Empty by default. The history subsystem is the only core service that may
-   * stage under `.brud/history`, and it receives the capability through the
-   * descriptor projection rather than a blanket constructor flag in the
-   * standard kernel.
+   * Retained for compatibility. A10 is no longer bypassable: every mutation
+   * is validated by `ValidationService`, so a scope cannot widen authority.
    */
   readonly trustedWriteScopes?: readonly string[];
 
@@ -119,11 +142,16 @@ const DEFAULT_LOGGER: IFileSystemLogger = {
 /**
  * Atomic filesystem service over a scoped storage driver.
  *
- * Path authority is not implemented here. Every public operation asks
- * `WorkspaceService` to canonicalize the caller's path and prove containment
- * before any driver call. Storage drivers only ever receive canonical absolute
- * paths produced by the workspace authority. Absolute paths are accepted only
- * when they resolve strictly inside the canonical workspace root.
+ * Path authority is split deliberately:
+ *
+ * - `WorkspaceService` canonicalizes the caller's path and proves geometric
+ *   containment (`realpath`, root routing, symlink escapes).
+ * - `ValidationService` owns path policy (the A10 denylist and `.brudignore`)
+ *   and is called for every read and mutation before a driver is touched.
+ *
+ * Storage drivers only ever receive canonical absolute paths produced by the
+ * workspace authority. Absolute paths are accepted only when they resolve
+ * strictly inside the canonical workspace root.
  *
  * Mutations are serialized per canonical target and staged through an
  * unpredictable sibling file created with `O_EXCL`. The staged file is flushed
@@ -139,6 +167,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
 
   private readonly journal: IFileMutationJournal;
 
+  private readonly validationProvider: ValidationAuthority | undefined;
+
   private readonly trustedWriteScopes: readonly string[];
 
   private readonly onCleanupError: ((error: unknown, absolutePath: string) => void) | undefined;
@@ -146,6 +176,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   private readonly logger: IFileSystemLogger;
 
   private workspaceInstance: IWorkspaceService | undefined;
+
+  private validationInstance: IValidationService | undefined;
 
   private rootHint: string;
 
@@ -162,6 +194,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   ) {
     this.driver = driver;
     this.journal = options?.mutationJournal ?? createFileMutationJournal();
+    this.validationProvider = options?.validation;
     this.trustedWriteScopes = options?.trustedWriteScopes ?? [];
     this.onCleanupError = options?.onCleanupError;
     this.logger = options?.logger ?? DEFAULT_LOGGER;
@@ -274,9 +307,27 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   }
 
   async readDirectory(relativeDirectoryPath: string): Promise<readonly DirectoryEntry[]> {
-    const { location } = await this.resolveTarget(relativeDirectoryPath);
+    const { location } = await this.resolveTarget(relativeDirectoryPath, 'read');
+    const entries = await readDirectoryOperation(this.driver, location.absolutePath);
+    const validation = await this.resolveValidation();
+    const visible: DirectoryEntry[] = [];
 
-    return readDirectoryOperation(this.driver, location.absolutePath);
+    for (const entry of entries) {
+      const childAbsolutePath = `${location.absolutePath}/${entry.name}`;
+
+      try {
+        const decision = await validation.validatePath(childAbsolutePath, 'read');
+
+        if (decision.ok) {
+          visible.push(entry);
+        }
+      } catch {
+        // A listing is a scan: an entry that cannot be validated is omitted
+        // rather than failing the whole directory read.
+      }
+    }
+
+    return visible;
   }
 
   async stat(relativePath: string): Promise<FileStats | null> {
@@ -357,7 +408,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     data: Uint8Array | string,
     scopes: readonly string[],
   ): Promise<void> {
-    const target = await this.resolveTarget(relativePath);
+    const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
       const trustedScopes = this.scopesWith(scopes);
@@ -409,7 +460,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     options: { overwrite?: boolean } | undefined,
     scopes: readonly string[],
   ): Promise<void> {
-    const target = await this.resolveTarget(relativePath);
+    const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
       const trustedScopes = this.scopesWith(scopes);
@@ -465,7 +516,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     relativePath: string,
     scopes: readonly string[],
   ): Promise<void> {
-    const target = await this.resolveTarget(relativePath);
+    const target = await this.resolveTarget(relativePath, 'delete');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
       const trustedScopes = this.scopesWith(scopes);
@@ -514,8 +565,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     destinationRelativePath: string,
     scopes: readonly string[],
   ): Promise<void> {
-    const source = await this.resolveTarget(sourceRelativePath);
-    const destination = await this.resolveTarget(destinationRelativePath);
+    const source = await this.resolveTarget(sourceRelativePath, 'mutate');
+    const destination = await this.resolveTarget(destinationRelativePath, 'mutate');
 
     await this.runExclusiveAll(
       [source.location.absolutePath, destination.location.absolutePath],
@@ -570,8 +621,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     destinationRelativePath: string,
     scopes: readonly string[],
   ): Promise<void> {
-    const source = await this.resolveTarget(sourceRelativePath);
-    const destination = await this.resolveTarget(destinationRelativePath);
+    const source = await this.resolveTarget(sourceRelativePath, 'read');
+    const destination = await this.resolveTarget(destinationRelativePath, 'mutate');
 
     await this.runExclusiveAll(
       [source.location.absolutePath, destination.location.absolutePath],
@@ -625,7 +676,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     relativePath: string,
     scopes: readonly string[],
   ): Promise<void> {
-    const target = await this.resolveTarget(relativePath);
+    const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.runExclusiveAll([target.location.absolutePath], async () => {
       const trustedScopes = this.scopesWith(scopes);
@@ -680,7 +731,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     relativePath: string,
     scopes: readonly string[],
   ): Promise<void> {
-    const target = await this.resolveTarget(relativePath);
+    const target = await this.resolveTarget(relativePath, 'delete');
 
     await this.runExclusiveAll([target.location.absolutePath], async () => {
       const trustedScopes = this.scopesWith(scopes);
@@ -879,21 +930,103 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     return instance;
   }
 
-  private async resolveTarget(relativePath: string): Promise<ResolvedTarget> {
+  private async resolveTarget(
+    relativePath: string,
+    access: OperationAccess = 'read',
+  ): Promise<ResolvedTarget> {
     const workspace = await this.resolveWorkspace();
     const location = supportsResolveContained(workspace)
       ? await workspace.resolveContained(relativePath)
       : await workspace.resolve(relativePath);
+    const target: ResolvedTarget = { workspace, location };
 
-    return { workspace, location };
+    await this.assertPolicy(target, access, relativePath);
+
+    return target;
+  }
+
+  /**
+   * Resolves the live policy authority.
+   *
+   * The standard kernel injects a probe that returns the already-constructed
+   * `ValidationService`. Standalone constructions without a probe build a
+   * local service over the same workspace authority so a filesystem can never
+   * operate without a policy gate.
+   */
+  private async resolveValidation(): Promise<IValidationService> {
+    if (this.validationInstance !== undefined) {
+      return this.validationInstance;
+    }
+
+    const provider = this.validationProvider;
+
+    if (provider !== undefined) {
+      const instance = typeof provider === 'function' ? provider() : provider;
+
+      this.validationInstance = instance;
+
+      return instance;
+    }
+
+    const workspace = await this.resolveWorkspace();
+    const flavor = (workspace as { readonly flavor?: WorkspacePathFlavor }).flavor
+      ?? (process.platform === 'win32' ? 'win32' : 'posix');
+    const instance = new ValidationService({
+      policy: DEFAULT_VALIDATION_POLICY,
+      workspace,
+      environment: {
+        homeDirectory: process.env.HOME ?? process.env.USERPROFILE ?? '/',
+        flavor,
+      },
+      ignoreFileReader: (absolutePath: string) => this.driver.readFile(absolutePath),
+    });
+
+    this.validationInstance = instance;
+
+    return instance;
+  }
+
+  /**
+   * Applies the frozen policy decision for one resolved target.
+   *
+   * Policy failures are re-thrown as `WorkspaceViolationError` so existing
+   * filesystem, plugin, and history callers keep narrowing on `code`/`rule`.
+   *
+   * @param target - Workspace-resolved target.
+   * @param access - Read, mutate, delete, or catalog access.
+   * @param callerPath - Original caller path, echoed in the error.
+   */
+  private async assertPolicy(
+    target: ResolvedTarget,
+    access: OperationAccess,
+    callerPath: string,
+  ): Promise<void> {
+    const validation = await this.resolveValidation();
+    const decision = await validation.validatePath(target.location.absolutePath, access);
+
+    if (decision.ok) {
+      return;
+    }
+
+    const rule = decision.rule.startsWith('PATH.')
+      ? toWorkspaceRule(decision.rule as PathRule)
+      : 'TRAVERSAL';
+
+    throw new WorkspaceViolationError(
+      rule,
+      callerPath,
+      decision.friendly,
+      target.location.root,
+    );
   }
 
   /**
    * Validates a write target before any staging or journal publication.
    *
-   * Rejects the workspace root, directories, and the immutable protected-path
-   * denylist. Absolute paths are accepted only when `WorkspaceService` already
-   * proved they are inside the canonical root.
+   * Policy (A10 and `.brudignore`) was already decided by
+   * `ValidationService`; this pass rejects the workspace root and directories.
+   * Absolute paths are accepted only when `WorkspaceService` already proved
+   * they are inside the canonical root.
    */
   private async validateWriteTarget(
     callerPath: string,
@@ -918,7 +1051,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   private assertMutableTarget(
     callerPath: string,
     target: ResolvedTarget,
-    trustedScopes: readonly string[],
+    _trustedScopes: readonly string[],
   ): void {
     const relative = target.location.relativePath;
 
@@ -930,8 +1063,6 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
         target.location.root,
       );
     }
-
-    assertNotProtectedPath(relative, trustedScopes);
   }
 
   private scopesWith(extraScopes: readonly string[]): readonly string[] {

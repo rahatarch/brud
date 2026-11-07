@@ -1,6 +1,6 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, realpath } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
@@ -54,17 +54,29 @@ describe('A10 protected-path denylist (V-9)', () => {
     await assert.rejects(service.createFile('.brud/settings.json', '{}'), isProtected);
   });
 
-  it('rejects direct history writes unless the history capability is held', async () => {
-    const { service } = await createService();
+  it('rejects history reads and writes through the workspace boundary', async () => {
+    const { service, driver } = await createService();
 
     await assert.rejects(service.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+    await mkdir(join(root, '.brud', 'history'), { recursive: true });
+    await driver.writeFile(join(root, '.brud/history/seq.json'), '{"date":"20260101","sequence":1}');
 
+    // Reads of the ledger are denied through the workspace boundary even when
+    // the file exists; only the storage driver used by the history subsystem
+    // may read it.
+    await assert.rejects(service.readText('.brud/history/seq.json'), isProtected);
+    assert.equal(
+      await driver.readText(join(root, '.brud/history/seq.json')),
+      '{"date":"20260101","sequence":1}',
+    );
+
+    // A trusted write scope no longer bypasses the workspace authority for the
+    // static A10 list; the history subsystem writes through the driver.
     const history = service.createTrustedProjection(['.brud/history']);
 
-    await history.writeAtomic('.brud/history/seq.json', '{"date":"20260101","sequence":1}');
-    assert.equal(
-      await service.readText('.brud/history/seq.json'),
-      '{"date":"20260101","sequence":1}',
+    await assert.rejects(
+      history.writeAtomic('.brud/history/seq.json', '{"date":"20260102","sequence":2}'),
+      isProtected,
     );
   });
 
@@ -75,9 +87,10 @@ describe('A10 protected-path denylist (V-9)', () => {
     await assert.rejects(facade.writeAtomic('hooks/pre-commit', '#!/bin/sh\n'), isProtected);
   });
 
-  it('grants no default write scope, and an explicit scope only to its caller', async () => {
+  it('grants no write scope that can bypass the static A10 denylist', async () => {
     // Since D-15 U-7 history writes through the storage driver, so no caller,
-    // the history service included, may write .brud/history by default.
+    // the history service included, may write .brud/history by default. The
+    // workspace authority enforces A10 before any trusted-scope check runs.
     const descriptor = createFileSystemDescriptor({ driver: new DurableNodeStorageDriver() });
     const scoped = createFileSystemDescriptor({
       driver: new DurableNodeStorageDriver(),
@@ -108,7 +121,31 @@ describe('A10 protected-path denylist (V-9)', () => {
     assert.ok(scoped.project);
     const owner = scoped.project(instance, { ...coreCaller, callerId: 'acme.owner' });
     await assert.rejects(scoped.project(instance, historyCaller).writeAtomic('.brud/history/seq.json', '{}'), isProtected);
-    await owner.writeAtomic('.brud/history/seq.json', '{}');
+    await assert.rejects(owner.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+  });
+
+  it('silently omits protected and user-ignored entries from directory listings', async () => {
+    await mkdir(join(root, '.git'), { recursive: true });
+    await mkdir(join(root, '.brud', 'history'), { recursive: true });
+    await mkdir(join(root, 'node_modules'), { recursive: true });
+    await mkdir(join(root, 'dist'), { recursive: true });
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, '.brudignore'), 'node_modules/\ndist/\n', 'utf8');
+    await writeFile(join(root, '.brud', 'settings.json'), '{}', 'utf8');
+    await writeFile(join(root, 'seed.txt'), 'seed', 'utf8');
+    await writeFile(join(root, 'src', 'main.ts'), 'export {};\n', 'utf8');
+
+    const { service } = await createService();
+    const names = (await service.readDirectory('')).map((entry) => entry.name).sort();
+
+    assert.equal(names.includes('.git'), false, '.git must be omitted');
+    assert.equal(names.includes('.brudignore'), false, '.brudignore must be omitted');
+    assert.equal(names.includes('node_modules'), false, 'user-ignored directory must be omitted');
+    assert.equal(names.includes('dist'), false, 'user-ignored directory must be omitted');
+    assert.equal(names.includes('seed.txt'), true);
+    assert.equal(names.includes('src'), true);
+
+    assert.deepEqual(await service.readDirectory('.brud'), []);
   });
 
   it('projects kernel and userland callers away from the raw writable handle', async () => {
