@@ -1,10 +1,14 @@
 # Brud
 
-**A local execution engine for AI agents.**
+**An AI-Native Runtime for local agents.**
 
-Build the agent, not the execution layer.
+Build the agent. Brud handles the runtime.
 
 Brud provides the primitives an agent needs to modify a workspace with control and traceability: file operations, terminal execution, a reversible history ledger, and capability-scoped plugins, exposed through a local JSON-RPC interface.
+
+Brud is a runtime layer built on top of Node.js, providing the missing primitives for safe, deterministic AI agent execution.
+
+If Node.js has NPM packages, Brud has capability-scoped Plugins.
 
 It is intended for teams building coding agents, editor integrations, and automation tools that need a dependable execution layer rather than a collection of scripts.
 
