@@ -8,8 +8,6 @@ Brud provides the primitives an agent needs to modify a workspace with control a
 
 Brud is an open foundation for building AI-native software. It provides the daemon, the plugins, the capability gates, and the UI framework that local AI agents need to interact with a workspace safely.
 
-If Node.js has NPM packages, Brud has capability-scoped Plugins.
-
 It is intended for teams building coding agents, editor integrations, and automation tools that need a dependable execution layer rather than a collection of scripts.
 
 This repository contains the engine, the local daemon, the official plugins, and the Brud Code reference client.
@@ -92,7 +90,6 @@ await client.close();
 |:---|:---|
 | **Kernel** | The in-process core that owns the service graph, policy enforcement, and execution pipeline. |
 | **Service** | A privileged built-in component that provides a core capability, such as workspace resolution, file I/O, validation, history, settings, or terminal execution. Brud refers to these as Level-1 services. |
-| **ActionManager** | The internal engine that secures Actions and guarantees they are never exposed to the AI. |
 | **Plugin** | A module that registers tools and actions and declares the permissions it requires. |
 | **Tool** | A capability exposed to the AI. The agent invokes Tools to perform actions in the workspace. Tools are visible to the AI model. |
 | **Action** | A capability exposed only to the User Interface. The client uses Actions to fetch data or trigger UI updates. Actions are completely invisible to the AI model. |
