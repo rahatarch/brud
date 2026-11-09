@@ -9,6 +9,7 @@ interface PluginModule {
   readonly catalogPlugin?: IBrudPlugin;
   readonly readerPlugin?: IBrudPlugin;
   readonly filesystemPlugin?: IBrudPlugin;
+  readonly historyPlugin?: IBrudPlugin;
   readonly terminalPlugin?: IBrudPlugin;
   readonly mcpBridgePlugin?: IBrudPlugin;
 }
@@ -26,6 +27,7 @@ function requireModule<TModule>(specifier: string): TModule {
 
 function loadPluginModules(): PluginModule {
   const terminal = requireModule<DefaultPluginModule>('../../plugins/Terminal/dist/index.js');
+  const history = requireModule<DefaultPluginModule>('../../plugins/History/dist/index.js');
   const mcpBridge = requireModule<DefaultPluginModule>('../../plugins/MCPBridge/dist/index.js');
 
   return {
@@ -35,9 +37,10 @@ function loadPluginModules(): PluginModule {
     ...requireModule<PluginModule>('../../plugins/Catalog/dist/index.js'),
     ...requireModule<PluginModule>('../../plugins/Reader/dist/index.js'),
     ...requireModule<PluginModule>('../../plugins/Filesystem/dist/index.js'),
-    // Terminal and MCPBridge both export their singleton under the name
+    // Terminal, History, and MCPBridge export their singleton under the name
     // `plugin`, so they cannot be spread into one namespace without a
     // collision. They are loaded separately and re-keyed here.
+    ...(history.plugin === undefined ? {} : { historyPlugin: history.plugin }),
     ...(terminal.plugin === undefined ? {} : { terminalPlugin: terminal.plugin }),
     ...(mcpBridge.plugin === undefined ? {} : { mcpBridgePlugin: mcpBridge.plugin }),
   };
@@ -59,10 +62,11 @@ function requirePlugin(
 /**
  * Official plugin set registered into every daemon-spawned kernel.
  *
- * The six shipped leaf plugins plus the Phase 10 Terminal and MCPBridge
- * plugins. The daemon composition passes `certifyInitialPlugins: true` to the
- * standard kernel so the Filesystem plugin receives the internal official
- * brand it needs to reach the core history service.
+ * The six shipped leaf plugins plus the Phase 10 Terminal, the Phase 3B
+ * History, and the MCPBridge plugins. The daemon composition passes
+ * `certifyInitialPlugins: true` to the standard kernel so the Filesystem and
+ * History plugins receive the internal official brand they need to reach the
+ * core history service.
  */
 export const OFFICIAL_PLUGINS: readonly IBrudPlugin[] = (() => {
   const modules = loadPluginModules();
@@ -74,6 +78,7 @@ export const OFFICIAL_PLUGINS: readonly IBrudPlugin[] = (() => {
     requirePlugin(modules, 'catalogPlugin'),
     requirePlugin(modules, 'readerPlugin'),
     requirePlugin(modules, 'filesystemPlugin'),
+    requirePlugin(modules, 'historyPlugin'),
     requirePlugin(modules, 'terminalPlugin'),
     requirePlugin(modules, 'mcpBridgePlugin'),
   ]);
