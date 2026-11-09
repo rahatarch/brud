@@ -115,7 +115,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
 
     const db = new DatabaseSync(join(root, '.brud', 'history', 'universal.db'));
     const names = (db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table','index') AND name NOT LIKE 'sqlite_%' ORDER BY name").all() as { name: string }[]).map((r) => r.name);
-    for (const expected of ['entry_types', 'sessions', 'session_sequence', 'contents', 'entries', 'checkpoints', 'reversals', 'history_state', 'imports', 'schema_migrations', 'idx_entries_path', 'idx_entries_payload_sha256', 'idx_entries_session', 'idx_entries_type', 'idx_sessions_created']) {
+    for (const expected of ['entry_types', 'sessions', 'session_sequence', 'contents', 'entries', 'checkpoints', 'reversals', 'history_state', 'imports', 'delete_history', 'schema_migrations', 'idx_entries_path', 'idx_entries_payload_sha256', 'idx_entries_session', 'idx_entries_type', 'idx_sessions_created', 'idx_sessions_trash', 'idx_delete_history_occurred', 'idx_delete_history_session']) {
       assert.ok(names.includes(expected), `missing ${expected}`);
     }
     assert.throws(() => db.exec("INSERT INTO history_state (state_key, value) VALUES ('x', 'not-an-integer')"), /cannot store TEXT value in INTEGER column/u);
@@ -138,7 +138,9 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     const path = join(root, '.brud', 'history', 'universal.db');
     const v1 = new DatabaseSync(path);
     v1.exec('DROP INDEX idx_entries_payload_sha256');
-    v1.exec('DELETE FROM schema_migrations WHERE version = 2');
+    v1.exec('DROP INDEX idx_sessions_trash');
+    v1.exec('DROP TABLE delete_history');
+    v1.exec('DELETE FROM schema_migrations WHERE version >= 2');
     v1.close();
 
     const upgraded = fileStore(root);
@@ -150,7 +152,7 @@ describe('UnifiedHistoryStore — migrations and constraints', () => {
     const versions = (db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as { version: number }[]).map((r) => r.version);
     const plan = (db.prepare('EXPLAIN QUERY PLAN SELECT 1 FROM entries WHERE payload_sha256 = ?').all('x') as { detail: string }[]).map((r) => r.detail);
     db.close();
-    assert.deepEqual(versions, [1, 2]);
+    assert.deepEqual(versions, [1, 2, 3]);
     assert.ok(plan.some((detail) => /USING (COVERING )?INDEX idx_entries_payload_sha256/u.test(detail)), JSON.stringify(plan));
     context.after(() => safeRm(root));
   });
@@ -225,7 +227,7 @@ describe('UnifiedHistoryStore — sessions', () => {
     store.seedSessionSequence('20261030', 50);
     store.seedSessionSequence('20261030', 10);
     assert.equal(store.createSession({ prompt: 'x', now: DAY_MS }).sessionId, 'BR-20261030-050');
-    store.insertSessionWithId({ sessionId: 'BR-20261030-120', createdAt: DAY_MS, prompt: 'imported', status: 'committed', origin: 'human', implicit: false, closedAt: DAY_MS, metadata: null });
+    store.insertSessionWithId({ sessionId: 'BR-20261030-120', createdAt: DAY_MS, prompt: 'imported', status: 'committed', origin: 'human', implicit: false, closedAt: DAY_MS, metadata: null, isDeleted: false, deletedAt: null, expiresAt: null });
     assert.equal(store.createSession({ prompt: 'y', now: DAY_MS }).sessionId, 'BR-20261030-121');
   });
 

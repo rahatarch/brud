@@ -26,8 +26,19 @@ export type {
   HistoryRetentionReport,
   HistoryRetentionSettings,
   NamespaceHandleOptions,
+  SessionDeleteReceipt,
+  SessionLifecycleOptions,
   SessionTargetPayload,
+  SessionTrashReceipt,
+  TrashPurgeReceipt,
+  TrashSessionOptions,
   UnifiedHistoryServiceOptions,
+  WipeSessionsOptions,
+  WipeSessionsReceipt,
+} from './service/index.js';
+export {
+  DEFAULT_TRASH_RETENTION_MS,
+  WIPE_CONFIRMATION_PHRASE,
 } from './service/index.js';
 export type {
   Disposable,
@@ -42,7 +53,25 @@ export type {
 export * from './service/errors.js';
 export { UnifiedHistoryStore } from './store/UnifiedHistoryStore.js';
 export * from './store/errors.js';
-export type { EntryPage, EntryQuery, EntryRow, HistoryDegradedReason, RetentionPolicy, RetentionReport, ReversalMode } from './store/types.js';
+export type {
+  DeleteHistoryAction,
+  DeleteHistoryPage,
+  DeleteHistoryQuery,
+  DeleteHistoryRow,
+  DeleteHistoryStatus,
+  EntryPage,
+  EntryQuery,
+  EntryRow,
+  HistoryDegradedReason,
+  RetentionPolicy,
+  RetentionReport,
+  ReversalMode,
+} from './store/types.js';
 export { ReversalEngine } from './engine/ReversalEngine.js';
+export type {
+  UnifiedOperationReversalPlan,
+  UnifiedOperationReversalReceipt,
+  UnifiedOperationSkip,
+} from './engine/ReversalEngine.js';
 export * from './engine/errors.js';
 export { ForeignReversalPlanError, namespaceHistoryFor } from './compat/LegacySessionAdapter.js';

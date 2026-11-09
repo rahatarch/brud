@@ -264,6 +264,9 @@ export class LegacyImporter {
           implicit: true,
           closedAt: createdAt,
           metadata: { importedFrom: source },
+          isDeleted: false,
+          deletedAt: null,
+          expiresAt: null,
         });
       };
       for (const id of sessionTimes.keys()) {
@@ -426,6 +429,9 @@ export class LegacyImporter {
           implicit: false,
           closedAt: status === 'active' ? null : createdAt,
           metadata,
+          isDeleted: false,
+          deletedAt: null,
+          expiresAt: null,
         });
         const prepared = preparedBySession.get(sessionId);
         if (prepared !== undefined && prepared.length > 0) {

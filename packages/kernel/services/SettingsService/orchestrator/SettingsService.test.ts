@@ -42,6 +42,29 @@ describe('SettingsService', () => {
     assert.deepEqual(service.getWarnings(), []);
   });
 
+  it('deserializes mcpAutoOn and defaults it to the legacy true when missing', async () => {
+    const missing = await createService(new InMemoryConfigStore({ workspaceContent: '{}' }));
+
+    assert.equal(missing.getSnapshot().mcpAutoOn, true);
+
+    const updated = await missing.update('workspace', { mcpAutoOn: false });
+
+    assert.equal(updated.mcpAutoOn, false);
+
+    const explicitFalse = await createService(new InMemoryConfigStore({
+      userContent: '{"mcpAutoOn":false}',
+    }));
+
+    assert.equal(explicitFalse.getSnapshot().mcpAutoOn, false);
+
+    const workspaceWins = await createService(new InMemoryConfigStore({
+      userContent: '{"mcpAutoOn":false}',
+      workspaceContent: '{"mcpAutoOn":true}',
+    }));
+
+    assert.equal(workspaceWins.getSnapshot().mcpAutoOn, true);
+  });
+
   it('never throws on malformed documents and leaves them untouched', async () => {
     const userDocument = '{ this is not json';
     const store = new InMemoryConfigStore({

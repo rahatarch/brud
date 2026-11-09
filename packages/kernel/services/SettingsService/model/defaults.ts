@@ -36,6 +36,9 @@ export const DEFAULT_READ_MAX_BATCH_FILES = 100;
 /** Default aggregate byte budget for a read operation. */
 export const DEFAULT_READ_MAX_AGGREGATE_BYTES = 8 * 1024 * 1024;
 
+/** Legacy default for automatic MCP startup (`mcpAutoOn`). */
+export const DEFAULT_MCP_AUTO_ON = true;
+
 /** Default history retention window in days (D-15 U-8, S-D4). */
 export const DEFAULT_HISTORY_RETENTION_DAYS = 90;
 
@@ -87,6 +90,7 @@ export function createSettingsSnapshot(values: SettingsValues): SettingsSnapshot
     readMaxBatchFiles: values.readMaxBatchFiles,
     readMaxAggregateBytes: values.readMaxAggregateBytes,
     plugins: { ...values.plugins },
+    mcpAutoOn: values.mcpAutoOn ?? DEFAULT_MCP_AUTO_ON,
     historyRetentionDays: values.historyRetentionDays,
     historyMinUndoEntries: values.historyMinUndoEntries,
   });
@@ -106,6 +110,7 @@ export const DEFAULT_SETTINGS: SettingsSnapshot = createSettingsSnapshot({
   readMaxBatchFiles: DEFAULT_READ_MAX_BATCH_FILES,
   readMaxAggregateBytes: DEFAULT_READ_MAX_AGGREGATE_BYTES,
   plugins: {},
+  mcpAutoOn: DEFAULT_MCP_AUTO_ON,
   historyRetentionDays: DEFAULT_HISTORY_RETENTION_DAYS,
   historyMinUndoEntries: DEFAULT_HISTORY_MIN_UNDO_ENTRIES,
 });
@@ -277,6 +282,7 @@ export function sanitizeSettingsDocument(
     readMaxBatchFiles?: number;
     readMaxAggregateBytes?: number;
     plugins?: Readonly<Record<string, PluginRolloutMode>>;
+    mcpAutoOn?: boolean;
     historyRetentionDays?: number;
     historyMinUndoEntries?: number;
   } = {};
@@ -350,6 +356,12 @@ export function sanitizeSettingsDocument(
 
   if (plugins !== undefined) {
     values.plugins = plugins;
+  }
+
+  const mcpAutoOn = readBoolean(document, 'mcpAutoOn', scope, warnings);
+
+  if (mcpAutoOn !== undefined) {
+    values.mcpAutoOn = mcpAutoOn;
   }
 
   // Values below the default parse here; the lattice then ignores them as a

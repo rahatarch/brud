@@ -43,6 +43,9 @@ export interface UnifiedRollbackReport {
 }
 
 export interface FileReversalStep {
+  /** Session entry that produced this file action (`brud.core.session-target`). */
+  readonly entryId: string;
+  readonly seq: number;
   readonly path: string;
   readonly action: 'restore' | 'delete' | 'mkdir' | 'rmdir';
   readonly targetBytes: Uint8Array | null;
@@ -53,6 +56,7 @@ export interface FileReversalStep {
 }
 
 export interface EntryReversalStep {
+  readonly entryId: string;
   readonly seq: number;
   readonly namespace: string;
   readonly type: string;
@@ -79,6 +83,42 @@ export interface UnifiedReversalReceipt {
   readonly filesDeleted: number;
   readonly entriesReverted: number;
   readonly failure?: { readonly seq: number; readonly message: string };
+}
+
+/** One requested operation that could not be reversed. */
+export interface UnifiedOperationSkip {
+  readonly entryId: string;
+  readonly seq: number | null;
+  readonly code: UnifiedReversalConflict['code'];
+  readonly message: string;
+}
+
+/** Receipt for a per-operation (subset) reversal. */
+export interface UnifiedOperationReversalReceipt {
+  readonly reversalId: string;
+  readonly sessionId: string;
+  readonly targetState: 'pre' | 'post';
+  readonly executedAt: number;
+  /** `success` only when every requested operation was reversed. */
+  readonly status: 'success' | 'partial';
+  readonly filesRestored: number;
+  readonly filesDeleted: number;
+  readonly entriesReverted: number;
+  /** Seqs of the entries actually reversed (the audit row's `reverted_entries`). */
+  readonly revertedEntries: readonly number[];
+  /** Requested operations that were skipped, with the reason. */
+  readonly skipped: readonly UnifiedOperationSkip[];
+}
+
+/** Result of planning a subset reversal. */
+export interface UnifiedOperationReversalPlan {
+  readonly sessionId: string;
+  readonly targetState: 'pre' | 'post';
+  /** Only actions belonging to the requested operations. */
+  readonly plan: UnifiedReversalPlan;
+  /** Requested operations that cannot be reversed, or were not found. */
+  readonly skipped: readonly UnifiedOperationSkip[];
+  readonly isExecutable: boolean;
 }
 
 export interface ReversalEngineOptions {
@@ -234,6 +274,8 @@ export class ReversalEngine {
         if (actual !== expected || actualState.kind !== expectedKind) {
           conflicts.push({
             code: 'STALE_BASELINE_CONFLICT',
+            entryId: entry.entryId,
+            seq: entry.seq,
             path: target.path,
             expectedSha256: expected,
             actualSha256: actual,
@@ -242,6 +284,8 @@ export class ReversalEngine {
         }
         if (desiredKind === 'directory') {
           fileActions.push({
+            entryId: entry.entryId,
+            seq: entry.seq,
             path: target.path,
             action: 'mkdir',
             targetBytes: null,
@@ -261,6 +305,8 @@ export class ReversalEngine {
             }
             conflicts.push({
               code: 'BLOB_NOT_FOUND',
+              entryId: entry.entryId,
+              seq: entry.seq,
               path: target.path,
               expectedSha256: desired,
               actualSha256: null,
@@ -269,6 +315,8 @@ export class ReversalEngine {
           }
         }
         fileActions.push({
+          entryId: entry.entryId,
+          seq: entry.seq,
           path: target.path,
           action: desired === null
             ? actualState.kind === 'directory' ? 'rmdir' : 'delete'
@@ -292,38 +340,38 @@ export class ReversalEngine {
         continue;
       }
       const live = this.service.reversalFor(entry.namespace, entry.type, entry.schemaVersion);
-      const step: EntryReversalStep = { seq: entry.seq, namespace: entry.namespace, type: entry.type, schemaVersion: entry.schemaVersion, mode };
+      const step: EntryReversalStep = { entryId: entry.entryId, seq: entry.seq, namespace: entry.namespace, type: entry.type, schemaVersion: entry.schemaVersion, mode };
       entryActions.push(step);
 
       if (live === undefined || live.mode !== mode) {
-        conflicts.push({ code: 'REVERTER_UNAVAILABLE', seq: entry.seq, message: `${entry.namespace}.${entry.type} has no active reverter` });
+        conflicts.push({ code: 'REVERTER_UNAVAILABLE', entryId: entry.entryId, seq: entry.seq, message: `${entry.namespace}.${entry.type} has no active reverter` });
         continue;
       }
       if (live.mode === 'inverse-payload') {
         const input = targetState === 'pre' ? entry.inversePayloadJson : entry.payloadJson;
         if (input === null) {
-          conflicts.push({ code: 'INVERSE_PAYLOAD_INVALID', seq: entry.seq, message: `${entry.namespace}.${entry.type} entry ${entry.seq} has no inverse payload` });
+          conflicts.push({ code: 'INVERSE_PAYLOAD_INVALID', entryId: entry.entryId, seq: entry.seq, message: `${entry.namespace}.${entry.type} entry ${entry.seq} has no inverse payload` });
           continue;
         }
         try {
           this.service.validatePayload(entry.namespace, entry.type, entry.schemaVersion, JSON.parse(input));
         } catch (error) {
-          conflicts.push({ code: 'INVERSE_PAYLOAD_INVALID', seq: entry.seq, message: (error as Error).message });
+          conflicts.push({ code: 'INVERSE_PAYLOAD_INVALID', entryId: entry.entryId, seq: entry.seq, message: (error as Error).message });
         }
         continue;
       }
       if (targetState === 'post') {
-        conflicts.push({ code: 'REVERTER_UNAVAILABLE', seq: entry.seq, message: 'handler entries cannot be re-applied forward' });
+        conflicts.push({ code: 'REVERTER_UNAVAILABLE', entryId: entry.entryId, seq: entry.seq, message: 'handler entries cannot be re-applied forward' });
         continue;
       }
       try {
         const view = await this.entryView(entry);
         const conflict = await this.withTimeout(() => live.detectConflict(view));
         if (conflict !== null) {
-          conflicts.push({ code: 'HANDLER_CONFLICT', seq: entry.seq, message: conflict.message });
+          conflicts.push({ code: 'HANDLER_CONFLICT', entryId: entry.entryId, seq: entry.seq, message: conflict.message });
         }
       } catch (error) {
-        conflicts.push({ code: 'HANDLER_CONFLICT', seq: entry.seq, message: (error as Error).message });
+        conflicts.push({ code: 'HANDLER_CONFLICT', entryId: entry.entryId, seq: entry.seq, message: (error as Error).message });
       }
     }
 
@@ -485,6 +533,289 @@ export class ReversalEngine {
       entriesReverted: reverted.length,
       ...(failure === undefined ? {} : { failure }),
     });
+  }
+
+  // ── per-operation (subset) reversal ─────────────────────────────────
+
+  /**
+   * Plans a reversal of only the requested operations in a session.
+   *
+   * An operation identifier is either an entry id (`entryId`, a UUID) or an
+   * entry sequence number. Raw `brud.core.file` mutations are not individually
+   * selectable: they are the linear undo journal, not session operations.
+   * Requested operations that cannot be reversed are returned in `skipped`
+   * rather than aborting the whole plan.
+   */
+  async planOperationReversal(
+    sessionId: string,
+    operationIds: readonly (string | number)[],
+    targetState: 'pre' | 'post' = 'pre',
+  ): Promise<UnifiedOperationReversalPlan> {
+    const session = this.service.store.getSession(sessionId);
+    if (session === undefined) {
+      throw new UnifiedSessionNotFoundError(sessionId);
+    }
+    if (session.status !== 'committed') {
+      throw new UnifiedSessionNotRevertibleError(sessionId, session.status);
+    }
+
+    const full = await this.planSessionReversal(sessionId, targetState);
+    const entries = this.collect(sessionId);
+    const byEntryId = new Map(entries.map((entry) => [entry.entryId, entry]));
+    const bySeq = new Map(entries.map((entry) => [entry.seq, entry]));
+    const fileBySeq = new Set(full.fileActions.map((action) => action.seq));
+    const entryBySeq = new Set(full.entryActions.map((action) => action.seq));
+
+    const selected = new Set<string>();
+    const skipped: UnifiedOperationSkip[] = [];
+
+    for (const operationId of operationIds) {
+      const entry = typeof operationId === 'number'
+        ? bySeq.get(operationId)
+        : byEntryId.get(operationId);
+      if (entry === undefined) {
+        skipped.push({
+          entryId: String(operationId),
+          seq: typeof operationId === 'number' ? operationId : null,
+          code: 'ENTRY_NOT_FOUND',
+          message: `Operation ${String(operationId)} was not found in session ${sessionId}`,
+        });
+        continue;
+      }
+      selected.add(entry.entryId);
+      if (entry.namespace === CORE_NAMESPACE && entry.type === FILE_ENTRY_TYPE.type) {
+        skipped.push({
+          entryId: entry.entryId,
+          seq: entry.seq,
+          code: 'ENTRY_NOT_REVERSIBLE',
+          message: `Entry ${entry.entryId} is a raw file mutation; select its session target or use undo instead`,
+        });
+        continue;
+      }
+      if (!fileBySeq.has(entry.seq) && !entryBySeq.has(entry.seq)) {
+        skipped.push({
+          entryId: entry.entryId,
+          seq: entry.seq,
+          code: 'ENTRY_NOT_REVERSIBLE',
+          message: `${entry.namespace}.${entry.type} entry ${entry.seq} has no reversible action`,
+        });
+      }
+    }
+
+    const conflicts = full.conflicts.filter((conflict) => conflict.entryId !== undefined && selected.has(conflict.entryId));
+    for (const conflict of conflicts) {
+      if (conflict.entryId === undefined) {
+        continue;
+      }
+      skipped.push({
+        entryId: conflict.entryId,
+        seq: conflict.seq ?? null,
+        code: conflict.code,
+        message: conflict.message,
+      });
+    }
+
+    // A conflicted operation is blocked from execution too, not only reported.
+    const blocked = new Set(skipped.map((skip) => skip.entryId));
+    const fileActions = full.fileActions
+      .filter((action) => selected.has(action.entryId) && !blocked.has(action.entryId))
+      .sort(compareFileReversalSteps);
+    const entryActions = full.entryActions.filter((action) => selected.has(action.entryId) && !blocked.has(action.entryId));
+    const plan: UnifiedReversalPlan = Object.freeze({
+      sessionId,
+      targetState,
+      fileActions: Object.freeze(fileActions),
+      entryActions: Object.freeze(entryActions),
+      conflicts: Object.freeze(conflicts),
+      isExecutable: conflicts.length === 0 && (fileActions.length > 0 || entryActions.length > 0),
+    });
+
+    return Object.freeze({
+      sessionId,
+      targetState,
+      plan,
+      skipped: Object.freeze(dedupeSkips(skipped)),
+      isExecutable: plan.isExecutable && skipped.length === 0,
+    });
+  }
+
+  /**
+   * Reverses only the requested operations. A requested operation that cannot
+   * be reversed is reported in `skipped` and the remaining operations still
+   * run (the surgical caller asked for those operations specifically). The
+   * whole-session path stays all-or-nothing.
+   *
+   * The audit row uses the same `reversals` shape as a whole-session reversal
+   * (`kind: 'session'`, `targetState`, status, `reverted_entries`), with the
+   * subset recorded in `reverted_entries` and skips summarised in
+   * `error_message`.
+   */
+  async revertOperations(
+    sessionId: string,
+    operationIds: readonly (string | number)[],
+    options: { readonly targetState?: 'pre' | 'post' } = {},
+  ): Promise<UnifiedOperationReversalReceipt> {
+    this.assertWritable();
+    const targetState = options.targetState ?? 'pre';
+    await this.service.flush();
+    this.service.suspendRecording();
+    try {
+      const planned = await this.planOperationReversal(sessionId, operationIds, targetState);
+      const skipped = [...planned.skipped];
+      const revertedEntries: number[] = [];
+      let filesRestored = 0;
+      let filesDeleted = 0;
+
+      for (const action of planned.plan.fileActions) {
+        const conflict = await this.precheckFileAction(action);
+        if (conflict !== undefined) {
+          skipped.push(conflict);
+          continue;
+        }
+        try {
+          const outcome = await this.applyOneFileAction(action);
+          filesRestored += outcome.restored;
+          filesDeleted += outcome.deleted;
+          revertedEntries.push(action.seq);
+        } catch (error) {
+          skipped.push({
+            entryId: action.entryId,
+            seq: action.seq,
+            code: 'APPLY_FAILED',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const ordered = [
+        ...planned.plan.entryActions.filter((action) => action.mode === 'inverse-payload'),
+        ...planned.plan.entryActions.filter((action) => action.mode === 'handler'),
+      ];
+      for (const action of ordered) {
+        try {
+          const entry = this.service.store.getEntry(action.seq) as EntryRow;
+          const live = this.service.reversalFor(action.namespace, action.type, action.schemaVersion);
+          if (live === undefined || live.mode === 'none') {
+            throw new Error(`${action.namespace}.${action.type} reverter became unavailable`);
+          }
+          if (live.mode === 'inverse-payload') {
+            const input = JSON.parse((targetState === 'pre' ? entry.inversePayloadJson : entry.payloadJson) as string) as unknown;
+            await this.withTimeout((signal) => live.apply(input, { signal }));
+          } else {
+            const view = await this.entryView(entry);
+            await this.withTimeout((signal) => live.revert(view, { signal }));
+          }
+          revertedEntries.push(action.seq);
+        } catch (error) {
+          skipped.push({
+            entryId: action.entryId,
+            seq: action.seq,
+            code: 'APPLY_FAILED',
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      const uniqueSkipped = dedupeSkips(skipped);
+      const status = uniqueSkipped.length === 0 && revertedEntries.length > 0 ? 'success' : 'partial';
+      const reversalId = `RV-${randomUUID()}`;
+      const executedAt = this.now();
+      this.service.store.transaction(() => {
+        this.service.store.insertReversal({
+          reversalId,
+          sessionId,
+          kind: 'session',
+          targetState,
+          executedAt,
+          status,
+          revertedEntries,
+          errorMessage: uniqueSkipped.length === 0
+            ? null
+            : uniqueSkipped.map((skip) => `${skip.code}:${skip.entryId}:${skip.message}`).join('; '),
+        });
+      });
+
+      return Object.freeze({
+        reversalId,
+        sessionId,
+        targetState,
+        executedAt,
+        status,
+        filesRestored,
+        filesDeleted,
+        entriesReverted: revertedEntries.length,
+        revertedEntries: Object.freeze([...revertedEntries]),
+        skipped: Object.freeze(uniqueSkipped),
+      });
+    } finally {
+      await settleJournal();
+      this.service.resumeRecording();
+    }
+  }
+
+  /** Re-checks one file action immediately before it is applied. */
+  private async precheckFileAction(action: FileReversalStep): Promise<UnifiedOperationSkip | undefined> {
+    if (action.action === 'restore' && action.targetBytes === null) {
+      return {
+        entryId: action.entryId,
+        seq: action.seq,
+        code: 'BLOB_NOT_FOUND',
+        message: `Restore action for "${action.path}" has no target bytes`,
+      };
+    }
+    const state = await this.currentState(action.path);
+    if (state.sha !== action.expectedCurrentSha256 || state.kind !== action.expectedCurrentKind) {
+      return {
+        entryId: action.entryId,
+        seq: action.seq,
+        code: 'STALE_BASELINE_CONFLICT',
+        message: `"${action.path}" changed since planning`,
+      };
+    }
+    return undefined;
+  }
+
+  /** Applies one file action, compensating only that action if it fails. */
+  private async applyOneFileAction(action: FileReversalStep): Promise<{ readonly restored: number; readonly deleted: number }> {
+    if (action.action === 'mkdir') {
+      const state = await this.currentState(action.path);
+      if (state.kind === 'missing') {
+        await this.fs.createDirectory(action.path);
+      }
+      return { restored: 1, deleted: 0 };
+    }
+    if (action.action === 'rmdir') {
+      const state = await this.currentState(action.path);
+      if (state.kind === 'directory') {
+        await this.fs.deleteDirectory(action.path);
+      }
+      return { restored: 0, deleted: 1 };
+    }
+    const prior = await this.readIfFile(action.path);
+    try {
+      if (action.action === 'delete') {
+        if (prior !== null) {
+          await this.fs.deleteFile(action.path);
+        }
+        return { restored: 0, deleted: 1 };
+      }
+      await this.fs.writeAtomic(action.path, action.targetBytes as Uint8Array);
+      return { restored: 1, deleted: 0 };
+    } catch (error) {
+      try {
+        if (prior !== null) {
+          await this.fs.writeAtomic(action.path, prior);
+        } else {
+          const state = await this.currentState(action.path);
+          if (state.kind === 'file') {
+            await this.fs.deleteFile(action.path);
+          }
+        }
+      } catch {
+        // Best effort compensation, as in the whole-session path.
+      }
+      throw error;
+    }
   }
 
   /** @internal Builds the read-only view handed to producer callbacks. */
@@ -774,6 +1105,20 @@ function compareFileReversalSteps(a: FileReversalStep, b: FileReversalStep): num
     return byDepth !== 0 ? byDepth : a.path.localeCompare(b.path);
   }
   return a.path.localeCompare(b.path);
+}
+
+function dedupeSkips(skips: readonly UnifiedOperationSkip[]): UnifiedOperationSkip[] {
+  const seen = new Set<string>();
+  const result: UnifiedOperationSkip[] = [];
+  for (const skip of skips) {
+    const key = `${skip.entryId}\u0000${skip.code}\u0000${skip.message}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(skip);
+  }
+  return result;
 }
 
 function stepCount(steps: number | undefined): number {

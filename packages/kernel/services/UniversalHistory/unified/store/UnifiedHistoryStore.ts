@@ -33,6 +33,9 @@ import type {
   CheckpointRow,
   ContentRef,
   CreateSessionInput,
+  DeleteHistoryPage,
+  DeleteHistoryQuery,
+  DeleteHistoryRow,
   EntryInput,
   EntryPage,
   EntryQuery,
@@ -212,6 +215,22 @@ function toSession(row: Row): SessionRow {
     implicit: row.implicit === 1,
     closedAt: (row.closed_at as number | null) ?? null,
     metadata: parseJson(row.metadata),
+    isDeleted: row.is_deleted === 1,
+    deletedAt: (row.deleted_at as number | null) ?? null,
+    expiresAt: (row.expires_at as number | null) ?? null,
+  };
+}
+
+function toDeleteHistory(row: Row): DeleteHistoryRow {
+  return {
+    eventId: row.event_id as string,
+    occurredAt: row.occurred_at as number,
+    action: row.action as DeleteHistoryRow['action'],
+    status: row.status as DeleteHistoryRow['status'],
+    sessionId: (row.session_id as string | null) ?? null,
+    actor: row.actor as string,
+    reason: (row.reason as string | null) ?? null,
+    details: parseJson(row.details),
   };
 }
 
@@ -425,8 +444,10 @@ export class UnifiedHistoryStore {
   insertSessionWithId(row: SessionRow): void {
     this.mutate(() => this.immediate(() => {
       const db = this.writer();
-      db.prepare(`INSERT INTO sessions (session_id, created_at, prompt, status, origin, implicit, closed_at, metadata)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      db.prepare(`INSERT INTO sessions
+                    (session_id, created_at, prompt, status, origin, implicit, closed_at,
+                     is_deleted, deleted_at, expires_at, metadata)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
         .run(
           row.sessionId,
           row.createdAt,
@@ -435,6 +456,9 @@ export class UnifiedHistoryStore {
           row.origin,
           row.implicit ? 1 : 0,
           row.closedAt,
+          row.isDeleted ? 1 : 0,
+          row.deletedAt,
+          row.expiresAt,
           row.metadata === null || row.metadata === undefined ? null : JSON.stringify(row.metadata),
         );
       const match = /^BR-(\d{8})-(\d+)$/u.exec(row.sessionId);
@@ -487,7 +511,9 @@ export class UnifiedHistoryStore {
     if (db === undefined) {
       return { rows: [] };
     }
-    const where: string[] = query.includeDeleted === true ? ['1 = 1'] : ['is_deleted = 0'];
+    const where: string[] = query.trashedOnly === true
+      ? ['is_deleted = 1']
+      : query.includeDeleted === true ? ['1 = 1'] : ['is_deleted = 0'];
     const params: SQLInputValue[] = [];
     if (query.since !== undefined) {
       where.push('created_at >= ?');
@@ -513,6 +539,141 @@ export class UnifiedHistoryStore {
     const last = page[page.length - 1];
     return rows.length > limit && last !== undefined
       ? { rows: page, next: { createdAt: last.createdAt, sessionId: last.sessionId } }
+      : { rows: page };
+  }
+
+  // ── session lifecycle (trash, restore, delete, wipe) ────────────────
+
+  /** Marks a session as trashed and gives it an expiry. Idempotent for an already-trashed row. */
+  trashSession(sessionId: string, deletedAt: number, expiresAt: number): SessionRow {
+    return this.mutate(() => this.immediate(() => {
+      const db = this.writer();
+      const exists = db.prepare('SELECT 1 AS present FROM sessions WHERE session_id = ?').get(sessionId);
+      if (exists === undefined) {
+        throw new UnifiedSessionNotFoundError(sessionId);
+      }
+      db.prepare('UPDATE sessions SET is_deleted = 1, deleted_at = ?, expires_at = ? WHERE session_id = ?')
+        .run(deletedAt, expiresAt, sessionId);
+      return toSession(db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId) as Row);
+    }));
+  }
+
+  /** Clears the trash flags on a session. Idempotent for an already-restored row. */
+  restoreSession(sessionId: string): SessionRow {
+    return this.mutate(() => this.immediate(() => {
+      const db = this.writer();
+      const exists = db.prepare('SELECT 1 AS present FROM sessions WHERE session_id = ?').get(sessionId);
+      if (exists === undefined) {
+        throw new UnifiedSessionNotFoundError(sessionId);
+      }
+      db.prepare('UPDATE sessions SET is_deleted = 0, deleted_at = NULL, expires_at = NULL WHERE session_id = ?')
+        .run(sessionId);
+      return toSession(db.prepare('SELECT * FROM sessions WHERE session_id = ?').get(sessionId) as Row);
+    }));
+  }
+
+  /**
+   * Permanently removes one session, its entries, checkpoints and reversal log.
+   * Delete-history audit rows are deliberately untouched.
+   */
+  deleteSession(sessionId: string): number {
+    return this.mutate(() => this.immediate(() => {
+      const db = this.writer();
+      const exists = db.prepare('SELECT 1 AS present FROM sessions WHERE session_id = ?').get(sessionId);
+      if (exists === undefined) {
+        throw new UnifiedSessionNotFoundError(sessionId);
+      }
+      return this.deleteSessionIn(db, sessionId);
+    }));
+  }
+
+  /** Permanently removes every session (including trashed and implicit rows) atomically. */
+  deleteAllSessions(): { readonly sessionIds: readonly string[]; readonly entriesDeleted: number } {
+    return this.mutate(() => this.immediate(() => {
+      const db = this.writer();
+      const sessionIds = (db.prepare('SELECT session_id AS sessionId FROM sessions ORDER BY session_id').all() as { sessionId: string }[])
+        .map((row) => row.sessionId);
+      let entriesDeleted = 0;
+      for (const sessionId of sessionIds) {
+        entriesDeleted += this.deleteSessionIn(db, sessionId);
+      }
+      return { sessionIds, entriesDeleted };
+    }));
+  }
+
+  /** Trashed sessions whose retention window has elapsed, oldest expiry first. */
+  listExpiredTrash(now: number, limit = MAX_PAGE): readonly string[] {
+    const rows = this.reader()
+      ?.prepare(`SELECT session_id AS sessionId FROM sessions
+                  WHERE is_deleted = 1 AND expires_at IS NOT NULL AND expires_at <= ?
+                  ORDER BY expires_at, session_id LIMIT ?`)
+      .all(now, clampLimit(limit)) as { sessionId: string }[] | undefined;
+    return (rows ?? []).map((row) => row.sessionId);
+  }
+
+  // ── delete-history audit ────────────────────────────────────────────
+
+  /** Appends one lifecycle audit row. Append-only; never updated or deleted. */
+  insertDeleteHistory(row: DeleteHistoryRow): void {
+    this.mutate(() => {
+      this.writer()
+        .prepare(`INSERT INTO delete_history
+                    (event_id, occurred_at, action, status, session_id, actor, reason, details)
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(
+          row.eventId,
+          row.occurredAt,
+          row.action,
+          row.status,
+          row.sessionId,
+          row.actor,
+          row.reason,
+          row.details === null || row.details === undefined ? null : JSON.stringify(row.details),
+        );
+    });
+  }
+
+  /** Newest-first keyset-paged lifecycle audit log. */
+  listDeleteHistory(query: DeleteHistoryQuery = {}): DeleteHistoryPage {
+    const db = this.reader();
+    if (db === undefined) {
+      return { rows: [] };
+    }
+    const where: string[] = ['1 = 1'];
+    const params: SQLInputValue[] = [];
+    if (query.sessionId !== undefined) {
+      where.push('session_id = ?');
+      params.push(query.sessionId);
+    }
+    if (query.action !== undefined) {
+      where.push('action = ?');
+      params.push(query.action);
+    }
+    if (query.status !== undefined) {
+      where.push('status = ?');
+      params.push(query.status);
+    }
+    if (query.since !== undefined) {
+      where.push('occurred_at >= ?');
+      params.push(query.since);
+    }
+    if (query.before !== undefined) {
+      where.push('occurred_at < ?');
+      params.push(query.before);
+    }
+    if (query.after !== undefined) {
+      where.push('(occurred_at < ? OR (occurred_at = ? AND event_id < ?))');
+      params.push(query.after.occurredAt, query.after.occurredAt, query.after.eventId);
+    }
+    const limit = clampLimit(query.limit);
+    const rows = db
+      .prepare(`SELECT * FROM delete_history WHERE ${where.join(' AND ')}
+                ORDER BY occurred_at DESC, event_id DESC LIMIT ?`)
+      .all(...params, limit + 1) as Row[];
+    const page = rows.slice(0, limit).map(toDeleteHistory);
+    const last = page[page.length - 1];
+    return rows.length > limit && last !== undefined
+      ? { rows: page, next: { occurredAt: last.occurredAt, eventId: last.eventId } }
       : { rows: page };
   }
 

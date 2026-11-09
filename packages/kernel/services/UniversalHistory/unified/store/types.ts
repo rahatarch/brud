@@ -41,6 +41,12 @@ export interface SessionRow {
   readonly implicit: boolean;
   readonly closedAt: number | null;
   readonly metadata: unknown;
+  /** True while the session is in the trash; normal listings hide it. */
+  readonly isDeleted: boolean;
+  /** Epoch ms the session entered the trash, or `null`. */
+  readonly deletedAt: number | null;
+  /** Epoch ms the trash entry expires and becomes purgeable, or `null`. */
+  readonly expiresAt: number | null;
 }
 
 /**
@@ -93,6 +99,8 @@ export interface SessionQuery {
   readonly includeImplicit?: boolean;
   /** Include soft-deleted sessions (legacy wire filter). */
   readonly includeDeleted?: boolean;
+  /** Return only soft-deleted (trashed) sessions. Takes precedence over `includeDeleted`. */
+  readonly trashedOnly?: boolean;
   /** Inclusive lower bound on `createdAt`, epoch ms (legacy wire filter). */
   readonly since?: number;
   /** Rows to skip (legacy wire contract only; prefer `before`). */
@@ -186,6 +194,44 @@ export interface ReversalRow {
   readonly status: string;
   readonly revertedEntries: readonly number[];
   readonly errorMessage: string | null;
+}
+
+/** Session lifecycle actions recorded in the delete-history audit log. */
+export type DeleteHistoryAction = 'trash' | 'restore' | 'delete' | 'wipe' | 'trash_expired';
+
+/** Outcome of a lifecycle action. Failed wipe confirmations are recorded too. */
+export type DeleteHistoryStatus = 'success' | 'failed';
+
+/** One append-only delete-history audit row. */
+export interface DeleteHistoryRow {
+  readonly eventId: string;
+  readonly occurredAt: number;
+  readonly action: DeleteHistoryAction;
+  readonly status: DeleteHistoryStatus;
+  /** Session the action targeted; `null` for a bulk wipe summary or a failed attempt. */
+  readonly sessionId: string | null;
+  readonly actor: string;
+  readonly reason: string | null;
+  /** Action-specific JSON details (deleted session ids, attempted phrase, ...). */
+  readonly details: unknown;
+}
+
+export interface DeleteHistoryQuery {
+  readonly sessionId?: string;
+  readonly action?: DeleteHistoryAction;
+  readonly status?: DeleteHistoryStatus;
+  /** Inclusive lower bound on `occurredAt`, epoch ms. */
+  readonly since?: number;
+  /** Exclusive upper bound on `occurredAt`, epoch ms. */
+  readonly before?: number;
+  readonly limit?: number;
+  /** Keyset cursor: return events strictly older than this row. */
+  readonly after?: { readonly occurredAt: number; readonly eventId: string };
+}
+
+export interface DeleteHistoryPage {
+  readonly rows: readonly DeleteHistoryRow[];
+  readonly next?: { readonly occurredAt: number; readonly eventId: string };
 }
 
 export interface ImportRow {

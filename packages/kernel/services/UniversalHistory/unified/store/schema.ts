@@ -6,7 +6,7 @@
  */
 import type { DatabaseSync } from 'node:sqlite';
 
-export const UNIFIED_SCHEMA_VERSION = 2;
+export const UNIFIED_SCHEMA_VERSION = 3;
 
 export const UNIFIED_BUSY_TIMEOUT_MS = 5_000;
 
@@ -109,6 +109,33 @@ const MIGRATIONS: readonly Migration[] = [
     version: 2,
     statements: [
       'CREATE INDEX idx_entries_payload_sha256 ON entries(payload_sha256)',
+    ],
+  },
+  {
+    // Phase 2 kernel history features: durable session lifecycle state.
+    //
+    // `sessions` already carries `is_deleted`/`deleted_at`/`expires_at` from
+    // v1, so trash/restore needs no destructive table rebuild. This migration
+    // adds (a) an index for the trash listing/purge predicates and (b) the
+    // append-only delete-history audit table. The audit table deliberately has
+    // no foreign key to `sessions`: it must outlive the rows it describes,
+    // including a permanent wipe.
+    version: 3,
+    statements: [
+      'CREATE INDEX idx_sessions_trash ON sessions(is_deleted, expires_at, created_at DESC, session_id DESC)',
+      `CREATE TABLE delete_history (
+        event_id    TEXT    PRIMARY KEY,
+        occurred_at INTEGER NOT NULL,
+        action      TEXT    NOT NULL
+                            CHECK (action IN ('trash','restore','delete','wipe','trash_expired')),
+        status      TEXT    NOT NULL CHECK (status IN ('success','failed')),
+        session_id  TEXT,
+        actor       TEXT    NOT NULL,
+        reason      TEXT,
+        details     TEXT    CHECK (details IS NULL OR json_valid(details))
+      ) STRICT`,
+      'CREATE INDEX idx_delete_history_occurred ON delete_history(occurred_at DESC, event_id DESC)',
+      'CREATE INDEX idx_delete_history_session ON delete_history(session_id, occurred_at DESC)',
     ],
   },
 ];

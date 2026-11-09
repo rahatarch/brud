@@ -122,6 +122,12 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
       return failed(toolFailureMessage(new ToolNotFoundError(name)));
     }
 
+    if (!this.isToolAllowed(name)) {
+      return failed(
+        `TOOL_DISABLED: tool "${name}" is disabled by the toolAllowList setting.`,
+      );
+    }
+
     const entry: RegisteredToolEntry = this.registry.getExecutable(name);
     const missing = missingPermissions(entry.requiredPermissions, callerContext.permissions);
 
@@ -391,6 +397,27 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
     if (this.disposed) {
       throw new ToolDisposedError();
     }
+  }
+
+  /**
+   * Whether the current allow-list permits the named tool.
+   *
+   * Absent accessor, unavailable settings, an empty map, or a missing key all
+   * mean "allow". Only an explicit `false` disables the tool, matching the
+   * legacy `settings.toolAllowList[kind] !== false` rule.
+   */
+  private isToolAllowed(name: string): boolean {
+    let allowList: Readonly<Record<string, boolean>> | undefined;
+
+    try {
+      allowList = this.dependencies.getToolAllowList?.();
+    } catch {
+      // Settings are unavailable (for example, standalone construction or a
+      // kernel that is not yet RUNNING). Fail open, as the legacy default did.
+      return true;
+    }
+
+    return allowList?.[name] !== false;
   }
 
   private warn(message: string, meta: Record<string, unknown>): void {

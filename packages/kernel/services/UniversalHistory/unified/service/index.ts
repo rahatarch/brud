@@ -15,4 +15,5 @@ export {
 export type { FileEntryPayload, SessionTargetPayload } from './builtinTypes.js';
 export * from './errors.js';
 export { BINARY_PROBE_LENGTH, isBinaryContent, normalizeTargetPath } from './targets.js';
+export { DEFAULT_TRASH_RETENTION_MS, WIPE_CONFIRMATION_PHRASE } from './types.js';
 export type * from './types.js';

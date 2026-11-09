@@ -1,6 +1,8 @@
-import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext.js';
+import type { ISettingsReader } from '../../SettingsService/contracts/ISettingsService.js';
+import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type { IBrudToolsService } from '../contracts/IBrudToolsService.js';
 import {
   BrudToolsService,
@@ -40,9 +42,30 @@ export function createBrudToolsDescriptor(
     tier: BRUD_TOOLS_SERVICE_TIER,
     dependencies: [],
     accessPolicy: { deniedCallers: [] },
-    factory: (): BrudToolsService => {
+    factory: (context: ServiceContext, broker): BrudToolsService => {
+      // The allow-list is read lazily, on the first dispatch, so the service's
+      // declared dependency graph stays empty and standalone construction keeps
+      // working. The access broker only serves requests while the kernel is
+      // RUNNING, and dispatch is a runtime operation, so this is safe. The
+      // reader token carries no access policy; by the time dispatch runs the
+      // settings service registered before tools (boot order) is available.
+      let reader: ISettingsReader | undefined;
+      const getToolAllowList = (): Readonly<Record<string, boolean>> => {
+        reader ??= broker.requestAccess(
+          {
+            callerId: 'kernel',
+            tier: 'kernel',
+            workspaceRoot: context.workspaceRoot,
+          },
+          SettingsReaderToken,
+        );
+
+        return reader.getSnapshot().toolAllowList;
+      };
+
       const dependencies: BrudToolsDependencies = {
         ...(options?.logger === undefined ? {} : { logger: options.logger }),
+        getToolAllowList,
       };
 
       return new BrudToolsService(dependencies);

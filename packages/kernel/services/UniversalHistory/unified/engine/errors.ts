@@ -20,10 +20,19 @@ export class UnifiedSessionNotRevertibleError extends Error {
 }
 
 export interface UnifiedReversalConflict {
-  readonly code: 'STALE_BASELINE_CONFLICT' | 'BLOB_NOT_FOUND' | 'REVERTER_UNAVAILABLE' | 'INVERSE_PAYLOAD_INVALID' | 'HANDLER_CONFLICT';
+  readonly code:
+    | 'STALE_BASELINE_CONFLICT'
+    | 'BLOB_NOT_FOUND'
+    | 'REVERTER_UNAVAILABLE'
+    | 'INVERSE_PAYLOAD_INVALID'
+    | 'HANDLER_CONFLICT'
+    | 'ENTRY_NOT_FOUND'
+    | 'ENTRY_NOT_REVERSIBLE'
+    | 'APPLY_FAILED';
   readonly message: string;
   readonly path?: string;
   readonly seq?: number;
+  readonly entryId?: string;
   readonly expectedSha256?: string | null;
   readonly actualSha256?: string | null;
 }

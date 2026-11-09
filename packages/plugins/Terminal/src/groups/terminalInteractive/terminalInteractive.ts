@@ -39,6 +39,15 @@ export const TERMINAL_INTERACTIVE_SCHEMA: Record<string, unknown> = {
       type: 'number',
       description: 'Maximum seconds to wait',
     },
+    cwd: {
+      type: 'string',
+      description: 'Working directory; resolved and validated against the workspace',
+    },
+    env: {
+      type: 'object',
+      additionalProperties: { type: 'string' },
+      description: 'Additional environment variables for the interactive session',
+    },
   },
   required: ['command', 'answers'],
   additionalProperties: false,
@@ -57,6 +66,35 @@ function readAnswers(value: unknown): readonly string[] | undefined {
   return value.every((entry): entry is string => typeof entry === 'string')
     ? value
     : undefined;
+}
+
+function readCwd(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+/**
+ * Reads the optional `env` map.
+ *
+ * Returns `undefined` when the field is absent, `null` when it is present but
+ * malformed. The schema already enforces the object-of-strings shape on the
+ * dispatch path; this guard keeps the exported builder honest for direct use.
+ */
+function readEnv(value: unknown): Readonly<Record<string, string>> | null | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return null;
+  }
+
+  const entries = Object.entries(value);
+
+  if (!entries.every(([, entry]) => typeof entry === 'string')) {
+    return null;
+  }
+
+  return Object.fromEntries(entries) as Record<string, string>;
 }
 
 function invalid(details: string): TerminalOperationResult {
@@ -89,6 +127,12 @@ export function createTerminalInteractiveRequest(
   }
 
   const timeoutMs = toMilliseconds(input.timeout);
+  const cwd = readCwd(input.cwd);
+  const env = readEnv(input.env);
+
+  if (env === null) {
+    return invalid('"env" must be an object whose values are strings.');
+  }
 
   return {
     request: {
@@ -96,6 +140,8 @@ export function createTerminalInteractiveRequest(
       command,
       answers,
       timeoutMs,
+      ...(cwd === undefined ? {} : { cwd }),
+      ...(env === undefined ? {} : { env }),
     },
     timeoutMs,
   };

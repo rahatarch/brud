@@ -51,6 +51,20 @@ export class UnifiedSessionStateError extends Error {
   }
 }
 
+/**
+ * A bulk wipe was requested without the exact confirmation phrase. The
+ * failed attempt is recorded in the delete-history audit log before this is
+ * thrown.
+ */
+export class UnifiedWipeConfirmationError extends Error {
+  public readonly code = 'WIPE_CONFIRMATION_REQUIRED' as const;
+
+  constructor(public readonly expectedPhrase: string) {
+    super(`Wiping all history requires the confirmation phrase "${expectedPhrase}"`);
+    this.name = 'UnifiedWipeConfirmationError';
+  }
+}
+
 /** A declared target path is not a safe workspace-relative path. */
 export class UnifiedInvalidTargetPathError extends Error {
   public readonly code = 'HISTORY_INVALID_TARGET' as const;

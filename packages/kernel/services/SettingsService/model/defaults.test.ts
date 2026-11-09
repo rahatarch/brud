@@ -71,6 +71,22 @@ describe('sanitizeSettingsDocument', () => {
   });
 });
 
+describe('sanitizeSettingsDocument — mcpAutoOn', () => {
+  it('parses the boolean and defaults the snapshot to the legacy true', () => {
+    assert.equal(DEFAULT_SETTINGS.mcpAutoOn, true);
+    assert.deepEqual(sanitizeSettingsDocument({}, 'workspace').values, {});
+    assert.equal(sanitizeSettingsDocument({ mcpAutoOn: false }, 'user').values.mcpAutoOn, false);
+    assert.equal(sanitizeSettingsDocument({ mcpAutoOn: true }, 'workspace').values.mcpAutoOn, true);
+  });
+
+  it('rejects a non-boolean value with an INVALID_FIELD warning', () => {
+    const result = sanitizeSettingsDocument({ mcpAutoOn: 'yes' }, 'user');
+
+    assert.equal(result.values.mcpAutoOn, undefined);
+    assert.deepEqual(result.warnings.map((warning) => warning.code), ['INVALID_FIELD']);
+  });
+});
+
 describe('sanitizeSettingsDocument — history retention (D-15 U-8)', () => {
   it('parses retention integers and clamps them to the ceilings', () => {
     const result = sanitizeSettingsDocument({ historyRetentionDays: 9_999, historyMinUndoEntries: 12_345.7 }, 'user');

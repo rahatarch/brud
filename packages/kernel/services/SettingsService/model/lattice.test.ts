@@ -235,6 +235,17 @@ describe('applyLatticeToWorkspacePatch', () => {
   });
 });
 
+describe('mcpAutoOn lattice', () => {
+  it('defaults to true and lets the project scope override the user scope', () => {
+    assert.equal(evaluateLattice().snapshot.mcpAutoOn, true);
+    assert.equal(evaluateLattice({ user: { mcpAutoOn: false } }).snapshot.mcpAutoOn, false);
+    assert.equal(
+      evaluateLattice({ user: { mcpAutoOn: false }, workspace: { mcpAutoOn: true } }).snapshot.mcpAutoOn,
+      true,
+    );
+  });
+});
+
 describe('history retention lattice (D-15 U-8)', () => {
   it('defaults to 90 days and a 10,000-entry undo floor', () => {
     const { snapshot } = evaluateLattice();

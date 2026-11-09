@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, readFile, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -295,6 +295,72 @@ describe('terminal_command', () => {
     );
 
     assert.equal(terminal.calls[0]?.stopOnFailure, true);
+  });
+
+  it('forwards cwd and env to the terminal handle', async () => {
+    const terminal = fakeTerminal();
+
+    await terminalCommand(
+      { command: 'echo hi', cwd: 'sub/dir', env: { TERMINAL_TEST_ENV: '1' } },
+      terminal,
+      harness.caller,
+    );
+
+    assert.equal(terminal.calls[0]?.cwd, 'sub/dir');
+    assert.deepEqual(terminal.calls[0]?.env, { TERMINAL_TEST_ENV: '1' });
+  });
+
+  it('forwards cwd and env for batch and conditional requests', async () => {
+    const terminal = fakeTerminal();
+    const options = { cwd: 'sub/dir', env: { TERMINAL_TEST_ENV: '1' } };
+
+    await terminalCommand({ commands: ['echo one'], ...options }, terminal, harness.caller);
+    await terminalCommand(
+      { command: 'echo one', onSuccess: 'echo two', ...options },
+      terminal,
+      harness.caller,
+    );
+
+    assert.equal(terminal.calls[0]?.mode, 'sequential');
+    assert.equal(terminal.calls[0]?.cwd, 'sub/dir');
+    assert.deepEqual(terminal.calls[0]?.env, { TERMINAL_TEST_ENV: '1' });
+    assert.equal(terminal.calls[1]?.mode, 'conditional');
+    assert.equal(terminal.calls[1]?.cwd, 'sub/dir');
+    assert.deepEqual(terminal.calls[1]?.env, { TERMINAL_TEST_ENV: '1' });
+  });
+
+  it('accepts cwd and env at the schema gate and still rejects unknown properties', async () => {
+    const accepted = await run(harness, {
+      command: 'echo hello',
+      cwd: harness.root,
+      env: { TERMINAL_TEST_ENV: '1' },
+    });
+
+    assert.equal(accepted.status, 'success');
+    assert.match(commandData(accepted).output, /hello/);
+
+    const rejected = await run(harness, { command: 'echo hello', unexpected: true });
+
+    assert.equal(rejected.status, 'failed');
+    assert.match(String(rejected.error), /TOOL_VALIDATION_ERROR/);
+  });
+
+  it('runs the command in the requested cwd and with the requested env', { timeout: 15000 }, async () => {
+    const subdir = join(harness.root, 'subdir');
+    await mkdir(subdir, { recursive: true });
+
+    const result = await run(harness, {
+      commands: ['pwd', 'printenv TERMINAL_TEST_ENV'],
+      cwd: subdir,
+      env: { TERMINAL_TEST_ENV: 'forwarded' },
+    });
+
+    assert.equal(result.status, 'success');
+
+    const outputs = successGroupData(result).map((entry) => entry.output);
+
+    assert.match(outputs[0] ?? '', /subdir/);
+    assert.match(outputs[1] ?? '', /forwarded/);
   });
 
   it('does not import child_process or any node:* module in runtime source', async () => {

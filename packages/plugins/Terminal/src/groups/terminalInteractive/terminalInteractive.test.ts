@@ -6,12 +6,16 @@ import { join } from 'node:path';
 import type {
   IBrudToolsService,
   IPluginExecutionContext,
+  ITerminalHandle,
   OperationResult,
+  TerminalResult,
+  TerminalRunRequest,
 } from '@brud/kernel';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
 import { createTerminalPlugin } from '../../plugin.js';
+import { terminalInteractive } from './terminalInteractive.js';
 
 interface Harness {
   readonly kernel: BrudKernel;
@@ -77,6 +81,32 @@ function errorText(result: OperationResult): string {
       : '';
 }
 
+const SUCCESS_RESULT: TerminalResult = {
+  success: true,
+  output: 'ok',
+  exitCode: 0,
+  duration: 1,
+  status: 'success',
+};
+
+function fakeTerminal(): ITerminalHandle & { readonly calls: TerminalRunRequest[] } {
+  const calls: TerminalRunRequest[] = [];
+
+  return {
+    calls,
+    async run(request: TerminalRunRequest): Promise<TerminalResult> {
+      calls.push(request);
+
+      return SUCCESS_RESULT;
+    },
+    async cancel(): Promise<void> {},
+    list(): readonly [] {
+      return [];
+    },
+    async dispose(): Promise<void> {},
+  };
+}
+
 describe('terminal_interactive', () => {
   let harness: Harness;
 
@@ -123,5 +153,42 @@ describe('terminal_interactive', () => {
 
     assert.equal(result.status, 'failed');
     assert.match(errorText(result), /TOOL_VALIDATION_ERROR/);
+  });
+
+  it('forwards cwd and env to the terminal handle', async () => {
+    const terminal = fakeTerminal();
+
+    await terminalInteractive(
+      { command: 'cat', answers: ['hello'], cwd: 'sub/dir', env: { TERMINAL_TEST_ENV: '1' } },
+      terminal,
+      harness.caller,
+    );
+
+    assert.equal(terminal.calls[0]?.mode, 'interactive');
+    assert.equal(terminal.calls[0]?.cwd, 'sub/dir');
+    assert.deepEqual(terminal.calls[0]?.env, { TERMINAL_TEST_ENV: '1' });
+    assert.deepEqual(terminal.calls[0]?.answers, ['hello']);
+  });
+
+  it('accepts cwd and env at the schema gate and still rejects unknown properties', async () => {
+    const script = "process.stdin.on('data',(chunk)=>{process.stdout.write('got:'+chunk.toString().trim());process.exit(0);});";
+    const accepted = await run(harness, {
+      command: `node -e "${script}"`,
+      answers: ['hello'],
+      cwd: harness.root,
+      env: { TERMINAL_TEST_ENV: '1' },
+    });
+
+    assert.equal(accepted.status, 'success');
+    assert.match((accepted.data as InteractiveData).output, /got:hello/);
+
+    const rejected = await run(harness, {
+      command: 'echo hello',
+      answers: [],
+      unexpected: true,
+    });
+
+    assert.equal(rejected.status, 'failed');
+    assert.match(errorText(rejected), /TOOL_VALIDATION_ERROR/);
   });
 });

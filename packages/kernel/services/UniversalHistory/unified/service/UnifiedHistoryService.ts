@@ -17,7 +17,19 @@ import type { UnifiedHistoryStore } from '../store/UnifiedHistoryStore.js';
 import type { IStorageDriver } from '../../../../drivers/contracts/index.js';
 import { LegacyImporter } from '../import/LegacyImporter.js';
 import type { LegacyImportReport } from '../import/LegacyImporter.js';
-import type { EntryPage, EntryQuery, EntryRow, HistoryClaimInput, PreparedEntry, RetentionReport, SessionPage, SessionQuery, SessionRow } from '../store/types.js';
+import type {
+  DeleteHistoryPage,
+  DeleteHistoryQuery,
+  EntryPage,
+  EntryQuery,
+  EntryRow,
+  HistoryClaimInput,
+  PreparedEntry,
+  RetentionReport,
+  SessionPage,
+  SessionQuery,
+  SessionRow,
+} from '../store/types.js';
 import type { CasSweepReport } from '../store/cas.js';
 import {
   BUILTIN_ENTRY_TYPES,
@@ -32,6 +44,7 @@ import {
   UnifiedEntryValidationError,
   UnifiedNamespaceError,
   UnifiedSessionStateError,
+  UnifiedWipeConfirmationError,
 } from './errors.js';
 import { LiveClaimHelper } from './LiveClaimHelper.js';
 
@@ -61,16 +74,27 @@ import {
   normalizeTargetPath,
   normalizeTargets,
 } from './targets.js';
+import {
+  DEFAULT_TRASH_RETENTION_MS,
+  WIPE_CONFIRMATION_PHRASE,
+} from './types.js';
 import type {
   Disposable,
   EntryRecordInput,
   EntryReversal,
   EntryTypeRegistration,
   NamespaceHistoryHandle,
+  SessionDeleteReceipt,
+  SessionLifecycleOptions,
   SessionMetadata,
+  SessionTrashReceipt,
   TargetBaseline,
+  TrashPurgeReceipt,
+  TrashSessionOptions,
   UnifiedCommitReceipt,
   UnifiedSessionView,
+  WipeSessionsOptions,
+  WipeSessionsReceipt,
 } from './types.js';
 
 const NAMESPACE_PATTERN = /^(?:@[a-z0-9][a-z0-9-]*\/)?[a-z0-9][a-z0-9._-]*$/u;
@@ -132,6 +156,11 @@ export interface UnifiedHistoryServiceOptions {
   readonly importLegacy?: boolean;
   /** Storage driver for the importer (required when `importLegacy` is true). */
   readonly driver?: IStorageDriver;
+  /**
+   * Trash retention window in milliseconds. Defaults to seven days, the
+   * legacy monorepo's window.
+   */
+  readonly trashRetentionMs?: number;
 }
 
 interface ActiveSession {
@@ -168,6 +197,8 @@ export class UnifiedHistoryService {
 
   private readonly now: () => number;
 
+  private readonly trashRetentionMs: number;
+
   /** Unique per service instance; part of every claim it publishes. */
   private readonly claimNonce = randomUUID().replaceAll('-', '');
 
@@ -176,6 +207,10 @@ export class UnifiedHistoryService {
 
   constructor(private readonly options: UnifiedHistoryServiceOptions) {
     this.now = options.now ?? Date.now;
+    const configured = options.trashRetentionMs ?? DEFAULT_TRASH_RETENTION_MS;
+    this.trashRetentionMs = Number.isFinite(configured) && configured >= 0
+      ? Math.trunc(configured)
+      : DEFAULT_TRASH_RETENTION_MS;
   }
 
   /**
@@ -219,6 +254,9 @@ export class UnifiedHistoryService {
     }
     await this.flush();
     const now = this.now();
+    // Expired trash is purged before the general retention pass so its rows
+    // and the audit entries written here are both visible to this run.
+    this.purgeExpiredTrash(now);
     const retention = this.options.store.applyRetention({
       cutoffMs: now - policy.retentionDays * 86_400_000,
       minUndoEntries: policy.minUndoEntries,
@@ -275,6 +313,13 @@ export class UnifiedHistoryService {
       // Release claims left behind by processes that died without closing, so
       // retention below can reclaim their rows (RL §3.3, rung 3).
       this.options.store.reclaimOrphanedClaims(this.now());
+      // Expired trash is permanently removed on every writable boot so the
+      // retention window is honoured even if no other lifecycle call happens.
+      try {
+        this.purgeExpiredTrash(this.now());
+      } catch (error) {
+        this.report(error, { phase: 'trash-expiry' });
+      }
       this.implicitSessionId = this.options.store.createSession({
         prompt: 'automatic recording',
         implicit: true,
@@ -507,6 +552,254 @@ export class UnifiedHistoryService {
 
   listSessions(query?: SessionQuery): SessionPage {
     return this.options.store.listSessions(query);
+  }
+
+  // ── session lifecycle: trash, restore, delete, wipe ─────────────────
+
+  /**
+   * Moves a completed session to the trash. Trashed sessions stay on disk and
+   * in the database but are hidden from normal {@link listSessions} results.
+   *
+   * Active sessions are refused: they may still be recording, and hiding them
+   * would split a live recording from its rows.
+   */
+  trashSession(sessionId: string, options: TrashSessionOptions = {}): SessionTrashReceipt {
+    this.assertWritable();
+    const occurredAt = options.now ?? this.now();
+    let row: SessionRow;
+    try {
+      row = this.requireSession(sessionId);
+    } catch (error) {
+      this.recordFailedLifecycle('trash', sessionId, options, occurredAt, error);
+      throw error;
+    }
+    if (row.status === 'active') {
+      const error = new UnifiedSessionStateError(sessionId, row.status, 'trash');
+      this.recordFailedLifecycle('trash', sessionId, options, occurredAt, error);
+      throw error;
+    }
+    const requestedRetention = options.retentionMs ?? this.trashRetentionMs;
+    const retentionMs = Number.isFinite(requestedRetention) && requestedRetention >= 0
+      ? Math.trunc(requestedRetention)
+      : this.trashRetentionMs;
+    const expiresAt = occurredAt + retentionMs;
+    return this.options.store.transaction(() => {
+      const session = this.options.store.trashSession(sessionId, occurredAt, expiresAt);
+      this.recordDeleteHistory({
+        occurredAt,
+        action: 'trash',
+        status: 'success',
+        sessionId,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? 'manual_delete',
+        details: { expiresAt, retentionMs },
+      });
+      return { session, occurredAt, expiresAt };
+    });
+  }
+
+  /** Returns a trashed session to normal state. Only a trashed session may be restored. */
+  restoreSession(sessionId: string, options: SessionLifecycleOptions = {}): SessionTrashReceipt {
+    this.assertWritable();
+    const occurredAt = options.now ?? this.now();
+    let row: SessionRow;
+    try {
+      row = this.requireSession(sessionId);
+    } catch (error) {
+      this.recordFailedLifecycle('restore', sessionId, options, occurredAt, error);
+      throw error;
+    }
+    if (!row.isDeleted) {
+      const error = new UnifiedSessionStateError(sessionId, row.status, 'restore (session is not trashed)');
+      this.recordFailedLifecycle('restore', sessionId, options, occurredAt, error);
+      throw error;
+    }
+    return this.options.store.transaction(() => {
+      const session = this.options.store.restoreSession(sessionId);
+      this.recordDeleteHistory({
+        occurredAt,
+        action: 'restore',
+        status: 'success',
+        sessionId,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? 'manual_restore',
+        details: { previousExpiresAt: row.expiresAt },
+      });
+      return { session, occurredAt, expiresAt: null };
+    });
+  }
+
+  /**
+   * Permanently removes one session (trashed or live) with its entries,
+   * checkpoints and reversal log. The delete-history audit entry survives.
+   */
+  deleteSessionPermanently(sessionId: string, options: SessionLifecycleOptions = {}): SessionDeleteReceipt {
+    this.assertWritable();
+    const occurredAt = options.now ?? this.now();
+    let row: SessionRow;
+    try {
+      row = this.requireSession(sessionId);
+    } catch (error) {
+      this.recordFailedLifecycle('delete', sessionId, options, occurredAt, error);
+      throw error;
+    }
+    return this.options.store.transaction(() => {
+      const entriesDeleted = this.options.store.deleteSession(sessionId);
+      this.recordDeleteHistory({
+        occurredAt,
+        action: 'delete',
+        status: 'success',
+        sessionId,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? 'manual_delete',
+        details: { wasTrashed: row.isDeleted, createdAt: row.createdAt, entriesDeleted },
+      });
+      return { sessionId, occurredAt, entriesDeleted };
+    });
+  }
+
+  /**
+   * Permanently removes every session, including trashed and implicit rows.
+   *
+   * The exact phrase {@link WIPE_CONFIRMATION_PHRASE} is required. A mismatch
+   * is recorded as a failed `wipe` audit entry and then rejected; it never
+   * removes anything. The phrase is deliberately textual: a boolean or a
+   * defaulted option would make an accidental wipe far too easy to trigger.
+   */
+  async wipeAllSessions(confirmation: string, options: WipeSessionsOptions = {}): Promise<WipeSessionsReceipt> {
+    this.assertWritable();
+    const occurredAt = options.now ?? this.now();
+    if (confirmation !== WIPE_CONFIRMATION_PHRASE) {
+      this.recordDeleteHistory({
+        occurredAt,
+        action: 'wipe',
+        status: 'failed',
+        sessionId: null,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? 'manual_wipe',
+        details: { attemptedPhrase: confirmation, expectedPhrase: WIPE_CONFIRMATION_PHRASE },
+      });
+      throw new UnifiedWipeConfirmationError(WIPE_CONFIRMATION_PHRASE);
+    }
+
+    await this.flush();
+    const result = this.options.store.transaction(() => {
+      const deleted = this.options.store.deleteAllSessions();
+      this.recordDeleteHistory({
+        occurredAt,
+        action: 'wipe',
+        status: 'success',
+        sessionId: null,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? 'manual_wipe',
+        details: { deletedCount: deleted.sessionIds.length, sessionIds: deleted.sessionIds },
+      });
+      return deleted;
+    });
+
+    // The live implicit row is gone. Clear the field and, if the service is
+    // running, re-establish the recording invariant with a fresh row.
+    this.implicitSessionId = undefined;
+    if (this.started && !this.isDegraded) {
+      this.implicitSessionId = this.ensureImplicitSession();
+    }
+
+    return { occurredAt, deletedCount: result.sessionIds.length, sessionIds: result.sessionIds };
+  }
+
+  /** Trashed sessions whose retention window has not yet elapsed. */
+  listTrashedSessions(query: SessionQuery = {}): SessionPage {
+    const now = this.now();
+    const page = this.options.store.listSessions({ ...query, includeDeleted: true, trashedOnly: true });
+    // An expired row is either waiting for the next sweep or has an invalid
+    // expiry; it is never exposed as restorable trash.
+    return {
+      rows: page.rows.filter((row) => row.expiresAt === null || row.expiresAt > now),
+      ...(page.next === undefined ? {} : { next: page.next }),
+    };
+  }
+
+  /** Permanently removes trashed sessions whose expiry has passed. */
+  purgeExpiredTrash(now = this.now()): TrashPurgeReceipt {
+    if (this.isDegraded) {
+      return { occurredAt: now, expiredSessionIds: [] };
+    }
+    return this.options.store.transaction(() => {
+      const expiredSessionIds: string[] = [];
+      for (;;) {
+        const batch = this.options.store.listExpiredTrash(now, 1_000);
+        if (batch.length === 0) {
+          break;
+        }
+        for (const sessionId of batch) {
+          const row = this.options.store.getSession(sessionId);
+          this.options.store.deleteSession(sessionId);
+          expiredSessionIds.push(sessionId);
+          this.recordDeleteHistory({
+            occurredAt: now,
+            action: 'trash_expired',
+            status: 'success',
+            sessionId,
+            actor: 'system',
+            reason: 'retention_cleanup',
+            details: { expiresAt: row?.expiresAt ?? null, retentionMs: this.trashRetentionMs },
+          });
+        }
+        if (batch.length < 1_000) {
+          break;
+        }
+      }
+      return { occurredAt: now, expiredSessionIds };
+    });
+  }
+
+  /** Newest-first lifecycle audit log (delete/restore/trash/wipe attempts). */
+  listDeleteHistory(query?: DeleteHistoryQuery): DeleteHistoryPage {
+    return this.options.store.listDeleteHistory(query);
+  }
+
+  private recordDeleteHistory(input: {
+    readonly occurredAt: number;
+    readonly action: 'trash' | 'restore' | 'delete' | 'wipe' | 'trash_expired';
+    readonly status: 'success' | 'failed';
+    readonly sessionId: string | null;
+    readonly actor: string;
+    readonly reason: string | null;
+    readonly details: unknown;
+  }): void {
+    this.options.store.insertDeleteHistory({
+      eventId: `DEL-${randomUUID()}`,
+      ...input,
+    });
+  }
+
+  /** Best-effort failed-attempt audit row; it must never mask the real error. */
+  private recordFailedLifecycle(
+    action: 'trash' | 'restore' | 'delete',
+    sessionId: string,
+    options: { readonly actor?: string; readonly reason?: string },
+    occurredAt: number,
+    error: unknown,
+  ): void {
+    try {
+      this.recordDeleteHistory({
+        occurredAt,
+        action,
+        status: 'failed',
+        sessionId,
+        actor: options.actor ?? 'user',
+        reason: options.reason ?? (action === 'restore' ? 'manual_restore' : 'manual_delete'),
+        details: { error: error instanceof Error ? error.message : String(error) },
+      });
+    } catch {
+      // The audit sink is best effort on a failure path.
+    }
+  }
+
+  private assertWritable(): void {
+    if (this.isDegraded) {
+      throw new UnifiedHistoryDegradedError(this.options.store.degradedReason ?? 'READ_ONLY_STORAGE');
+    }
   }
 
   /**
