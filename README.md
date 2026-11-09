@@ -1,216 +1,86 @@
-# Brud
+# Brud OS
 
-**The open foundation for AI-native software.**
+An autonomous agent is only useful if it can take action. Letting it act safely is the hard part.
 
-Build the agent. Brud handles the foundation.
+**Brud OS is a foundation for building autonomous agents: software that takes actions on your behalf inside a project folder you control.**
 
-Brud provides the primitives an agent needs to modify a workspace with control and traceability: file operations, terminal execution, a reversible history ledger, and capability-scoped plugins, exposed through a local JSON-RPC interface.
+## What Brud OS is: the kernel
 
-Brud is an open foundation for building AI-native software. It provides the daemon, the plugins, the capability gates, and the UI framework that local AI agents need to interact with a workspace safely.
+Brud OS is built around a kernel. **In Brud, the kernel is a service orchestrator.**
 
-It is intended for teams building coding agents, editor integrations, and automation tools that need a dependable execution layer rather than a collection of scripts.
+Services are the core capabilities the kernel manages, such as a file system or a terminal. Plugins are packages that register tools for an agent and declare which capabilities they need — in other words, which operations they are allowed to perform.
 
-This repository contains the engine, the local daemon, the official plugins, and the Brud Code reference client.
+The kernel manages those services, decides what each service is allowed to do, and passes requests between the services and the agent or application asking. **It has no built-in capabilities.** It does not open files, run commands, or remember history. Everything an agent can do is added as a service or a plugin.
 
-[![Quality Gate](https://github.com/rahatarch/brud/actions/workflows/quality.yml/badge.svg)](https://github.com/rahatarch/brud/actions/workflows/quality.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Status: developer preview](https://img.shields.io/badge/status-developer%20preview-orange.svg)](#project-status)
+A workspace is the project folder Brud is allowed to operate in. Add a capability by adding a service or a plugin; **the kernel itself does not change.**
 
----
+When Brud starts, the kernel reads the dependencies between services, starts them in the right order, and checks every request to confirm the caller is allowed to use the service it is asking for.
 
-## Why build on Brud
+## The Starter Pack model
 
-- **Workspace containment is enforced before execution.** Every file operation resolves to a canonical path and is checked against the workspace boundary, the protected-path policy, and the user's `.brudignore` rules.
-- **Mutations are reversible.** The history service records pre- and post-mutation states in a SQLite ledger backed by content-addressed storage, and can revert an operation or a complete session.
-- **Permissions are explicit.** Plugins declare the capabilities they require. The kernel exposes only the handles that a plugin declared, and undeclared access is rejected at the boundary.
-- **Hosts remain decoupled.** The kernel does not depend on an editor API. The daemon exposes one tool interface over a local socket or stdio, so a VS Code extension, a CLI, and a desktop application can share the same execution layer.
-- **The official plugin set is included.** Filesystem, reader, search, structure, catalog, terminal, MCP bridge, and prompt-vault plugins are maintained in this repository.
+Brud ships with ready-made bundles of services and plugins called **Starter Packs**.
 
-## Quick start
+Each Starter Pack turns the bare kernel into a complete environment for a specific kind of agent: a coding agent, a video agent, or a compliance agent. The kernel does not change between packs; only the services and plugins do. Today, this repository ships the Coding Starter Pack.
 
-> **Developer preview.** The npm packages are not published yet. The commands below build the engine from source. Public interfaces may change before version 1.0.
+## The Coding Starter Pack
 
-### Prerequisites
+The Coding Starter Pack gives a coding agent what it needs to work in a project. **It registers the services a coding agent needs.**
 
-- Node.js 22.13 or newer, required by `node:sqlite`
+A file system service lets the agent read and change files, but only inside the project; it refuses paths outside it. A terminal service runs commands and screens them against a policy before they execute.
 
-### Build from source
+A history service records every change with before-and-after states and can undo a whole session. Settings, validation, and workspace services store configuration, check requests and commands before they run, and keep paths consistent.
 
-```bash
-git clone https://github.com/rahatarch/brud.git
-cd brud
-npm install
-npm run build:all
-npm run build \
-  --workspace @brud/plugin-filesystem \
-  --workspace @brud/plugin-terminal \
-  --workspace @brud/plugin-reader \
-  --workspace @brud/plugin-search \
-  --workspace @brud/plugin-structure \
-  --workspace @brud/plugin-catalog \
-  --workspace @brud/plugin-user-prompts \
-  --workspace @brud/plugin-mcp-bridge
-```
+A plugin manager loads plugins and limits each plugin to the capabilities it declared. A tool service exposes the actions available to the agent; an action service handles operations that only a user interface can call; a utility service provides shared helpers such as working out which files a source file imports.
 
-### Start the daemon
+**The pack also ships the plugins that give the agent its tools.** Reader, search, and structure plugins read files, find text, and extract a compact map of the project. Catalog lists the tools available to the agent. Filesystem creates, moves, and deletes files. Terminal runs commands.
 
-```bash
-node packages/daemon/dist/cli.js --workspace /path/to/project --stdio
-```
+The MCP bridge connects the agent to external tools through the Model Context Protocol, a standard way for AI tools to call other tools. The user prompts plugin stores reusable prompts.
 
-The `--stdio` mode serves the MCP stdio transport. A custom application does not need to start the daemon manually; the client below starts it on demand.
+- **Contained.** The file system service only lets the agent touch files inside the project.
+- **Journaled.** Every change through the file system service is recorded with before-and-after states.
+- **Reversible.** A session can be undone.
 
-### Connect a client
+These are properties of the Coding Starter Pack, not of the kernel. The kernel manages and connects the services; **the pack supplies the guarantees.**
 
-```ts
-import { connectToDaemon } from '@brud/daemon';
+## The pattern for other domains
 
-const client = await connectToDaemon({ workspaceRoot: process.cwd() });
+A Photoshop Starter Pack would bring services for image editing, and a compliance Starter Pack would bring services for audits. **The kernel stays the same.**
 
-const { result } = await client.request('tools.execute', {
-  name: 'create_file',
-  input: {
-    path: 'src/generated.ts',
-    content: 'export const ready = true;\n',
-  },
-});
+## Honest boundaries
 
-if (result.status !== 'success') {
-  throw new Error(result.error ?? result.message ?? 'Tool execution failed');
-}
+### Kernel design
 
-await client.close();
-```
+Plugins run inside the same process as the kernel. They are restricted to the capabilities they declare, but **the kernel does not contain hostile code.** This is how the kernel is built.
 
-`@brud/daemon` is a workspace package in this repository. External applications can send the same JSON-RPC methods over the local socket; no published client package is available yet.
+### Coding Starter Pack scope
 
-## Core concepts
+The shipped pack does not provide an operating-system sandbox.
 
-| Term | Definition |
-|:---|:---|
-| **Kernel** | The in-process core that owns the service graph, policy enforcement, and execution pipeline. |
-| **Service** | A privileged built-in component that provides a core capability, such as workspace resolution, file I/O, validation, history, settings, or terminal execution. Brud refers to these as Level-1 services. |
-| **Plugin** | A module that registers tools and actions and declares the permissions it requires. |
-| **Tool** | A capability exposed to the AI. The agent invokes Tools to perform actions in the workspace. Tools are visible to the AI model. |
-| **Action** | A capability exposed only to the User Interface. The client uses Actions to fetch data or trigger UI updates. Actions are completely invisible to the AI model. |
-| **Daemon** | The local process that hosts the kernel and exposes tools and actions over JSON-RPC. |
-| **Ledger** | The SQLite history store that records mutation pre- and post-states and supports reversal. |
+The terminal service screens commands against a policy, but a command that passes can write outside the workspace. Those writes are outside the history record.
 
-## Architecture
+History reversal covers changes made through the pack's file system service only. Unrecorded paths cannot be reverted, and directory reversal has documented limits.
 
-```text
-Agent (AI)                                Client (UI)
-      │                                        │
-      │ tools.execute                          │ actions.execute
-      │                                        │
-      └──────────────┬─────────────────────────┘
-                     │ JSON-RPC over a local socket or stdio
-                     ▼
-Brud Daemon ── authenticates the client, scopes the workspace, enforces caller tier
-                     │
-                     ▼
-Brud Kernel ── service graph, policy enforcement, execution pipeline
-                     │
-                     ├── Level-1 services
-                     │   Workspace · FileSystem · Validation · History · Settings · Terminal · ActionManager
-                     │
-                     └── Plugins (capability-scoped)
-                         Filesystem · Reader · Search · Structure · Catalog · Terminal
-                         MCP Bridge · User Prompts
-```
+### Project status
 
-A request enters through the daemon, is authenticated, and is bound to a workspace with a caller tier of `ai` or `ui`. The kernel resolves the requested **Tool** (for AI callers) or **Action** (for UI callers), applies the owning plugin's capability scope and the path and command policy, and executes the operation through the relevant service or plugin. `actions.execute` is gated to `ui` callers and is never listed in the tool catalog or exposed over MCP. Kernel-mediated file mutations are recorded in the history ledger before and after execution.
+Brud OS is a developer preview. The Coding Starter Pack is the only pack that ships today.
 
-## Capabilities
+There is no marketplace and no system for distributing third-party Starter Packs. Public interfaces may change before the first stable version.
 
-| Capability | Provided by | Operations |
-|:---|:---|:---|
-| File mutation | Filesystem plugin | Create, delete, rename, move, copy, and append files; create, delete, and move directories; multi-file append; search and replace; multi-file search and replace |
-| File reading | Reader plugin | `read_file`, `read_files`, `read_directory` |
-| Search | Search plugin | `search_files` |
-| Project structure | Structure plugin | `extract_structure`, `codebase_metadata` |
-| Tool discovery | Catalog plugin | `get_tool_info` |
-| Terminal execution | Terminal plugin | `terminal_command`, `terminal_interactive` |
-| History and reversal | Universal History service | SQLite ledger, content-addressed states, operation and session reversal |
-| MCP integration | MCP Bridge plugin | stdio and HTTP transports for the Model Context Protocol |
-| Prompt storage | User Prompts plugin | Workspace-scoped prompt vault |
-| UI Actions | ActionManager service | `actions.list`, `actions.execute`; UI-only endpoints such as `list_sessions`, `get_settings`, and `preview_diff` |
+The way to build a real product on Brud today is to fork the repository. Everything described in this document ships in the repository: the kernel, the Coding Starter Pack, and the pattern for additional Starter Packs. Fork it, register the services and plugins your domain needs, and ship your product. A published, stable Brud package is a future state, not today's.
 
-Tools are the AI-facing surface. The agent can discover and use them to modify the workspace. Actions are the UI-facing surface. They fetch data for the application (like session history or diff previews) and are strictly isolated from the AI. The Daemon enforces this separation using caller tiers.
+## Where to go next
 
-## Security model
+**To work with the code,** clone the repository and install dependencies with `npm install`.
 
-Brud enforces policy at the kernel boundary, before an operation reaches the filesystem or a process.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the repository and engine are structured.
+- [Kernel architecture standard](docs/architecture/ENGINE_ARCHITECTURE_STANDARD.md) — the kernel's rules and service boundaries.
+- [History engine specification](docs/architecture/BRUD_HISTORY_ENGINE_SPEC.md) — how changes are recorded and reversed.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute.
 
-### Enforced controls
-
-- **Workspace boundary.** Paths are resolved to canonical absolute paths and checked for traversal and symlink escapes before execution.
-- **Protected paths.** The kernel denies access to `.git`, `.brud/history`, `.brud/settings.json`, and `.brudignore`, including all descendants.
-- **User policy.** `.brudignore` rules are loaded once per workspace and applied to every path evaluation. The kernel does not allow tools to read or modify the ignore file itself.
-- **Command validation.** Terminal commands are screened against a configurable denylist of destructive patterns. The policy is frozen at kernel boot.
-- **Capability-scoped plugins.** A plugin manifest declares permissions such as `fs:read`, `fs:write`, `history:read`, `history:write`, `tools:register`, `tools:execute`, `terminal:execute`, and `telemetry:emit`. The kernel exposes only the handles that the plugin declared.
-- **Daemon authentication.** On POSIX systems, the local runtime directory is user-private (`0700`), and clients complete a token-based handshake before issuing requests.
-- **History access control.** Plugins interact with the ledger through abstracted APIs. Raw ledger access is reserved for the client and for official plugins reading their own namespace.
-
-### Current boundaries
-
-- Plugins execute in the same process as the kernel. The kernel grants only the capabilities a plugin declared; this does not isolate hostile code.
-- Operating-system sandboxing is not implemented. Process isolation for plugins is deferred to a future design decision.
-- Terminal commands are screened by a denylist, not contained by an operating-system sandbox. A command that passes validation can write outside the workspace, and those writes are outside the history ledger.
-- History reversal covers kernel-mediated file operations. Unrecorded paths cannot be reverted, and directory-state reversal has documented limits.
-- The project is pre-1.0, and interfaces may change.
-
-## Repository layout
-
-The repository is an npm workspace monorepo. The engine packages, official plugins, and reference client are versioned together.
-
-| Path | Contents |
-|:---|:---|
-| `packages/kernel` | Microkernel: service container, capability enforcement, validation, execution pipeline, Level-1 services |
-| `packages/protocol` | JSON-RPC contracts and shared types |
-| `packages/daemon` | Local host, transport, authentication, CLI, and client |
-| `packages/plugins/*` | The eight official plugins |
-| `packages/ui` | React webview interface |
-| `apps/vscode` | Brud Code, the reference VS Code extension |
-| `apps/web` | Project website and documentation (Next.js static export) |
-| `tests` | Integration tests |
-| `docs` | Architecture, standards, and release documentation |
-| `deprecated` | Archived pre-microkernel engine, retained for reference only |
-
-## Project status
-
-Brud is in developer preview. The engine, daemon, protocol, and plugins are under active development, and public interfaces may change before version 1.0. No npm packages are published yet.
-
-The reference VS Code client, Brud Code, is being migrated from the archived engine to the daemon protocol. Until that migration completes, parts of the client use the code in `deprecated/`.
-
-## Development and testing
-
-```bash
-npm run typecheck
-npm run lint
-npm run test:kernel
-npm run test:daemon
-npm run ci
-```
-
-`npm run ci` builds the engine, runs the kernel test suite, checks package boundaries, and runs the linter. The default daemon suite covers protocol dispatch and client behavior; additional adversarial transport tests are located in `packages/daemon/src/__verification__/`.
-
-## Documentation
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) — repository and engine structure
-- [Engine architecture standard](docs/architecture/ENGINE_ARCHITECTURE_STANDARD.md) — service boundaries and kernel contracts
-- [Microkernel rollout plan](docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md) — migration record and design decisions
-- [History security model](docs/architecture/HISTORY_SECURITY_MODEL.md) — ledger access model and threat boundaries
-- [PRIVACY.md](PRIVACY.md) — data handling
-- [CONTRIBUTING.md](CONTRIBUTING.md) — contribution guidelines
-- [CHANGELOG.md](CHANGELOG.md) — release history
-
-## Contributing
-
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request. Report security vulnerabilities privately to the maintainers rather than in a public issue.
+A dedicated Starter Pack guide is in progress; in the meantime, the architecture documents above cover the same ground.
 
 ## License
 
-Brud is released under the [MIT License](LICENSE).
+Brud OS is released under the [**MIT License**](LICENSE).
 
-Brud is developed by Akkhar-Labs.
+Brud OS is developed by Akkhar-Labs.

@@ -1,12 +1,23 @@
 /**
- * Presents the unified engine through the existing `IUniversalHistoryService`
- * contract (`brud.core.universalHistory`), shaped exactly like the legacy
- * session ledger, so the daemon wire contract and plugins see no change.
+ * Plugin-facing facade over the unified history engine.
+ *
+ * Implements `IPluginHistoryService` for the `brud.core.universalHistory`
+ * token: sessions, whole-session and per-operation reversal, snapshots, and
+ * the lifecycle audit log. The daemon wire contract keeps its existing shape.
  */
 import type {
   CommitOutcome,
   IUniversalHistoryService,
 } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
+import type {
+  IPluginHistoryService,
+  PluginSessionView,
+  RevertOperationsOptions,
+} from '../../contracts/IPluginHistoryService.js';
+import type {
+  DeleteHistoryPage,
+  DeleteHistoryQuery,
+} from '../store/types.js';
 import type {
   CommitReceipt,
   FileReversalAction,
@@ -16,24 +27,34 @@ import type {
   ReversalPlan,
   ReversalReceipt,
   SessionManifest,
-  SessionRow as LegacySessionRow,
+  SessionRow as ContractSessionRow,
   TargetDigest,
 } from '../../contracts/IUniversalHistoryService/types.js';
-import type { ReversalEngine, UnifiedReversalPlan } from '../engine/ReversalEngine.js';
+import type { ReversalEngine, UnifiedReversalPlan, UnifiedOperationReversalPlan, UnifiedOperationReversalReceipt } from '../engine/ReversalEngine.js';
 import type { SessionTargetPayload } from '../service/builtinTypes.js';
-import type { NamespaceHistoryHandle, SessionMetadata, TargetBaseline } from '../service/types.js';
+import type {
+  NamespaceHistoryHandle,
+  SessionDeleteReceipt,
+  SessionLifecycleOptions,
+  SessionMetadata,
+  SessionTrashReceipt,
+  TargetBaseline,
+  TrashSessionOptions,
+  WipeSessionsOptions,
+  WipeSessionsReceipt,
+} from '../service/types.js';
 import type { NamespaceHandleOptions, UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
 
 /**
- * Adapters built by the unified engine, mapped to their service. Kept off the
- * adapter's surface so `IUniversalHistoryService` (and the daemon contract)
+ * Facades built by the unified engine, mapped to their service. Kept off the
+ * facade's surface so `IUniversalHistoryService` (and the daemon contract)
  * gain nothing; the plugin manager reaches it through `namespaceHistoryFor`.
  */
 const UNIFIED_SERVICES = new WeakMap<object, UnifiedHistoryService>();
 
 /**
  * Returns a namespace-bound handle when `history` is backed by the unified
- * engine, or `undefined` on the legacy engine (rollback switch until U-7).
+ * engine.
  */
 export function namespaceHistoryFor(
   history: IUniversalHistoryService,
@@ -43,10 +64,10 @@ export function namespaceHistoryFor(
   return UNIFIED_SERVICES.get(history)?.forNamespace(namespace, options);
 }
 
-/** Plans handed out by this adapter, mapped to the full native plan. */
+/** Plans handed out by this facade, mapped to the full native plan. */
 const NATIVE_PLANS = new WeakMap<object, UnifiedReversalPlan>();
 
-/** A legacy-shaped plan that this adapter did not produce. */
+/** A plan that this facade did not produce. */
 export class ForeignReversalPlanError extends Error {
   public readonly code = 'REVERSAL_PLAN_UNKNOWN' as const;
 
@@ -68,7 +89,7 @@ function digest(path: string, state: TargetBaseline): TargetDigest {
   };
 }
 
-export class LegacySessionAdapter implements IUniversalHistoryService {
+export class PluginHistoryFacade implements IPluginHistoryService {
   constructor(
     private readonly service: UnifiedHistoryService,
     private readonly engine: ReversalEngine,
@@ -94,7 +115,7 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
   async planReversal(sessionId: string, options?: PlanReversalOptions): Promise<ReversalPlan> {
     const native = await this.engine.planSessionReversal(sessionId, options?.targetState ?? 'pre');
     const actions: FileReversalAction[] = native.fileActions.map((action) => {
-      // Directory actions stay within the legacy action vocabulary: a
+      // Directory actions stay within the contract action vocabulary: a
       // directory restore is a restore with no bytes, a removal is a delete.
       const kind: FileReversalAction['action'] = action.action === 'mkdir'
         ? 'restore'
@@ -189,7 +210,7 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
     };
   }
 
-  async listSessions(filter?: LedgerQueryFilter): Promise<readonly LegacySessionRow[]> {
+  async listSessions(filter?: LedgerQueryFilter): Promise<readonly ContractSessionRow[]> {
     const since = filter?.since === undefined ? undefined : Date.parse(filter.since);
     const page = this.service.listSessions({
       ...(filter?.status === undefined ? {} : { status: filter.status }),
@@ -208,6 +229,77 @@ export class LegacySessionAdapter implements IUniversalHistoryService {
       deleted_at: null,
       expires_at: null,
     }));
+  }
+
+  // ── plugin-facing Phase 2 surface (Phase 3A) ───────────────────────
+
+  getSessionView(sessionId: string): PluginSessionView | undefined {
+    const view = this.service.getSessionView(sessionId);
+
+    if (view === undefined) {
+      return undefined;
+    }
+
+    return {
+      session: view.session,
+      declaredTargets: view.declaredTargets,
+      baseline: view.baseline,
+      targets: view.targets.map(({ entry, payload }) => ({
+        seq: entry.seq,
+        entryId: entry.entryId,
+        namespace: entry.namespace,
+        type: entry.type,
+        schemaVersion: entry.schemaVersion,
+        createdAt: entry.createdAt,
+        payload,
+      })),
+    };
+  }
+
+  listDeleteHistory(query?: DeleteHistoryQuery): DeleteHistoryPage {
+    return this.service.listDeleteHistory(query);
+  }
+
+  planOperationReversal(
+    sessionId: string,
+    operationIds: readonly (string | number)[],
+    targetState: 'pre' | 'post' = 'pre',
+  ): Promise<UnifiedOperationReversalPlan> {
+    return this.engine.planOperationReversal(sessionId, operationIds, targetState);
+  }
+
+  trashSession(sessionId: string, options?: TrashSessionOptions): SessionTrashReceipt {
+    return this.service.trashSession(sessionId, options);
+  }
+
+  restoreSession(sessionId: string, options?: SessionLifecycleOptions): SessionTrashReceipt {
+    return this.service.restoreSession(sessionId, options);
+  }
+
+  deleteSessionPermanently(
+    sessionId: string,
+    options?: SessionLifecycleOptions,
+  ): SessionDeleteReceipt {
+    return this.service.deleteSessionPermanently(sessionId, options);
+  }
+
+  wipeAllSessions(
+    confirmation: string,
+    options?: WipeSessionsOptions,
+  ): Promise<WipeSessionsReceipt> {
+    return this.service.wipeAllSessions(confirmation, options);
+  }
+
+  revertOperations(
+    sessionId: string,
+    operationIds: readonly (string | number)[],
+    options?: RevertOperationsOptions,
+  ): Promise<UnifiedOperationReversalReceipt> {
+    return this.engine.revertOperations(sessionId, operationIds, options);
+  }
+
+  deleteAuditLog(query?: DeleteHistoryQuery): number {
+    return this.service.deleteAuditLog(query);
   }
 
   /** Lifecycle hooks used by the unified descriptor. */

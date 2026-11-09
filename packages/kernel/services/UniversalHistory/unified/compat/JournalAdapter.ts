@@ -1,7 +1,6 @@
 /**
- * Presents the unified engine through the existing `IUniversalHistory`
- * contract (`brud.core.history`): undo, redo, checkpoints, and the mutation
- * list, shaped exactly like the legacy journal.
+ * Presents the unified engine through the `IUniversalHistory` contract
+ * (`brud.core.history`): undo, redo, checkpoints, and the mutation list.
  */
 import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type {
@@ -18,7 +17,7 @@ import type { UnifiedHistoryService } from '../service/UnifiedHistoryService.js'
 
 const DEFAULT_LIMIT = 1_000;
 
-export class LegacyJournalAdapter implements IUniversalHistory {
+export class JournalAdapter implements IUniversalHistory {
   constructor(
     private readonly service: UnifiedHistoryService,
     private readonly engine: ReversalEngine,

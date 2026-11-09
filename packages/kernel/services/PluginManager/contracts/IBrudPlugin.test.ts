@@ -6,7 +6,7 @@ import type {
   ToolRegistrationOptions,
 } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { IPluginHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { PluginPermissionError } from './errors.js';
@@ -49,7 +49,7 @@ function createContext(pluginId: string): IPluginContext {
     getFileSystem: (): IBrudFileSystem => {
       throw new PluginPermissionError(pluginId, 'getFileSystem', ['fs:read', 'fs:write']);
     },
-    getUniversalHistory: (): IUniversalHistoryService => {
+    getUniversalHistory: (): IPluginHistoryService => {
       throw new PluginPermissionError(pluginId, 'getUniversalHistory', [
         'history:read',
         'history:write',

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { IPluginHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { PluginPermissionError } from './errors.js';
@@ -61,7 +61,7 @@ class UnusedFileSystem implements IBrudFileSystem {
   }
 }
 
-class UnusedUniversalHistory implements IUniversalHistoryService {
+class UnusedUniversalHistory implements IPluginHistoryService {
   async beginSession(): Promise<never> {
     throw new Error('history facade is not used in this test');
   }
@@ -83,6 +83,42 @@ class UnusedUniversalHistory implements IUniversalHistoryService {
   }
 
   async listSessions(): Promise<never> {
+    throw new Error('history facade is not used in this test');
+  }
+
+  getSessionView(): never {
+    throw new Error('history facade is not used in this test');
+  }
+
+  listDeleteHistory(): never {
+    throw new Error('history facade is not used in this test');
+  }
+
+  async planOperationReversal(): Promise<never> {
+    throw new Error('history facade is not used in this test');
+  }
+
+  trashSession(): never {
+    throw new Error('history facade is not used in this test');
+  }
+
+  restoreSession(): never {
+    throw new Error('history facade is not used in this test');
+  }
+
+  deleteSessionPermanently(): never {
+    throw new Error('history facade is not used in this test');
+  }
+
+  async wipeAllSessions(): Promise<never> {
+    throw new Error('history facade is not used in this test');
+  }
+
+  async revertOperations(): Promise<never> {
+    throw new Error('history facade is not used in this test');
+  }
+
+  deleteAuditLog(): never {
     throw new Error('history facade is not used in this test');
   }
 }
@@ -129,7 +165,7 @@ function createProviders(counts: ProviderCounts): PluginCapabilityProviders {
       counts.fileSystem += 1;
       return fileSystem;
     },
-    universalHistory: (): IUniversalHistoryService => {
+    universalHistory: (): IPluginHistoryService => {
       counts.universalHistory += 1;
       return universalHistory;
     },

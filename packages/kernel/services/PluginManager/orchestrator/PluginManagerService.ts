@@ -5,7 +5,7 @@ import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
 import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
-import { namespaceHistoryFor } from '../../UniversalHistory/unified/compat/LegacySessionAdapter.js';
+import { namespaceHistoryFor } from '../../UniversalHistory/unified/compat/PluginHistoryFacade.js';
 import { createReadOnlyNamespaceHandle } from '../../UniversalHistory/unified/service/NamespaceHandle.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';

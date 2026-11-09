@@ -2,8 +2,8 @@
  * Kernel descriptors for the unified history engine (D-15).
  *
  * One `UnifiedHistoryService` + `ReversalEngine` backs both existing tokens:
- * - `brud.core.universalHistory` → `LegacySessionAdapter` (sessions, revert)
- * - `brud.core.history`          → `LegacyJournalAdapter` (undo/redo/checkpoints)
+ * - `brud.core.universalHistory` → `PluginHistoryFacade` (sessions, revert)
+ * - `brud.core.history`          → `JournalAdapter` (undo/redo/checkpoints)
  *
  * Registered by `createStandardKernel()`; the only history engine since D-15 U-7.
  */
@@ -20,8 +20,8 @@ import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
-import { LegacyJournalAdapter } from '../compat/LegacyJournalAdapter.js';
-import { LegacySessionAdapter } from '../compat/LegacySessionAdapter.js';
+import { JournalAdapter } from '../compat/JournalAdapter.js';
+import { PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
 import type { HistoryRetentionReport } from '../service/UnifiedHistoryService.js';
@@ -49,16 +49,16 @@ interface Runtime {
 }
 
 export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescriptorOptions): {
-  readonly session: ServiceDescriptor<IUniversalHistoryService, LegacySessionAdapter>;
-  readonly journal: ServiceDescriptor<IUniversalHistory, LegacyJournalAdapter>;
+  readonly session: ServiceDescriptor<IUniversalHistoryService, PluginHistoryFacade>;
+  readonly journal: ServiceDescriptor<IUniversalHistory, JournalAdapter>;
 } {
   let runtime: Runtime | undefined;
 
-  const session: ServiceDescriptor<IUniversalHistoryService, LegacySessionAdapter> = {
+  const session: ServiceDescriptor<IUniversalHistoryService, PluginHistoryFacade> = {
     token: UniversalHistoryToken,
     tier: 'core',
     dependencies: [FileSystemToken],
-    factory: (context: ServiceContext, broker: IKernelAccessBroker): LegacySessionAdapter => {
+    factory: (context: ServiceContext, broker: IKernelAccessBroker): PluginHistoryFacade => {
       const historyRoot = join(context.workspaceRoot, '.brud', 'history');
       let fileSystem: IBrudFileSystem | undefined;
       const resolveFileSystem = (): IBrudFileSystem => {
@@ -133,22 +133,22 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
           });
         }
       };
-      return new LegacySessionAdapter(service, engine, retain);
+      return new PluginHistoryFacade(service, engine, retain);
     },
   };
 
-  const journal: ServiceDescriptor<IUniversalHistory, LegacyJournalAdapter> = {
+  const journal: ServiceDescriptor<IUniversalHistory, JournalAdapter> = {
     token: HistoryToken,
     tier: 'core',
     dependencies: [UniversalHistoryToken],
     accessPolicy: { deniedCallers: [] },
-    factory: (): LegacyJournalAdapter => {
+    factory: (): JournalAdapter => {
       if (runtime === undefined) {
         throw new Error('brud.core.universalHistory must be constructed before brud.core.history');
       }
-      return new LegacyJournalAdapter(runtime.service, runtime.engine);
+      return new JournalAdapter(runtime.service, runtime.engine);
     },
-    project: (instance: LegacyJournalAdapter, caller: ServiceContext): IUniversalHistory =>
+    project: (instance: JournalAdapter, caller: ServiceContext): IUniversalHistory =>
       caller.tier === 'core' ? instance : new ReadOnlyHistoryFacade(instance),
   };
 

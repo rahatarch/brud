@@ -22,7 +22,7 @@ import type { TestContext } from 'node:test';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
-import { LegacySessionAdapter } from '../compat/LegacySessionAdapter.js';
+import { PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, UnifiedHistoryService } from '../service/index.js';
 import type { SessionTargetPayload } from '../service/builtinTypes.js';
@@ -266,7 +266,7 @@ describe('DIRECTORY_STATE_SHA256 — collision safety', () => {
 
   it('maps directory actions into the legacy public vocabulary', async (context) => {
     const h = await harness(context);
-    const adapter = new LegacySessionAdapter(h.service, h.engine);
+    const adapter = new PluginHistoryFacade(h.service, h.engine);
     await h.fs.createDirectory('tree');
     await h.fs.createDirectory('tree/deleted');
 

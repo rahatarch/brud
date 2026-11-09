@@ -74,4 +74,4 @@ export type {
   UnifiedOperationSkip,
 } from './engine/ReversalEngine.js';
 export * from './engine/errors.js';
-export { ForeignReversalPlanError, namespaceHistoryFor } from './compat/LegacySessionAdapter.js';
+export { ForeignReversalPlanError, namespaceHistoryFor } from './compat/PluginHistoryFacade.js';

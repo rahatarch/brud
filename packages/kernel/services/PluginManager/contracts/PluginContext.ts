@@ -11,7 +11,8 @@ import type {
   ToolRegistrationOptions,
 } from '../../BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import type { IPluginHistoryService, IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
+import { isPluginHistoryService } from '../../UniversalHistory/contracts/index.js';
 import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
@@ -115,7 +116,7 @@ export class PluginContext implements IPluginContext {
 
   private fileSystem: IBrudFileSystem | undefined;
 
-  private universalHistory: IUniversalHistoryService | undefined;
+  private universalHistory: IPluginHistoryService | undefined;
 
   private history: NamespaceHistoryHandle | undefined;
 
@@ -149,7 +150,7 @@ export class PluginContext implements IPluginContext {
     return this.fileSystem;
   }
 
-  public getUniversalHistory(): IUniversalHistoryService {
+  public getUniversalHistory(): IPluginHistoryService {
     this.assertCapability('getUniversalHistory', 'universalHistory');
 
     if (!this.official) {
@@ -161,7 +162,17 @@ export class PluginContext implements IPluginContext {
       );
     }
 
-    this.universalHistory ??= this.capabilities.universalHistory();
+    if (this.universalHistory === undefined) {
+      const history = this.capabilities.universalHistory();
+
+      if (!isPluginHistoryService(history)) {
+        throw new Error(
+          `UniversalHistory provider for plugin "${this.pluginId}" does not implement the plugin history contract`,
+        );
+      }
+
+      this.universalHistory = history;
+    }
 
     return this.universalHistory;
   }

@@ -1,4 +1,12 @@
 import type { IBrudPlugin, IPluginContext } from '@brud/kernel';
+import {
+  TERMINAL_KILL_PROCESS_ACTION,
+  TERMINAL_KILL_PROCESS_SCHEMA,
+  TERMINAL_LIST_PROCESSES_ACTION,
+  TERMINAL_LIST_PROCESSES_SCHEMA,
+  terminalKillProcess,
+  terminalListProcesses,
+} from './groups/terminalActions/index.js';
 import { TERMINAL_COMMAND_SCHEMA, terminalCommand } from './groups/terminalCommand/index.js';
 import { TERMINAL_INTERACTIVE_SCHEMA, terminalInteractive } from './groups/terminalInteractive/index.js';
 import { manifest } from './manifest.js';
@@ -42,8 +50,25 @@ export function createTerminalPlugin(): IBrudPlugin {
           terminalInteractive(input, terminal, executionContext),
       });
 
-      context.logger.info('Terminal tools registered', {
+      context.registerAction({
+        name: TERMINAL_KILL_PROCESS_ACTION,
+        description: 'Terminate a live terminal process started by this plugin',
+        parametersSchema: TERMINAL_KILL_PROCESS_SCHEMA,
+        execute: (input, executionContext) =>
+          terminalKillProcess(input, terminal, executionContext),
+      });
+
+      context.registerAction({
+        name: TERMINAL_LIST_PROCESSES_ACTION,
+        description: 'List live terminal processes started by this plugin',
+        parametersSchema: TERMINAL_LIST_PROCESSES_SCHEMA,
+        execute: (input, executionContext) =>
+          terminalListProcesses(input, terminal, executionContext),
+      });
+
+      context.logger.info('Terminal tools and actions registered', {
         tools: ['terminal_command', 'terminal_interactive'],
+        actions: [TERMINAL_KILL_PROCESS_ACTION, TERMINAL_LIST_PROCESSES_ACTION],
       });
     },
   };

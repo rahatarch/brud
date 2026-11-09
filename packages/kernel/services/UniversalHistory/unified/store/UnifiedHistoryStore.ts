@@ -677,6 +677,44 @@ export class UnifiedHistoryStore {
       : { rows: page };
   }
 
+  /**
+   * Deletes lifecycle audit rows matching the filter. Returns the count removed.
+   *
+   * `limit` and `after` are listing cursors and are intentionally ignored: a
+   * deletion targets every row the filter selects. The caller scopes the delete
+   * with `sessionId`/`action`/`status`/time bounds.
+   */
+  deleteDeleteHistory(query: DeleteHistoryQuery = {}): number {
+    return this.mutate(() => this.immediate(() => {
+      const where: string[] = ['1 = 1'];
+      const params: SQLInputValue[] = [];
+      if (query.sessionId !== undefined) {
+        where.push('session_id = ?');
+        params.push(query.sessionId);
+      }
+      if (query.action !== undefined) {
+        where.push('action = ?');
+        params.push(query.action);
+      }
+      if (query.status !== undefined) {
+        where.push('status = ?');
+        params.push(query.status);
+      }
+      if (query.since !== undefined) {
+        where.push('occurred_at >= ?');
+        params.push(query.since);
+      }
+      if (query.before !== undefined) {
+        where.push('occurred_at < ?');
+        params.push(query.before);
+      }
+      const result = this.writer()
+        .prepare(`DELETE FROM delete_history WHERE ${where.join(' AND ')}`)
+        .run(...params);
+      return Number(result.changes);
+    }));
+  }
+
   // ── contents ────────────────────────────────────────────────────────
 
   /** Stores bytes by digest: inline up to the threshold, otherwise in `cas/`. Deduplicates. */

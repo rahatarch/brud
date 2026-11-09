@@ -54,7 +54,7 @@ import { LiveClaimHelper } from './LiveClaimHelper.js';
  * The stage's mutation checks must break the fix in a scratch copy whose
  * imports still resolve to this package's real dependencies. This accessor
  * returns the live service for a bound namespace handle, which the running
- * process already holds in `LegacySessionAdapter`'s private map; it adds no
+ * process already holds in `PluginHistoryFacade`'s private map; it adds no
  * state and is unreachable unless the environment variable below is set.
  */
 export function verificationServiceFor(history: unknown): unknown {
@@ -756,6 +756,18 @@ export class UnifiedHistoryService {
   /** Newest-first lifecycle audit log (delete/restore/trash/wipe attempts). */
   listDeleteHistory(query?: DeleteHistoryQuery): DeleteHistoryPage {
     return this.options.store.listDeleteHistory(query);
+  }
+
+  /**
+   * Deletes lifecycle audit rows matching the filter and returns the count.
+   *
+   * The deletion is not itself audited: recording it would immediately
+   * repopulate the log the caller asked to clear. Listing cursors
+   * (`limit`/`after`) are ignored because they do not describe a delete set.
+   */
+  deleteAuditLog(query: DeleteHistoryQuery = {}): number {
+    this.assertWritable();
+    return this.options.store.deleteDeleteHistory(query);
   }
 
   private recordDeleteHistory(input: {

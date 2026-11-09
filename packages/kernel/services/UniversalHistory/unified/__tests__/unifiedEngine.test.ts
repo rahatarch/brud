@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
-import { ForeignReversalPlanError, LegacySessionAdapter } from '../compat/LegacySessionAdapter.js';
+import { ForeignReversalPlanError, PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
 import { UnifiedReversalConflictError } from '../engine/errors.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, UnifiedHistoryService } from '../service/index.js';
@@ -239,10 +239,10 @@ describe('ReversalEngine — handler mode and guards', () => {
   });
 });
 
-describe('LegacySessionAdapter', () => {
+describe('PluginHistoryFacade', () => {
   it('refuses to execute a plan it did not produce', async (context) => {
     const h = await harness(context);
-    const adapter = new LegacySessionAdapter(h.service, h.engine);
+    const adapter = new PluginHistoryFacade(h.service, h.engine);
     await assert.rejects(
       () => adapter.executeReversal({ sessionId: 'BR-20261030-001', targetState: 'pre', actions: [], conflicts: [], isExecutable: true }),
       ForeignReversalPlanError,

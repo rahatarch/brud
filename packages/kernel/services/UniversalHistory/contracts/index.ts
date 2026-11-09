@@ -25,6 +25,16 @@ export type {
   IUniversalHistoryService,
 } from './IUniversalHistoryService/IUniversalHistoryService.js';
 
+export type {
+  IPluginHistoryService,
+  PluginSessionRow,
+  PluginSessionTarget,
+  PluginSessionView,
+  PluginTargetBaseline,
+  RevertOperationsOptions,
+} from './IPluginHistoryService.js';
+export { isPluginHistoryService } from './IPluginHistoryService.js';
+
 export type { IUniversalHistory } from './IUniversalHistory.js';
 export type {
   Checkpoint,
