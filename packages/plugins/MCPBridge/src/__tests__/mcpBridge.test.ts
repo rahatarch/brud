@@ -98,7 +98,7 @@ async function bootBridge(): Promise<Harness> {
     initialPlugins: [bridge, echoPlugin],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const transport = new FakeMcpTransport();
   await bridge.onTransportAttach?.(transport);

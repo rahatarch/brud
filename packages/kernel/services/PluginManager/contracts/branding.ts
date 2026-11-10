@@ -1,20 +1,21 @@
-/**
- * Unique, module-local certification symbol for first-party Brud plugins.
- *
- * The symbol is deliberately not exported through any package barrel: only
- * trusted kernel code can present it, and third-party plugins cannot obtain a
- * reference to forge official status.
- */
-const OFFICIAL_PLUGIN_BRAND: unique symbol = Symbol('brud.kernel.plugin.official');
+import { createStandaloneBrandScope } from '../../BrandRegistry/orchestrator/BrandScope.js';
+import type { IBrandScope } from '../../BrandRegistry/contracts/IBrandScope.js';
 
 /**
- * Internal marker carried by plugins certified by the Brud kernel.
+ * Package-internal default scope used by standalone plugin helpers.
  *
- * A manifest cannot manufacture this marker because the symbol is unreachable
- * outside the internal branding module.
+ * Production kernels create their own plugin-manager scope from the Brand
+ * Registry. This scope keeps direct unit construction and legacy test helpers
+ * working without reintroducing the old module-local symbol.
  */
-export interface OfficialPluginBrand {
-  readonly [OFFICIAL_PLUGIN_BRAND]: true;
+const DEFAULT_OFFICIAL_SCOPE = createStandaloneBrandScope('brud.core.pluginManager');
+
+/** Marker type retained for source compatibility with earlier helpers. */
+export type OfficialPluginBrand = object;
+
+/** Returns the package-internal scope used by standalone plugin helpers. */
+export function getDefaultOfficialPluginScope(): IBrandScope {
+  return DEFAULT_OFFICIAL_SCOPE;
 }
 
 /** Namespace prefixes owned exclusively by first-party Brud plugins. */
@@ -31,49 +32,26 @@ export function isReservedPluginId(pluginId: string): boolean {
 }
 
 /**
- * Verifies that a candidate owns the genuine kernel branding symbol.
- *
- * The brand must be an own, non-enumerable property carrying the exact symbol
- * reference and a `true` value, so neither a string-named lookalike nor an
- * inherited property can pass the check.
+ * Verifies that a candidate carries the package-internal official brand.
  *
  * @param candidate - Value that may carry an official brand.
- * @returns `true` when the candidate is officially certified.
+ * @returns `true` when the candidate is certified by the default scope.
  */
 export function hasOfficialPluginBrand(candidate: unknown): candidate is OfficialPluginBrand {
-  if (typeof candidate !== 'object' || candidate === null) {
-    return false;
-  }
-
-  const descriptor = Object.getOwnPropertyDescriptor(candidate, OFFICIAL_PLUGIN_BRAND);
-
-  return descriptor !== undefined && descriptor.value === true && descriptor.enumerable === false;
+  return DEFAULT_OFFICIAL_SCOPE.verify(candidate);
 }
 
 /**
- * Marks a first-party plugin with the internal official brand.
+ * Marks a first-party plugin with the package-internal official brand.
  *
- * This helper is internal to the kernel. It is intentionally absent from the
- * public package barrels so third-party code cannot authorize itself.
+ * Production kernels brand through the Brand Registry scope created at boot;
+ * this helper remains for standalone composition and existing tests.
  *
  * @param plugin - Plugin instance built by trusted first-party code.
  * @returns The same instance, now carrying the unforgeable brand.
  */
 export function certifyOfficialPlugin<TPlugin extends object>(
   plugin: TPlugin,
-): TPlugin & OfficialPluginBrand {
-  if (hasOfficialPluginBrand(plugin)) {
-    return plugin;
-  }
-
-  const brand: OfficialPluginBrand = { [OFFICIAL_PLUGIN_BRAND]: true };
-  const branded = Object.assign(plugin, brand);
-
-  Object.defineProperty(branded, OFFICIAL_PLUGIN_BRAND, {
-    configurable: false,
-    enumerable: false,
-    writable: false,
-  });
-
-  return branded;
+): TPlugin {
+  return DEFAULT_OFFICIAL_SCOPE.brand(plugin);
 }

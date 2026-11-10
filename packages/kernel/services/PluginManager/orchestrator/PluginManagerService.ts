@@ -73,13 +73,19 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
 
   private readonly contexts = new Map<string, ActivePluginContextRecord>();
 
+  private readonly isOfficial: (candidate: unknown) => boolean;
+
   constructor(dependencies: PluginManagerRuntimeDependencies) {
     this.dependencies = dependencies;
+    this.isOfficial = dependencies.isOfficial ?? hasOfficialPluginBrand;
   }
 
   public register(plugin: IBrudPlugin): void {
     const candidate: unknown = plugin.manifest;
-    const validation = validatePluginManifest(candidate, { officialBrandHolder: plugin });
+    const validation = validatePluginManifest(candidate, {
+      officialBrandHolder: plugin,
+      isOfficialBrand: this.isOfficial,
+    });
     const pluginId = candidatePluginId(candidate);
 
     if (!validation.ok) {
@@ -106,7 +112,7 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
     this.records.set(manifest.id, {
       plugin,
       manifest,
-      official: hasOfficialPluginBrand(plugin),
+      official: this.isOfficial(plugin),
       state: 'unloaded',
     });
   }

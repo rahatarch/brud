@@ -53,7 +53,7 @@ describe('createSettingsDescriptor', () => {
   it('rejects a caller outside the access policy with AccessDeniedError', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ options: { workspaceRoot: '/workspace' } });
 
     try {
       assert.throws(
@@ -74,7 +74,7 @@ describe('createSettingsDescriptor', () => {
   it('keeps the mutating service for allowlisted kernel and host callers', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ options: { workspaceRoot: '/workspace' } });
 
     try {
       for (const callerId of SETTINGS_MUTATOR_CALLERS) {
@@ -91,7 +91,7 @@ describe('createSettingsDescriptor', () => {
   it('lets userland resolve the reader token without mutators', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ options: { workspaceRoot: '/workspace' } });
 
     try {
       const reader = kernel.requestAccess(
@@ -123,7 +123,7 @@ describe('createSettingsReaderDescriptor', () => {
   it('serves the same frozen snapshot as the mutating service', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ options: { workspaceRoot: '/workspace' } });
 
     try {
       const settings = kernel.requestAccess(caller({ callerId: 'kernel', tier: 'kernel' }), SettingsToken);
@@ -154,7 +154,7 @@ describe('createSettingsReaderDescriptor', () => {
   it('keeps the settings service first in the standard boot order', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ workspaceRoot: '/workspace' });
+    await kernel.boot({ options: { workspaceRoot: '/workspace' } });
 
     try {
       assert.equal(kernel.listServices()[0]?.id, 'brud.core.settings');

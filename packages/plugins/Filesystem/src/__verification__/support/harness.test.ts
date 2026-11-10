@@ -163,7 +163,7 @@ export async function bootVerificationKernel(
       : { mutationJournal: options.mutationJournal }),
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller: ServiceContext = {
     callerId: 'verification.filesystem',

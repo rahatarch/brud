@@ -159,7 +159,7 @@ before(async () => {
     initialPlugins: [without.plugin, first.plugin, second.plugin],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
   tools = kernel.requestAccess(
     { callerId: 'verification.capability', tier: 'core', workspaceRoot: root },
     BrudToolsToken,

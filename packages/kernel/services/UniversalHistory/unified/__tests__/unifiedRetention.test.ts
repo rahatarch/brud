@@ -361,7 +361,7 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
       const kernel = createStandardKernel({
         settings: { store: new InMemoryConfigStore({ userContent: user === null ? null : JSON.stringify(user) }) },
       });
-      await kernel.boot({ workspaceRoot: root });
+      await kernel.boot({ options: { workspaceRoot: root } });
       return kernel;
     };
 
@@ -560,7 +560,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     const script = `
 const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../src/bootstrap/index.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
-await kernel.boot({ workspaceRoot: process.argv[2] });
+await kernel.boot({ options: { workspaceRoot: process.argv[2] } });
 process.stdout.write('ready');
 await new Promise(() => {});
 `;
@@ -656,7 +656,7 @@ await new Promise(() => {});
     const script = `
 const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../src/bootstrap/index.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
-await kernel.boot({ workspaceRoot: process.argv[2] });
+await kernel.boot({ options: { workspaceRoot: process.argv[2] } });
 process.stdout.write('ready');
 await new Promise(() => {});
 `;

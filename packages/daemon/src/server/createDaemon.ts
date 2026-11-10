@@ -9,7 +9,6 @@ import { canonicalizeDaemonWorkspaceRoot, resolveEndpoint } from '../lifecycle/e
 import type { DaemonEndpoint } from '../lifecycle/endpoint.js';
 import { GracefulShutdownCoordinator } from '../lifecycle/shutdown.js';
 import { attachMcpTransports } from '../mcpTransport.js';
-import { OFFICIAL_PLUGINS } from '../officialPlugins.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 import type { KernelWorkspace } from '../workspaceRegistry.js';
 import { DaemonServer } from './DaemonServer.js';
@@ -88,8 +87,6 @@ function createWorkspaceRegistry(
   stdio: boolean,
 ): WorkspaceRegistry {
   return new WorkspaceRegistry({
-    initialPlugins: OFFICIAL_PLUGINS,
-    certifyInitialPlugins: true,
     ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
     // A stdio daemon serves exactly one client for its whole process
     // lifetime, so its workspace must never be reclaimed by the idle sweep.

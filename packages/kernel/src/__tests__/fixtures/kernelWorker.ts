@@ -41,7 +41,7 @@ const kernel = createStandardKernel({
   initialPlugins: [plugin],
 });
 
-await kernel.boot({ workspaceRoot });
+await kernel.boot({ options: { workspaceRoot } });
 
 const tools = kernel.requestAccess(
   { callerId: `worker.${workerId}`, tier: 'core', workspaceRoot },

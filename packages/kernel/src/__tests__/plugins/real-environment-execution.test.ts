@@ -119,7 +119,7 @@ describe('real environment execution invariant', () => {
 
     try {
       await seedWorkspace(root);
-      await kernel.boot({ workspaceRoot: root });
+      await kernel.boot({ options: { workspaceRoot: root } });
 
       const caller: ServiceContext = {
         callerId: 'test.real-environment-execution',

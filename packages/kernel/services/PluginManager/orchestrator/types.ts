@@ -10,6 +10,13 @@ export interface PluginManagerRuntimeDependencies {
 
   /** Lazy Exposed API Registry accessor used for every context projection. */
   readonly apiRegistry: () => IExposedApiRegistry;
+
+  /**
+   * Official-brand verifier supplied by the plugin manager's boot scope.
+   *
+   * Defaults to the package-internal scope for direct unit construction.
+   */
+  readonly isOfficial?: (candidate: unknown) => boolean;
 }
 
 export interface InternalPluginRecord {

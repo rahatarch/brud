@@ -748,7 +748,7 @@ describe('ValidationService — standard kernel registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: root });
+    await kernel.boot({ options: { workspaceRoot: root } });
 
     try {
       const ids = kernel.listServices().map((entry) => entry.id);

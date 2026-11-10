@@ -9,5 +9,11 @@
     "outDir": "dist",
     "rootDir": "."
   },
-  "include": ["src", "drivers", "services"]
+  "include": [
+    "index.ts",
+    "src",
+    "drivers",
+    "services",
+    "serviceModules"
+  ]
 }

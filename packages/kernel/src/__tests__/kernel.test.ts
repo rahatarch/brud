@@ -507,7 +507,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     assert.strictEqual(kernel.lifecycleState, 'RUNNING');
     assert.strictEqual(kernel.hasService(alpha), true);
@@ -556,7 +556,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       onInitialize: () => events.push('init:a'),
     }));
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     assert.deepStrictEqual(events, [
       'factory:a',
@@ -579,7 +579,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     kernel.register(probeDescriptor({ token: b, dependencies: [a], onDispose: () => disposed.push('b') }));
     kernel.register(probeDescriptor({ token: c, dependencies: [b], onDispose: () => disposed.push('c') }));
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
     await kernel.shutdown();
 
     assert.deepStrictEqual(disposed, ['c', 'b', 'a']);
@@ -609,7 +609,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     }));
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot }),
+      () => kernel.boot({ options: { workspaceRoot } }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /init failed: broken/);
@@ -633,7 +633,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     const kernel = new BrudKernel();
     kernel.register(probeDescriptor({ token: probeToken('first') }));
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     assert.throws(
       () => kernel.register(probeDescriptor({ token: probeToken('second') })),
@@ -645,11 +645,11 @@ describe('BrudKernel lifecycle orchestrator', () => {
     const kernel = new BrudKernel();
     kernel.register(probeDescriptor({ token: probeToken('single') }));
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
     await kernel.shutdown();
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot }),
+      () => kernel.boot({ options: { workspaceRoot } }),
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
   });
@@ -657,10 +657,10 @@ describe('BrudKernel lifecycle orchestrator', () => {
   it('rejects booting twice without shutting down first', async () => {
     const kernel = new BrudKernel();
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot }),
+      () => kernel.boot({ options: { workspaceRoot } }),
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
   });
@@ -682,7 +682,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     }));
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot }),
+      () => kernel.boot({ options: { workspaceRoot } }),
       (error: unknown) => {
         assert.ok(error instanceof MissingDependencyError);
         assert.strictEqual(error.missingTokenId, 'ghost');
@@ -697,7 +697,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
   it('throws ServiceNotFoundError for unknown services after boot', async () => {
     const kernel = new BrudKernel();
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     assert.throws(
       () => kernel.requestAccess(callerContext, probeToken('absent')),
@@ -730,7 +730,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       }),
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     await assert.rejects(() => kernel.shutdown(), /dispose failed: b/);
 
@@ -800,7 +800,7 @@ describe('BrudKernel onRunning hook', () => {
       },
     }));
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     assert.deepStrictEqual(events, ['init:a', 'init:b', 'running:a', 'running:b']);
     assert.deepStrictEqual(observedStates, ['RUNNING', 'RUNNING']);
@@ -833,7 +833,7 @@ describe('BrudKernel onRunning hook', () => {
     kernel.register(runningProbeDescriptor({ token: c, dependencies: [b], events }));
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot }),
+      () => kernel.boot({ options: { workspaceRoot } }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.strictEqual(error.message, 'running failed: b');
@@ -875,7 +875,7 @@ describe('BrudKernel onRunning hook', () => {
       },
     }));
 
-    const booting = kernel.boot({ workspaceRoot });
+    const booting = kernel.boot({ options: { workspaceRoot } });
     await entered;
 
     await assert.rejects(

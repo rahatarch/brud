@@ -60,7 +60,7 @@ export async function bootTerminalHarness(
     initialPlugins: [createTerminalPlugin()],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller: IPluginExecutionContext = {
     workspaceRoot: root,

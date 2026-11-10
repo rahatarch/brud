@@ -84,7 +84,7 @@ describe('UserPrompts path isolation invariant', () => {
     });
 
     try {
-      await kernel.boot({ workspaceRoot: root });
+      await kernel.boot({ options: { workspaceRoot: root } });
 
       const caller: ServiceContext = {
         callerId: 'test.userprompts-path-isolation',

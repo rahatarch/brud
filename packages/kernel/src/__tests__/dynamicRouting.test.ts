@@ -107,7 +107,7 @@ async function compose(
 ): Promise<PreparedKernel> {
   const prepared = await prepare(t, options);
 
-  await prepared.kernel.boot({ workspaceRoot: prepared.root });
+  await prepared.kernel.boot({ options: { workspaceRoot: prepared.root } });
 
   return prepared;
 }
@@ -190,7 +190,7 @@ describe('Dynamic routing with a synthetic peer service and plugin', () => {
     const { kernel, root } = await prepare(t, { withService: true, rogue: true });
 
     await assert.rejects(
-      kernel.boot({ workspaceRoot: root }),
+      kernel.boot({ options: { workspaceRoot: root } }),
       (error: unknown) => {
         assert.ok(error instanceof RouterKindCollisionError);
         assert.equal(error.code, 'ROUTER_KIND_COLLISION');

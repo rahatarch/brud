@@ -103,6 +103,14 @@ export interface PluginManifestValidationOptions {
    * flag.
    */
   readonly officialBrandHolder?: object;
+
+  /**
+   * Verifier supplied by the plugin manager's boot-time brand scope.
+   *
+   * When omitted, the package-internal default scope is consulted so direct
+   * unit construction keeps its previous behavior.
+   */
+  readonly isOfficialBrand?: (holder: object) => boolean;
 }
 
 /** Successful manifest validation outcome. */
@@ -366,9 +374,10 @@ export function validatePluginManifest(
     return { ok: false, reason: 'INVALID_MANIFEST', error: 'manifest must be a non-null object' };
   }
 
+  const isOfficialBrand = options?.isOfficialBrand ?? hasOfficialPluginBrand;
   const branded =
     options?.officialBrandHolder !== undefined &&
-    hasOfficialPluginBrand(options.officialBrandHolder);
+    isOfficialBrand(options.officialBrandHolder);
 
   const official = validateOfficial(candidate.official);
   if (!official.ok) {

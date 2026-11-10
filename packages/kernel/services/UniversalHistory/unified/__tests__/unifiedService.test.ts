@@ -117,7 +117,7 @@ async function boot(ws: Workspace): Promise<KernelHandle> {
       },
     },
   });
-  await kernel.boot({ workspaceRoot: ws.root });
+  await kernel.boot({ options: { workspaceRoot: ws.root } });
   const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', workspaceRoot: ws.root };
   const fs = kernel.requestAccess(caller, FileSystemToken);
 

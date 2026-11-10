@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
-import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
+import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import { InMemoryConfigStore } from '../../SettingsService/storage/InMemoryConfigStore.js';
 import type {
@@ -129,7 +129,7 @@ describe('BrudTools allow-list kernel wiring', () => {
       settings: { store: new InMemoryConfigStore() },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     try {
       let ran = 0;

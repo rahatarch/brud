@@ -58,7 +58,7 @@ describe('plugin lifecycle invariant', () => {
     });
 
     try {
-      await kernel.boot({ workspaceRoot: root });
+      await kernel.boot({ options: { workspaceRoot: root } });
 
       const caller: ServiceContext = {
         callerId: 'test.leaf-plugin-lifecycle',

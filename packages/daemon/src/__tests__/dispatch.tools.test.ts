@@ -80,7 +80,7 @@ class FakeToolsService implements IBrudToolsService {
 class FakeKernel {
   public readonly tools: FakeToolsService;
 
-  public lifecycleState: 'RUNNING' | 'DISPOSED' = 'RUNNING';
+  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
 
   constructor(public readonly root: string) {
     this.tools = new FakeToolsService(`tool:${root}`);

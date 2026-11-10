@@ -193,12 +193,12 @@ describe('Parser and Router Level-1 services', () => {
     kernel.register(rogueDescriptor);
 
     await assert.rejects(
-      kernel.boot({ workspaceRoot: root }),
+      kernel.boot({ options: { workspaceRoot: root } }),
       (error: unknown) => {
         assert.ok(error instanceof RouterKindCollisionError);
         assert.equal(error.code, 'ROUTER_KIND_COLLISION');
         assert.equal(error.kind, 'tool');
-        assert.equal(error.existingTokenId, BrudToolsToken.id);
+        assert.equal(error.existingTokenId, rogueToken.id);
         return true;
       },
     );

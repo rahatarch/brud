@@ -160,7 +160,7 @@ export async function bootCatalogKernel(
     history: { inMemory: true },
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller = makeCaller(root);
   const tools = kernel.requestAccess(caller, BrudToolsToken);

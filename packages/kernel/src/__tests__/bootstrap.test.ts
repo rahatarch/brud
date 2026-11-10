@@ -35,7 +35,7 @@ async function bootStandardKernel(): Promise<BrudKernel> {
   const kernel = createStandardKernel({
     history: { inMemory: true },
   });
-  await kernel.boot({ workspaceRoot });
+  await kernel.boot({ options: { workspaceRoot } });
   return kernel;
 }
 
@@ -46,13 +46,13 @@ describe('createStandardKernel', () => {
     });
 
     assert.equal(kernel.lifecycleState, 'UNINITIALIZED');
+
+    await kernel.boot({ options: { workspaceRoot } });
+
+    assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.equal(kernel.hasService(FileSystemToken), true);
     assert.equal(kernel.hasService(UniversalHistoryToken), true);
     assert.equal(kernel.hasService(PluginManagerToken), true);
-
-    await kernel.boot({ workspaceRoot });
-
-    assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.equal(kernel.hasService(FileSystemToken), true);
     assert.equal(kernel.hasService(UniversalHistoryToken), true);
     assert.equal(kernel.hasService(PluginManagerToken), true);

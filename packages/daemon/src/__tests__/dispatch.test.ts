@@ -224,7 +224,7 @@ describe('DaemonServer dispatch', () => {
       storageDriver,
       history: { inMemory: true },
     });
-    await createdKernel.boot({ workspaceRoot });
+    await createdKernel.boot({ options: { workspaceRoot } });
     kernel = createdKernel;
 
     socketPath = join(tempDirectory, 'daemon.sock');

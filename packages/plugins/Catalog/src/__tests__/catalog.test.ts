@@ -35,7 +35,7 @@ describe('Catalog plugin', () => {
       history: { dbPath: join(root, '.brud', 'history', 'universal.db') },
     });
 
-    await kernel.boot({ workspaceRoot: root });
+    await kernel.boot({ options: { workspaceRoot: root } });
 
     caller = {
       callerId: 'test.catalog',

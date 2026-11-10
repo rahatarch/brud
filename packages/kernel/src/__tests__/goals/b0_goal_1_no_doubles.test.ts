@@ -56,7 +56,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
   });
 
   it('does not expose either double from the kernel source entry point', async () => {
-    const entry = join(KERNEL_ROOT, 'src/index.ts');
+    const entry = join(KERNEL_ROOT, 'index.ts');
     const module: Record<string, unknown> = await import(pathToFileURL(entry).href);
 
     for (const name of [...DOUBLES, 'StorageError']) {
@@ -65,7 +65,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
   });
 
   it('fails a static named import of either double from the kernel entry point', () => {
-    const entryUrl = pathToFileURL(join(KERNEL_ROOT, 'src/index.ts')).href;
+    const entryUrl = pathToFileURL(join(KERNEL_ROOT, 'index.ts')).href;
 
     for (const name of DOUBLES) {
       const script = `import { ${name} } from '${entryUrl}'; void ${name};`;

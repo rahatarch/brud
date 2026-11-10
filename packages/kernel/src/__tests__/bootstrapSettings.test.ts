@@ -48,7 +48,7 @@ describe('createStandardKernel settings boot', () => {
     });
     const kernel = createKernel(store);
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -75,7 +75,7 @@ describe('createStandardKernel settings boot', () => {
     });
     const kernel = createKernel(store);
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -95,7 +95,7 @@ describe('createStandardKernel settings boot', () => {
   it('exposes only the reader to userland through the standard kernel', async () => {
     const kernel = createKernel(new InMemoryConfigStore());
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       const reader = kernel.requestAccess(

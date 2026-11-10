@@ -102,7 +102,7 @@ export async function bootBridgeHarness(
     initialPlugins: [...plugins, bridge],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller = { callerId: 'verification.mcp', tier: 'core' as const, workspaceRoot: root };
   const tools = kernel.requestAccess(caller, BrudToolsToken);

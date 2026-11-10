@@ -53,7 +53,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel: BrudKernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ workspaceRoot: fixture.workspace });
+    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
 
     try {
       const ids = kernel.listServices().map((service) => service.id);
@@ -91,7 +91,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ workspaceRoot: linkedRoot });
+    await kernel.boot({ options: { workspaceRoot: linkedRoot } });
 
     try {
       const workspace = kernel.requestAccess(caller(linkedRoot), WorkspaceToken);
@@ -120,7 +120,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ workspaceRoot: fixture.workspace });
+    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
 
     try {
       const workspace = kernel.requestAccess(caller(fixture.workspace), WorkspaceToken);
@@ -144,7 +144,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ workspaceRoot: fixture.workspace });
+    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
 
     try {
       const workspace = kernel.requestAccess(caller(fixture.workspace), WorkspaceToken);
@@ -166,7 +166,7 @@ describe('WorkspaceService boot integration', () => {
   it('rejects a filesystem-root workspace at boot', async () => {
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await assert.rejects(kernel.boot({ workspaceRoot: '/' }));
+    await assert.rejects(kernel.boot({ options: { workspaceRoot: '/' } }));
     assert.equal(kernel.lifecycleState, 'DISPOSED');
   });
 });

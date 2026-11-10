@@ -77,7 +77,7 @@ export async function bootReaderKernel(
     initialPlugins: [searchPlugin, readerPlugin, ...(options.initialPlugins ?? [])],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller: ServiceContext = {
     callerId: 'test.reader',

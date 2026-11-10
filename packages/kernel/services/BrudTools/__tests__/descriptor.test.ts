@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
+import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { IBrudToolsService, ToolRegistrationOptions } from '../contracts/IBrudToolsService.js';
@@ -59,7 +59,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
 
@@ -90,7 +90,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const disposable = tools.registerTool('brud.a', true, tool('synthetic_probe_tool'));
@@ -111,7 +111,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, {
@@ -134,7 +134,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, tool('read_file', {
@@ -160,7 +160,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const result = await tools.executeTool('nope', {}, {

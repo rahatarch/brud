@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
-import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
+import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../src/contracts/accessBroker.js';
 import type { KernelLogger, ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
@@ -82,7 +82,7 @@ async function runInStandardKernel(
     },
   });
 
-  await kernel.boot({ workspaceRoot: workspace, logger });
+  await kernel.boot({ options: { workspaceRoot: workspace }, logger });
 
   try {
     const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', workspaceRoot: workspace };

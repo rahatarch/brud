@@ -6,8 +6,8 @@ import type { ServiceDescriptor } from './serviceDescriptor.js';
  * Options controlling a kernel boot sequence.
  */
 export interface KernelBootOptions {
-  /** Absolute path of the workspace the kernel operates in. */
-  readonly workspaceRoot: string;
+  /** Open options bag supplied by the host and forwarded to services. */
+  readonly options?: Readonly<Record<string, unknown>>;
 
   /** Optional diagnostic sink forwarded to every service context. */
   readonly logger?: KernelLogger;

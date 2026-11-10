@@ -45,7 +45,7 @@ export async function bootHistoryHarness(): Promise<HistoryHarness> {
     initialPlugins: [createHistoryPlugin()],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const coreCaller = {
     callerId: 'test.history.plugin',

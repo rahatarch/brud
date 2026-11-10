@@ -85,12 +85,14 @@ export class BrudKernel implements IBrudKernel {
     try {
       const ordered = topologicalSort(this.descriptorMap());
       this.initializedServices.length = 0;
+      const bootWorkspaceRoot = options.options?.['workspaceRoot'];
+      const workspaceRoot = typeof bootWorkspaceRoot === 'string' ? bootWorkspaceRoot : '';
 
       for (const descriptor of ordered) {
         const context: ServiceContext = {
           callerId: 'kernel',
           tier: descriptor.tier,
-          workspaceRoot: options.workspaceRoot,
+          workspaceRoot,
           ...(options.logger === undefined ? {} : { logger: options.logger }),
         };
 

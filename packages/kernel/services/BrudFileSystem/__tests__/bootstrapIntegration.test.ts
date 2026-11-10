@@ -50,7 +50,7 @@ async function bootKernel(
     mutationJournal: journal,
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const workspace = kernel.requestAccess(caller(), WorkspaceToken);
   const fileSystem = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;

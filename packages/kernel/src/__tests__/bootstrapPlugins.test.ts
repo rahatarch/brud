@@ -133,7 +133,7 @@ describe('createStandardKernel plugin integration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       const manager = kernel.requestAccess(createCaller(), PluginManagerToken);
@@ -160,7 +160,7 @@ describe('createStandardKernel plugin integration', () => {
       initialPlugins: [beta, alpha],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     const manager = kernel.requestAccess(createCaller(), PluginManagerToken);
 
@@ -193,7 +193,7 @@ describe('createStandardKernel plugin integration', () => {
     kernel.register(createUnifiedHistoryDescriptors({ driver: new DurableNodeStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [plugin] }));
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     assert.deepEqual(log, ['initialize:filesystem', 'activate:acme.sequenced']);
 
@@ -238,7 +238,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       ],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -265,7 +265,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       ],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       const tools = kernel.requestAccess(createCaller(), BrudToolsToken);
@@ -291,7 +291,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       ],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -328,7 +328,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [broken, stable] }));
 
     await assert.rejects(
-      () => kernel.boot({ workspaceRoot: WORKSPACE_ROOT }),
+      () => kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } }),
       (error: unknown) => {
         assert.ok(error instanceof PluginLifecycleError);
         assert.equal(error.pluginId, 'acme.broken');
@@ -372,7 +372,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       ],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.ok(coreDenied instanceof PluginPermissionError);
@@ -430,7 +430,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       ],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.ok(coreDenied instanceof PluginPermissionError);
@@ -476,7 +476,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       initialPlugins: [official],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.ok(history instanceof ReadOnlyUniversalHistoryFacade);
@@ -502,7 +502,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       initialPlugins: [official],
     });
 
-    await kernel.boot({ workspaceRoot: WORKSPACE_ROOT });
+    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
 
     try {
       assert.ok(history !== undefined);

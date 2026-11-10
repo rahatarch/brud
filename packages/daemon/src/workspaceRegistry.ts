@@ -4,7 +4,7 @@ import type {
   IMcpTransport,
   IStorageDriver,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
-import { loadKernelModule } from './kernelRuntime.js';
+import { createKernel } from './kernelRuntime.js';
 
 /** Default idle window after which a client-less workspace is disposed. */
 export const DEFAULT_WORKSPACE_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -23,13 +23,14 @@ export interface KernelWorkspace {
 /** Options passed to a custom kernel factory. */
 export interface KernelFactoryOptions {
   readonly workspaceRoot: string;
-  readonly initialPlugins: readonly IBrudPlugin[];
+  /** Explicit plugin override; omitted means the config's plugin set. */
+  readonly initialPlugins?: readonly IBrudPlugin[];
   readonly storageDriver?: IStorageDriver;
-  /** Host-composition trust decision forwarded to `createStandardKernel`. */
+  /** Certifies an explicit plugin override with the official brand. */
   readonly certifyInitialPlugins?: boolean;
 }
 
-/** Builds (but does not boot) the kernel for a workspace. */
+/** Builds the kernel for a workspace; the returned kernel may already be booted. */
 export type KernelFactory = (options: KernelFactoryOptions) => Promise<BrudKernel>;
 
 /** Timer handle shape compatible with Node's `Timeout`. */
@@ -97,11 +98,10 @@ export interface WorkspaceRegistryOptions {
 }
 
 async function defaultKernelFactory(options: KernelFactoryOptions): Promise<BrudKernel> {
-  const kernelModule = await loadKernelModule();
-
-  return kernelModule.createStandardKernel({
-    initialPlugins: options.initialPlugins,
+  return createKernel({
+    workspaceRoot: options.workspaceRoot,
     ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
+    ...(options.initialPlugins === undefined ? {} : { initialPlugins: options.initialPlugins }),
     ...(options.certifyInitialPlugins === undefined
       ? {}
       : { certifyInitialPlugins: options.certifyInitialPlugins }),
@@ -135,7 +135,7 @@ export class WorkspaceRegistry {
 
   private readonly pendingSpawns = new Map<string, Promise<KernelWorkspace>>();
 
-  private readonly initialPlugins: readonly IBrudPlugin[];
+  private readonly initialPlugins: readonly IBrudPlugin[] | undefined;
 
   private readonly storageDriver: IStorageDriver | undefined;
 
@@ -162,7 +162,7 @@ export class WorkspaceRegistry {
   private disposed = false;
 
   constructor(options: WorkspaceRegistryOptions = {}) {
-    this.initialPlugins = options.initialPlugins ?? [];
+    this.initialPlugins = options.initialPlugins;
     this.storageDriver = options.storageDriver;
     this.certifyInitialPlugins = options.certifyInitialPlugins;
     this.kernelFactory = options.kernelFactory ?? defaultKernelFactory;
@@ -360,7 +360,7 @@ export class WorkspaceRegistry {
 
   private async createWorkspace(
     root: string,
-    initialPlugins: readonly IBrudPlugin[],
+    initialPlugins: readonly IBrudPlugin[] | undefined,
   ): Promise<KernelWorkspace> {
     const kernel = await this.kernelFactory({
       workspaceRoot: root,
@@ -371,7 +371,9 @@ export class WorkspaceRegistry {
         : { certifyInitialPlugins: this.certifyInitialPlugins }),
     });
 
-    await kernel.boot({ workspaceRoot: root });
+    if (kernel.lifecycleState === 'UNINITIALIZED') {
+      await kernel.boot({ options: { workspaceRoot: root } });
+    }
 
     const workspace: KernelWorkspace = {
       root,

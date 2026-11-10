@@ -43,7 +43,7 @@ async function bootKernel(): Promise<Harness> {
     initialPlugins: [createTerminalPlugin()],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller = { callerId: 'test.terminal.actions', tier: 'core' as const, workspaceRoot: root };
   const actionCaller = {

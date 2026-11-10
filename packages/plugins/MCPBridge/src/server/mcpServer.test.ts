@@ -140,7 +140,7 @@ async function bootKernel(): Promise<Harness> {
     initialPlugins: [echoPlugin],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const tools = kernel.requestAccess(
     { callerId: 'test.mcp.server', tier: 'core', workspaceRoot: root },

@@ -17,7 +17,7 @@ const TOKEN = 'connect-workspace-token-0123456789abcdef';
 const PRIMARY_ROOT = join(tmpdir(), 'brud-connect-primary');
 
 class FakeKernel {
-  public lifecycleState: 'RUNNING' | 'DISPOSED' = 'RUNNING';
+  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
 
   public bootCount = 0;
 

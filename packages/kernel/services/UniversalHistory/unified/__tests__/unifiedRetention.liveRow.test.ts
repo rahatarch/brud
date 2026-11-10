@@ -106,7 +106,7 @@ const [root, inbox, outbox] = process.argv.slice(2);
 const emit = (payload) => appendFileSync(outbox, JSON.stringify(payload) + String.fromCharCode(10));
 
 const kernel = createStandardKernel();
-await kernel.boot({ workspaceRoot: root });
+await kernel.boot({ options: { workspaceRoot: root } });
 const caller = { callerId: 'retention.liveRow.worker', tier: 'core', workspaceRoot: root };
 const journal = kernel.requestAccess(caller, HistoryToken);
 const fileSystem = kernel.requestAccess(caller, FileSystemToken);
@@ -321,7 +321,7 @@ interface Parent {
 
 async function bootParent(context: TestContext, workspaceRoot: string): Promise<Parent> {
   const kernel = createStandardKernel();
-  await kernel.boot({ workspaceRoot });
+  await kernel.boot({ options: { workspaceRoot } });
   context.after(async () => { await kernel.shutdown(); });
   const caller: ServiceContext = { callerId: 'retention.liveRow.parent', tier: 'core', workspaceRoot };
   return {

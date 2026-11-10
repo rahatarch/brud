@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '../../../src/bootstrap/createKernel.js';
+import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { ITerminalService, TerminalChunkCallback } from '../contracts/ITerminalService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
@@ -29,7 +29,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const terminal = kernel.requestAccess(caller(), TerminalToken);
     const validation = kernel.requestAccess(caller(), ValidationToken);
@@ -46,7 +46,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const terminal = kernel.requestAccess<ITerminalService>(
       caller(),
@@ -74,7 +74,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const terminal = kernel.requestAccess<ITerminalService>(
       caller(),

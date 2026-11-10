@@ -106,7 +106,7 @@ export function createKernelSubject(): HistoryOracleSubjectFactory {
       },
     });
 
-    await kernel.boot({ workspaceRoot });
+    await kernel.boot({ options: { workspaceRoot } });
 
     const caller: ServiceContext = { callerId: 'history.oracle', tier: 'core', workspaceRoot };
     const fs = kernel.requestAccess(caller, FileSystemToken);

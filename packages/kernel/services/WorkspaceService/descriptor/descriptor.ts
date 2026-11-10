@@ -21,9 +21,16 @@ export const WORKSPACE_SERVICE_TIER: ServiceTier = 'core';
 export interface WorkspaceDescriptorOptions {
   /**
    * Declared roots, in routing order. Defaults to the single boot workspace
-   * root supplied to `kernel.boot({ workspaceRoot })`.
+   * root supplied to `kernel.boot({ options: { workspaceRoot } })` or by the
+   * service module's `primaryRoot` option.
    */
   readonly roots?: readonly string[];
+
+  /**
+   * Root selected as primary when no explicit primary is supplied.
+   * Defaults to the boot workspace root on the service context.
+   */
+  readonly primaryRoot?: string;
 
   /**
    * Storage driver used for `realpath`/`lstat`. Defaults to the Node driver.
@@ -75,7 +82,7 @@ export function createWorkspaceDescriptor(
         roots: options?.roots !== undefined && options.roots.length > 0
           ? options.roots
           : [context.workspaceRoot],
-        primaryRoot: context.workspaceRoot,
+        primaryRoot: options?.primaryRoot ?? context.workspaceRoot,
         port,
         ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
         ...(options?.allowFilesystemRoot === undefined

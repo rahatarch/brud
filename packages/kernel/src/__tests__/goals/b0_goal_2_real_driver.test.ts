@@ -113,7 +113,10 @@ describe('B0 Goal 2 — every rewritten filesystem test exercises the real drive
   });
 
   it('uses the durable driver as the standard-kernel default', async () => {
-    const source = await readFile(join(KERNEL_ROOT, 'src/bootstrap/createKernel.ts'), 'utf8');
+    const source = await readFile(
+      join(KERNEL_ROOT, 'services/BrudFileSystem/serviceModule.ts'),
+      'utf8',
+    );
 
     assert.match(source, /new DurableNodeStorageDriver\(\)/u);
   });

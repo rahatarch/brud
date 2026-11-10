@@ -63,7 +63,7 @@ export async function bootTestKernel(
     ...(options.plugins === undefined ? {} : { initialPlugins: options.plugins }),
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller: ServiceContext = {
     callerId: 'test.filesystem',

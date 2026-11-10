@@ -1,6 +1,5 @@
 export * from './version.js';
 export * from './kernelRuntime.js';
-export * from './officialPlugins.js';
 export * from './workspaceRegistry.js';
 export * from './mcpTransport.js';
 export * from './lifecycle/index.js';

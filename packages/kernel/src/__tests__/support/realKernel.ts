@@ -34,7 +34,7 @@ export async function bootRealKernel(
     ...(options.initialPlugins === undefined ? {} : { initialPlugins: options.initialPlugins }),
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   context.after(async () => {
     await kernel.shutdown().catch(() => undefined);

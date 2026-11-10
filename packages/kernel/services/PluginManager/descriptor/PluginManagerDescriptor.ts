@@ -5,6 +5,7 @@ import type {
 } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
+import type { IBrandScope } from '../../BrandRegistry/contracts/IBrandScope.js';
 import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/IExposedApiRegistry.js';
 import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
@@ -16,6 +17,10 @@ import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
 import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
+import {
+  getDefaultOfficialPluginScope,
+  hasOfficialPluginBrand,
+} from '../contracts/branding.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
 import { PluginManagerService } from '../orchestrator/PluginManagerService.js';
 
@@ -33,6 +38,24 @@ export interface PluginManagerDescriptorOptions {
    * become active when the kernel runs the manager's `initialize` hook.
    */
   readonly initialPlugins?: readonly IBrudPlugin[];
+
+  /**
+   * Plugins the composition declared official.
+   *
+   * They are branded with {@link brandScope} when the manager is constructed.
+   */
+  readonly officialPlugins?: readonly object[];
+
+  /** Boot-time brand scope used to certify and verify official plugins. */
+  readonly brandScope?: IBrandScope;
+
+  /**
+   * Resolves the boot-time brand scope lazily.
+   *
+   * The standard composition uses this to read the Brand Registry instance
+   * from the shared bag when the manager factory runs.
+   */
+  readonly brandScopeProvider?: () => IBrandScope;
 
   /**
    * Declares {@link UniversalHistoryToken} as a boot dependency.
@@ -102,6 +125,7 @@ export function createPluginManagerDescriptor(
   options?: PluginManagerDescriptorOptions,
 ): ServiceDescriptor<IPluginManagerService, PluginManagerService> {
   const initialPlugins = options?.initialPlugins ?? [];
+  const officialPlugins = options?.officialPlugins ?? [];
   const withUniversalHistory = options?.withUniversalHistory ?? false;
   const withTools = options?.withTools ?? false;
   const withActions = options?.withActions ?? false;
@@ -145,9 +169,26 @@ export function createPluginManagerDescriptor(
       const apiRegistry = (): IExposedApiRegistry =>
         broker.requestAccess(caller, ExposedApiRegistryToken);
 
+      const brandScope = options?.brandScopeProvider?.()
+        ?? options?.brandScope
+        ?? getDefaultOfficialPluginScope();
+
+      for (const plugin of officialPlugins) {
+        brandScope.brand(plugin);
+      }
+
+      // Adopt plugins certified through the package-internal scope, which is
+      // how standalone helpers and older in-process tests brand fixtures.
+      for (const plugin of initialPlugins) {
+        if (hasOfficialPluginBrand(plugin) && !brandScope.verify(plugin)) {
+          brandScope.brand(plugin);
+        }
+      }
+
       const manager = new PluginManagerService({
         workspaceRoot: context.workspaceRoot,
         apiRegistry,
+        isOfficial: (candidate) => brandScope.verify(candidate),
       });
 
       for (const plugin of initialPlugins) {

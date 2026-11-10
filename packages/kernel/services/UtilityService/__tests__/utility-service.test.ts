@@ -95,7 +95,7 @@ describe('brud.core.utils service', () => {
       initialPlugins: [plugin],
     });
 
-    await kernel.boot({ workspaceRoot: root });
+    await kernel.boot({ options: { workspaceRoot: root } });
   });
 
   after(async () => {

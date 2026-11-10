@@ -59,7 +59,7 @@ class FakeScheduler implements WorkspaceRegistryScheduler {
 }
 
 class FakeKernel {
-  public lifecycleState: 'RUNNING' | 'DISPOSED' = 'RUNNING';
+  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
 
   public bootCount = 0;
 
@@ -67,9 +67,11 @@ class FakeKernel {
 
   public bootedAt: string | undefined;
 
-  async boot(options: { readonly workspaceRoot: string }): Promise<void> {
+  async boot(options: { readonly options?: { readonly workspaceRoot?: unknown } }): Promise<void> {
     this.bootCount += 1;
-    this.bootedAt = options.workspaceRoot;
+    this.bootedAt = typeof options.options?.workspaceRoot === 'string'
+      ? options.options.workspaceRoot
+      : undefined;
     this.lifecycleState = 'RUNNING';
   }
 

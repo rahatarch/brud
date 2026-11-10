@@ -40,7 +40,7 @@ async function boot(root: string): Promise<Booted> {
   const warnings: { message: string; meta?: Record<string, unknown> }[] = [];
   const logger: KernelLogger = { warn: (message, meta) => warnings.push({ message, ...(meta === undefined ? {} : { meta }) }) };
   const kernel = createStandardKernel({ logger });
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
   const caller: ServiceContext = { callerId: 'import.test', tier: 'core', workspaceRoot: root };
   return {
     kernel,

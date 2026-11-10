@@ -42,4 +42,11 @@ export interface ServiceDescriptor<TService, TInternal extends TService = TServi
    * @param caller - Context of the requesting caller.
    */
   readonly project?: (instance: TInternal, caller: ServiceContext) => TService;
+
+  /**
+   * Whether the composition declared this service first-party.
+   *
+   * Recorded now for the future Brand Registry; nothing consumes it yet.
+   */
+  readonly official?: boolean;
 }

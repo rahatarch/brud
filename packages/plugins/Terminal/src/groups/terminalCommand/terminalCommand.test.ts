@@ -46,7 +46,7 @@ async function bootKernel(): Promise<Harness> {
     initialPlugins: [createTerminalPlugin()],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   const caller: IPluginExecutionContext = {
     workspaceRoot: root,

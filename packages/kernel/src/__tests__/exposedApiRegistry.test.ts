@@ -104,7 +104,7 @@ async function compose(
 ): Promise<{ kernel: BrudKernel; root: string; domains: readonly ProbeFixture[] }> {
   const prepared = await prepare(t, fixtures, initialPlugins);
 
-  await prepared.kernel.boot({ workspaceRoot: prepared.root });
+  await prepared.kernel.boot({ options: { workspaceRoot: prepared.root } });
 
   return prepared;
 }
@@ -176,7 +176,7 @@ describe('Exposed API Registry', () => {
     ]);
 
     await assert.rejects(
-      kernel.boot({ workspaceRoot: root }),
+      kernel.boot({ options: { workspaceRoot: root } }),
       (error: unknown) => {
         assert.ok(error instanceof ExposedApiNameCollisionError);
         assert.equal(error.code, 'EXPOSED_API_NAME_COLLISION');

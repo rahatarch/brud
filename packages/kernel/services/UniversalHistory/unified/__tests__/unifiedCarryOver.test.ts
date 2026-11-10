@@ -36,7 +36,7 @@ async function workspace(context: TestContext): Promise<string> {
 
 async function boot(root: string, logger?: KernelLogger): Promise<BrudKernel> {
   const kernel = createStandardKernel();
-  await kernel.boot({ workspaceRoot: root, ...(logger === undefined ? {} : { logger }) });
+  await kernel.boot({ options: { workspaceRoot: root }, ...(logger === undefined ? {} : { logger }) });
   return kernel;
 }
 

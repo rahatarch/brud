@@ -102,7 +102,7 @@ class FakeKernel {
 
   public readonly tools = new FakeToolsService();
 
-  public lifecycleState: 'RUNNING' | 'DISPOSED' = 'RUNNING';
+  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
 
   constructor(private readonly root: string) {
     this.actions = new FakeActionsService(`action:${root}`);

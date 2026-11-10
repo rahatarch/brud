@@ -54,7 +54,7 @@ async function boot(context: TestContext): Promise<Harness> {
     ],
   });
 
-  await kernel.boot({ workspaceRoot: root });
+  await kernel.boot({ options: { workspaceRoot: root } });
 
   context.after(async () => {
     await kernel.shutdown();
