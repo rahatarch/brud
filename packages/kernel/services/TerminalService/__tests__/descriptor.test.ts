@@ -69,7 +69,7 @@ describe('TerminalService bootstrap registration', () => {
     assert.strictEqual(terminal.activeSessions().length, 0);
   });
 
-  it('exposes the legacy chunk callback surface through the kernel authority', async () => {
+  it('exposes the chunk callback surface through the kernel authority', async () => {
     const kernel = createStandardKernel({
       history: { inMemory: true },
     });

@@ -210,7 +210,7 @@ describe('UnifiedHistoryService — automatic recording (brud.core.file)', () =>
     assert.equal(new Set(writes.map((e) => e.payload.path)).size, 40);
   });
 
-  it('reports recording failures to the error sink and keeps recording (legacy F5)', async (context) => {
+  it('reports recording failures to the error sink and keeps recording (recording failure contract)', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-unified-service-errors-')));
     const driver = new DurableNodeStorageDriver();
     const journal = createFileMutationJournal();

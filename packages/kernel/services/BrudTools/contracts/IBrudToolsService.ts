@@ -1,6 +1,5 @@
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
-import type { ParseOptions, ParseResult, RouteResult } from './parsing.js';
 
 /**
  * Caller context handed to a tool handler at dispatch time.
@@ -127,7 +126,7 @@ export interface IBrudToolsService {
    * Validates and dispatches one tool invocation.
    *
    * Validation is performed against the target tool's registered
-   * `parametersSchema` only. There is no legacy operation-kind gate and no
+   * `parametersSchema` only. There is no operation-kind gate and no
    * implicit `index`: a payload is accepted exactly when the tool's own
    * schema accepts it.
    *
@@ -145,28 +144,20 @@ export interface IBrudToolsService {
   ): Promise<OperationResult>;
 
   /**
-   * Scans Brud Protocol v2 text into operations without dispatching.
+   * Validates a payload against a tool without invoking its handler.
    *
-   * The parser is fail-closed: a malformed document returns `ok: false` and no
-   * partial operation list. Protected parameters are resolved from each named
-   * tool's registered `parametersSchema`.
+   * This is the dry-run gate used by the Router. Lookup, allow-list and schema
+   * validation run; caller permissions are not checked.
    *
-   * @param rawInput - Raw model output, including any surrounding prose.
-   * @param options - Bounds and dispatch context.
+   * @param name - Dispatch name.
+   * @param rawInput - Untrusted payload supplied by the caller.
+   * @param callerContext - Execution context that would be used on dispatch.
    */
-  parseInput(rawInput: string, options?: ParseOptions): ParseResult;
-
-  /**
-   * Parses, validates and dispatches every `[CALL tool_name]` block in order.
-   *
-   * Each operation is checked against its registered `parametersSchema` before
-   * dispatch. Parsing failures dispatch nothing. Handler throws become `failed`
-   * outcomes instead of rejecting the batch.
-   *
-   * @param rawInput - Raw model output.
-   * @param options - Bounds, cancellation and dispatch context.
-   */
-  parseAndRoute(rawInput: string, options?: ParseOptions): Promise<RouteResult>;
+  validateTool(
+    name: string,
+    rawInput: unknown,
+    callerContext: IPluginExecutionContext,
+  ): OperationResult;
 }
 
 /**

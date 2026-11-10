@@ -244,7 +244,7 @@ describe('Catalog facade security', () => {
   it('fails closed when the tools capability provider is absent', () => {
     const context = makePluginContext(undefined, ['tools:register']);
 
-    assert.throws(() => context.getBrudTools(), /Tools capability is not available/u);
+    assert.throws(() => context.getBrudTools(), /Tools API "tools" is not registered/u);
   });
 
   it('never invokes a tool handler while listing or describing', async () => {

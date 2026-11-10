@@ -137,7 +137,7 @@ export class ProcessManager {
     return Array.from(this.live.values(), (entry) => entry.pid);
   }
 
-  /** Allocates a session id in the legacy `proc-<timestamp>-<counter>` sequence. */
+  /** Allocates a session id in the `proc-<timestamp>-<counter>` sequence. */
   nextSessionId(): string {
     this.sessionCounter++;
 

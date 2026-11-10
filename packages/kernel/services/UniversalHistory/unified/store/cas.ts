@@ -167,7 +167,7 @@ const STAGING_PATTERN = /^\.[0-9a-f]{64}\..+\.tmp$/u;
  * Removes blob files no `contents` row references and abandoned staging files,
  * both only when older than the grace period (D-15 U-8).
  *
- * Only `<historyRoot>/cas/<aa>/` is visited; legacy `blobs/` and every other
+ * Only `<historyRoot>/cas/<aa>/` is visited; previous `blobs/` and every other
  * path are never touched. A blob must be named by a valid digest inside its
  * own shard, and its reference is re-checked immediately before deletion.
  */

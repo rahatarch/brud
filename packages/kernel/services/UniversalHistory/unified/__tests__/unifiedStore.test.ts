@@ -509,7 +509,7 @@ describe('UnifiedHistoryStore — degraded mode (F-UP-1, oracle R4 contract)', (
 });
 
 describe('UnifiedHistoryStore — module isolation', () => {
-  it('imports no node:fs and nothing from the legacy history modules', () => {
+  it('imports no node:fs and nothing from the removed history modules', () => {
     const directory = resolve(dirname(fileURLToPath(import.meta.url)), '../store');
     const pattern = /(?:\bfrom\s+|\bimport\s*\(\s*)['"]([^'"]+)['"]/gu;
     for (const file of readdirSync(directory).filter((name) => name.endsWith('.ts'))) {
@@ -517,7 +517,7 @@ describe('UnifiedHistoryStore — module isolation', () => {
       for (const match of source.matchAll(pattern)) {
         const specifier = match[1] ?? '';
         assert.ok(!/^node:fs/u.test(specifier) && specifier !== 'fs', `${file} imports ${specifier}`);
-        assert.ok(!/\.\.\/\.\.\/(storage|operations|engine|listener|orchestrator|descriptor|contracts)\//u.test(specifier), `${file} imports legacy ${specifier}`);
+        assert.ok(!/\.\.\/\.\.\/(storage|operations|engine|listener|orchestrator|descriptor|contracts)\//u.test(specifier), `${file} imports removed ${specifier}`);
       }
     }
   });

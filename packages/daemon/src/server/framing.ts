@@ -66,12 +66,12 @@ export class FrameDecoder {
   private buffer: Buffer = Buffer.alloc(0);
 
   /**
-   * Legacy push surface: decodes every complete frame and throws the first
+   * Push surface: decodes every complete frame and throws the first
    * frame error after the chunk has been consumed.
    *
    * The daemon server uses {@link pushFrames} so one malformed frame cannot
    * discard valid peers. This method remains for client-side consumers and
-   * compatibility tests that treat a bad frame as fatal.
+   * frame tests that treat a bad frame as fatal.
    */
   push(chunk: Buffer): unknown[] {
     const results = this.pushFrames(chunk);

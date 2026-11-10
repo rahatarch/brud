@@ -24,7 +24,7 @@ class RecordingValidator implements TerminalValidatorPort {
       return validationFailure({
         code: 'MISSING_FIELD',
         rule: 'CMD.NO_COMMAND',
-        legacyCode: 'MISSING_FIELD',
+        externalCode: 'MISSING_FIELD',
         friendly: 'Command rejected.',
         details: 'The command is empty.',
         actionable: true,
@@ -36,7 +36,7 @@ class RecordingValidator implements TerminalValidatorPort {
       return validationFailure({
         code: 'DANGEROUS_COMMAND',
         rule: 'CMD.RM_ROOT',
-        legacyCode: 'DANGEROUS_COMMAND',
+        externalCode: 'DANGEROUS_COMMAND',
         friendly: 'Command rejected.',
         details: `The command "${command}" is blocked.`,
         command,
@@ -96,7 +96,7 @@ describe('TerminalService security and limits', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_BLOCKED');
-    assert.strictEqual(decision.legacyCode, 'DANGEROUS_COMMAND');
+    assert.strictEqual(decision.externalCode, 'DANGEROUS_COMMAND');
     assert.ok(validator.seen.includes('rm -rf /'));
     // Only the validation pass ran: no process was registered or spawned.
     assert.strictEqual(service.activeSessions().length, 0);
@@ -190,7 +190,7 @@ describe('TerminalService security and limits', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_OUTPUT_LIMIT');
-    assert.strictEqual(decision.legacyCode, 'TERMINAL_OUTPUT_LIMIT');
+    assert.strictEqual(decision.externalCode, 'TERMINAL_OUTPUT_LIMIT');
     // The tree was killed on the breach, not after the 10s sleep.
     assert.ok(Date.now() - startedAt < 9_000, 'a limit breach must kill the process immediately');
     await service.dispose();
@@ -258,7 +258,7 @@ describe('TerminalService security and limits', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_SPAWN_FAILED');
-    assert.strictEqual(decision.legacyCode, 'EXECUTION_FAILED');
+    assert.strictEqual(decision.externalCode, 'EXECUTION_FAILED');
     await service.dispose();
   });
 
@@ -288,7 +288,7 @@ describe('TerminalService security and limits', () => {
 
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
-    assert.strictEqual(decision.legacyCode, 'BATCH_LIMIT_EXCEEDED');
+    assert.strictEqual(decision.externalCode, 'BATCH_LIMIT_EXCEEDED');
     await service.dispose();
   });
 
@@ -300,7 +300,7 @@ describe('TerminalService security and limits', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_UNAVAILABLE');
-    assert.strictEqual(decision.legacyCode, 'TERMINAL_UNAVAILABLE');
+    assert.strictEqual(decision.externalCode, 'TERMINAL_UNAVAILABLE');
     assert.strictEqual(decision.retryable, true);
     assert.strictEqual(decision.actionable, false);
     assert.ok(Date.now() - startedAt < 1_000, 'the refusal must be immediate');
@@ -327,7 +327,7 @@ describe('TerminalService security and limits', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_TIMEOUT');
-    assert.strictEqual(decision.legacyCode, 'TERMINAL_TIMEOUT');
+    assert.strictEqual(decision.externalCode, 'TERMINAL_TIMEOUT');
     await service.dispose();
   });
 
@@ -425,7 +425,7 @@ describe('TerminalService collaborator boundary isolation', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_INTERNAL');
-    assert.strictEqual(decision.legacyCode, 'INTERNAL_ERROR');
+    assert.strictEqual(decision.externalCode, 'INTERNAL_ERROR');
     assert.strictEqual(decision.retryable, true);
     assert.strictEqual(service.activeSessions().length, 0);
     await service.dispose();

@@ -31,9 +31,9 @@ export interface SettingsSnapshot {
   readonly readMaxAggregateBytes: number;
   readonly plugins: Readonly<Record<string, PluginRolloutMode>>;
   /**
-   * Whether the MCP server starts automatically with the project (legacy
+   * Whether the MCP server starts automatically with the project. Missing
    * `mcpAutoOn`). Data only: the client reads it and decides. Missing on disk
-   * resolves to the legacy default (`true`).
+   * values resolve to `true`.
    */
   readonly mcpAutoOn?: boolean;
   /**

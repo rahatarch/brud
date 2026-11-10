@@ -36,7 +36,7 @@ export const DEFAULT_READ_MAX_BATCH_FILES = 100;
 /** Default aggregate byte budget for a read operation. */
 export const DEFAULT_READ_MAX_AGGREGATE_BYTES = 8 * 1024 * 1024;
 
-/** Legacy default for automatic MCP startup (`mcpAutoOn`). */
+/** Default for automatic MCP startup (`mcpAutoOn`). */
 export const DEFAULT_MCP_AUTO_ON = true;
 
 /** Default history retention window in days (D-15 U-8, S-D4). */

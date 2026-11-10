@@ -8,3 +8,4 @@ export type {
   InternalPluginRecord,
   PluginManagerRuntimeDependencies,
 } from './types.js';
+export { createRegistryCapabilityProviders } from './registryCapabilities.js';

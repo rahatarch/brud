@@ -8,7 +8,7 @@ import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext
  *
  * Payload validation is not a dependency: the service compiles each tool's
  * registered `parametersSchema` through the kernel's zero-dependency JSON
- * Schema compiler, so there is no legacy operation-kind gate to inject.
+ * Schema compiler, so there is no operation-kind gate to inject.
  */
 export interface BrudToolsDependencies {
   /** Diagnostic sink for registry and dispatch warnings. */
@@ -21,7 +21,7 @@ export interface BrudToolsDependencies {
    * `brud.core.settings.reader`; the accessor is only touched at dispatch time,
    * so the service's declared dependency graph is unchanged. An absent
    * accessor, an unavailable settings source, or an empty map all mean "allow",
-   * matching the legacy default. Only an explicit `false` disables a tool.
+   * matching the default. Only an explicit `false` disables a tool.
    */
   readonly getToolAllowList?: () => Readonly<Record<string, boolean>>;
 }

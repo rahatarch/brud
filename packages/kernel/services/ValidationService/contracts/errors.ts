@@ -8,8 +8,8 @@ import type {
 /**
  * Machine-readable kernel codes.
  *
- * The kernel never emits a legacy code directly (rollout plan Appendix C);
- * the facade maps these onto the legacy vocabulary. Every code is stable and
+ * The kernel never emits a external code directly (rollout plan Appendix C);
+ * the facade maps these onto the external vocabulary. Every code is stable and
  * may be persisted, so values must not be renamed without a migration.
  */
 export type ValidationCode =
@@ -64,7 +64,7 @@ export type ValidationCode =
  *
  * `ok: true` carries no payload so callers cannot infer authority from a
  * partially populated failure. Failures always carry a code, the violated
- * rule, the legacy-compatible friendly text and the details template.
+ * rule, the external-compatible friendly text and the details template.
  */
 export type ValidationDecision =
   | { readonly ok: true }
@@ -73,14 +73,14 @@ export type ValidationDecision =
       readonly code: ValidationCode;
       readonly rule: ValidationRule;
       /**
-       * Facade-level code a legacy caller sees for this failure.
+       * Facade-level code a external caller sees for this failure.
        *
        * Normally identical to `code`; path and workspace failures differ
-       * because Appendix C maps the structured kernel code onto the legacy
+       * because Appendix C maps the structured kernel code onto the external
        * vocabulary (`PATH_OUTSIDE_WORKSPACE`, `VALIDATION_ERROR`,
        * `NO_WORKSPACE`) at the boundary.
        */
-      readonly legacyCode: string;
+      readonly externalCode: string;
       readonly friendly: string;
       readonly details: string;
       readonly path?: string;
@@ -101,7 +101,7 @@ export const VALIDATION_OK: ValidationDecision = Object.freeze({ ok: true });
 export interface ValidationFailureDetails {
   readonly code: ValidationCode;
   readonly rule: ValidationRule;
-  readonly legacyCode: string;
+  readonly externalCode: string;
   readonly friendly: string;
   readonly details: string;
   readonly path?: string;
@@ -115,14 +115,14 @@ export interface ValidationFailureDetails {
 /**
  * Builds a frozen failure decision.
  *
- * @param details - Code, rule, legacy code, messages and flags.
+ * @param details - Code, rule, external code, messages and flags.
  */
 export function validationFailure(details: ValidationFailureDetails): ValidationDecision {
   return Object.freeze({
     ok: false as const,
     code: details.code,
     rule: details.rule,
-    legacyCode: details.legacyCode,
+    externalCode: details.externalCode,
     friendly: details.friendly,
     details: details.details,
     actionable: details.actionable,
@@ -164,7 +164,7 @@ export abstract class ValidationViolationError extends Error {
   /**
    * Violated rule id.
    *
-   * Typed as `string` because the legacy adapter re-exposes the pre-Phase-3
+   * Typed as `string` because the external adapter re-exposes the pre-Phase-3
    * six-member vocabulary on this property, so `assert.equal(error.rule,
    * 'TRAVERSAL')` keeps compiling and passing unchanged. Every kernel engine
    * sets it to a {@link ValidationRule}.

@@ -156,7 +156,7 @@ interface CacheEntry {
 /**
  * Batch-scoped canonicalization cache.
  *
- * Mirrors the legacy `PathCache` contract: the root and every existing path
+ * Mirrors the `PathCache` contract: the root and every existing path
  * are memoized for the life of the batch, non-existent paths never are, so a
  * create target is re-resolved on every call and `realpath` results are never
  * stale for a file that appears mid-batch.

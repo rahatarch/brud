@@ -5,7 +5,7 @@ import type {
   IPluginExecutionContext,
   ToolRegistrationOptions,
 } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsService } from '../../services/BrudTools/orchestrator/BrudToolsService.js';
+import { ParserRouterHarness } from './support/parserRouterHarness.js';
 
 const CONTEXT: IPluginExecutionContext = {
   workspaceRoot: '/workspace',
@@ -30,7 +30,7 @@ function tool(
 
 describe('Brud Protocol v2 parser', () => {
   it('parses a valid [BRUD] block with a simple tool call', () => {
-    const service = new BrudToolsService();
+    const service = new ParserRouterHarness();
     service.registerTool('brud.tools.test', true, tool('echo', {
       type: 'object',
       properties: { text: { type: 'string' } },
@@ -59,7 +59,7 @@ describe('Brud Protocol v2 parser', () => {
   });
 
   it('parses multiple [CALL] blocks in document order', () => {
-    const service = new BrudToolsService();
+    const service = new ParserRouterHarness();
     service.registerTool('brud.tools.test', true, tool('echo', {
       type: 'object',
       properties: { text: { type: 'string' } },
@@ -98,7 +98,7 @@ describe('Brud Protocol v2 parser', () => {
   });
 
   it('treats a {protected} region as literal and does not execute inner [CALL] markers', async () => {
-    const service = new BrudToolsService();
+    const service = new ParserRouterHarness();
     const calls: Record<string, unknown>[] = [];
 
     service.registerTool('brud.tools.filesystem', true, tool('create_file', {
@@ -153,7 +153,7 @@ describe('Brud Protocol v2 parser', () => {
   });
 
   it('routes end-to-end: parses, validates against the registered schema and executes', async () => {
-    const service = new BrudToolsService();
+    const service = new ParserRouterHarness();
     let invocations = 0;
     let observedIndex: unknown = 'not-called';
 

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import type { IWorkspacePathPort } from '../contracts/IWorkspaceService.js';
 import { WorkspaceViolationError } from '../contracts/errors.js';
-import { createLegacyPathAdapter } from '../legacy/LegacyPathAdapter.js';
+import { createWorkspacePathBridge } from '../bridge/WorkspacePathBridge.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { WorkspaceService } from './WorkspaceService.js';
 
@@ -190,7 +190,7 @@ describe('WorkspaceService remediation — root round-trip and nested hints (F5)
     const { base } = await createRoots([]);
     context.after(() => rm(base, { recursive: true, force: true }));
     const repo = join(base, 'repo');
-    const core = join(repo, 'packages/legacy');
+    const core = join(repo, 'packages/previous');
     await mkdir(core, { recursive: true });
 
     const service = await createLexicalService([repo, core]);
@@ -248,13 +248,13 @@ describe('WorkspaceService remediation — error payload safety (F6, F7)', () =>
     }
   });
 
-  it('sanitizes legacy adapter details', async (context) => {
+  it('sanitizes path bridge details', async (context) => {
     const { base, roots } = await createRoots(['workspace']);
     context.after(() => rm(base, { recursive: true, force: true }));
     const root = roots[0];
     assert.ok(root);
     const service = await createLexicalService([root]);
-    const adapter = createLegacyPathAdapter(service);
+    const adapter = createWorkspacePathBridge(service);
 
     const result = await adapter.validate('../outside\nATTACK\r\n.txt');
 

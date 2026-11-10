@@ -5,8 +5,8 @@ import type { TerminalResult } from './ITerminalService.js';
  * Machine-readable terminal failure codes.
  *
  * Every code is stable and may be persisted, so values must not be renamed
- * without a migration. The kernel never emits a legacy code directly; the
- * facade maps these onto the legacy vocabulary through {@link legacyCodeFor}.
+ * without a migration. The kernel never emits a external code directly; the
+ * facade maps these onto the external vocabulary through {@link externalCodeFor}.
  */
 export type TerminalErrorCode =
   | 'TERMINAL_UNAVAILABLE'
@@ -25,7 +25,7 @@ export type TerminalErrorCode =
  * Mirrors `ValidationDecision` so the two gates compose identically:
  * `ok: true` carries no authority beyond the result payload, and every
  * failure carries a code, the violated rule (when the gate produced one),
- * the legacy-compatible text and the flags a host needs to react.
+ * the external-compatible text and the flags a host needs to react.
  */
 export type TerminalDecision =
   | { readonly ok: true; readonly result: TerminalResult }
@@ -34,8 +34,8 @@ export type TerminalDecision =
       readonly code: TerminalErrorCode;
       /** Violated validation rule, present for gate rejections. */
       readonly rule?: ValidationRule;
-      /** Facade-level code a legacy caller sees for this failure. */
-      readonly legacyCode: string;
+      /** Facade-level code a external caller sees for this failure. */
+      readonly externalCode: string;
       readonly friendly: string;
       readonly details: string;
       readonly command?: string;
@@ -63,7 +63,7 @@ export type TerminalDecision =
 export interface TerminalFailureDetails {
   readonly code: TerminalErrorCode;
   readonly rule?: ValidationRule;
-  readonly legacyCode: string;
+  readonly externalCode: string;
   readonly friendly: string;
   readonly details: string;
   readonly command?: string;
@@ -84,14 +84,14 @@ export function terminalSuccess(result: TerminalResult): TerminalDecision {
 /**
  * Builds a frozen failure decision.
  *
- * @param details - Code, rule, legacy code, messages and flags.
+ * @param details - Code, rule, external code, messages and flags.
  */
 export function terminalFailure(details: TerminalFailureDetails): TerminalDecision {
   return Object.freeze({
     ok: false as const,
     code: details.code,
     ...(details.rule === undefined ? {} : { rule: details.rule }),
-    legacyCode: details.legacyCode,
+    externalCode: details.externalCode,
     friendly: details.friendly,
     details: details.details,
     ...(details.command === undefined ? {} : { command: details.command }),
@@ -118,7 +118,7 @@ export function terminalFailure(details: TerminalFailureDetails): TerminalDecisi
 export function terminalUnavailable(command?: string, cwd?: string, details?: string): TerminalDecision {
   return terminalFailure({
     code: 'TERMINAL_UNAVAILABLE',
-    legacyCode: 'TERMINAL_UNAVAILABLE',
+    externalCode: 'TERMINAL_UNAVAILABLE',
     friendly: 'Terminal execution unavailable: validation authority not bound',
     details: details ?? 'The terminal service cannot execute commands without an active ValidationService.',
     ...(command === undefined ? {} : { command }),
@@ -128,7 +128,7 @@ export function terminalUnavailable(command?: string, cwd?: string, details?: st
   });
 }
 
-/** Legacy `BrudError` codes by kernel terminal code. */
+/** External `BrudError` codes by kernel terminal code. */
 const LEGACY_CODE_BY_TERMINAL_CODE: Readonly<Record<TerminalErrorCode, string>> = Object.freeze({
   TERMINAL_UNAVAILABLE: 'TERMINAL_UNAVAILABLE',
   TERMINAL_INVALID_REQUEST: 'EXECUTION_FAILED',
@@ -142,15 +142,15 @@ const LEGACY_CODE_BY_TERMINAL_CODE: Readonly<Record<TerminalErrorCode, string>> 
 });
 
 /**
- * Default legacy code for a terminal code.
+ * Default external code for a terminal code.
  *
- * Gate rejections usually carry a precise `legacyCode` already; this mapping
- * covers execution outcomes, where the legacy surface only knows
+ * Gate rejections usually carry a precise `externalCode` already; this mapping
+ * covers execution outcomes, where the external surface only knows
  * `EXECUTION_FAILED` and the three additive codes.
  *
  * @param code - Kernel terminal code.
  */
-export function legacyCodeFor(code: TerminalErrorCode): string {
+export function externalCodeFor(code: TerminalErrorCode): string {
   return LEGACY_CODE_BY_TERMINAL_CODE[code];
 }
 
@@ -178,7 +178,7 @@ export function terminalFailureFromValidation(
   return terminalFailure({
     code,
     rule: decision.rule,
-    legacyCode: decision.legacyCode,
+    externalCode: decision.externalCode,
     friendly: decision.friendly,
     details: decision.details,
     ...(command === undefined ? {} : { command }),
@@ -205,7 +205,7 @@ export type TerminalFailureSource =
       readonly ok: false;
       readonly code: string;
       readonly rule: ValidationRule;
-      readonly legacyCode: string;
+      readonly externalCode: string;
       readonly friendly: string;
       readonly details: string;
       readonly command?: string;

@@ -1,4 +1,5 @@
 import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
 import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
@@ -143,7 +144,11 @@ export function createValidationDescriptor(
         });
       });
 
-      return service;
+      return withExposedApis(service, (registry) => {
+        registry.registerApi(CORE_API_NAME.validation, ValidationToken, {
+          capability: 'validation:read',
+        });
+      });
     },
   };
 }

@@ -8,6 +8,15 @@ export const KEY_PATTERN = /^([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$/;
 export const BRACE_PATTERN = /^\{([^{}]+)\}$/;
 
 /**
+ * Call header: `[CALL <name>]` or `[CALL <kind> <name>]`.
+ *
+ * Group 1 is the first token and group 2 the optional second token. The
+ * scanner decides which is the kind from the group count, so the bare
+ * single-token form keeps naming a `tool`.
+ */
+export const CALL_PATTERN = /^\[CALL\s+([^\s\]]+)(?:\s+([^\s\]]+))?\s*\]$/;
+
+/**
  * Fail-closed scanner error.
  *
  * Carries the document line number so a caller can point at the offending

@@ -14,14 +14,28 @@ describe('isPluginPermission', () => {
     }
   });
 
-  it('rejects unknown permission strings', () => {
-    const rejected: readonly unknown[] = [
+  it('accepts extensible capability tokens', () => {
+    const accepted: readonly unknown[] = [
       'fs:delete',
-      'FS:READ',
       'history',
-      'telemetry',
+      'photoshop:access',
+      'acme:feature:beta',
+    ];
+
+    for (const candidate of accepted) {
+      assert.equal(isPluginPermission(candidate), true, String(candidate));
+    }
+  });
+
+  it('rejects malformed capability tokens', () => {
+    const rejected: readonly unknown[] = [
+      'FS:READ',
       ' tools:register',
       '',
+      'tools::register',
+      'tools:',
+      ':read',
+      'tools register',
     ];
 
     for (const candidate of rejected) {

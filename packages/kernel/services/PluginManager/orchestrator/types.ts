@@ -1,9 +1,4 @@
-import type { IActionManager } from '../../ActionManager/contracts/index.js';
-import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
-import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
-import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
-import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
+import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/IExposedApiRegistry.js';
 import { PluginError, PluginDependencyError } from '../contracts/errors.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../contracts/IPluginContext.js';
@@ -13,22 +8,8 @@ import type { PluginManifest } from '../contracts/manifest.js';
 export interface PluginManagerRuntimeDependencies {
   readonly workspaceRoot: string;
 
-  readonly fileSystem: () => IBrudFileSystem;
-
-  readonly universalHistory?: () => IUniversalHistoryService;
-
-  readonly brudTools?: () => IBrudToolsService;
-
-  /**
-   * Lazy accessor for the UI-only action manager.
-   *
-   * Used exclusively as a registration sink for `context.registerAction`.
-   */
-  readonly actionManager?: () => IActionManager;
-
-  readonly utilities?: () => IUtilityService;
-
-  readonly terminal?: () => ITerminalService;
+  /** Lazy Exposed API Registry accessor used for every context projection. */
+  readonly apiRegistry: () => IExposedApiRegistry;
 }
 
 export interface InternalPluginRecord {

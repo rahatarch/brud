@@ -4,10 +4,10 @@ import type { OperationResult } from '../../src/contracts/handler.js';
 import type { ServiceContext } from '../../src/contracts/lifecycle.js';
 import { compileJsonSchema } from '../../services/ValidationService/engine/jsonSchema/index.js';
 import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import type { RoutedOperationOutcome } from '../../services/BrudTools/contracts/parsing.js';
 import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
-import { synthesizeIndex } from '../../services/BrudTools/parser/indexSynthesis.js';
-import type { BrudOperationKind } from '../../services/BrudTools/parser/types/operations.js';
+import type { BrudOperation } from '../../services/Parser/contracts/index.js';
+import { synthesizeIndex } from '../../services/Parser/parser/indexSynthesis.js';
+import type { BrudOperationKind } from '../../src/contracts/brudOperation.js';
 import { ValidationToken } from '../../services/ValidationService/descriptor/tokens.js';
 import type { IValidationService } from '../../services/ValidationService/contracts/IValidationService.js';
 import type { ValidationService } from '../../services/ValidationService/orchestrator/ValidationService.js';
@@ -144,17 +144,16 @@ describe('P0-3 open tool identity', () => {
     assert.equal(kind, 'synthetic_probe_tool');
   });
 
-  it('RoutedOperationOutcome has no kind field', () => {
-    const noKind: 'kind' extends keyof RoutedOperationOutcome ? never : true = true;
-    const outcome: RoutedOperationOutcome = {
-      operationIndex: '1',
-      sequence: 0,
-      toolName: 'synthetic_probe_tool',
-      status: 'success',
+  it('a parsed operation carries the shared kind field', () => {
+    const operation: BrudOperation = {
+      index: '1',
+      kind: 'tool',
+      name: 'synthetic_probe_tool',
+      parameters: Object.freeze({}),
     };
 
-    assert.equal(noKind, true);
-    assert.equal('kind' in outcome, false);
+    assert.equal(operation.kind, 'tool');
+    assert.equal(operation.name, 'synthetic_probe_tool');
   });
 });
 
@@ -188,8 +187,8 @@ describe('P0-5 validateFormat', () => {
     assert.equal(decision.ok, true);
   });
 
-  it('rejects legacy markers', async (t) => {
-    const { kernel, root } = await bootRealKernel(t, { prefix: 'brud-purification-legacy-' });
+  it('rejects merge markers', async (t) => {
+    const { kernel, root } = await bootRealKernel(t, { prefix: 'brud-purification-merge-' });
     const validation = kernel.requestAccess<IValidationService>(caller(root), ValidationToken) as ValidationService;
     const decision = validation.validateFormat(
       '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE',

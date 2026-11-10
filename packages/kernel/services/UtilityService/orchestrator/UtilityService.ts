@@ -17,7 +17,7 @@ export class UtilityService implements IUtilityService, IServiceLifecycle {
   /**
    * Resolves local imports in a source string.
    *
-   * Accepts either the named-option form or the legacy positional form. The
+   * Accepts either the named-option form or the positional form. The
    * positional form is preserved so existing callers migrate without a
    * behavioural change.
    */

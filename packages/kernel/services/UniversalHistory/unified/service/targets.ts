@@ -1,7 +1,7 @@
-/** Target-path normalization and content classification (ported from legacy capture rules). */
+/** Target-path normalization and content classification (ported from previous capture rules). */
 import { UnifiedInvalidTargetPathError } from './errors.js';
 
-/** Same probe window as the legacy session ledger. */
+/** Same probe window as the previous session ledger. */
 export const BINARY_PROBE_LENGTH = 8_000;
 
 /** Paths inside history storage are never recorded. */

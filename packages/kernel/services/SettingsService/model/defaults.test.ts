@@ -72,7 +72,7 @@ describe('sanitizeSettingsDocument', () => {
 });
 
 describe('sanitizeSettingsDocument — mcpAutoOn', () => {
-  it('parses the boolean and defaults the snapshot to the legacy true', () => {
+  it('parses the boolean and defaults the snapshot to true', () => {
     assert.equal(DEFAULT_SETTINGS.mcpAutoOn, true);
     assert.deepEqual(sanitizeSettingsDocument({}, 'workspace').values, {});
     assert.equal(sanitizeSettingsDocument({ mcpAutoOn: false }, 'user').values.mcpAutoOn, false);

@@ -9,7 +9,7 @@ import type { BrudKernel } from '../../../src/engine/BrudKernel.js';
 import type { BrudFileSystem } from '../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';
-import { createLegacyPathAdapter } from '../legacy/LegacyPathAdapter.js';
+import { createWorkspacePathBridge } from '../bridge/WorkspacePathBridge.js';
 import { WorkspaceToken } from '../descriptor/tokens.js';
 
 interface Fixture {
@@ -136,7 +136,7 @@ describe('WorkspaceService boot integration', () => {
     }
   });
 
-  it('serves legacy absolute paths through the adapter on a booted kernel', async (context) => {
+  it('serves host absolute paths through the bridge on a booted kernel', async (context) => {
     const fixture = await createFixture();
     context.after(async () => {
       await rm(fixture.base, { recursive: true, force: true });
@@ -148,11 +148,11 @@ describe('WorkspaceService boot integration', () => {
 
     try {
       const workspace = kernel.requestAccess(caller(fixture.workspace), WorkspaceToken);
-      const adapter = createLegacyPathAdapter(workspace);
+      const adapter = createWorkspacePathBridge(workspace);
       const absoluteInside = join(fixture.workspace, 'notes', 'draft.md');
 
       assert.equal(await adapter.toKernelRelative(absoluteInside), 'notes/draft.md');
-      assert.equal(adapter.toLegacyAbsolute('notes/draft.md'), join(await realpath(fixture.workspace), 'notes', 'draft.md'));
+      assert.equal(adapter.toHostAbsolute('notes/draft.md'), join(await realpath(fixture.workspace), 'notes', 'draft.md'));
 
       const outside = await adapter.validate(join(fixture.outside, 'secret.txt'), 'read_file');
 

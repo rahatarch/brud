@@ -220,7 +220,7 @@ export class PathEvaluationEngine {
    * Evaluates a path synchronously, using the registered roots as the
    * containment authority.
    *
-   * The legacy `BrudAPI.validate` boundary is synchronous and cannot await
+   * The `BrudAPI.validate` boundary is synchronous and cannot await
    * `workspace.resolve`. This method runs the *same* lexical rules, the *same*
    * boundary switch and the *same* A10 denylist; only the containment proof
    * differs (segment-aware lexical containment instead of `realpath`). The
@@ -344,7 +344,7 @@ export class PathEvaluationEngine {
       : input;
 
     // With containment disabled an absolute path outside the root is admitted
-    // as-is, exactly as the legacy validator resolved it against the first
+    // as-is, exactly as the previous validator resolved it against the first
     // folder. Lexical segment rules still apply to the relative form, and A10
     // still applies when the target lands inside the root's own namespace.
     const insideRoot = !relativePath.startsWith('..') && !splitSegments(relativePath).includes('..');

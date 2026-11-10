@@ -18,7 +18,7 @@ import { computeLineRange } from './lineRange.js';
  * handler is selected. Filesystem-dependent rules (`INPUT.SEARCH_NOT_FOUND`,
  * `INPUT.MULTIPLE_MATCHES`, `INPUT.LINE_RANGE`, `INPUT.BATCH_LIMIT`) are
  * expressed as helpers that take the already-read content or file count, which
- * lets both the legacy facade and the read engine call them.
+ * lets both the external facade and the read engine call them.
  */
 
 /** One schema failure. */
@@ -34,7 +34,7 @@ export interface SchemaFailure {
   };
 }
 
-/** Metadata member-check rules, one per legacy `E_*` parser code. */
+/** Metadata member-check rules, one per `E_*` parser code. */
 export type MetadataRule = Extract<InputRule, 'INPUT.METADATA_WRONG_CASE'
   | 'INPUT.DUPLICATE_SESSION_METADATA'
   | 'INPUT.DUPLICATE_OPERATION_METADATA'
@@ -45,9 +45,9 @@ export type MetadataRule = Extract<InputRule, 'INPUT.METADATA_WRONG_CASE'
   | 'INPUT.METADATA_UNCLOSED'>;
 
 /**
- * Metadata rule → legacy parser code.
+ * Metadata rule → parser code.
  *
- * The kernel keeps the structured rule; the boundary emits the legacy code the
+ * The kernel keeps the structured rule; the boundary emits the external code the
  * parser has always thrown, so a caller can still branch on the exact failure
  * (audit §2.3, F-3).
  */
@@ -143,7 +143,7 @@ export class InputSchemaEngine {
   /**
    * Membership test for `validate.knownOperation`.
    *
-   * Legacy parity: the pre-Phase-3 boundary asked only whether the kind is
+   * External parity: the pre-Phase-3 boundary asked only whether the kind is
    * catalogued and never inspected its payload, so a known kind always
    * succeeds here even when its mandatory fields are absent (audit F-1).
    *
@@ -541,11 +541,11 @@ export class InputSchemaEngine {
   /**
    * Runs a single metadata member check.
    *
-   * The legacy metadata parser performs these in sequence (wrapper case,
+   * The previous metadata parser performs these in sequence (wrapper case,
    * duplicates, position, field case, unknown field, then termination). The
    * validator exposes each step separately so the caller keeps the parser's
    * ordering, while the failure carries both the structured rule id and the
-   * legacy `E_*` code (audit §2.3).
+   * `E_*` code (audit §2.3).
    *
    * @param rule - Metadata rule to report.
    * @param values - Wrapper name, operation index or offending field.

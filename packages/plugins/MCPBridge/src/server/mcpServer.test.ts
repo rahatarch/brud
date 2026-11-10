@@ -15,6 +15,13 @@ import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.
 import { createStandardKernel } from '../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../kernel/src/engine/BrudKernel.js';
 import { BrudToolsToken } from '../../../../kernel/services/BrudTools/descriptor/tokens.js';
+import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../../../kernel/services/ExposedApiRegistry/contracts/index.js';
+import { createRegistryCapabilityProviders } from '../../../../kernel/services/PluginManager/orchestrator/registryCapabilities.js';
+import type { InternalPluginRecord } from '../../../../kernel/services/PluginManager/orchestrator/types.js';
+import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';
+import type { ServiceContext } from '../../../../kernel/src/contracts/lifecycle.js';
+import type { ServiceToken } from '../../../../kernel/src/contracts/serviceToken.js';
 import { createMcpServer } from './mcpServer.js';
 
 interface Harness {
@@ -154,21 +161,74 @@ async function bootKernel(): Promise<Harness> {
   };
 }
 
+class ToolBroker implements IKernelAccessBroker {
+  constructor(private readonly tools: IBrudToolsService) {}
+
+  requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {
+    void caller;
+
+    if (token.id === BrudToolsToken.id) {
+      return this.tools as TService;
+    }
+
+    throw new Error(`Service "${token.id}" is not registered`);
+  }
+
+  hasService(token: ServiceToken<unknown>): boolean {
+    return token.id === BrudToolsToken.id;
+  }
+
+  listServices(): readonly ServiceInfo[] {
+    return Object.freeze([]);
+  }
+}
+
 function createContext(harness: Harness): PluginContext {
+  const permissions = ['tools:execute'] as const;
+  const broker = new ToolBroker(harness.tools);
+  const registry = new ExposedApiRegistryService({
+    broker,
+    callerContext: {
+      callerId: 'test.api.registry',
+      tier: 'core',
+      workspaceRoot: harness.root,
+    },
+  });
+
+  registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+    capability: 'tools:register',
+    combine: lastProjectionWins,
+  });
+  registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+    capability: 'tools:execute',
+    combine: lastProjectionWins,
+  });
+  registry.closeRegistration();
+
+  const manifest = {
+    id: 'test.mcp.server',
+    name: 'MCP server test',
+    version: '1.0.0',
+    permissions: [...permissions],
+  };
+  const record: InternalPluginRecord = {
+    plugin: { manifest, activate: (): void => undefined },
+    manifest,
+    official: false,
+    state: 'unloaded',
+  };
+
   return new PluginContext({
     pluginId: 'test.mcp.server',
     workspaceRoot: harness.root,
-    permissions: ['tools:execute'],
+    permissions,
     logger: LOGGER,
-    capabilities: {
-      fileSystem: () => {
-        throw new Error('filesystem is not used by this test');
-      },
-      universalHistory: () => {
-        throw new Error('history is not used by this test');
-      },
-      brudTools: () => harness.tools,
-    },
+    capabilities: createRegistryCapabilityProviders(
+      registry,
+      record,
+      permissions,
+      harness.root,
+    ),
   });
 }
 

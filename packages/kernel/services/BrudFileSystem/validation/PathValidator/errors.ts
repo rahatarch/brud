@@ -1,12 +1,12 @@
 /**
- * Legacy path-rule vocabulary.
+ * External path-rule vocabulary.
  *
  * Preserved verbatim so the pre-Phase-3 contract (public `rule` strings on
- * thrown errors, `PathViolationRule` type) keeps working. The kernel
+ * thrown errors, `ExternalPathRule` type) keeps working. The kernel
  * vocabulary is `PathRule` in `ValidationService/contracts/rules.ts`;
- * `toLegacyRule` is the one-way projection between them.
+ * `toExternalPathRule` is the one-way projection between them.
  */
-export type PathViolationRule =
+export type ExternalPathRule =
   | 'NULL_BYTE'
   | 'TRAVERSAL'
   | 'RESERVED_DEVICE'
@@ -17,8 +17,8 @@ export type PathViolationRule =
 import { PathViolationError } from '../../../ValidationService/contracts/errors.js';
 import type { PathRule } from '../../../ValidationService/contracts/rules.js';
 
-/** Projects a kernel path rule onto the legacy six-member vocabulary. */
-export function toLegacyRule(rule: PathRule): PathViolationRule {
+/** Projects a kernel path rule onto the external six-member vocabulary. */
+export function toExternalPathRule(rule: PathRule): ExternalPathRule {
   switch (rule) {
     case 'PATH.NULL_BYTE':
       return 'NULL_BYTE';
@@ -36,43 +36,41 @@ export function toLegacyRule(rule: PathRule): PathViolationRule {
 }
 
 export interface PathViolationDetails {
-  readonly rule: PathViolationRule;
+  readonly rule: ExternalPathRule;
   readonly root: string;
   readonly candidatePath: string;
   readonly reason: string;
 }
 
 /**
- * Thrown by the legacy `PathValidator`/`assertSafeRelativePath` surface.
+ * Path-rule violation adapter.
  *
- * Phase 3 keeps this error alive as an adapter: it is a `PathViolationError`
- * carrying the kernel `PathRule` on `kernelRule` and the legacy six-member
- * name on `rule`, so both vocabularies stay observable from one object.
- * `ScopedPartitionFacade` and `WorkspaceService` read whichever they know.
+ * A `PathViolationError` that also carries the external six-member rule name,
+ * so callers can narrow on either vocabulary from one object.
  */
-export class PathTraversalViolationError extends PathViolationError {
-  /** Legacy rule name, also mirrored onto `rule`. */
-  public readonly legacyRule: PathViolationRule;
+export class PathRuleViolationError extends PathViolationError {
+  /** External rule name, also mirrored onto `rule`. */
+  public readonly externalRule: ExternalPathRule;
 
-  /** Legacy alias of the caller-supplied path. */
+  /** Caller-supplied path as seen by the external surface. */
   public readonly candidatePath: string;
 
-  /** Legacy alias of the reason. */
+  /** Reason text as seen by the external surface. */
   public readonly reason: string;
 
-  /** Legacy constructor shape preserved for third-party callers. */
+  /** Constructs the adapter from external rule details. */
   constructor(details: PathViolationDetails) {
-    super(legacyToKernelRule(details.rule), details.candidatePath, details.reason, details.root);
-    this.name = 'PathTraversalViolationError';
-    this.legacyRule = details.rule;
+    super(externalToKernelRule(details.rule), details.candidatePath, details.reason, details.root);
+    this.name = 'PathRuleViolationError';
+    this.externalRule = details.rule;
     this.candidatePath = details.candidatePath;
     this.reason = details.reason;
     this.rule = details.rule;
   }
 }
 
-/** Projects the legacy vocabulary onto the kernel path rules. */
-export function legacyToKernelRule(rule: PathViolationRule): PathRule {
+/** Projects the external vocabulary onto the kernel path rules. */
+export function externalToKernelRule(rule: ExternalPathRule): PathRule {
   switch (rule) {
     case 'NULL_BYTE':
       return 'PATH.NULL_BYTE';

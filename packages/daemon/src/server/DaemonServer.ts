@@ -18,7 +18,7 @@ export interface DaemonServerConfig {
   /** Multi-workspace registry. Preferred over `kernel`. */
   readonly registry?: WorkspaceRegistry;
 
-  /** Legacy single-kernel composition adopted for `workspaceRoot`. */
+  /** Single-kernel composition adopted for `workspaceRoot`. */
   readonly kernel?: BrudKernel;
   readonly socketPath: string;
   readonly token: string;

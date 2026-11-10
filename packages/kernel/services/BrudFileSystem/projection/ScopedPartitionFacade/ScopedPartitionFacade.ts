@@ -1,9 +1,7 @@
 import type { DirectoryEntry, FileStats } from '../../../../drivers/contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
-// Path rules come from the canonical validation engine; `validation/
-// PathValidator` is now only a deprecated alias for the same implementation.
-// The facade keeps the legacy `PathTraversalViolationError` at its boundary,
-// which every existing caller narrows on.
+// Path rules come from the canonical validation engine. The facade keeps the
+// external `PathRuleViolationError` at its boundary, which callers narrow on.
 import { PathViolationError } from '../../../ValidationService/contracts/errors.js';
 import {
   assertSafeRelativePath as assertCanonicalRelativePath,
@@ -11,10 +9,10 @@ import {
 } from '../../../ValidationService/engine/pathLexicon.js';
 import type { PathRule } from '../../../ValidationService/contracts/rules.js';
 import type { ValidationFlavor as PathFlavor } from '../../../ValidationService/contracts/IValidationService.js';
-import { PathTraversalViolationError, toLegacyRule } from '../../validation/PathValidator/errors.js';
+import { PathRuleViolationError, toExternalPathRule } from '../../validation/PathValidator/errors.js';
 
 /**
- * Applies the canonical lexical rules and rethrows in the legacy shape.
+ * Applies the canonical lexical rules and rethrows in the external shape.
  *
  * @param candidate - Relative path text.
  * @param flavor - Path flavor.
@@ -24,8 +22,8 @@ function assertSafeRelativePath(candidate: string, flavor: PathFlavor): string {
     return assertCanonicalRelativePath(candidate, flavor);
   } catch (error: unknown) {
     if (error instanceof PathViolationError) {
-      throw new PathTraversalViolationError({
-        rule: toLegacyRule(error.rule as PathRule),
+      throw new PathRuleViolationError({
+        rule: toExternalPathRule(error.rule as PathRule),
         root: '',
         candidatePath: candidate,
         reason: error.reason,
@@ -55,8 +53,8 @@ export type PartitionMutationKind =
  * Failure raised when a mutation targets a read-only projection.
  *
  * It carries the structured `INPUT.READ_ONLY_PROJECTION` rule next to the
- * legacy `VALIDATION_ERROR` code, so callers can narrow on either the rule or
- * the code without reaching into the service.
+ * external `VALIDATION_ERROR` code, so callers can narrow on either the rule
+ * or the code without reaching into the service.
  */
 export class ReadOnlyProjectionViolationError extends Error {
   readonly code = 'VALIDATION_ERROR';
@@ -99,7 +97,7 @@ function normalizePartitionPrefix(prefix: string, flavor: PathFlavor): string {
     .filter((segment) => segment.length > 0 && segment !== '.');
 
   if (segments.length === 0) {
-    throw new PathTraversalViolationError({
+    throw new PathRuleViolationError({
       rule: 'TRAVERSAL',
       root: '',
       candidatePath: prefix,

@@ -11,7 +11,14 @@ import {
 } from '../../services/BrudTools/descriptor/BrudToolsDescriptor.js';
 import { certifyOfficialPlugin } from '../../services/PluginManager/contracts/branding.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
+import { createExposedApiRegistryDescriptor } from '../../services/ExposedApiRegistry/descriptor/ExposedApiRegistryDescriptor.js';
+import { isExposedApiRegistrant } from '../../services/ExposedApiRegistry/contracts/registrant.js';
+import type { ExposedApiRegistryService } from '../../services/ExposedApiRegistry/orchestrator/index.js';
+import { createParserDescriptor } from '../../services/Parser/descriptor/ParserDescriptor.js';
 import { createPluginManagerDescriptor } from '../../services/PluginManager/descriptor/index.js';
+import { isRouterRegistrant } from '../../services/Router/contracts/registrant.js';
+import { createRouterDescriptor } from '../../services/Router/descriptor/RouterDescriptor.js';
+import type { RouterService } from '../../services/Router/orchestrator/index.js';
 import {
   createSettingsDescriptor,
   createSettingsReaderDescriptor,
@@ -63,7 +70,7 @@ export interface CreateStandardKernelOptions {
   readonly storageDriver?: IStorageDriver;
   /**
    * History storage overrides. Both history tokens are served by the unified
-   * polymorphic engine (D-15), which imports legacy `ledger.db`, `history.db`
+   * polymorphic engine (D-15), which imports previous `ledger.db`, `history.db`
    * and `seq.json` on first boot and never modifies them.
    */
   readonly history?: StandardHistoryOptions;
@@ -167,14 +174,21 @@ function canonicalizeBootRoot(workspaceRoot: string): string {
  * {@link BrudKernel.boot} is called.
  *
  * Boot order is structural: settings, settings reader, utilities, workspace,
- * filesystem, validation, terminal, tools, history, then plugins. Workspace
- * precedes the filesystem service so the canonical root identity exists before
- * any content service initializes.
+ * filesystem, validation, terminal, parser, router, tools, actions, history,
+ * then plugins. Workspace precedes the filesystem service so the canonical
+ * root identity exists before any content service initializes; the router
+ * precedes every service that claims a kind.
  *
  * @param options - Optional driver, workspace, history, and plugin overrides for testing or alternate backends.
  * @returns A kernel instance ready to boot.
  */
 export function createStandardKernel(options?: CreateStandardKernelOptions): BrudKernel {
+  // Captured while the Router factory runs so the boot pinner can hand it to
+  // every registrant before the registration window closes.
+  const routerBinding: { instance?: RouterService } = {};
+  // Captured while the Exposed API Registry factory runs. The boot pinner uses
+  // it to collect service exposure declarations before RUNNING.
+  const apiRegistryBinding: { instance?: ExposedApiRegistryService } = {};
   // Validation freezes its policy from the settings snapshot and the workspace
   // authority; terminal binds the validation gate it re-checks every command
   // against. Both dependencies are only readable once the broker serves
@@ -184,6 +198,37 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       await pinBootPolicies(instances);
       pinTerminalPolicies(instances);
+
+      // Kind registration happens here, while the kernel is still BOOTING and
+      // the broker's lifecycle gate is suspended. Only services composed by
+      // this function are in `instances`, so no later caller can claim a kind.
+      const router = routerBinding.instance;
+
+      if (router !== undefined) {
+        for (const instance of instances) {
+          if (isRouterRegistrant(instance)) {
+            instance.registerWithRouter(router);
+          }
+        }
+
+        // Close before the kernel announces RUNNING: a late claim fails boot
+        // instead of silently shadowing the boot-time table.
+        router.closeRegistration();
+      }
+
+      // Exposure declarations use the same boot window: all factories have
+      // run, the broker gate is suspended, and the Registry is still open.
+      const apiRegistry = apiRegistryBinding.instance;
+
+      if (apiRegistry !== undefined) {
+        for (const instance of instances) {
+          if (isExposedApiRegistrant(instance)) {
+            instance.registerWithApiRegistry(apiRegistry);
+          }
+        }
+
+        apiRegistry.closeRegistration();
+      }
     },
   });
   const storageDriver = options?.storageDriver ?? new DurableNodeStorageDriver();
@@ -198,6 +243,14 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // from the kernel. The plugin manager declares it as a dependency, so the
   // service is RUNNING before any plugin activates and calls getUtilities().
   kernel.register(createUtilityDescriptor());
+  // brud.core.exposedApiRegistry is the boot-registered exposure table. Every
+  // Level-1 service declares its plugin-facing APIs through it during the boot
+  // pinner, and the plugin manager consumes it instead of a hardcoded list.
+  kernel.register(createExposedApiRegistryDescriptor({
+    onConstruct: (service) => {
+      apiRegistryBinding.instance = service;
+    },
+  }));
   // Capture the workspace instance built by its descriptor so the filesystem
   // descriptor receives the same canonical authority instead of constructing
   // a second, divergent path model. Topological order guarantees the workspace
@@ -276,11 +329,23 @@ export function createStandardKernel(options?: CreateStandardKernelOptions): Bru
   // (including conditional branches) through the frozen gate before spawning,
   // and owns the only process-spawn site in the kernel.
   kernel.register(createTerminalDescriptor(options?.terminal));
-  // BrudTools (brud.core.tools) is the Level-1 tool routing table. It
-  // validates payloads against each registered tool's own JSON Schema through
-  // the zero-dependency compiler, so it declares no validation-service
-  // dependency. It sits before the plugin manager, so the registry is RUNNING
-  // before any plugin activates and registers into it.
+  // brud.core.parser is the schema-agnostic [BRUD] syntax engine and
+  // brud.core.router is the boot-registered kind table. They sit before every
+  // routing consumer: the parser turns raw text into kind-tagged operations,
+  // and the router dispatches each operation to the Level-1 service that
+  // claimed its kind during the boot window.
+  kernel.register(createParserDescriptor());
+  kernel.register(createRouterDescriptor({
+    onConstruct: (service) => {
+      routerBinding.instance = service;
+    },
+  }));
+  // BrudTools (brud.core.tools) is the Level-1 tool registry. It validates
+  // payloads against each registered tool's own JSON Schema through the
+  // zero-dependency compiler, so it declares no validation-service
+  // dependency. It claims the `tool` kind on the router during boot and sits
+  // before the plugin manager, so the registry is RUNNING before any plugin
+  // activates and registers into it.
   kernel.register(createBrudToolsDescriptor(options?.tools));
   // Actions are the UI-only fourth primitive. The descriptor declares
   // validation and tools as ordering dependencies, so both gates exist before

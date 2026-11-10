@@ -5,7 +5,7 @@ import type { BrudFileSystem } from './BrudFileSystem.js';
 /**
  * Filesystem projection that carries an explicit protected-write capability.
  *
- * Only projections minted by {@link BrudFileSystem.createTrustedProjection}
+ * Only projections minted by {@link BrudFileSystem.createAuthorizedProjection}
  * reach this class, and the descriptor mints them only for the owning core
  * service (the history subsystem). Reads are delegated unchanged.
  */

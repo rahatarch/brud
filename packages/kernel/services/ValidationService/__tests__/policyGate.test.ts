@@ -119,9 +119,9 @@ describe('PolicyGateEngine — frozen ingestion', () => {
 describe('PolicyGateEngine — per-call override rejection (POLICY.PER_CALL_OVERRIDE)', () => {
   const gate = new PolicyGateEngine(policy());
 
-  it('rejects every legacy bypass flag', () => {
-    for (const key of ['skipValidation', 'override', 'workspaceBoundaryEnabled', 'commandValidationEnabled', 'trustedScopes']) {
-      const rejection = gate.rejectPerCallOverride({ [key]: key === 'trustedScopes' ? ['x'] : false });
+  it('rejects every bypass flag', () => {
+    for (const key of ['skipValidation', 'override', 'workspaceBoundaryEnabled', 'commandValidationEnabled', 'authorizedScopes']) {
+      const rejection = gate.rejectPerCallOverride({ [key]: key === 'authorizedScopes' ? ['x'] : false });
 
       assert.notEqual(rejection, null, key);
       assert.equal(rejection?.option, key);

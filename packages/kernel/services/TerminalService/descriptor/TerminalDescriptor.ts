@@ -1,5 +1,6 @@
 import type { KernelLogger, ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type {
   ISettingsReader,
   SettingsSnapshot,
@@ -204,7 +205,11 @@ export function createTerminalDescriptor(
         });
       });
 
-      return service;
+      return withExposedApis(service, (registry) => {
+        registry.registerApi(CORE_API_NAME.terminal, TerminalToken, {
+          capability: 'terminal:execute',
+        });
+      });
     },
   };
 }

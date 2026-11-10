@@ -1,10 +1,10 @@
 /**
- * Goal 10 — legacy MCP parity.
+ * Goal 10 — MCP message parity.
  *
  * The deleted `packages/mcp` envelope was `{ content: [{ type: 'text', text }],
  * isError }` for both success and tool-level failure; only malformed requests
  * became JSON-RPC errors. These tests pin that envelope and the documented
- * legacy message/error semantics through a real SDK client.
+ * existing message/error semantics through a real SDK client.
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -22,13 +22,13 @@ let workspace = '';
 let sdk: SdkClientHarness;
 
 before(async () => {
-  workspace = await createWorkspace('brud-legacy-parity-');
+  workspace = await createWorkspace('brud-mcp-parity-');
   await mkdir(join(workspace, 'src'), { recursive: true });
   await mkdir(join(workspace, 'docs'), { recursive: true });
   await writeFile(join(workspace, 'src', 'app.ts'), 'export const app = true;\n', 'utf8');
   await writeFile(join(workspace, 'src', 'util.ts'), 'export const util = true;\n', 'utf8');
   await writeFile(join(workspace, 'docs', 'guide.md'), '# Guide\n', 'utf8');
-  await writeFile(join(workspace, 'readable.txt'), 'legacy parity\n', 'utf8');
+  await writeFile(join(workspace, 'readable.txt'), 'parity\n', 'utf8');
   sdk = await connectSdkClient(workspace);
 });
 
@@ -59,7 +59,7 @@ describe('Goal 10 — MCP envelope shape', () => {
 
   it('returns one text content block for a successful create_file', async () => {
     const result = await call('create_file', {
-      path: 'legacy-created.txt',
+      path: 'parity-created.txt',
       content: 'created\n',
     });
     const content = contentOf(result);
@@ -87,7 +87,7 @@ describe('Goal 10 — MCP envelope shape', () => {
   });
 });
 
-describe('Goal 10 — legacy message text', () => {
+describe('Goal 10 — message text parity', () => {
   it('reports read_file using the documented read summary', async () => {
     const result = await call('read_file', { filePath: 'readable.txt' });
 
@@ -131,14 +131,14 @@ describe('Goal 10 — legacy message text', () => {
 
 describe('Goal 10 — failure codes and leakage', () => {
   it('includes FILE_NOT_FOUND for a missing read_file target', async () => {
-    const result = await call('read_file', { filePath: 'missing-legacy-file.txt' });
+    const result = await call('read_file', { filePath: 'missing-parity-file.txt' });
 
     assert.equal(result.isError, true);
     assert.match(textOf(result), /FILE_NOT_FOUND/u);
   });
 
   it('includes TOOL_NOT_FOUND for an unknown tool', async () => {
-    const result = await call('unknown-legacy-tool', {});
+    const result = await call('unknown-parity-tool', {});
 
     assert.equal(result.isError, true);
     assert.match(textOf(result), /TOOL_NOT_FOUND/u);

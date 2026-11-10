@@ -19,6 +19,7 @@ import type {
 } from '../../../services/PluginManager/contracts/index.js';
 import type { OperationResult } from '../../contracts/handler.js';
 import { PluginContext } from '../../../services/PluginManager/contracts/PluginContext.js';
+import { createTestPluginContext } from '../support/testApiRegistry.js';
 import type { IPluginLogger } from '../../../services/PluginManager/contracts/IPluginContext.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudToolsService } from '../../../services/BrudTools/contracts/index.js';
@@ -243,20 +244,11 @@ describe('Goal 4 — getTerminal gating', () => {
   });
 
   it('returns null when the permission is declared but no terminal service exists', () => {
-    const context = new PluginContext({
+    const context = createTestPluginContext({
       pluginId: 'test.capability.service-less',
       workspaceRoot: root,
       permissions: ['terminal:execute'],
-      logger: LOGGER,
-      capabilities: {
-        fileSystem: () => {
-          throw new Error('not used');
-        },
-        universalHistory: () => {
-          throw new Error('not used');
-        },
-      },
-    });
+    }).context;
 
     assert.equal(context.getTerminal(), null);
   });

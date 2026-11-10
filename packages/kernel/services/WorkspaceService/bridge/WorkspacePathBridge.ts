@@ -3,27 +3,27 @@ import { WorkspaceError, sanitizeWorkspaceText } from '../contracts/errors.js';
 import type { WorkspaceViolationRule } from '../contracts/errors.js';
 
 /**
- * Legacy path failure codes preserved at the boundary.
+ * Bridge path failure codes preserved at the boundary.
  *
  * These are the codes existing MCP clients and extension callers already
  * branch on; the adapter is the only place that translates kernel vocabulary
  * back into them.
  */
-export type LegacyPathErrorCode =
+export type WorkspacePathBridgeErrorCode =
   | 'PATH_OUTSIDE_WORKSPACE'
   | 'VALIDATION_ERROR';
 
-/** Temporary legacy-facing path bridge (rollout plan §3.3). */
-export interface LegacyPathAdapter {
+/** Temporary bridge-facing path bridge (rollout plan §3.3). */
+export interface WorkspacePathBridge {
   /** Absolute or relative user input -> canonical kernel-relative path. */
   toKernelRelative(userPath: string, operationKind?: string): Promise<string>;
 
-  /** Kernel-relative -> canonical absolute path for legacy results and UI. */
-  toLegacyAbsolute(kernelRelativePath: string): string;
+  /** Kernel-relative -> canonical absolute path for host results and UI. */
+  toHostAbsolute(kernelRelativePath: string): string;
 }
 
-/** Non-throwing success value produced by {@link WorkspacePathAdapter.validate}. */
-export interface LegacyPathSuccess {
+/** Non-throwing success value produced by {@link DefaultWorkspacePathBridge.validate}. */
+export interface WorkspacePathBridgeSuccess {
   readonly ok: true;
 
   /** Canonical kernel-relative path (`''` for the workspace root). */
@@ -39,20 +39,20 @@ export interface LegacyPathSuccess {
   readonly operationKind?: string;
 }
 
-/** Non-throwing failure value produced by {@link WorkspacePathAdapter.validate}. */
-export interface LegacyPathFailure {
+/** Non-throwing failure value produced by {@link DefaultWorkspacePathBridge.validate}. */
+export interface WorkspacePathBridgeFailure {
   readonly ok: false;
 
-  /** Legacy error code the caller expects. */
-  readonly code: LegacyPathErrorCode;
+  /** Bridge error code the caller expects. */
+  readonly code: WorkspacePathBridgeErrorCode;
 
   /** Kernel rule that produced the failure. */
   readonly rule: WorkspaceViolationRule;
 
-  /** Legacy-friendly message. */
+  /** Bridge-friendly message. */
   readonly friendly: string;
 
-  /** Legacy-detailed message. */
+  /** Bridge-detailed message. */
   readonly details: string;
 
   /** Path supplied by the caller. */
@@ -62,8 +62,8 @@ export interface LegacyPathFailure {
   readonly operationKind?: string;
 }
 
-/** Result of {@link WorkspacePathAdapter.validate}. */
-export type LegacyPathValidation = LegacyPathSuccess | LegacyPathFailure;
+/** Result of {@link DefaultWorkspacePathBridge.validate}. */
+export type WorkspacePathBridgeResult = WorkspacePathBridgeSuccess | WorkspacePathBridgeFailure;
 
 const OUTSIDE_FRIENDLY = 'The path is outside the current workspace.';
 const INVALID_FRIENDLY = 'The path is not valid.';
@@ -79,22 +79,22 @@ const OUTSIDE_RULES: ReadonlySet<WorkspaceViolationRule> = new Set<WorkspaceViol
 ]);
 
 /**
- * Legacy-facing path error carrying the pre-migration code vocabulary.
+ * Bridge-facing path error carrying the kernel bridge code vocabulary.
  *
- * The shape mirrors the legacy `BrudError` fields (`code`, `friendly`,
+ * The shape mirrors the host `BrudError` fields (`code`, `friendly`,
  * `details`, `path`) so an existing error mapper keeps working unchanged.
  */
-export class LegacyPathError extends Error {
-  /** Legacy error code. */
-  readonly code: LegacyPathErrorCode;
+export class WorkspacePathBridgeError extends Error {
+  /** Bridge error code. */
+  readonly code: WorkspacePathBridgeErrorCode;
 
   /** Kernel rule that produced the failure. */
   readonly rule: WorkspaceViolationRule;
 
-  /** Legacy-friendly message. */
+  /** Bridge-friendly message. */
   readonly friendly: string;
 
-  /** Legacy-detailed message. */
+  /** Bridge-detailed message. */
   readonly details: string;
 
   /** Path supplied by the caller. */
@@ -106,9 +106,9 @@ export class LegacyPathError extends Error {
   /**
    * @param failure - Non-throwing failure value to promote to an exception.
    */
-  constructor(failure: LegacyPathFailure) {
+  constructor(failure: WorkspacePathBridgeFailure) {
     super(failure.details);
-    this.name = 'LegacyPathError';
+    this.name = 'WorkspacePathBridgeError';
     this.code = failure.code;
     this.rule = failure.rule;
     this.friendly = failure.friendly;
@@ -122,10 +122,10 @@ export class LegacyPathError extends Error {
 }
 
 /**
- * Translates between legacy absolute paths and kernel-relative descriptors.
+ * Translates between host absolute paths and kernel-relative descriptors.
  *
  * **Temporary boundary component.** The kernel never imports this module;
- * it exists for the legacy bridge and host adapters until Phase 11 and must
+ * it exists for the path bridge and host adapters until Phase 11 and must
  * not be reached by a plugin. Work item 7 of §5.2 places it in the bridge
  * layer; it lives beside the workspace service for now because the adapter
  * package has not been migrated yet.
@@ -139,7 +139,7 @@ export class LegacyPathError extends Error {
  * 5. `..` is rejected after canonicalization; the root prefix is stripped.
  * 6. The result uses `'/'` separators and is `''` for the root itself.
  */
-export class WorkspacePathAdapter implements LegacyPathAdapter {
+export class DefaultWorkspacePathBridge implements WorkspacePathBridge {
   private readonly workspace: IWorkspaceService;
 
   /**
@@ -153,30 +153,30 @@ export class WorkspacePathAdapter implements LegacyPathAdapter {
     const result = await this.validate(userPath, operationKind);
 
     if (!result.ok) {
-      throw new LegacyPathError(result);
+      throw new WorkspacePathBridgeError(result);
     }
 
     return result.kernelRelative;
   }
 
-  toLegacyAbsolute(kernelRelativePath: string): string {
+  toHostAbsolute(kernelRelativePath: string): string {
     try {
       return this.workspace.toAbsolutePath(kernelRelativePath);
     } catch (error: unknown) {
-      throw new LegacyPathError(
+      throw new WorkspacePathBridgeError(
         this.failureFromError(error, kernelRelativePath, undefined),
       );
     }
   }
 
   /**
-   * Non-throwing translation used by the parity matrix and the legacy bridge.
+   * Non-throwing translation used by the parity matrix and the path bridge.
    *
    * @param userPath - Absolute or relative user path.
-   * @param operationKind - Legacy operation kind, echoed back for parity assertions.
-   * @returns A success value or a legacy-coded failure value.
+   * @param operationKind - Bridge operation kind, echoed back for parity assertions.
+   * @returns A success value or a bridge-coded failure value.
    */
-  async validate(userPath: string, operationKind?: string): Promise<LegacyPathValidation> {
+  async validate(userPath: string, operationKind?: string): Promise<WorkspacePathBridgeResult> {
     if (typeof userPath !== 'string') {
       return this.failure(
         'INVALID_INPUT',
@@ -213,7 +213,7 @@ export class WorkspacePathAdapter implements LegacyPathAdapter {
     error: unknown,
     userPath: string,
     operationKind: string | undefined,
-  ): LegacyPathFailure {
+  ): WorkspacePathBridgeFailure {
     if (error instanceof WorkspaceError) {
       const rule = error.rule ?? 'INVALID_INPUT';
 
@@ -228,7 +228,7 @@ export class WorkspacePathAdapter implements LegacyPathAdapter {
     userPath: string,
     reason: string,
     operationKind?: string,
-  ): LegacyPathFailure {
+  ): WorkspacePathBridgeFailure {
     const code = this.codeFor(rule);
     const outside = code === 'PATH_OUTSIDE_WORKSPACE';
     const safePath = sanitizeWorkspaceText(userPath);
@@ -247,7 +247,7 @@ export class WorkspacePathAdapter implements LegacyPathAdapter {
     };
   }
 
-  private codeFor(rule: WorkspaceViolationRule): LegacyPathErrorCode {
+  private codeFor(rule: WorkspaceViolationRule): WorkspacePathBridgeErrorCode {
     if (OUTSIDE_RULES.has(rule)) {
       return 'PATH_OUTSIDE_WORKSPACE';
     }
@@ -257,11 +257,11 @@ export class WorkspacePathAdapter implements LegacyPathAdapter {
 }
 
 /**
- * Builds the legacy path adapter for a workspace authority.
+ * Builds the workspace path bridge for a workspace authority.
  *
  * @param workspace - Canonical workspace authority to translate through.
- * @returns A `LegacyPathAdapter` with a non-throwing `validate` helper.
+ * @returns A `WorkspacePathBridge` with a non-throwing `validate` helper.
  */
-export function createLegacyPathAdapter(workspace: IWorkspaceService): WorkspacePathAdapter {
-  return new WorkspacePathAdapter(workspace);
+export function createWorkspacePathBridge(workspace: IWorkspaceService): DefaultWorkspacePathBridge {
+  return new DefaultWorkspacePathBridge(workspace);
 }

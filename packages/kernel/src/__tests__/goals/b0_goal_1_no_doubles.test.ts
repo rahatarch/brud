@@ -114,7 +114,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
           continue;
         }
 
-        // The only tolerated legacy references are the two daemon test files
+        // The only tolerated double references are the two daemon test files
         // recorded as Phase 10 deferrals, and only for the driver name. The
         // path fake is tolerated nowhere.
         if (name === 'InMemoryStorageDriver' && DEFERRED_DAEMON_SET.has(relativePath)) {
@@ -128,7 +128,7 @@ describe('B0 Goal 1 — no substitution double for the filesystem layer', () => 
     assert.deepEqual(violations, [], `live references remain:\n${violations.join('\n')}`);
   });
 
-  it('confines any legacy reference to the two daemon tests recorded as Phase 10 deferrals', async () => {
+  it('confines deferred double references to the daemon tests recorded as Phase 10 deferrals', async () => {
     for (const relativePath of DEFERRED_DAEMON_TESTS) {
       assert.equal(
         DEFERRED_DAEMON_SET.has(relativePath),

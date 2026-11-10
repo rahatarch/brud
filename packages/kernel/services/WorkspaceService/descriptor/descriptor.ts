@@ -2,6 +2,7 @@ import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecyc
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { IStorageDriver } from '../../../drivers/contracts/index.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type {
   IWorkspacePathPort,
@@ -69,25 +70,24 @@ export function createWorkspaceDescriptor(
     token: WorkspaceToken,
     tier: WORKSPACE_SERVICE_TIER,
     dependencies: [SettingsReaderToken],
-    factory: (context: ServiceContext): WorkspaceService => new WorkspaceService({
-      roots: options?.roots !== undefined && options.roots.length > 0
-        ? options.roots
-        : [context.workspaceRoot],
-      primaryRoot: context.workspaceRoot,
-      port,
-      ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
-      ...(options?.allowFilesystemRoot === undefined
-        ? {}
-        : { allowFilesystemRoot: options.allowFilesystemRoot }),
-      ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
-    }),
+    factory: (context: ServiceContext): WorkspaceService => withExposedApis(
+      new WorkspaceService({
+        roots: options?.roots !== undefined && options.roots.length > 0
+          ? options.roots
+          : [context.workspaceRoot],
+        primaryRoot: context.workspaceRoot,
+        port,
+        ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
+        ...(options?.allowFilesystemRoot === undefined
+          ? {}
+          : { allowFilesystemRoot: options.allowFilesystemRoot }),
+        ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
+      }),
+      (registry) => {
+        registry.registerApi(CORE_API_NAME.workspace, WorkspaceToken, {
+          capability: 'workspace:read',
+        });
+      },
+    ),
   };
 }
-
-/** Standard workspace descriptor over the boot workspace root. */
-export const workspaceDescriptor: ServiceDescriptor<IWorkspaceService, WorkspaceService> =
-  createWorkspaceDescriptor();
-
-/** Backwards-compatible alias for {@link workspaceDescriptor}. */
-export const WorkspaceDescriptor: ServiceDescriptor<IWorkspaceService, WorkspaceService> =
-  workspaceDescriptor;

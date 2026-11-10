@@ -270,7 +270,7 @@ export class IgnoreRulesRegistry {
   /**
    * Returns the already-loaded rules for a root, or the empty set.
    *
-   * Used by the synchronous legacy boundary, which cannot await the first
+   * Used by the synchronous synchronous boundary, which cannot await the first
    * load. A later asynchronous validation populates the cache for it.
    *
    * @param root - Canonical workspace root.

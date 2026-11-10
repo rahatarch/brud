@@ -3,7 +3,7 @@
  *
  * Black-box behaviour of kernel history, exercised only through public
  * surfaces on a real, booted, on-disk kernel. It passed unchanged on the
- * legacy engines and on the unified engine (U-4, U-6); since D-15 U-7 the
+ * previous engines and on the unified engine (U-4, U-6); since D-15 U-7 the
  * unified engine is the only subject.
  *
  * Coverage outside this file, designated as part of the oracle:
@@ -14,7 +14,7 @@
  *   "drives history sessions through the typed client helpers".
  * - Not black-box observable (internal only, re-specified for the new engine
  *   in U-3): background ingestion failures forwarded to the error sink
- *   (legacy F5).
+ *   (recording failure contract).
  */
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -187,7 +187,7 @@ describe(`history parity oracle [${SUBJECT_NAME}] — sessions`, () => {
     await h.fs.writeAtomic('src/changed.ts', 'new\n');
 
     assert.equal((await h.commitSession(id, 'completed')).committedFileCount, 1);
-    // Observed legacy behaviour: the manifest lists every declared target.
+    // Observed previous behaviour: the manifest lists every declared target.
     assert.deepEqual((await h.getSession(id))?.filesAffected, declared);
     const plan = await h.planReversal(id);
     assert.deepEqual(plan.actions, [{ path: 'src/changed.ts', action: 'restore' }]);
@@ -667,7 +667,7 @@ await kernel.shutdown();
   });
 
   // Contract from rollout plan §2.3.4: boot succeeds, ingestion is a no-op,
-  // reversals are refused. (The legacy engines failed this scenario, F-UP-1;
+  // reversals are refused. (The previous engines failed this scenario, F-UP-1;
   // they were removed in D-15 U-7.)
   it('R4 a read-only history directory boots degraded: no recording, reversals refused', async (context) => {
     // Windows chmod does not enforce read-only for Administrators, so the

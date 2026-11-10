@@ -4,7 +4,7 @@
  * The oracle scenarios talk only to this interface. Each history engine gets
  * one adapter (a "subject") that drives a real, booted kernel on a temporary
  * on-disk workspace and maps engine-specific results into the normalized
- * shapes below. The same scenarios must pass on the legacy engines (today)
+ * shapes below. The same scenarios must pass on the previous engines
  * and on the unified engine (U-4/U-6) without being edited.
  */
 import type { IBrudFileSystem } from '../../../services/BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';

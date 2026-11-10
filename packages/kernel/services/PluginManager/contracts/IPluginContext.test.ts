@@ -7,9 +7,14 @@ import type { IUtilityService } from '../../UtilityService/contracts/IUtilitySer
 import { PluginPermissionError } from './errors.js';
 import type { IPluginLogger, IPluginSubscriptions } from './IPluginContext.js';
 import { PluginContext } from './PluginContext.js';
-import type { PluginCapabilityProviders } from './PluginContext.js';
 import type { PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';
+import { createServiceToken } from '../../../src/contracts/serviceToken.js';
+import { createTestPluginContext } from '../../../src/__tests__/support/testApiRegistry.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../ExposedApiRegistry/contracts/index.js';
+import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
+import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
+import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
 
 class UnusedFileSystem implements IBrudFileSystem {
   async readFile(): Promise<never> {
@@ -156,43 +161,63 @@ const UNUSED_NAMESPACE_HANDLE = Object.freeze({
   registerEntryType: () => ({ dispose: (): void => void (disposedEntryTypes += 1) }),
 }) as unknown as NamespaceHistoryHandle;
 
-function createProviders(counts: ProviderCounts): PluginCapabilityProviders {
-  const fileSystem = new UnusedFileSystem();
-  const universalHistory = new UnusedUniversalHistory();
-
-  return {
-    fileSystem: (): IBrudFileSystem => {
-      counts.fileSystem += 1;
-      return fileSystem;
-    },
-    universalHistory: (): IPluginHistoryService => {
-      counts.universalHistory += 1;
-      return universalHistory;
-    },
-    history: (): NamespaceHistoryHandle => {
-      counts.history = (counts.history ?? 0) + 1;
-      return UNUSED_NAMESPACE_HANDLE;
-    },
-    utilities: (): IUtilityService => {
-      counts.utilities = (counts.utilities ?? 0) + 1;
-      return UNUSED_UTILITIES;
-    },
-  };
-}
+const NS_HISTORY_TOKEN = createServiceToken<UnusedUniversalHistory>(
+  'test.namespaceHistory',
+  'Test-only namespace history token',
+);
 
 function createContext(
   permissions: readonly PluginPermission[],
   counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 },
   official = false,
 ): PluginContext {
-  return new PluginContext({
+  const { context } = createTestPluginContext({
     pluginId: 'brud.tools.core',
     workspaceRoot: '/workspace',
     permissions,
     official,
-    logger: new RecordingLogger(),
-    capabilities: createProviders(counts),
+    services: {
+      fileSystem: new UnusedFileSystem(),
+      utilities: UNUSED_UTILITIES,
+    },
+    extraServices: new Map([
+      [UniversalHistoryToken.id, new UnusedUniversalHistory()],
+      [NS_HISTORY_TOKEN.id, new UnusedUniversalHistory()],
+    ]),
+    seed: (registry) => {
+      registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
+        capability: 'history:read',
+        combine: lastProjectionWins,
+      });
+      registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
+        capability: 'history:write',
+        combine: lastProjectionWins,
+      });
+      registry.registerApi(CORE_API_NAME.namespaceHistory, NS_HISTORY_TOKEN, {
+        capability: 'history:read',
+        projection: () => UNUSED_NAMESPACE_HANDLE,
+        combine: lastProjectionWins,
+      });
+      registry.registerApi(CORE_API_NAME.namespaceHistory, NS_HISTORY_TOKEN, {
+        capability: 'history:write',
+        projection: () => UNUSED_NAMESPACE_HANDLE,
+        combine: lastProjectionWins,
+      });
+    },
+    onAccess: (tokenId) => {
+      if (tokenId === FileSystemToken.id) {
+        counts.fileSystem += 1;
+      } else if (tokenId === UniversalHistoryToken.id) {
+        counts.universalHistory += 1;
+      } else if (tokenId === NS_HISTORY_TOKEN.id) {
+        counts.history = (counts.history ?? 0) + 1;
+      } else if (tokenId === UtilityToken.id) {
+        counts.utilities = (counts.utilities ?? 0) + 1;
+      }
+    },
   });
+
+  return context;
 }
 
 describe('IPluginContext contract', () => {
@@ -223,13 +248,12 @@ describe('IPluginContext contract', () => {
   it('accepts a manager-supplied logger and subscription registry', () => {
     const logger = new RecordingLogger();
     const subscriptions: IPluginSubscriptions = new PluginSubscriptions();
-    const context = new PluginContext({
+    const { context } = createTestPluginContext({
       pluginId: 'brud.tools.core',
       workspaceRoot: '/workspace',
       permissions: [],
       logger,
       subscriptions,
-      capabilities: createProviders({ fileSystem: 0, universalHistory: 0 }),
     });
 
     assert.equal(context.logger, logger);
@@ -282,16 +306,17 @@ describe('IPluginContext contract', () => {
   });
 
   it('returns a memoized history facade for read or write permissions', () => {
-    const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
     // Official since D-15 U-6: the core session history is official-only.
-    const context = createContext(['history:read'], counts, true);
+    for (const permission of ['history:read', 'history:write'] as const) {
+      const counts: ProviderCounts = { fileSystem: 0, universalHistory: 0 };
+      const context = createContext([permission], counts, true);
 
-    const first = context.getUniversalHistory();
-    const second = context.getUniversalHistory();
+      const first = context.getUniversalHistory();
+      const second = context.getUniversalHistory();
 
-    assert.ok(first instanceof UnusedUniversalHistory);
-    assert.equal(first, second);
-    assert.equal(counts.universalHistory, 1);
+      assert.equal(first, second);
+      assert.equal(counts.universalHistory, 1);
+    }
   });
 
   it('denies the core session history to a non-official plugin even with history permissions', () => {
@@ -323,7 +348,7 @@ describe('IPluginContext contract', () => {
         return true;
       },
     );
-    assert.equal(counts.history, undefined);
+    assert.equal(counts.history ?? 0, 0);
   });
 
   it('returns a memoized namespace history handle to official and non-official plugins', () => {

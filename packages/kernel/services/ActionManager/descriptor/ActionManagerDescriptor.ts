@@ -1,6 +1,7 @@
 import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { IActionManager } from '../contracts/IActionManager.js';
 import { ACTION_MANAGER_ALLOWED_CALLERS } from '../contracts/IActionManager.js';
@@ -45,7 +46,13 @@ export function createActionManagerDescriptor(
         ...(options?.logger === undefined ? {} : { logger: options.logger }),
       };
 
-      return new ActionManagerService(dependencies);
+      const service = new ActionManagerService(dependencies);
+
+      return withExposedApis(service, (registry) => {
+        registry.registerApi(CORE_API_NAME.actionManager, ActionManagerToken, {
+          capability: 'actions:register',
+        });
+      });
     },
   };
 }

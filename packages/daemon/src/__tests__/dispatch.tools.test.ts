@@ -50,6 +50,14 @@ class FakeToolsService implements IBrudToolsService {
     ];
   }
 
+  validateTool(
+    _name: string,
+    _rawInput: unknown,
+    _callerContext: IPluginExecutionContext,
+  ): OperationResult {
+    return { status: 'success' };
+  }
+
   async executeTool(
     name: string,
     rawInput: unknown,
@@ -66,14 +74,6 @@ class FakeToolsService implements IBrudToolsService {
         origin: callerContext.origin,
       },
     };
-  }
-
-  parseInput(): never {
-    throw new Error('not used');
-  }
-
-  parseAndRoute(): never {
-    throw new Error('not used');
   }
 }
 

@@ -2,7 +2,7 @@
  * Row and query types of the unified history store (D-15, U-2).
  */
 
-/** Status names exactly as persisted (legacy-compatible spelling). */
+/** Status names exactly as persisted (persisted spelling). */
 export type PersistedSessionStatus = 'active' | 'committed' | 'aborted' | 'reverted';
 
 export type ReversalMode = 'none' | 'inverse-payload' | 'handler';
@@ -97,13 +97,13 @@ export interface SessionQuery {
   /** Keyset cursor: return sessions strictly older than this one. */
   readonly before?: { readonly createdAt: number; readonly sessionId: string };
   readonly includeImplicit?: boolean;
-  /** Include soft-deleted sessions (legacy wire filter). */
+  /** Include soft-deleted sessions (wire filter). */
   readonly includeDeleted?: boolean;
   /** Return only soft-deleted (trashed) sessions. Takes precedence over `includeDeleted`. */
   readonly trashedOnly?: boolean;
-  /** Inclusive lower bound on `createdAt`, epoch ms (legacy wire filter). */
+  /** Inclusive lower bound on `createdAt`, epoch ms (wire filter). */
   readonly since?: number;
-  /** Rows to skip (legacy wire contract only; prefer `before`). */
+  /** Rows to skip (wire contract only; prefer `before`). */
   readonly offset?: number;
 }
 

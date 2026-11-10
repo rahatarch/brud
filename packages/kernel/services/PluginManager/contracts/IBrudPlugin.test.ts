@@ -46,6 +46,7 @@ function createContext(pluginId: string): IPluginContext {
       error: (): void => undefined,
     },
     hasPermission: (permission: PluginPermission): boolean => permissions.has(permission),
+    resolve: (): null => null,
     getFileSystem: (): IBrudFileSystem => {
       throw new PluginPermissionError(pluginId, 'getFileSystem', ['fs:read', 'fs:write']);
     },

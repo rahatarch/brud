@@ -1,5 +1,7 @@
+import { PUBLIC_API_CAPABILITY } from '../../../src/contracts/capability.js';
 import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type { IUtilityService } from '../contracts/IUtilityService.js';
 import { UtilityService } from '../orchestrator/UtilityService.js';
 import { UtilityToken } from './tokens.js';
@@ -26,7 +28,14 @@ export function createUtilityDescriptor(): ServiceDescriptor<IUtilityService, Ut
     token: UtilityToken,
     tier: UTILITY_SERVICE_TIER,
     dependencies: [],
-    factory: (): UtilityService => new UtilityService(),
+    factory: (): UtilityService => withExposedApis(
+      new UtilityService(),
+      (registry) => {
+        registry.registerApi(CORE_API_NAME.utilities, UtilityToken, {
+          capability: PUBLIC_API_CAPABILITY,
+        });
+      },
+    ),
   };
 }
 

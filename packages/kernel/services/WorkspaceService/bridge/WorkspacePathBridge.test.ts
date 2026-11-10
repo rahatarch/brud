@@ -7,10 +7,10 @@ import { NodeStorageDriver } from '../../../drivers/node/index.js';
 import { WorkspaceService } from '../orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import {
-  LegacyPathError,
-  WorkspacePathAdapter,
-  createLegacyPathAdapter,
-} from './LegacyPathAdapter.js';
+  WorkspacePathBridgeError,
+  DefaultWorkspacePathBridge,
+  createWorkspacePathBridge,
+} from './WorkspacePathBridge.js';
 
 interface Fixture {
   readonly base: string;
@@ -20,7 +20,7 @@ interface Fixture {
 }
 
 async function createFixture(): Promise<Fixture> {
-  const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-legacy-adapter-')));
+  const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-path-bridge-')));
   const workspace = join(base, 'workspace');
   const outside = join(base, 'outside');
   const sibling = join(base, 'workspace-evil');
@@ -36,7 +36,7 @@ async function createFixture(): Promise<Fixture> {
   return { base, workspace, outside, sibling };
 }
 
-async function createAdapter(workspace: string): Promise<WorkspacePathAdapter> {
+async function createAdapter(workspace: string): Promise<DefaultWorkspacePathBridge> {
   const service = new WorkspaceService({
     roots: [workspace],
     port: createStorageDriverPathPort(new NodeStorageDriver()),
@@ -44,10 +44,10 @@ async function createAdapter(workspace: string): Promise<WorkspacePathAdapter> {
   });
   await service.initialize();
 
-  return createLegacyPathAdapter(service);
+  return createWorkspacePathBridge(service);
 }
 
-describe('WorkspacePathAdapter translation', () => {
+describe('DefaultWorkspacePathBridge translation', () => {
   it('translates absolute and relative inputs to kernel-relative descriptors', async (context) => {
     const fixture = await createFixture();
     context.after(async () => {
@@ -71,10 +71,10 @@ describe('WorkspacePathAdapter translation', () => {
     const adapter = await createAdapter(fixture.workspace);
     const canonicalRoot = await realpath(fixture.workspace);
 
-    assert.equal(adapter.toLegacyAbsolute('notes/draft.md'), join(canonicalRoot, 'notes', 'draft.md'));
-    assert.equal(adapter.toLegacyAbsolute(''), canonicalRoot);
+    assert.equal(adapter.toHostAbsolute('notes/draft.md'), join(canonicalRoot, 'notes', 'draft.md'));
+    assert.equal(adapter.toHostAbsolute(''), canonicalRoot);
 
-    const roundTrip = adapter.toLegacyAbsolute(await adapter.toKernelRelative(join(fixture.workspace, 'notes', 'draft.md')));
+    const roundTrip = adapter.toHostAbsolute(await adapter.toKernelRelative(join(fixture.workspace, 'notes', 'draft.md')));
 
     assert.equal(roundTrip, join(canonicalRoot, 'notes', 'draft.md'));
   });
@@ -90,7 +90,7 @@ describe('WorkspacePathAdapter translation', () => {
     assert.equal(await adapter.toKernelRelative('%2e%2e/secret.txt'), '%2e%2e/secret.txt');
   });
 
-  it('throws legacy-coded errors with the legacy field shape', async (context) => {
+  it('throws bridge-coded errors with the external field shape', async (context) => {
     const fixture = await createFixture();
     context.after(async () => {
       await rm(fixture.base, { recursive: true, force: true });
@@ -101,7 +101,7 @@ describe('WorkspacePathAdapter translation', () => {
     await assert.rejects(
       adapter.toKernelRelative(join(fixture.outside, 'secret.txt'), 'read_file'),
       (error: unknown) => {
-        assert.ok(error instanceof LegacyPathError);
+        assert.ok(error instanceof WorkspacePathBridgeError);
         assert.equal(error.code, 'PATH_OUTSIDE_WORKSPACE');
         assert.equal(error.rule, 'OUTSIDE_ROOT');
         assert.equal(error.friendly, 'The path is outside the current workspace.');
@@ -114,16 +114,16 @@ describe('WorkspacePathAdapter translation', () => {
     );
 
     assert.throws(
-      () => adapter.toLegacyAbsolute('../secret.txt'),
-      (error: unknown) => error instanceof LegacyPathError
+      () => adapter.toHostAbsolute('../secret.txt'),
+      (error: unknown) => error instanceof WorkspacePathBridgeError
         && error.code === 'PATH_OUTSIDE_WORKSPACE'
         && error.rule === 'TRAVERSAL',
     );
   });
 });
 
-describe('legacy path parity matrix', () => {
-  it('preserves the documented legacy path outcomes for every row', async (context) => {
+describe('path parity matrix', () => {
+  it('preserves the documented path outcomes for every row', async (context) => {
     const fixture = await createFixture();
     context.after(async () => {
       await rm(fixture.base, { recursive: true, force: true });
@@ -202,7 +202,7 @@ describe('legacy path parity matrix', () => {
     const adapter = await createAdapter(fixture.workspace);
     const adapterResult = await adapter.validate('notes/a\u0000b.md');
 
-    // Legacy accepted a null byte and deferred failure to the filesystem call
+    // The bridge accepted a null byte and deferred failure to the filesystem call
     // (`ERR_INVALID_ARG_VALUE`, audit A7). The adapter rejects it up front.
     assert.equal(adapterResult.ok, false);
     assert.equal(adapterResult.ok ? '' : adapterResult.code, 'VALIDATION_ERROR');

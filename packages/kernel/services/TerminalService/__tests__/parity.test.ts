@@ -55,7 +55,7 @@ describe('TerminalService parity', () => {
     assert.strictEqual(decision.ok, false);
     assert.ok(!decision.ok);
     assert.strictEqual(decision.code, 'TERMINAL_EXIT_NONZERO');
-    assert.strictEqual(decision.legacyCode, 'EXECUTION_FAILED');
+    assert.strictEqual(decision.externalCode, 'EXECUTION_FAILED');
     assert.notStrictEqual(decision.exitCode, null);
     assert.notStrictEqual(decision.exitCode, 0);
     await service.dispose();

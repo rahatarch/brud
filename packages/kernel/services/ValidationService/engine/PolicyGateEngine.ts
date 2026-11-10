@@ -15,7 +15,7 @@ import {
  *
  * The core read engine derives its own `MAX_BATCH_FILES` and
  * `HARD_MAX_AGGREGATE_BYTES` from these two values, so the kernel settings
- * lattice and the legacy reader cannot drift into a split brain: the settings
+ * lattice and the settings reader cannot drift into a split brain: the settings
  * clamps and the reader ceiling are the same numbers by construction.
  */
 
@@ -32,7 +32,7 @@ export const KERNEL_HARD_MAX_AGGREGATE_BYTES = READ_MAX_AGGREGATE_BYTES_MAX;
  * and deep-frozen. There is no setter, no reload hook and no subscription, so
  * a policy value cannot weaken while an operation is in flight (audit §7.3,
  * W-7). The per-call `skipValidation` / `override` / `workspaceBoundaryEnabled`
- * options of the legacy API are deliberately absent here: any caller that
+ * options of the earlier API are deliberately absent here: any caller that
  * supplies them is rejected with `POLICY.PER_CALL_OVERRIDE`.
  */
 
@@ -63,7 +63,7 @@ const FORBIDDEN_OPTION_KEYS = [
   'override',
   'workspaceBoundaryEnabled',
   'commandValidationEnabled',
-  'trustedScopes',
+  'authorizedScopes',
 ] as const;
 
 /**

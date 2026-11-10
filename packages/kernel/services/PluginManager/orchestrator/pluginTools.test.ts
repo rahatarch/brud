@@ -10,6 +10,8 @@ import type { PluginManifest } from '../contracts/manifest.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import type { PluginManagerRuntimeDependencies } from './types.js';
 import { PluginManagerService } from './PluginManagerService.js';
+import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
+import { createTestApiRegistry, MapServiceBroker } from '../../../src/__tests__/support/testApiRegistry.js';
 
 const WORKSPACE_ROOT = '/workspace';
 
@@ -46,12 +48,16 @@ function createPlugin(
 function createManager(
   brudTools: () => BrudToolsService,
 ): PluginManagerService {
+  const tools = brudTools();
+  const broker = new MapServiceBroker(new Map([[BrudToolsToken.id, tools]]));
+  const apiRegistry = createTestApiRegistry({
+    broker,
+    workspaceRoot: WORKSPACE_ROOT,
+    services: { brudTools: tools },
+  });
   const dependencies: PluginManagerRuntimeDependencies = {
     workspaceRoot: WORKSPACE_ROOT,
-    fileSystem: (): never => {
-      throw new Error('filesystem is not used in this test');
-    },
-    brudTools,
+    apiRegistry: () => apiRegistry,
   };
 
   return new PluginManagerService(dependencies);
@@ -391,11 +397,13 @@ describe('PluginManagerService tool capabilities', () => {
   });
 
   it('reports a friendly failure when the tools service is unavailable', async () => {
+    const apiRegistry = createTestApiRegistry({
+      broker: new MapServiceBroker(new Map()),
+      workspaceRoot: WORKSPACE_ROOT,
+    });
     const manager = new PluginManagerService({
       workspaceRoot: WORKSPACE_ROOT,
-      fileSystem: (): never => {
-        throw new Error('filesystem is not used in this test');
-      },
+      apiRegistry: () => apiRegistry,
     });
     let failure: unknown;
 
@@ -417,6 +425,6 @@ describe('PluginManagerService tool capabilities', () => {
     await manager.activatePlugin('acme.tools.orphan');
 
     assert.ok(failure instanceof Error);
-    assert.match(failure.message, /Tools service is unavailable for plugin "acme.tools.orphan"/);
+    assert.match(failure.message, /Tools API "tools" is not registered for plugin "acme.tools.orphan"/);
   });
 });

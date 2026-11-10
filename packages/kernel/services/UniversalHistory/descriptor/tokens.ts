@@ -10,9 +10,9 @@ export const UniversalHistoryToken = createServiceToken<IUniversalHistoryService
 /**
  * Token for the journal-driven, checkpoint/undo history service.
  *
- * The legacy transaction-oriented ledger keeps `brud.core.universalHistory`
- * until the decommission phase; this token is the Phase 4 operation-level
- * audit surface consumed by the filesystem mutation journal.
+ * The transaction-oriented history service keeps `brud.core.universalHistory`;
+ * this token is the operation-level audit surface consumed by the filesystem
+ * mutation journal.
  */
 export const HistoryToken = createServiceToken<IUniversalHistory>(
   'brud.core.history',

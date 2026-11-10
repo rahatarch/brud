@@ -76,7 +76,7 @@ export interface SessionManifest {
   expiresAt?: string;
 }
 
-// ── Shared contract types (moved from the legacy engine modules, D-15 U-6) ──
+// ── Shared contract types (moved from the previous engine modules, D-15 U-6) ──
 
 /** File state targeted by a reversal. */
 export type ReversalTargetState = 'pre' | 'post';

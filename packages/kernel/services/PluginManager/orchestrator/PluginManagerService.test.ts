@@ -17,6 +17,8 @@ import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../contracts/IPluginContext.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import type { PluginManifest } from '../contracts/manifest.js';
+import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
+import { createTestApiRegistry, MapServiceBroker } from '../../../src/__tests__/support/testApiRegistry.js';
 import { PluginManagerService } from './PluginManagerService.js';
 import {
   PluginActiveDependencyError,
@@ -147,9 +149,16 @@ function createSubscriptionPlugin(
 function createManager(
   fileSystem: IBrudFileSystem = new RecordingFileSystem(),
 ): PluginManagerService {
+  const broker = new MapServiceBroker(new Map([[FileSystemToken.id, fileSystem]]));
+  const apiRegistry = createTestApiRegistry({
+    broker,
+    workspaceRoot: WORKSPACE_ROOT,
+    services: { fileSystem },
+  });
+
   return new PluginManagerService({
     workspaceRoot: WORKSPACE_ROOT,
-    fileSystem: () => fileSystem,
+    apiRegistry: () => apiRegistry,
   });
 }
 

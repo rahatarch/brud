@@ -22,7 +22,7 @@ import type { TestContext } from 'node:test';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
-import { PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
+import { PluginHistoryFacade } from '../adapters/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, UnifiedHistoryService } from '../service/index.js';
 import type { SessionTargetPayload } from '../service/builtinTypes.js';
@@ -264,19 +264,19 @@ describe('DIRECTORY_STATE_SHA256 — collision safety', () => {
     assert.equal(await h.fs.exists('tree/new.txt'), false);
   });
 
-  it('maps directory actions into the legacy public vocabulary', async (context) => {
+  it('maps directory actions into the public vocabulary', async (context) => {
     const h = await harness(context);
     const adapter = new PluginHistoryFacade(h.service, h.engine);
     await h.fs.createDirectory('tree');
     await h.fs.createDirectory('tree/deleted');
 
-    const removed = await h.service.beginSession('legacy remove', {
+    const removed = await h.service.beginSession('remove directory', {
       declaredTargets: ['tree/deleted'],
     });
     await h.fs.deleteDirectory('tree/deleted');
     await h.service.commitSession(removed, 'completed');
 
-    const created = await h.service.beginSession('legacy create', {
+    const created = await h.service.beginSession('create directory', {
       declaredTargets: ['tree/created'],
     });
     await h.fs.createDirectory('tree/created');

@@ -1,5 +1,6 @@
-import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { IServiceLifecycle, ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type { IConfigStore } from '../contracts/IConfigStore.js';
 import type {
   ISettingsReader,
@@ -71,10 +72,16 @@ export function createSettingsDescriptor(
         ...(options?.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
       });
 
-      return new SettingsService({
+      const service = new SettingsService({
         store,
         ...(options?.defaults === undefined ? {} : { defaults: options.defaults }),
         ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
+      });
+
+      return withExposedApis(service, (registry) => {
+        registry.registerApi(CORE_API_NAME.settings, SettingsToken, {
+          capability: 'settings:write',
+        });
       });
     },
     project: (instance: SettingsService, caller: ServiceContext): ISettingsService => {
@@ -107,10 +114,10 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
     tier: SETTINGS_SERVICE_TIER,
     dependencies: [SettingsToken],
     factory: (context: ServiceContext, broker) => {
-      let reader: ISettingsReader | undefined;
+      let resolved: ISettingsReader | undefined;
 
       const resolve = (): ISettingsReader => {
-        reader ??= broker.requestAccess(
+        resolved ??= broker.requestAccess(
           {
             callerId: 'kernel',
             tier: 'kernel',
@@ -119,30 +126,22 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
           SettingsToken,
         );
 
-        return reader;
+        return resolved;
       };
 
-      return {
+      const reader: ISettingsReader & IServiceLifecycle = {
         getSnapshot: (): SettingsSnapshot => resolve().getSnapshot(),
         onChange: (listener: (snapshot: SettingsSnapshot) => void): (() => void) =>
           resolve().onChange(listener),
+        initialize: async (): Promise<void> => undefined,
+        dispose: async (): Promise<void> => undefined,
       };
+
+      return withExposedApis(reader, (registry) => {
+        registry.registerApi(CORE_API_NAME.settingsReader, SettingsReaderToken, {
+          capability: 'settings:read',
+        });
+      });
     },
   };
 }
-
-/** Standard settings descriptor with the default store. */
-export const settingsDescriptor: ServiceDescriptor<ISettingsService, SettingsService> =
-  createSettingsDescriptor();
-
-/** Backwards-compatible alias for {@link settingsDescriptor}. */
-export const SettingsDescriptor: ServiceDescriptor<ISettingsService, SettingsService> =
-  settingsDescriptor;
-
-/** Standard read-only settings descriptor. */
-export const settingsReaderDescriptor: ServiceDescriptor<ISettingsReader> =
-  createSettingsReaderDescriptor();
-
-/** Backwards-compatible alias for {@link settingsReaderDescriptor}. */
-export const SettingsReaderDescriptor: ServiceDescriptor<ISettingsReader> =
-  settingsReaderDescriptor;

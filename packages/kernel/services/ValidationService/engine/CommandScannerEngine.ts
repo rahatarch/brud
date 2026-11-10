@@ -13,7 +13,7 @@ import { scanCommand, normalizeCommand } from './commandPatterns.js';
 /**
  * Hardened command scanner.
  *
- * Migrated from the quarantined legacy engine's `api/index.ts:187-244` and closes the nine
+ * Migrated from the quarantined quarantined engine's `api/index.ts:187-244` and closes the nine
  * audited bypasses:
  *
  * - B-1/B-2: `rm -r -f /` and `rm --recursive --force /` are seen as the same
@@ -26,7 +26,7 @@ import { scanCommand, normalizeCommand } from './commandPatterns.js';
  * - B-11: privilege escalation is case-insensitive (`SUDO`).
  * - B-17: `command cd /outside` is unwrapped before the cd tokenizer runs.
  *
- * Two further deviations from legacy, both documented by the audit (§3.4,
+ * Two further deviations from the previous engine, both documented by the audit (§3.4,
  * §3.6 B-21):
  *
  * - An unconfigured workspace no longer silently disables cd containment;
@@ -176,7 +176,7 @@ export class CommandScannerEngine {
   }
 
   /**
-   * Resolves a cwd argument for the legacy `validate.cwd` contract.
+   * Resolves a cwd argument for the `validate.cwd` contract.
    *
    * @param cwd - Declared working directory, when any.
    */

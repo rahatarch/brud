@@ -10,7 +10,8 @@ import type {
 import type { TerminalDecision } from '../../TerminalService/contracts/errors.js';
 import type { IPluginLogger } from '../contracts/IPluginContext.js';
 import { PluginContext } from '../contracts/PluginContext.js';
-import type { PluginCapabilityProviders } from '../contracts/PluginContext.js';
+import { createTestPluginContext } from '../../../src/__tests__/support/testApiRegistry.js';
+import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from '../contracts/permissions.js';
 
@@ -18,15 +19,6 @@ const LOGGER: IPluginLogger = {
   info: (): void => undefined,
   warn: (): void => undefined,
   error: (): void => undefined,
-};
-
-const UNUSED_PROVIDERS: Pick<PluginCapabilityProviders, 'fileSystem' | 'universalHistory'> = {
-  fileSystem: () => {
-    throw new Error('filesystem is not used in this test');
-  },
-  universalHistory: () => {
-    throw new Error('history is not used in this test');
-  },
 };
 
 interface FakeTerminalService extends ITerminalService {
@@ -121,18 +113,16 @@ function createFakeTerminal(): FakeTerminalService {
 
 function createContext(
   permissions: readonly PluginPermission[],
-  terminal?: () => ITerminalService,
+  terminal?: ITerminalService,
+  onAccess?: (tokenId: string) => void,
 ): PluginContext {
-  return new PluginContext({
+  return createTestPluginContext({
     pluginId: 'acme.terminal.consumer',
     workspaceRoot: '/workspace',
     permissions,
-    logger: LOGGER,
-    capabilities: {
-      ...UNUSED_PROVIDERS,
-      ...(terminal === undefined ? {} : { terminal }),
-    },
-  });
+    ...(terminal === undefined ? {} : { services: { terminal } }),
+    ...(onAccess === undefined ? {} : { onAccess }),
+  }).context;
 }
 
 describe('terminal plugin capability', () => {
@@ -144,9 +134,11 @@ describe('terminal plugin capability', () => {
     let resolutions = 0;
     const context = createContext(
       ['fs:read'],
-      () => {
-        resolutions += 1;
-        return createFakeTerminal();
+      createFakeTerminal(),
+      (tokenId) => {
+        if (tokenId === TerminalToken.id) {
+          resolutions += 1;
+        }
       },
     );
 
@@ -158,9 +150,10 @@ describe('terminal plugin capability', () => {
   it('returns a scoped handle when terminal:execute is declared', async () => {
     const service = createFakeTerminal();
     let resolutions = 0;
-    const context = createContext(['terminal:execute'], () => {
-      resolutions += 1;
-      return service;
+    const context = createContext(['terminal:execute'], service, (tokenId) => {
+      if (tokenId === TerminalToken.id) {
+        resolutions += 1;
+      }
     });
 
     const handle = context.getTerminal();
@@ -185,7 +178,7 @@ describe('terminal plugin capability', () => {
 
   it('only lists, cancels, and disposes executions owned by the plugin', async () => {
     const service = createFakeTerminal();
-    const context = createContext(['terminal:execute'], () => service);
+    const context = createContext(['terminal:execute'], service);
     const handle = context.getTerminal();
 
     assert.ok(handle !== null);

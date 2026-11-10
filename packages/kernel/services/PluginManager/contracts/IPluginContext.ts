@@ -108,6 +108,18 @@ export interface IPluginContext {
   hasPermission(permission: PluginPermission): boolean;
 
   /**
+   * Resolves any exposed API by name through the Exposed API Registry.
+   *
+   * The plugin's declared capabilities are applied by the Registry, so a
+   * missing grant returns `null` instead of throwing. Core typed getters use
+   * the same resolution path and share the cached projection.
+   *
+   * @param apiName - Registered API name, for example `'filesystem'`.
+   * @returns The projection, or `null` when no registration matches.
+   */
+  resolve<T = unknown>(apiName: string): T | null;
+
+  /**
    * Returns a workspace-scoped filesystem facade.
    *
    * Requires `fs:read` or `fs:write`; write operations remain gated by the

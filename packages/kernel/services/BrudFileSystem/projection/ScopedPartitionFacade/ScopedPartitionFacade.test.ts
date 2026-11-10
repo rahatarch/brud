@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../orchestrator/BrudFileSystem.js';
-import { PathTraversalViolationError } from '../../validation/PathValidator/PathValidator.js';
+import { PathRuleViolationError } from '../../validation/PathValidator/PathValidator.js';
 import { ReadOnlyProjectionViolationError, ScopedPartitionFacade } from './ScopedPartitionFacade.js';
 
 let root = '';
@@ -25,7 +25,7 @@ function nextRoot(): string {
 }
 
 function isTraversalViolation(error: unknown): boolean {
-  return error instanceof PathTraversalViolationError
+  return error instanceof PathRuleViolationError
     && error.code === 'PATH_TRAVERSAL_DETECTED';
 }
 

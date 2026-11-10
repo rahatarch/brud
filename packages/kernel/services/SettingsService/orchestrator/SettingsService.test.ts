@@ -42,7 +42,7 @@ describe('SettingsService', () => {
     assert.deepEqual(service.getWarnings(), []);
   });
 
-  it('deserializes mcpAutoOn and defaults it to the legacy true when missing', async () => {
+  it('deserializes mcpAutoOn and defaults it to true when missing', async () => {
     const missing = await createService(new InMemoryConfigStore({ workspaceContent: '{}' }));
 
     assert.equal(missing.getSnapshot().mcpAutoOn, true);

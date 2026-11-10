@@ -30,6 +30,8 @@ import type { PluginManifest } from '../contracts/manifest.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
 import { PluginManagerService } from '../orchestrator/PluginManagerService.js';
+import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
+import { createTestApiRegistry } from '../../../src/__tests__/support/testApiRegistry.js';
 import {
   PLUGIN_MANAGER_SERVICE_TIER,
   PluginManagerDescriptor,
@@ -155,6 +157,7 @@ function createHarness(options?: HarnessOptions): Harness {
   const driver = new DurableNodeStorageDriver();
   const fileSystem = new BrudFileSystem(nextWorkspaceRoot(), driver);
   const universalHistory = new UnusedUniversalHistory();
+  const brudTools = new BrudToolsService();
 
   registry.register(createFileSystemDescriptor({ driver }));
   registry.setInstance(FileSystemToken.id, fileSystem);
@@ -176,15 +179,35 @@ function createHarness(options?: HarnessOptions): Harness {
       token: BrudToolsToken,
       tier: 'core',
       dependencies: [],
-      factory: (): BrudToolsService => new BrudToolsService(),
+      factory: (): BrudToolsService => brudTools,
     };
 
     registry.register(toolsDescriptor);
-    registry.setInstance(BrudToolsToken.id, new BrudToolsService());
+    registry.setInstance(BrudToolsToken.id, brudTools);
   }
 
+  const innerBroker = new KernelAccessBroker(registry, () => 'RUNNING');
+  const countingBroker = new CountingBroker(innerBroker);
+  const apiRegistry = createTestApiRegistry({
+    broker: countingBroker,
+    workspaceRoot: workspaceRoots[workspaceRoots.length - 1] ?? tmpdir(),
+    services: {
+      fileSystem,
+      ...(options?.withHistory === false ? {} : { universalHistory }),
+      ...(options?.withTools === true ? { brudTools } : {}),
+    },
+  });
+
+  registry.register({
+    token: ExposedApiRegistryToken,
+    tier: 'core',
+    dependencies: [],
+    factory: () => apiRegistry,
+  });
+  registry.setInstance(ExposedApiRegistryToken.id, apiRegistry);
+
   return {
-    broker: new CountingBroker(new KernelAccessBroker(registry, () => 'RUNNING')),
+    broker: countingBroker,
     fileSystem,
     universalHistory,
   };
@@ -207,7 +230,7 @@ describe('createPluginManagerDescriptor', () => {
     assert.equal(PluginManagerToken.id, 'PluginManager');
     assert.deepEqual(
       descriptor.dependencies.map((token) => token.id),
-      [FileSystemToken.id],
+      [FileSystemToken.id, ExposedApiRegistryToken.id],
     );
   });
 
@@ -217,7 +240,7 @@ describe('createPluginManagerDescriptor', () => {
     assert.equal(descriptor.tier, 'core');
     assert.deepEqual(
       descriptor.dependencies.map((token) => token.id),
-      [FileSystemToken.id, UniversalHistoryToken.id],
+      [FileSystemToken.id, UniversalHistoryToken.id, ExposedApiRegistryToken.id],
     );
   });
 
@@ -226,7 +249,7 @@ describe('createPluginManagerDescriptor', () => {
     assert.equal(PluginManagerDescriptor.tier, 'core');
     assert.deepEqual(
       PluginManagerDescriptor.dependencies.map((token) => token.id),
-      [FileSystemToken.id],
+      [FileSystemToken.id, ExposedApiRegistryToken.id],
     );
   });
 
@@ -297,7 +320,7 @@ describe('createPluginManagerDescriptor', () => {
         assert.ok(error instanceof PluginLifecycleError);
         assert.equal(error.code, 'PLUGIN_LIFECYCLE');
         assert.equal(error.pluginId, 'brud.probe.history');
-        assert.match(error.message, /Universal history service is unavailable/u);
+        assert.match(error.message, /Universal history API "universalHistory" is not registered/u);
         return true;
       },
     );
@@ -314,7 +337,7 @@ describe('createPluginManagerDescriptor tool composition', () => {
 
     assert.deepEqual(
       descriptor.dependencies.map((token) => token.id),
-      [FileSystemToken.id, UniversalHistoryToken.id],
+      [FileSystemToken.id, UniversalHistoryToken.id, ExposedApiRegistryToken.id],
     );
   });
 
@@ -326,7 +349,7 @@ describe('createPluginManagerDescriptor tool composition', () => {
 
     assert.deepEqual(
       descriptor.dependencies.map((token) => token.id),
-      [FileSystemToken.id, UniversalHistoryToken.id, BrudToolsToken.id],
+      [FileSystemToken.id, UniversalHistoryToken.id, ExposedApiRegistryToken.id, BrudToolsToken.id],
     );
   });
 

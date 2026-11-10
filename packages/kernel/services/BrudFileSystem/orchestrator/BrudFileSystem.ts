@@ -92,10 +92,10 @@ export interface BrudFileSystemOptions {
   /**
    * Protected prefixes this instance is the owning writer for.
    *
-   * Retained for compatibility. A10 is no longer bypassable: every mutation
-   * is validated by `ValidationService`, so a scope cannot widen authority.
+   * Every mutation is still validated by `ValidationService`; an authorized
+   * scope cannot widen validation authority.
    */
-  readonly trustedWriteScopes?: readonly string[];
+  readonly authorizedWriteScopes?: readonly string[];
 
   /** Receives staging-sweep failures. Defaults to the logger warning sink. */
   readonly onCleanupError?: (error: unknown, absolutePath: string) => void;
@@ -112,7 +112,7 @@ export type WorkspaceAuthority = IWorkspaceService | (() => IWorkspaceService);
  *
  * `resolveContained` is the class-level spelling of `resolve` that states the
  * guarantee at the call site. Implementations that only expose `resolve` are
- * still accepted for compatibility.
+ * accepted through {@link supportsResolveContained}.
  */
 interface WorkspacePathAuthority extends IWorkspaceService {
   resolveContained(userPath: string): Promise<WorkspaceLocation>;
@@ -169,7 +169,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
 
   private readonly validationProvider: ValidationAuthority | undefined;
 
-  private readonly trustedWriteScopes: readonly string[];
+  private readonly authorizedWriteScopes: readonly string[];
 
   private readonly onCleanupError: ((error: unknown, absolutePath: string) => void) | undefined;
 
@@ -185,7 +185,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
    * @param workspaceOrRoot - Canonical workspace authority, a probe returning
    * one, or a workspace root string for standalone construction.
    * @param driver - Scoped storage driver.
-   * @param options - Flavor, root hint, journal, and trusted scope overrides.
+   * @param options - Flavor, root hint, journal, and authorized scope overrides.
    */
   constructor(
     workspaceOrRoot: WorkspaceAuthority | string,
@@ -195,7 +195,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     this.driver = driver;
     this.journal = options?.mutationJournal ?? createFileMutationJournal();
     this.validationProvider = options?.validation;
-    this.trustedWriteScopes = options?.trustedWriteScopes ?? [];
+    this.authorizedWriteScopes = options?.authorizedWriteScopes ?? [];
     this.onCleanupError = options?.onCleanupError;
     this.logger = options?.logger ?? DEFAULT_LOGGER;
 
@@ -241,7 +241,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
    *
    * @param scopes - Protected workspace-relative prefixes to trust.
    */
-  createTrustedProjection(scopes: readonly string[]): IBrudFileSystem {
+  createAuthorizedProjection(scopes: readonly string[]): IBrudFileSystem {
     return new TrustedFileSystemProjection(this, scopes);
   }
 
@@ -411,8 +411,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
-      const trustedScopes = this.scopesWith(scopes);
-      const validation = await this.validateWriteTarget(relativePath, target, trustedScopes);
+      const authorizedScopes = this.scopesWith(scopes);
+      const validation = await this.validateWriteTarget(relativePath, target, authorizedScopes);
       const tracked = this.journal.enabled;
       const mutationId = tracked ? this.newMutationId() : '';
       const previous = tracked
@@ -463,8 +463,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
-      const trustedScopes = this.scopesWith(scopes);
-      const validation = await this.validateWriteTarget(relativePath, target, trustedScopes);
+      const authorizedScopes = this.scopesWith(scopes);
+      const validation = await this.validateWriteTarget(relativePath, target, authorizedScopes);
 
       if (options?.overwrite === false && validation.stats !== null) {
         throw new FileAlreadyExistsError(target.location.absolutePath);
@@ -519,8 +519,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     const target = await this.resolveTarget(relativePath, 'delete');
 
     await this.writeMutex.runExclusive(target.location.absolutePath, async () => {
-      const trustedScopes = this.scopesWith(scopes);
-      this.assertMutableTarget(relativePath, target, trustedScopes);
+      const authorizedScopes = this.scopesWith(scopes);
+      this.assertMutableTarget(relativePath, target, authorizedScopes);
 
       const stats = await this.driver.stat(target.location.absolutePath);
 
@@ -571,10 +571,10 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     await this.runExclusiveAll(
       [source.location.absolutePath, destination.location.absolutePath],
       async () => {
-        const trustedScopes = this.scopesWith(scopes);
+        const authorizedScopes = this.scopesWith(scopes);
 
-        this.assertMutableTarget(sourceRelativePath, source, trustedScopes);
-        this.assertMutableTarget(destinationRelativePath, destination, trustedScopes);
+        this.assertMutableTarget(sourceRelativePath, source, authorizedScopes);
+        this.assertMutableTarget(destinationRelativePath, destination, authorizedScopes);
         await this.assertRenamePreconditions(source, destination);
 
         const tracked = this.journal.enabled;
@@ -627,10 +627,10 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     await this.runExclusiveAll(
       [source.location.absolutePath, destination.location.absolutePath],
       async () => {
-        const trustedScopes = this.scopesWith(scopes);
+        const authorizedScopes = this.scopesWith(scopes);
 
-        this.assertMutableTarget(sourceRelativePath, source, trustedScopes);
-        this.assertMutableTarget(destinationRelativePath, destination, trustedScopes);
+        this.assertMutableTarget(sourceRelativePath, source, authorizedScopes);
+        this.assertMutableTarget(destinationRelativePath, destination, authorizedScopes);
         await this.assertCopyPreconditions(source, destination);
 
         const tracked = this.journal.enabled;
@@ -679,9 +679,9 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     const target = await this.resolveTarget(relativePath, 'mutate');
 
     await this.runExclusiveAll([target.location.absolutePath], async () => {
-      const trustedScopes = this.scopesWith(scopes);
+      const authorizedScopes = this.scopesWith(scopes);
 
-      this.assertMutableTarget(relativePath, target, trustedScopes);
+      this.assertMutableTarget(relativePath, target, authorizedScopes);
 
       const existing = await this.driver.stat(target.location.absolutePath);
 
@@ -734,9 +734,9 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     const target = await this.resolveTarget(relativePath, 'delete');
 
     await this.runExclusiveAll([target.location.absolutePath], async () => {
-      const trustedScopes = this.scopesWith(scopes);
+      const authorizedScopes = this.scopesWith(scopes);
 
-      this.assertMutableTarget(relativePath, target, trustedScopes);
+      this.assertMutableTarget(relativePath, target, authorizedScopes);
 
       const stats = await this.driver.stat(target.location.absolutePath);
 
@@ -1031,9 +1031,9 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   private async validateWriteTarget(
     callerPath: string,
     target: ResolvedTarget,
-    trustedScopes: readonly string[],
+    authorizedScopes: readonly string[],
   ): Promise<TargetValidation> {
-    this.assertMutableTarget(callerPath, target, trustedScopes);
+    this.assertMutableTarget(callerPath, target, authorizedScopes);
 
     const stats = await this.driver.stat(target.location.absolutePath);
 
@@ -1051,7 +1051,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   private assertMutableTarget(
     callerPath: string,
     target: ResolvedTarget,
-    _trustedScopes: readonly string[],
+    _authorizedScopes: readonly string[],
   ): void {
     const relative = target.location.relativePath;
 
@@ -1066,15 +1066,15 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   }
 
   private scopesWith(extraScopes: readonly string[]): readonly string[] {
-    if (this.trustedWriteScopes.length === 0) {
+    if (this.authorizedWriteScopes.length === 0) {
       return extraScopes;
     }
 
     if (extraScopes.length === 0) {
-      return this.trustedWriteScopes;
+      return this.authorizedWriteScopes;
     }
 
-    return [...this.trustedWriteScopes, ...extraScopes];
+    return [...this.authorizedWriteScopes, ...extraScopes];
   }
 
   private modeFor(stats: FileStats | null): number {

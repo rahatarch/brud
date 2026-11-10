@@ -4,17 +4,17 @@ import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../../../drivers/node/index.js';
-import { PathTraversalViolationError, PathValidator } from './PathValidator.js';
-import type { PathViolationRule } from './PathValidator.js';
+import { PathRuleViolationError, PathValidator } from './PathValidator.js';
+import type { ExternalPathRule } from './PathValidator.js';
 
 function isTraversalViolation(error: unknown): boolean {
-  return error instanceof PathTraversalViolationError
+  return error instanceof PathRuleViolationError
     && error.code === 'PATH_TRAVERSAL_DETECTED';
 }
 
-function hasRule(rule: PathViolationRule): (error: unknown) => boolean {
+function hasRule(rule: ExternalPathRule): (error: unknown) => boolean {
   return (error: unknown) => isTraversalViolation(error)
-    && error instanceof PathTraversalViolationError
+    && error instanceof PathRuleViolationError
     && error.rule === rule;
 }
 
@@ -176,9 +176,9 @@ describe('PathValidator', () => {
     it('reports the violated rule, root, candidate, and reason', () => {
       try {
         validator.resolve('../secret.txt');
-        assert.fail('expected a PathTraversalViolationError');
+        assert.fail('expected a PathRuleViolationError');
       } catch (error: unknown) {
-        assert.ok(error instanceof PathTraversalViolationError);
+        assert.ok(error instanceof PathRuleViolationError);
         assert.equal(error.code, 'PATH_TRAVERSAL_DETECTED');
         assert.equal(error.rule, 'TRAVERSAL');
         assert.equal(error.root, '/workspace');
@@ -198,7 +198,7 @@ describe('PathValidator', () => {
 
       assert.equal(result.ok, false);
       if (!result.ok) {
-        assert.ok(result.error instanceof PathTraversalViolationError);
+        assert.ok(result.error instanceof PathRuleViolationError);
         assert.equal(result.error.rule, 'TRAVERSAL');
         assert.equal(result.error.root, '/workspace');
         assert.equal(result.error.candidatePath, '../secret.txt');

@@ -3,14 +3,10 @@ import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OperationResult } from '../../src/contracts/handler.js';
-import type { ServiceContext } from '../../src/contracts/lifecycle.js';
-import type {
-  IBrudToolsService,
-  IPluginExecutionContext,
-} from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
+import type { IPluginExecutionContext } from '../../services/BrudTools/contracts/IBrudToolsService.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { ParserRouterHarness } from './support/parserRouterHarness.js';
 
 const PLUGIN_ID = 'com.test.adversarial';
 
@@ -197,10 +193,6 @@ function adversarialPlugin(): IBrudPlugin {
   };
 }
 
-function serviceCaller(root: string): ServiceContext {
-  return { callerId: 'parser.adversarial', tier: 'core', workspaceRoot: root };
-}
-
 function dispatchContext(
   root: string,
   permissions: readonly string[] = ['tools:execute'],
@@ -214,7 +206,7 @@ function dispatchContext(
 
 interface AdversarialKernel {
   readonly root: string;
-  readonly tools: IBrudToolsService;
+  readonly tools: ParserRouterHarness;
 }
 
 async function bootAdversarial(
@@ -225,7 +217,7 @@ async function bootAdversarial(
     prefix: `brud-parser-adversarial-${prefix}-`,
     initialPlugins: [adversarialPlugin()],
   });
-  const tools = kernel.requestAccess<IBrudToolsService>(serviceCaller(root), BrudToolsToken);
+  const tools = ParserRouterHarness.fromKernel(kernel, root);
 
   return { root, tools };
 }
@@ -286,7 +278,7 @@ describe('A. Protocol parser attacks', () => {
       return;
     }
     assert.equal(parsed.error.code, 'PARSE_ERROR');
-    assert.match(parsed.error.friendly, /expected \[CALL tool_name\]/);
+    assert.match(parsed.error.friendly, /expected \[CALL <kind> <name>\]/);
   });
 
   it('P-05 rejects a [CALL] block missing [END]', async (t) => {
@@ -341,7 +333,7 @@ describe('A. Protocol parser attacks', () => {
       return;
     }
     assert.equal(parsed.error.code, 'PARSE_ERROR');
-    assert.match(parsed.error.friendly, /expected \[CALL tool_name\]/);
+    assert.match(parsed.error.friendly, /expected \[CALL <kind> <name>\]/);
   });
 
   it('P-09 rejects duplicate parameter names', async (t) => {
@@ -374,7 +366,7 @@ describe('A. Protocol parser attacks', () => {
     assert.equal(routed.dispatched, 0);
     assert.equal(routed.failed, 1);
     assert.equal(routed.operations[0]?.status, 'schema_invalid');
-    assert.match(String(routed.operations[0]?.error), /SCHEMA_INVALID/);
+    assert.match(String(routed.operations[0]?.error), /TOOL_VALIDATION_ERROR/);
     await assertMissing(join(root, 'typed-sentinel.json'));
   });
 
@@ -492,7 +484,7 @@ describe('B. Protected region attacks', () => {
     assert.equal(parsed.error.code, 'PARSE_ERROR');
   });
 
-  it('R-03 rejects a protected parameter supplied without the {code} opener', async (t) => {
+  it('R-03 parses a braceless value as plain syntax (schema-agnostic parser)', async (t) => {
     const { tools } = await bootAdversarial(t, 'r03');
     const parsed = tools.parseInput(brud(
       '[CALL adv_deploy]',
@@ -502,12 +494,11 @@ describe('B. Protected region attacks', () => {
       '[END]',
     ));
 
-    assert.equal(parsed.ok, false);
-    if (parsed.ok) {
+    assert.equal(parsed.ok, true);
+    if (!parsed.ok) {
       return;
     }
-    assert.equal(parsed.error.code, 'PARSE_ERROR');
-    assert.match(parsed.error.friendly, /protected parameter "code"/);
+    assert.equal(parsed.operations[0]?.parameters.code, 'console.log("unbraced")');
   });
 
   it('R-04 preserves nested brace-like markers as literal protected content', async (t) => {

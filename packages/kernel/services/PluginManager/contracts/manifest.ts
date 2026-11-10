@@ -283,7 +283,7 @@ function validatePermissions(candidate: unknown): FieldResult<readonly PluginPer
     if (!isPluginPermission(entry)) {
       return {
         ok: false,
-        error: `manifest.permissions contains an unknown permission: ${JSON.stringify(entry)}`,
+        error: `manifest.permissions contains an invalid capability token: ${JSON.stringify(entry)}`,
       };
     }
 

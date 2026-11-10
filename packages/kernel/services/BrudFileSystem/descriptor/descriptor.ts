@@ -1,6 +1,7 @@
 import type { IStorageDriver } from '../../../drivers/contracts/index.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type { WorkspacePathFlavor } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
@@ -62,7 +63,7 @@ export interface FileSystemDescriptorOptions {
    * capability is applied to the caller-facing projection rather than to the
    * shared instance.
    */
-  readonly trustedWriteScopesByCaller?: Readonly<Record<string, readonly string[]>>;
+  readonly authorizedWriteScopesByCaller?: Readonly<Record<string, readonly string[]>>;
 }
 
 /**
@@ -83,7 +84,7 @@ export function createFileSystemDescriptor(
 ): ServiceDescriptor<IBrudFileSystem, BrudFileSystem> {
   const driver = options?.driver ?? new DurableNodeStorageDriver();
 
-  const trustedScopesByCaller = { ...options?.trustedWriteScopesByCaller };
+  const authorizedScopesByCaller = { ...options?.authorizedWriteScopesByCaller };
 
   return {
     token: FileSystemToken,
@@ -104,16 +105,26 @@ export function createFileSystemDescriptor(
         ...(options?.validation === undefined ? {} : { validation: options.validation }),
       };
 
-      if (options?.workspace !== undefined) {
-        return new BrudFileSystem(options.workspace, driver, serviceOptions);
-      }
+      const instance = options?.workspace !== undefined
+        ? new BrudFileSystem(options.workspace, driver, serviceOptions)
+        : new BrudFileSystem(root, driver, serviceOptions);
 
-      return new BrudFileSystem(root, driver, serviceOptions);
+      return withExposedApis(instance, (registry) => {
+        registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
+          capability: 'fs:read',
+          projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
+          combine: lastProjectionWins,
+        });
+        registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
+          capability: 'fs:write',
+          combine: lastProjectionWins,
+        });
+      });
     },
     project: (instance: BrudFileSystem, caller: ServiceContext): IBrudFileSystem => {
-      const trustedScopes = trustedScopesByCaller[caller.callerId] ?? [];
-      let projection: IBrudFileSystem = caller.tier === 'core' && trustedScopes.length > 0
-        ? instance.createTrustedProjection(trustedScopes)
+      const authorizedScopes = authorizedScopesByCaller[caller.callerId] ?? [];
+      let projection: IBrudFileSystem = caller.tier === 'core' && authorizedScopes.length > 0
+        ? instance.createAuthorizedProjection(authorizedScopes)
         : instance;
 
       if (caller.partitionPrefix !== undefined && caller.partitionPrefix.length > 0) {

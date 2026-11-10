@@ -1,13 +1,3 @@
-import type { IActionManager } from '../../ActionManager/contracts/index.js';
-import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
-import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
-import { ReadOnlyFacade } from '../../BrudFileSystem/projection/index.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
-import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
-import { ReadOnlyUniversalHistoryFacade } from '../../UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
-import { namespaceHistoryFor } from '../../UniversalHistory/unified/compat/PluginHistoryFacade.js';
-import { createReadOnlyNamespaceHandle } from '../../UniversalHistory/unified/service/NamespaceHandle.js';
-import type { NamespaceHistoryHandle } from '../../UniversalHistory/unified/service/types.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import { resolveActivationOrder, resolveDeactivationOrder } from '../contracts/activationOrder.js';
 import { hasOfficialPluginBrand } from '../contracts/branding.js';
@@ -26,6 +16,7 @@ import type {
 } from '../contracts/IPluginManager.js';
 import { validatePluginManifest } from '../contracts/manifest.js';
 import { PluginContext } from '../contracts/PluginContext.js';
+import { createRegistryCapabilityProviders } from './registryCapabilities.js';
 import {
   PluginActiveDependencyError,
   PluginManifestValidationError,
@@ -35,7 +26,6 @@ import type {
   InternalPluginRecord,
   PluginManagerRuntimeDependencies,
 } from './types.js';
-
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
@@ -466,6 +456,12 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
   private createContext(record: InternalPluginRecord): IPluginContext {
     const pluginId = record.manifest.id;
     const permissions = record.manifest.permissions;
+    const capabilities = createRegistryCapabilityProviders(
+      this.dependencies.apiRegistry(),
+      record,
+      permissions,
+      this.dependencies.workspaceRoot,
+    );
 
     return new PluginContext({
       pluginId,
@@ -473,86 +469,7 @@ export class PluginManagerService implements IPluginManagerService, IServiceLife
       permissions,
       official: record.official,
       logger: new PluginManagerLogger(pluginId),
-      capabilities: {
-        fileSystem: (): IBrudFileSystem => {
-          const fileSystem = this.dependencies.fileSystem();
-
-          return permissions.includes('fs:write') ? fileSystem : new ReadOnlyFacade(fileSystem);
-        },
-        universalHistory: (): IUniversalHistoryService => {
-          const accessor = this.dependencies.universalHistory;
-
-          if (accessor === undefined) {
-            throw new Error(
-              `Universal history service is unavailable for plugin "${pluginId}"`,
-            );
-          }
-
-          // Write authority needs both a declared `history:write` and the
-          // kernel-derived official brand. Every other plugin, including a
-          // third party declaring `history:write`, gets the read-only facade.
-          const history = accessor();
-
-          return permissions.includes('history:write') && record.official
-            ? history
-            : new ReadOnlyUniversalHistoryFacade(history);
-        },
-        history: (): NamespaceHistoryHandle => {
-          const accessor = this.dependencies.universalHistory;
-          const handle =
-            accessor === undefined
-              ? undefined
-              : namespaceHistoryFor(accessor(), pluginId, { official: record.official });
-
-          if (handle === undefined) {
-            throw new Error(
-              `Namespace history requires the unified history engine (plugin "${pluginId}")`,
-            );
-          }
-
-          // Writes stay inside the plugin's own namespace, so a declared
-          // `history:write` is enough here; `history:read` alone is read-only.
-          return permissions.includes('history:write')
-            ? handle
-            : createReadOnlyNamespaceHandle(handle);
-        },
-        brudTools: (): IBrudToolsService => {
-          const accessor = this.dependencies.brudTools;
-
-          if (accessor === undefined) {
-            throw new Error(`Tools service is unavailable for plugin "${record.manifest.id}"`);
-          }
-
-          return accessor();
-        },
-        actionManager: (): IActionManager => {
-          const accessor = this.dependencies.actionManager;
-
-          if (accessor === undefined) {
-            throw new Error(`ActionManager service is unavailable for plugin "${record.manifest.id}"`);
-          }
-
-          return accessor();
-        },
-        utilities: () => {
-          const accessor = this.dependencies.utilities;
-
-          if (accessor === undefined) {
-            throw new Error(`Utility service is unavailable for plugin "${record.manifest.id}"`);
-          }
-
-          return accessor();
-        },
-        terminal: (): ITerminalService => {
-          const accessor = this.dependencies.terminal;
-
-          if (accessor === undefined) {
-            throw new Error(`Terminal service is unavailable for plugin "${record.manifest.id}"`);
-          }
-
-          return accessor();
-        },
-      },
+      capabilities,
     });
   }
 

@@ -27,7 +27,7 @@ export interface ResolveImportsOptions {
   /**
    * Optional explicit language hint (`typescript`, `python`, `go`, `rust`).
    *
-   * When omitted, the file extension selects the table, preserving the legacy
+   * When omitted, the file extension selects the table, preserving the existing
    * resolver's behaviour exactly. An unknown hint raises `INVALID_FIELD`.
    */
   readonly language?: string;
@@ -55,7 +55,7 @@ export interface IUtilityService {
   resolveImports(content: string, options: ResolveImportsOptions): Promise<string[]>;
 
   /**
-   * Positional form preserved from the legacy `resolveImports` API.
+   * Positional form preserved from the earlier `resolveImports` API.
    *
    * @param content - Source text to scan.
    * @param filePath - Path of the source file.

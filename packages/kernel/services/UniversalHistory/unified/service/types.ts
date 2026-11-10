@@ -11,7 +11,7 @@ import type {
 /** Exact phrase a caller must supply to permanently wipe every session. */
 export const WIPE_CONFIRMATION_PHRASE = 'DELETE ALL HISTORY';
 
-/** Default trash retention window: the legacy monorepo's seven days. */
+/** Default trash retention window: the previous monorepo's seven days. */
 export const DEFAULT_TRASH_RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
 
 /** Options for trashing one session. */

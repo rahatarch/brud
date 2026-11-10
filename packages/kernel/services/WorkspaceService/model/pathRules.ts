@@ -183,7 +183,7 @@ export function assertSafeWorkspaceRelativePath(
 }
 
 /**
- * Translates a kernel path rule into the legacy workspace rule vocabulary.
+ * Translates a kernel path rule into the external workspace rule vocabulary.
  *
  * The two vocabularies overlap on the containment rules and differ on the
  * finer-grained lexical ones; telemetry aggregates on the workspace names.

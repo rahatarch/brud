@@ -138,7 +138,7 @@ interface FileStep {
 
 const DEFAULT_CALLBACK_TIMEOUT_MS = 10_000;
 
-/** '' stands for "no file" in reports, as in the legacy engine. */
+/** '' stands for "no file" in reports, as in the previous engine. */
 const hashText = (value: string | null): string => value ?? '';
 
 async function settleJournal(): Promise<void> {
@@ -988,7 +988,7 @@ export class ReversalEngine {
           await this.fs.deleteFile(step.path);
         }
       } catch {
-        // Best effort, as in the legacy engine.
+        // Best effort, as in the previous engine.
       }
     }
   }

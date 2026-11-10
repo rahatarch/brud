@@ -1,7 +1,7 @@
 /**
  * Canonical rule vocabulary for `brud.core.validation`.
  *
- * Every rule id is `<CATEGORY>.<NAME>` and is stable: telemetry, the legacy
+ * Every rule id is `<CATEGORY>.<NAME>` and is stable: telemetry, the external
  * facade and the parity matrix key off these strings. The inventory is the
  * audited catalogue reconciled by W-3: the dead `CMD.CD_ESCAPE`/`CMD.CD_DYNAMIC`
  * aliases are folded into their `PATH.*` owners, the eight metadata member

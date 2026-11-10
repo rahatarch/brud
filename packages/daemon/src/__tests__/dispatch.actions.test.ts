@@ -52,6 +52,10 @@ class FakeActionsService implements IActionManager {
     ];
   }
 
+  validateAction(_name: string, _rawInput: unknown): OperationResult {
+    return { status: 'success' };
+  }
+
   async executeAction(
     name: string,
     rawInput: unknown,
@@ -84,16 +88,12 @@ class FakeToolsService implements IBrudToolsService {
     return [];
   }
 
-  async executeTool(): Promise<OperationResult> {
+  validateTool(): OperationResult {
     return { status: 'success' };
   }
 
-  parseInput(): never {
-    throw new Error('not used');
-  }
-
-  parseAndRoute(): never {
-    throw new Error('not used');
+  async executeTool(): Promise<OperationResult> {
+    return { status: 'success' };
   }
 }
 

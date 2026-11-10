@@ -21,7 +21,7 @@ const posixScanner = new CommandScannerEngine(
 );
 
 /**
- * Audited §3.6 bypass table. B-4, B-5 and B-12 are legacy control cases that
+ * Audited §3.6 bypass table. B-4, B-5 and B-12 are baseline control cases that
  * were already blocked and must stay blocked.
  */
 const BYPASS_CASES: readonly {
@@ -47,13 +47,13 @@ const BYPASS_CASES: readonly {
 ];
 
 describe('CommandScannerEngine — dangerous patterns', () => {
-  it('keeps the 17 legacy regexes byte-for-byte and in order', () => {
+  it('keeps the 17 baseline regexes byte-for-byte and in order', () => {
     assert.equal(LEGACY_PATTERNS.length, 17);
     assert.equal(LEGACY_PATTERNS[0]?.source, '\\brm\\s+-(?:rf|fr)\\s+(\\/|\\/\\*|~|\\.)(?:$|\\s)');
     assert.equal(LEGACY_PATTERNS[16]?.source, '\\bnpm\\s+--unsafe-perm\\b');
   });
 
-  it('blocks every legacy family', () => {
+  it('blocks every baseline family', () => {
     const cases: readonly [string, string][] = [
       ['rm -rf /', 'CMD.RM_ROOT'],
       ['rm -rf /*', 'CMD.RM_ROOT'],
@@ -83,9 +83,9 @@ describe('CommandScannerEngine — dangerous patterns', () => {
     }
   });
 
-  it('reports the legacy pattern index so callers see the old numbering', () => {
-    assert.equal(posixScanner.scan('sudo rm x')?.legacyIndex, 2);
-    assert.equal(posixScanner.scan('rm -rf /')?.legacyIndex, 0);
+  it('reports the baseline pattern index so callers see the old numbering', () => {
+    assert.equal(posixScanner.scan('sudo rm x')?.externalIndex, 2);
+    assert.equal(posixScanner.scan('rm -rf /')?.externalIndex, 0);
   });
 
   it('allows ordinary commands', () => {
@@ -125,14 +125,14 @@ describe('CommandScannerEngine — cd chains', () => {
   const cases: readonly [string, string | null][] = [
     ['cd /outside && npm install', 'PATH.CWD_ESCAPE'],
     ['cd ~/other-project && ls', 'PATH.CWD_ESCAPE'],
-    ['cd packages/legacy && npm test', null],
+    ['cd packages/previous && npm test', null],
     ['pushd /outside && command', 'PATH.CWD_ESCAPE'],
     ['cd $HOME && ls', 'PATH.CWD_ESCAPE'],
     ['cd $DYNAMIC_VAR && ls', 'PATH.CWD_DYNAMIC'],
     ['cd /workspace/../outside && ls', 'PATH.CWD_ESCAPE'],
     ['cd /workspace && ls', null],
     ['(cd /outside && ls)', 'PATH.CWD_ESCAPE'],
-    ['cd packages/legacy; npm test; cd ../ui; npm test', null],
+    ['cd packages/previous; npm test; cd ../ui; npm test', null],
     ['command cd /outside', 'PATH.CWD_ESCAPE'],
     ['sudo cd /outside', 'PATH.CWD_ESCAPE'],
     ['cd "  " && ls', null],
@@ -167,7 +167,7 @@ describe('CommandScannerEngine — cd chains', () => {
     assert.equal(win32.evaluateChain('cd $HOME', 'C:\\workspace').rule, 'PATH.CWD_ESCAPE');
   });
 
-  it('resolves cwd arguments for the legacy contract', () => {
+  it('resolves cwd arguments for the existing contract', () => {
     assert.equal(posixScanner.resolveCwd(undefined), '/workspace');
     assert.equal(posixScanner.resolveCwd('   '), '/workspace');
     assert.equal(posixScanner.resolveCwd('/workspace/sub/dir'), '/workspace/sub/dir');

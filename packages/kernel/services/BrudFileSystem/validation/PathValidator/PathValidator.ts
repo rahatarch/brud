@@ -1,46 +1,36 @@
 /**
- * Deprecated re-export of the canonical lexical path engine.
+ * Path-rule adapter over the canonical lexical path engine.
  *
- * Phase 3 moved path validation to
- * `ValidationService/engine/LexicalPathEngine.ts` (rollout plan W-1). This
- * module keeps the pre-Phase-3 class name, constructor, methods and error
- * shape so `ScopedPartitionFacade`, `WorkspaceService/model/pathRules.ts` and
- * `PathValidator.test.ts` keep working unchanged; it is removed in Phase 5.
- *
- * There is exactly one implementation: {@link PathValidator} extends
- * `LexicalPathEngine` and only translates the thrown error class at the
- * boundary.
+ * `PathValidator` extends `LexicalPathEngine` and translates thrown kernel
+ * violations into the external `PathRuleViolationError` at the boundary.
  */
 import { LexicalPathEngine } from '../../../ValidationService/engine/LexicalPathEngine.js';
 import { PathViolationError } from '../../../ValidationService/contracts/errors.js';
 import type { PathRule } from '../../../ValidationService/contracts/rules.js';
 import type { ValidationFlavor } from '../../../ValidationService/contracts/IValidationService.js';
-import { PathTraversalViolationError, toLegacyRule } from './errors.js';
+import { PathRuleViolationError, toExternalPathRule } from './errors.js';
 
 export { assertSafeRelativePath, defaultPathFlavor } from '../../../ValidationService/engine/pathLexicon.js';
-export { PathTraversalViolationError } from './errors.js';
+export { PathRuleViolationError } from './errors.js';
 export type { ValidationFlavor as PathFlavor } from '../../../ValidationService/contracts/IValidationService.js';
 export type { PathRule } from '../../../ValidationService/contracts/rules.js';
-export type { PathViolationDetails, PathViolationRule } from './errors.js';
+export type { PathViolationDetails, ExternalPathRule } from './errors.js';
 
 /** Options for {@link PathValidator}. */
 export interface PathValidatorOptions {
   readonly flavor?: ValidationFlavor;
 }
 
-/** @deprecated Use `LexicalResolution` from `ValidationService/engine`. */
 export type PathResolution =
   | { readonly ok: true; readonly path: string }
-  | { readonly ok: false; readonly error: PathTraversalViolationError };
+  | { readonly ok: false; readonly error: PathRuleViolationError };
 
-/** @deprecated Use `LexicalResolution` from `ValidationService/engine`. */
 export type PathResolutionSuccess = Extract<PathResolution, { readonly ok: true }>;
 
-/** @deprecated Use `LexicalResolution` from `ValidationService/engine`. */
 export type PathResolutionFailure = Extract<PathResolution, { readonly ok: false }>;
 
 /**
- * @deprecated Use `LexicalPathEngine` from `ValidationService/engine`.
+ * Translates kernel path violations into the external error type.
  */
 export class PathValidator extends LexicalPathEngine {
   /**
@@ -52,7 +42,7 @@ export class PathValidator extends LexicalPathEngine {
   }
 
   /**
-   * Resolves a relative path, rethrowing kernel violations in the legacy shape.
+   * Resolves a relative path, rethrowing kernel violations in the external shape.
    *
    * @param relativePath - Relative path text.
    */
@@ -60,7 +50,7 @@ export class PathValidator extends LexicalPathEngine {
     try {
       return super.resolve(relativePath);
     } catch (error: unknown) {
-      throw this.toLegacy(error, relativePath);
+      throw this.toPathRuleViolation(error, relativePath);
     }
   }
 
@@ -77,12 +67,12 @@ export class PathValidator extends LexicalPathEngine {
     try {
       return await super.resolveContained(relativePath, driver);
     } catch (error: unknown) {
-      throw this.toLegacy(error, relativePath);
+      throw this.toPathRuleViolation(error, relativePath);
     }
   }
 
   /**
-   * Non-throwing resolution with the legacy error type.
+   * Non-throwing resolution with the external error type.
    *
    * @param relativePath - Relative path text.
    */
@@ -90,7 +80,7 @@ export class PathValidator extends LexicalPathEngine {
     try {
       return { ok: true, path: this.resolve(relativePath) };
     } catch (error: unknown) {
-      if (error instanceof PathTraversalViolationError) {
+      if (error instanceof PathRuleViolationError) {
         return { ok: false, error };
       }
 
@@ -98,10 +88,10 @@ export class PathValidator extends LexicalPathEngine {
     }
   }
 
-  private toLegacy(error: unknown, relativePath: string): unknown {
+  private toPathRuleViolation(error: unknown, relativePath: string): unknown {
     if (error instanceof PathViolationError) {
-      return new PathTraversalViolationError({
-        rule: toLegacyRule(error.rule as PathRule),
+      return new PathRuleViolationError({
+        rule: toExternalPathRule(error.rule as PathRule),
         root: error.root,
         candidatePath: error.path.length > 0 ? error.path : relativePath,
         reason: error.reason,

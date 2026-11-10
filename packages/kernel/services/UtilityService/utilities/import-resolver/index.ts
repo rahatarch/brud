@@ -66,7 +66,7 @@ async function resolveModulePath(
  * @param customPatterns - Optional replacement regex sources; capture group 1
  * must contain the module specifier.
  * @param language - Optional explicit language hint. When omitted, the file
- * extension selects the pattern table exactly as the legacy resolver does.
+ * extension selects the pattern table exactly as the earlier resolver does.
  * @returns Resolved local paths, in discovery order, without duplicates.
  */
 export async function resolveImports(

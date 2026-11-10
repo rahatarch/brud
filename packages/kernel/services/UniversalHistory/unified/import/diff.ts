@@ -1,9 +1,9 @@
 /**
- * Unified-diff reconstruction, ported from the legacy session ledger's
- * reversal planner (`operations/plan_reversal/planReversal.ts`). The legacy
+ * Unified-diff reconstruction, ported from the previous session ledger's
+ * reversal planner (`operations/plan_reversal/planReversal.ts`). The previous
  * ledger stored small text changes as a diff and rebuilt the other side on
  * demand; the importer uses this once, at import time, to recover full bytes.
- * Ported rather than imported so the importer survives deletion of the legacy
+ * Ported rather than imported so the importer survives deletion of the previous
  * modules (U-7). Behaviour must stay identical to the original.
  */
 

@@ -51,7 +51,7 @@ const VALID_PAYLOADS: Readonly<Record<string, unknown>> = {
 };
 
 describe('kindMatrix — 21-kind constraint matrix', () => {
-  it('enumerates exactly the 21 catalogued kinds in legacy order', () => {
+  it('enumerates exactly the 21 catalogued kinds in catalogued order', () => {
     assert.equal(KNOWN_OPERATION_KINDS.length, 21);
     assert.equal(KIND_CONSTRAINTS.length, 21);
     assert.deepEqual([...KNOWN_OPERATION_KINDS], [
@@ -237,10 +237,10 @@ describe('InputSchemaEngine — batch and message gates', () => {
 
   it('validates the Brud Protocol v2 wrapper', () => {
     const valid = '[BRUD]\n[CALL read_file]\npath: a.ts\n[END]\n[/BRUD]';
-    const legacy = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
+    const mergeMarker = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
 
     assert.equal(engine.validateFormat(valid).ok, true);
-    assert.equal(engine.validateFormat(legacy).ok, false);
+    assert.equal(engine.validateFormat(mergeMarker).ok, false);
     assert.equal(engine.validateFormat('no wrapper').ok, false);
     assert.equal(engine.validateFormat('[/BRUD]\n[BRUD]').ok, false);
   });

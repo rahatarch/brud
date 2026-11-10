@@ -20,7 +20,7 @@ const STRICT_SCHEMA: Record<string, unknown> = {
 const LEGACY_ARTIFACT_PATTERN = /index|MISSING_FIELD|MISSING_INDEX|UNKNOWN_OPERATION|21-kind/iu;
 
 describe('dynamic dispatch contract invariant', () => {
-  it('validates exactly against the registered schema and never requires a legacy index', async (t) => {
+  it('validates exactly against the registered schema and never requires an index', async (t) => {
     const { kernel, root } = await bootRealKernel(t, {
       prefix: 'brud-dispatch-contract-',
     });
@@ -85,7 +85,7 @@ describe('dynamic dispatch contract invariant', () => {
       assert.doesNotMatch(
         message,
         LEGACY_ARTIFACT_PATTERN,
-        `dispatch errors must not mention a legacy index or operation kind: ${message}`,
+        `dispatch errors must not mention an index or operation kind: ${message}`,
       );
     }
 

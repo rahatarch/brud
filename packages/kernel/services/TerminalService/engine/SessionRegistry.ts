@@ -16,7 +16,7 @@ export interface SessionRecord {
 /**
  * Active session registry.
  *
- * Sessions are keyed by the legacy `proc-<timestamp>-<counter>` identity so a
+ * Sessions are keyed by the `proc-<timestamp>-<counter>` identity so a
  * host that already persists those ids keeps working. The registry is the only
  * place a caller sees live sessions; it never owns a child process, so it can
  * be inspected from a transport without resolving the process manager.
@@ -26,7 +26,7 @@ export class SessionRegistry {
 
   private readonly sessions = new Map<string, SessionRecord>();
 
-  /** Allocates a session id in the legacy sequence. */
+  /** Allocates a session id in the proc sequence. */
   nextId(): string {
     this.counter++;
 

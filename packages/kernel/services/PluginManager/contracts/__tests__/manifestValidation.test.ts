@@ -58,18 +58,25 @@ describe('manifest validation contract', () => {
     assert.match(result.error, /manifest\.version/);
   });
 
-  it('rejects undeclared permissions', () => {
-    const result = validatePluginManifest({
+  it('accepts extensible permissions and rejects malformed tokens', () => {
+    const flexible = validatePluginManifest({
       ...validManifest,
-      permissions: ['fs:read', 'fs:destroy'],
+      permissions: ['fs:read', 'fs:destroy', 'photoshop:access'],
     });
 
-    assert.equal(result.ok, false);
-    if (result.ok) {
+    assert.equal(flexible.ok, true);
+
+    const malformed = validatePluginManifest({
+      ...validManifest,
+      permissions: ['fs:read', 'FS:DESTROY'],
+    });
+
+    assert.equal(malformed.ok, false);
+    if (malformed.ok) {
       return;
     }
 
-    assert.match(result.error, /unknown permission/);
+    assert.match(malformed.error, /invalid capability token/);
   });
 
   it('rejects non-array dependencies', () => {
@@ -106,7 +113,7 @@ describe('manifest validation contract', () => {
       assert.deepEqual(outcomes, [true, true]);
     }
 
-    const invalid = 'fs:delete';
+    const invalid = 'FS:DELETE';
 
     assert.deepEqual([isPluginPermission(invalid), isPluginPermission(invalid)], [false, false]);
   });

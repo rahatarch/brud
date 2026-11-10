@@ -27,7 +27,10 @@ import { createFileMutationJournal } from '../../services/BrudFileSystem/events/
 import { createUnifiedHistoryDescriptors } from '../../services/UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.js';
 import { UniversalHistoryToken } from '../../services/UniversalHistory/descriptor/tokens.js';
 import type { NamespaceHistoryHandle } from '../../services/UniversalHistory/unified/service/types.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../services/ExposedApiRegistry/contracts/index.js';
+import { ReadOnlyFacade } from '../../services/BrudFileSystem/projection/index.js';
 import { createStandardKernel } from '../bootstrap/index.js';
+import { createSeededApiRegistryDescriptor, createTestApiRegistry, MapServiceBroker } from './support/testApiRegistry.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
@@ -96,6 +99,20 @@ class TracingFileSystem extends BrudFileSystem {
     this.log.push('dispose:filesystem');
     await super.dispose();
   }
+}
+
+function createFileSystemApiRegistryDescriptor(): ServiceDescriptor<unknown, unknown> {
+  return createSeededApiRegistryDescriptor((registry) => {
+    registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
+      capability: 'fs:read',
+      projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
+      combine: lastProjectionWins,
+    });
+    registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
+      capability: 'fs:write',
+      combine: lastProjectionWins,
+    });
+  }) as unknown as ServiceDescriptor<unknown, unknown>;
 }
 
 function createTracingFileSystemDescriptor(
@@ -172,6 +189,7 @@ describe('createStandardKernel plugin integration', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
+    kernel.register(createFileSystemApiRegistryDescriptor());
     kernel.register(createUnifiedHistoryDescriptors({ driver: new DurableNodeStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [plugin] }));
 
@@ -305,6 +323,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     const kernel = new BrudKernel();
 
     kernel.register(createTracingFileSystemDescriptor(log));
+    kernel.register(createFileSystemApiRegistryDescriptor());
     kernel.register(createUnifiedHistoryDescriptors({ driver: new DurableNodeStorageDriver(), journal: createFileMutationJournal(), inMemory: true }).session);
     kernel.register(createPluginManagerDescriptor({ initialPlugins: [broken, stable] }));
 
@@ -497,11 +516,13 @@ describe('plugin capabilities requested during activation at boot', () => {
 
   it('does not activate plugins in PluginManagerService.initialize()', async () => {
     const log: string[] = [];
+    const apiRegistry = createTestApiRegistry({
+      broker: new MapServiceBroker(new Map()),
+      workspaceRoot: WORKSPACE_ROOT,
+    });
     const manager = new PluginManagerService({
       workspaceRoot: WORKSPACE_ROOT,
-      fileSystem: (): IBrudFileSystem => {
-        throw new Error('filesystem must not be resolved during initialize()');
-      },
+      apiRegistry: () => apiRegistry,
     });
 
     manager.register(createRecordingPlugin({ id: 'acme.staged', log }));

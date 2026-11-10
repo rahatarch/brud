@@ -14,7 +14,7 @@ import type { ValidationDecision } from '../contracts/errors.js';
 import { ALL_VALIDATION_RULES, VALIDATION_RULE_COUNT, ruleCategory } from '../contracts/rules.js';
 import { ValidationService } from '../orchestrator/ValidationService.js';
 import { KIND_CONSTRAINTS } from '../engine/kindMatrix.js';
-import { legacyMessages } from '../engine/errorCatalog.js';
+import { externalMessages } from '../engine/errorCatalog.js';
 import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import { ValidationToken } from '../descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
@@ -142,12 +142,12 @@ describe('ValidationService — path decisions', () => {
     assert.deepEqual(await service().validatePath('/workspace/notes/draft.md', 'read_file'), { ok: true });
   });
 
-  it('reports traversal with the legacy boundary code', async () => {
+  it('reports traversal with the synchronous boundary code', async () => {
     const decision = failure(await service().validatePath('../secret.txt', 'read_file'));
 
     assert.equal(decision.code, 'PATH_TRAVERSAL_DETECTED');
     assert.equal(decision.rule, 'PATH.PARENT_SEGMENT');
-    assert.equal(decision.legacyCode, 'PATH_OUTSIDE_WORKSPACE');
+    assert.equal(decision.externalCode, 'PATH_OUTSIDE_WORKSPACE');
     assert.equal(decision.actionable, true);
     assert.equal(decision.retryable, false);
     assert.equal(decision.path, '../secret.txt');
@@ -158,7 +158,7 @@ describe('ValidationService — path decisions', () => {
     const decision = failure(await service().validatePath('notes/\0x', 'read_file'));
 
     assert.equal(decision.rule, 'PATH.NULL_BYTE');
-    assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+    assert.equal(decision.externalCode, 'VALIDATION_ERROR');
   });
 
   it('reports sibling-prefix escapes as VALIDATION_ERROR (Appendix C row 3)', async () => {
@@ -166,14 +166,14 @@ describe('ValidationService — path decisions', () => {
 
     assert.equal(decision.rule, 'PATH.SIBLING_PREFIX');
     assert.equal(decision.code, 'PATH_TRAVERSAL_DETECTED');
-    assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+    assert.equal(decision.externalCode, 'VALIDATION_ERROR');
   });
 
   it('reports symlink escapes as PATH_OUTSIDE_WORKSPACE', async () => {
     const decision = failure(await service().validatePath('escape/secret.txt', 'read_file'));
 
     assert.equal(decision.rule, 'PATH.SYMLINK_ESCAPE');
-    assert.equal(decision.legacyCode, 'PATH_OUTSIDE_WORKSPACE');
+    assert.equal(decision.externalCode, 'PATH_OUTSIDE_WORKSPACE');
   });
 
   it('reports NO_WORKSPACE when the registry is empty', async () => {
@@ -183,14 +183,14 @@ describe('ValidationService — path decisions', () => {
 
     assert.equal(decision.code, 'NO_WORKSPACE');
     assert.equal(decision.rule, 'PATH.NO_WORKSPACE');
-    assert.equal(decision.legacyCode, 'NO_WORKSPACE');
+    assert.equal(decision.externalCode, 'NO_WORKSPACE');
   });
 
   it('rejects an unknown operation kind', async () => {
     const decision = failure(await service().validatePath('a.ts', 'nope'));
 
     assert.equal(decision.rule, 'PATH.NON_STRING');
-    assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+    assert.equal(decision.externalCode, 'VALIDATION_ERROR');
   });
 
   it('rejects the workspace root as a mutable target (V-3)', async () => {
@@ -198,7 +198,7 @@ describe('ValidationService — path decisions', () => {
 
     assert.equal(decision.rule, 'PATH.ROOT_NOT_MUTABLE');
     assert.equal(decision.code, 'WORKSPACE_PATH_VIOLATION');
-    assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+    assert.equal(decision.externalCode, 'VALIDATION_ERROR');
   });
 
   it('allows the workspace root for reads', async () => {
@@ -252,12 +252,12 @@ describe('ValidationService — A10 across all kinds', () => {
 
         assert.equal(decision.rule, 'PATH.PROTECTED_DENY', `${constraint.kind} ${target}`);
         assert.equal(decision.code, 'PROTECTED_PATH_DENIED');
-        assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+        assert.equal(decision.externalCode, 'VALIDATION_ERROR');
       }
     });
   }
 
-  it('covers directory creation and deletion, which the legacy filesystem missed', async () => {
+  it('covers directory creation and deletion, which the earlier filesystem missed', async () => {
     for (const kind of ['create_directory', 'delete_directory', 'move_directory']) {
       assert.equal(failure(await service().validatePath('.brud/history', kind)).rule, 'PATH.PROTECTED_DENY');
       assert.equal(failure(await service().validatePath('.git', kind)).rule, 'PATH.PROTECTED_DENY');
@@ -279,12 +279,12 @@ describe('ValidationService — A10 across all kinds', () => {
 });
 
 describe('ValidationService — commands', () => {
-  it('blocks dangerous commands with the legacy text and rule', () => {
+  it('blocks dangerous commands with the baseline text and rule', () => {
     const decision = failure(service().validateCommand('rm -rf /'));
 
     assert.equal(decision.code, 'DANGEROUS_COMMAND');
     assert.equal(decision.rule, 'CMD.RM_ROOT');
-    assert.equal(decision.legacyCode, 'DANGEROUS_COMMAND');
+    assert.equal(decision.externalCode, 'DANGEROUS_COMMAND');
     assert.equal(decision.friendly, 'The command is potentially dangerous and has been blocked.');
     assert.equal(decision.metadata?.['patternIndex'], 0);
   });
@@ -338,7 +338,7 @@ describe('ValidationService — commands', () => {
     const decision = failure(await service({ workspace: broken }).validatePath('a.ts', 'read_file'));
 
     assert.equal(decision.code, 'WORKSPACE_CONFIGURATION_INVALID');
-    assert.equal(decision.legacyCode, 'NO_WORKSPACE');
+    assert.equal(decision.externalCode, 'NO_WORKSPACE');
   });
 
   it('returns MISSING_FIELD for an empty command', () => {
@@ -353,7 +353,7 @@ describe('ValidationService — commands', () => {
 
     assert.equal(escape.code, 'CWD_ESCAPE');
     assert.equal(escape.rule, 'PATH.CWD_ESCAPE');
-    assert.equal(escape.legacyCode, 'CWD_ESCAPE');
+    assert.equal(escape.externalCode, 'CWD_ESCAPE');
 
     const dynamic = failure(service().validateCommand('cd $VAR && ls'));
 
@@ -378,7 +378,7 @@ describe('ValidationService — commands', () => {
     assert.equal(failure(unconfigured.validateCommand('sudo rm -rf /')).code, 'DANGEROUS_COMMAND');
   });
 
-  it('supports the synchronous legacy boundary', () => {
+  it('supports the synchronous synchronous boundary', () => {
     const instance = service();
 
     assert.deepEqual(instance.validatePathSync('notes/draft.md', 'read_file'), { ok: true });
@@ -497,7 +497,7 @@ describe('ValidationService — inputs', () => {
 
     assert.equal(decision.code, 'BATCH_LIMIT_EXCEEDED');
     assert.equal(decision.rule, 'POLICY.AGGREGATE_BYTES');
-    assert.equal(decision.legacyCode, 'BATCH_LIMIT_EXCEEDED');
+    assert.equal(decision.externalCode, 'BATCH_LIMIT_EXCEEDED');
     assert.equal(decision.actionable, true);
     assert.equal(decision.retryable, true);
   });
@@ -521,7 +521,7 @@ describe('ValidationService — inputs', () => {
 
     assert.equal(decision.code, 'READ_ONLY_VIOLATION');
     assert.equal(decision.rule, 'INPUT.READ_ONLY_PROJECTION');
-    assert.equal(decision.legacyCode, 'VALIDATION_ERROR');
+    assert.equal(decision.externalCode, 'VALIDATION_ERROR');
     assert.equal(decision.actionable, false);
     assert.equal(decision.retryable, false);
   });
@@ -552,7 +552,7 @@ describe('ValidationService — membership pre-checks (F-1 / F-2)', () => {
     const decision = failure(service().validateKnownOperation('bogus_operation'));
 
     assert.equal(decision.rule, 'INPUT.UNKNOWN_OPERATION');
-    assert.equal(decision.legacyCode, 'UNKNOWN_OPERATION');
+    assert.equal(decision.externalCode, 'UNKNOWN_OPERATION');
   });
 
   it('reports TOOL_NOT_FOUND for an unknown tool', () => {
@@ -560,12 +560,12 @@ describe('ValidationService — membership pre-checks (F-1 / F-2)', () => {
 
     assert.equal(decision.rule, 'INPUT.UNKNOWN_TOOL');
     assert.equal(decision.code, 'TOOL_NOT_FOUND');
-    assert.equal(decision.legacyCode, 'TOOL_NOT_FOUND');
+    assert.equal(decision.externalCode, 'TOOL_NOT_FOUND');
   });
 });
 
 describe('ValidationService — metadata member checks (F-3)', () => {
-  it('maps every metadata rule onto its legacy E_* code', () => {
+  it('maps every metadata rule onto its E_* code', () => {
     const cases = [
       ['INPUT.METADATA_WRONG_CASE', { wrapper: 'SESSION_METADATA' }, 'E_METADATA_WRONG_CASE'],
       ['INPUT.DUPLICATE_SESSION_METADATA', {}, 'E_DUPLICATE_SESSION_METADATA'],
@@ -582,18 +582,18 @@ describe('ValidationService — metadata member checks (F-3)', () => {
 
       assert.equal(decision.rule, rule);
       assert.equal(decision.code, code);
-      assert.equal(decision.legacyCode, code);
+      assert.equal(decision.externalCode, code);
     }
   });
 
-  it('renders the legacy unclosed-wrapper text', () => {
+  it('renders the baseline unclosed-wrapper text', () => {
     const decision = failure(service().validateMetadata('INPUT.METADATA_UNCLOSED', { wrapper: 'session_metadata' }));
 
     assert.equal(decision.friendly, 'Unclosed <session_metadata> wrapper. Expected </session_metadata>.');
     assert.equal(decision.details, 'Unclosed <session_metadata> wrapper. Expected </session_metadata>.');
   });
 
-  it('renders the legacy duplicate-operation text with the index', () => {
+  it('renders the baseline duplicate-operation text with the index', () => {
     const decision = failure(service().validateMetadata('INPUT.DUPLICATE_OPERATION_METADATA', { index: '4' }));
 
     assert.equal(
@@ -651,10 +651,10 @@ describe('ValidationService — remaining decision entry points', () => {
 
   it('validates the Brud Protocol v2 wrapper', () => {
     const message = '[BRUD]\n[CALL read_file]\npath: a.ts\n[END]\n[/BRUD]';
-    const legacy = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
+    const mergeMarker = '<<<<<<< SEARCH\nx\n=======\ny\n>>>>>>> REPLACE';
 
     assert.deepEqual(service().validateFormat(message), { ok: true });
-    assert.equal(failure(service().validateFormat(legacy)).code, 'PARSE_ERROR');
+    assert.equal(failure(service().validateFormat(mergeMarker)).code, 'PARSE_ERROR');
     assert.equal(failure(service().validateFormat('no wrapper')).code, 'PARSE_ERROR');
     assert.equal(failure(service().validateFormat('[/BRUD]\n[BRUD]')).code, 'PARSE_ERROR');
   });
@@ -707,36 +707,36 @@ describe('ValidationService — remaining decision entry points', () => {
   });
 });
 
-describe('errorCatalog — legacy message parity', () => {
+describe('errorCatalog — baseline message parity', () => {
   it('reproduces the audited friendly strings verbatim', () => {
-    assert.equal(legacyMessages('NO_WORKSPACE').friendly, 'No workspace is currently open.');
-    assert.equal(legacyMessages('MISSING_INDEX').friendly, 'You haven\'t used any index number with your instructions.');
-    assert.equal(legacyMessages('INVALID_LINE_RANGE').friendly, 'Invalid line range specified for file read.');
-    assert.equal(legacyMessages('BATCH_LIMIT_EXCEEDED').friendly, 'Read batch too large.');
-    assert.equal(legacyMessages('TOOL_DISABLED', { operation: 'x' }).friendly, 'Tool "x" is disabled.');
+    assert.equal(externalMessages('NO_WORKSPACE').friendly, 'No workspace is currently open.');
+    assert.equal(externalMessages('MISSING_INDEX').friendly, 'You haven\'t used any index number with your instructions.');
+    assert.equal(externalMessages('INVALID_LINE_RANGE').friendly, 'Invalid line range specified for file read.');
+    assert.equal(externalMessages('BATCH_LIMIT_EXCEEDED').friendly, 'Read batch too large.');
+    assert.equal(externalMessages('TOOL_DISABLED', { operation: 'x' }).friendly, 'Tool "x" is disabled.');
   });
 
-  it('interpolates legacy detail templates', () => {
+  it('interpolates baseline detail templates', () => {
     assert.equal(
-      legacyMessages('PATH_TRAVERSAL_DETECTED', { path: '/etc/passwd' }).details,
+      externalMessages('PATH_TRAVERSAL_DETECTED', { path: '/etc/passwd' }).details,
       'The path "/etc/passwd" is outside the current workspace. File operations are restricted to files and folders inside the workspace.',
     );
     assert.equal(
-      legacyMessages('MISSING_FIELD', { field: 'path', operation: 'replace' }).details,
+      externalMessages('MISSING_FIELD', { field: 'path', operation: 'replace' }).details,
       'The field "path" is required in replace operation.',
     );
     assert.equal(
-      legacyMessages('INVALID_LINE_RANGE', { startLine: 5, endLine: 3, totalLines: 4 }).details,
+      externalMessages('INVALID_LINE_RANGE', { startLine: 5, endLine: 3, totalLines: 4 }).details,
       'Requested line range 5-3 is invalid for file with 4 lines (1-indexed).',
     );
     assert.equal(
-      legacyMessages('BATCH_LIMIT_EXCEEDED', { requested: 101, limit: 100 }).details,
+      externalMessages('BATCH_LIMIT_EXCEEDED', { requested: 101, limit: 100 }).details,
       'Requested 101 files; the limit is 100 per batch. Narrow the pattern, add excludePatterns, or split the read into sequential batches of 100 or fewer.',
     );
   });
 
   it('keeps UNEXPECTED_ERROR rather than the plan\'s EXECUTION_ERROR (audit §6.2)', () => {
-    assert.equal(legacyMessages('UNEXPECTED_ERROR', { operation: 'write', reason: 'boom' }).friendly, 'An unexpected error occurred.');
+    assert.equal(externalMessages('UNEXPECTED_ERROR', { operation: 'write', reason: 'boom' }).friendly, 'An unexpected error occurred.');
   });
 });
 

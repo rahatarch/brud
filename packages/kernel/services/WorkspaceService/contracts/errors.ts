@@ -1,7 +1,7 @@
 /**
  * Violated workspace rule.
  *
- * The names mirror the kernel `PathViolationRule` vocabulary so downstream
+ * The names mirror the kernel `ExternalPathRule` vocabulary so downstream
  * telemetry can aggregate workspace and filesystem violations together.
  * `SIBLING_PREFIX`, `AMBIGUOUS_ROOT`, `FILESYSTEM_ROOT`, `UNKNOWN_ROOT`, and
  * `UNVERIFIABLE_LINEAGE` are workspace concerns and have no filesystem

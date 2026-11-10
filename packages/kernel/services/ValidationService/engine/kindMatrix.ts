@@ -3,7 +3,7 @@
  *
  * The table is the audited §4.2 matrix, restated as data so the validator and
  * its parity test cannot drift. `KNOWN_OPERATION_KINDS` stays a closed literal
- * for legacy parity; Phase 5 (`BrudTools`) replaces the lookup with a registry
+ * for baseline parity; Phase 5 (`BrudTools`) replaces the lookup with a registry
  * while keeping these constraints attached to each kind.
  */
 
@@ -63,7 +63,7 @@ const PATTERN_OPTIONALS = ['excludePatterns', 'directory', 'maxResults', 'recurs
 /**
  * Constraint matrix for the 21 catalogued kinds, in the canonical order.
  *
- * The order is the legacy `KNOWN_OPERATIONS` / `KNOWN_TOOLS` sequence so any
+ * The order is the `KNOWN_OPERATIONS` / `KNOWN_TOOLS` sequence so any
  * order-sensitive consumer (catalog listing, tool guide) is byte-compatible.
  */
 export const KIND_CONSTRAINTS: readonly KindConstraint[] = Object.freeze([
@@ -329,7 +329,7 @@ export const KNOWN_OPERATION_KINDS: readonly string[] = Object.freeze(
   KIND_CONSTRAINTS.map((constraint) => constraint.kind),
 );
 
-/** Kind vocabulary as exposed to tools (byte-identical to the legacy list). */
+/** Kind vocabulary as exposed to tools (byte-identical to the catalogued list). */
 export const KNOWN_TOOL_KINDS: readonly string[] = KNOWN_OPERATION_KINDS;
 
 const CONSTRAINT_BY_KIND = new Map(KIND_CONSTRAINTS.map((constraint) => [constraint.kind, constraint]));

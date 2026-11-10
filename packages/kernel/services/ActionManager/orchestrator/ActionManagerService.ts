@@ -1,5 +1,7 @@
+import { BRUD_KIND_ACTION } from '../../../src/contracts/brudOperation.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
+import type { IRouterService } from '../../Router/contracts/IRouterService.js';
 import {
   ActionDisposedError,
   ActionNotFoundError,
@@ -13,8 +15,9 @@ import type {
   IActionManager,
   RegisteredActionInfo,
 } from '../contracts/IActionManager.js';
+import { ActionManagerToken } from '../descriptor/tokens.js';
 import type { JsonSchemaViolation } from '../../ValidationService/engine/jsonSchema/index.js';
-import { ActionRegistry } from '../registry/ActionRegistry.js';
+import { ActionRegistry, type RegisteredActionEntry } from '../registry/ActionRegistry.js';
 import type { ActionManagerDependencies } from './types.js';
 
 /**
@@ -94,14 +97,76 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
     rawInput: unknown,
     callerContext: IActionExecutionContext,
   ): Promise<OperationResult> {
+    const prepared = this.prepareAction(name, rawInput);
+
+    if (!prepared.ok) {
+      return prepared.result;
+    }
+
+    try {
+      return await prepared.entry.execute(normalizeInput(rawInput), callerContext);
+    } catch (error) {
+      return failed(`ACTION_HANDLER_ERROR: ${describe(error)}`);
+    }
+  }
+
+  /**
+   * Validates a payload against the target action without invoking its handler.
+   *
+   * @param name - Action name.
+   * @param rawInput - Untrusted payload.
+   * @returns `success` when the payload is admissible, otherwise `failed`.
+   */
+  validateAction(name: string, rawInput: unknown): OperationResult {
+    const prepared = this.prepareAction(name, rawInput);
+
+    return prepared.ok ? { status: 'success' } : prepared.result;
+  }
+
+  /**
+   * Claims the `action` kind on the Router.
+   *
+   * Called by the standard composition during the boot registration window.
+   *
+   * @param router - Router accepting boot-time registrations.
+   */
+  registerWithRouter(router: IRouterService): void {
+    router.register<IActionManager>({
+      kind: BRUD_KIND_ACTION,
+      token: ActionManagerToken,
+      dispatch: (service, operation, context) => {
+        const callerContext: IActionExecutionContext = {
+          workspaceRoot: context.workspaceRoot,
+          callerId: context.callerId,
+          ...(context.signal === undefined ? {} : { signal: context.signal }),
+          ...(context.origin === undefined ? {} : { origin: context.origin }),
+        };
+
+        const input = { ...operation.parameters };
+
+        return context.dryRun === true
+          ? Promise.resolve(service.validateAction(operation.name, input))
+          : service.executeAction(operation.name, input, callerContext);
+      },
+    });
+  }
+
+  /**
+   * Runs the common lookup and schema gate.
+   *
+   * @param name - Action name.
+   * @param rawInput - Untrusted payload.
+   * @returns The executable entry, or a failed result.
+   */
+  private prepareAction(name: string, rawInput: unknown): PreparedAction {
     if (this.disposed) {
-      return failed(actionFailureMessage(new ActionDisposedError()));
+      return { ok: false, result: failed(actionFailureMessage(new ActionDisposedError())) };
     }
 
     const action = this.registry.getAction(name);
 
     if (action === undefined) {
-      return failed(actionFailureMessage(new ActionNotFoundError(name)));
+      return { ok: false, result: failed(actionFailureMessage(new ActionNotFoundError(name))) };
     }
 
     const entry = this.registry.getExecutable(name);
@@ -113,22 +178,21 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
 
       this.warn(message, { action: name });
 
-      return failed(message);
+      return { ok: false, result: failed(message) };
     }
 
     const validation = compiled.schema.validate(rawInput);
 
     if (!validation.valid) {
-      return failed(actionFailureMessage(
-        new ActionValidationError(name, formatViolations(validation.violations)),
-      ));
+      return {
+        ok: false,
+        result: failed(actionFailureMessage(
+          new ActionValidationError(name, formatViolations(validation.violations)),
+        )),
+      };
     }
 
-    try {
-      return await entry.execute(normalizeInput(rawInput), callerContext);
-    } catch (error) {
-      return failed(`ACTION_HANDLER_ERROR: ${describe(error)}`);
-    }
+    return { ok: true, entry };
   }
 
   /**
@@ -146,6 +210,11 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
     this.dependencies.logger?.warn(message, meta);
   }
 }
+
+/** Result of the shared lookup and schema gate. */
+type PreparedAction =
+  | { readonly ok: true; readonly entry: RegisteredActionEntry }
+  | { readonly ok: false; readonly result: OperationResult };
 
 /** Builds a `failed` result carrying an ActionManager code. */
 function failed(error: string): OperationResult {

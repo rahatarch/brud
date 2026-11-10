@@ -257,7 +257,7 @@ describe('history garbage collection (D-15 U-8)', () => {
     assert.equal(await h.driver.exists(blobPath(h.history, large.sha256)), false);
   });
 
-  it('sweeps only old orphan blobs and staging files under cas/, never legacy files', async (context) => {
+  it('sweeps only old orphan blobs and staging files under cas/, never previous files', async (context) => {
     const h = await harness(context);
     const digest = sha256Hex(new TextEncoder().encode('lost'));
     const orphanPath = blobPath(h.history, digest);
@@ -265,9 +265,9 @@ describe('history garbage collection (D-15 U-8)', () => {
     await h.driver.writeFile(orphanPath, 'lost');
     const staging = join(orphanPath, '..', `.${digest}.123.abc.tmp`);
     await h.driver.writeFile(staging, 'partial');
-    for (const legacy of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
-      await h.driver.mkdir(join(h.history, legacy, '..'), { recursive: true });
-      await h.driver.writeFile(join(h.history, legacy), 'legacy');
+    for (const previous of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
+      await h.driver.mkdir(join(h.history, previous, '..'), { recursive: true });
+      await h.driver.writeFile(join(h.history, previous), 'previous');
     }
 
     const early = await h.store.sweepBlobs({ now: Date.now(), graceMs: HISTORY_GC_GRACE_MS });
@@ -277,8 +277,8 @@ describe('history garbage collection (D-15 U-8)', () => {
     assert.deepEqual([late.blobsRemoved, late.stagingRemoved], [1, 1]);
     assert.equal(await h.driver.exists(orphanPath), false);
     assert.equal(await h.driver.exists(staging), false);
-    for (const legacy of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
-      assert.equal(await h.driver.readText(join(h.history, legacy)), 'legacy', legacy);
+    for (const previous of ['ledger.db', 'history.db', 'seq.json', `blobs/${digest}`]) {
+      assert.equal(await h.driver.readText(join(h.history, previous)), 'previous', previous);
     }
   });
 

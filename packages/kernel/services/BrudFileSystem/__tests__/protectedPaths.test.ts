@@ -72,7 +72,7 @@ describe('A10 protected-path denylist (V-9)', () => {
 
     // A trusted write scope no longer bypasses the workspace authority for the
     // static A10 list; the history subsystem writes through the driver.
-    const history = service.createTrustedProjection(['.brud/history']);
+    const history = service.createAuthorizedProjection(['.brud/history']);
 
     await assert.rejects(
       history.writeAtomic('.brud/history/seq.json', '{"date":"20260102","sequence":2}'),
@@ -90,11 +90,11 @@ describe('A10 protected-path denylist (V-9)', () => {
   it('grants no write scope that can bypass the static A10 denylist', async () => {
     // Since D-15 U-7 history writes through the storage driver, so no caller,
     // the history service included, may write .brud/history by default. The
-    // workspace authority enforces A10 before any trusted-scope check runs.
+    // workspace authority enforces A10 before any authorized-scope check runs.
     const descriptor = createFileSystemDescriptor({ driver: new DurableNodeStorageDriver() });
     const scoped = createFileSystemDescriptor({
       driver: new DurableNodeStorageDriver(),
-      trustedWriteScopesByCaller: { 'acme.owner': ['.brud/history'] },
+      authorizedWriteScopesByCaller: { 'acme.owner': ['.brud/history'] },
     });
     const instance = new BrudFileSystem(root, new DurableNodeStorageDriver());
 

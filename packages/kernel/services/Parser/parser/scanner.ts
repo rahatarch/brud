@@ -1,12 +1,20 @@
+import {
+  BRUD_DEFAULT_KIND,
+  isValidBrudKind,
+  type BrudOperationKind,
+} from '../../../src/contracts/brudOperation.js';
 import { parseParameters } from './parameters.js';
-import { BRACE_PATTERN, BrudParseError } from './syntax.js';
+import { BRACE_PATTERN, BrudParseError, CALL_PATTERN } from './syntax.js';
 
 export { BRUD_PARSE_ERROR, BrudParseError } from './syntax.js';
 
-/** One `[CALL tool_name]` … `[END]` block with parsed parameters. */
+/** One `[CALL …]` … `[END]` block with its kind, name and parsed parameters. */
 export interface ScannedCall {
-  /** Tool name taken from the opening `[CALL …]` marker. */
-  readonly toolName: string;
+  /** Operation kind declared by the header, or the default for a bare name. */
+  readonly kind: BrudOperationKind;
+
+  /** Operation name (tool or action name) taken from the opening marker. */
+  readonly name: string;
 
   /** Parsed parameter map; protected values are literal strings. */
   readonly parameters: Readonly<Record<string, unknown>>;
@@ -16,20 +24,19 @@ export interface ScannedCall {
 }
 
 /**
- * Resolves the protected parameter names for a tool.
+ * Resolves the protected parameter names for an operation.
  *
- * Returns an empty array when the tool has no registered schema, so its
- * parameters are parsed as plain `key: value` pairs and routing can report
- * `TOOL_NOT_FOUND`. `undefined` remains available to custom scanners that
- * explicitly want every brace region treated as opaque.
+ * The Parser is schema-agnostic and passes `undefined`, which makes every
+ * brace region opaque. The hook stays injectable so a future syntax-only
+ * profile can narrow the protected set without changing the scanner.
  */
 export type ProtectedParameterResolver = (
-  toolName: string,
+  kind: BrudOperationKind,
+  name: string,
 ) => readonly string[] | undefined;
 
 const WRAPPER_OPEN = '[BRUD]';
 const WRAPPER_CLOSE = '[/BRUD]';
-const CALL_PATTERN = /^\[CALL\s+([^\]\s]+)\s*\]$/;
 const END_MARKER = '[END]';
 
 /**
@@ -61,13 +68,17 @@ export function extractWrapper(raw: string): { readonly body: string; readonly l
 }
 
 /**
- * Scans a full document into ordered tool calls.
+ * Scans a full document into ordered operations.
  *
- * The wrapper is extracted first, then every `[CALL name]` is split at the
- * first `[END]` that is not inside a protected parameter for that tool.
+ * The wrapper is extracted first, then every `[CALL …]` is split at the first
+ * `[END]` that is not inside a protected parameter.
+ *
+ * Header forms:
+ * - `[CALL <name>]` — defaults to `kind: tool`.
+ * - `[CALL <kind> <name>]` — explicit kind, e.g. `[CALL action list_sessions]`.
  *
  * @param raw - Untrusted model output.
- * @param resolveProtected - Protected-parameter resolver for a tool name.
+ * @param resolveProtected - Protected-parameter resolver.
  * @returns Ordered calls, each with parsed parameters.
  */
 export function scanBrudDocument(
@@ -88,20 +99,14 @@ export function scanBrudDocument(
       continue;
     }
 
-    const call = CALL_PATTERN.exec(candidate.trim());
+    const header = parseCallHeader(candidate.trim(), line + index);
 
-    if (call === null) {
-      throw new BrudParseError('expected [CALL tool_name]', line + index);
-    }
-
-    const toolName = call[1] ?? '';
-
-    if (toolName === '') {
-      throw new BrudParseError('empty tool name in [CALL]', line + index);
+    if (header === undefined) {
+      throw new BrudParseError('expected [CALL <kind> <name>]', line + index);
     }
 
     const openingLine = line + index;
-    const protectedNames = resolveProtected(toolName);
+    const protectedNames = resolveProtected(header.kind, header.name);
     const bodyLines: string[] = [];
 
     index += 1;
@@ -153,7 +158,8 @@ export function scanBrudDocument(
     }
 
     calls.push({
-      toolName,
+      kind: header.kind,
+      name: header.name,
       parameters: parseParameters(bodyLines, protectedNames, openingLine + 1),
       line: openingLine,
     });
@@ -166,46 +172,52 @@ export function scanBrudDocument(
   return calls;
 }
 
-/**
- * Lists the top-level `properties` marked `protected: true`.
- *
- * The `protected` keyword is an annotation only; it never constrains a value.
- * An unknown tool has no protected parameters: its payload is parsed normally
- * and the router owns the `TOOL_NOT_FOUND` decision.
- *
- * @param schema - Registered `parametersSchema` object.
- * @returns Protected parameter names, possibly empty.
- */
-export function protectedParametersForSchema(
-  schema: Readonly<Record<string, unknown>> | undefined,
-): readonly string[] {
-  if (schema === undefined) {
-    return [];
-  }
-
-  const properties = schema.properties;
-
-  if (properties === null || typeof properties !== 'object' || Array.isArray(properties)) {
-    return [];
-  }
-
-  const names: string[] = [];
-
-  for (const [name, child] of Object.entries(properties as Record<string, unknown>)) {
-    if (
-      child !== null
-      && typeof child === 'object'
-      && !Array.isArray(child)
-      && (child as Record<string, unknown>).protected === true
-    ) {
-      names.push(name);
-    }
-  }
-
-  return names;
+/** A parsed call header. */
+interface CallHeader {
+  readonly kind: BrudOperationKind;
+  readonly name: string;
 }
 
-/** Whether a parameter is protected for a tool whose schema is known. */
+/**
+ * Parses a `[CALL …]` header.
+ *
+ * One token is a bare operation name and defaults to `tool`; two tokens are
+ * `<kind> <name>`. The kind must satisfy the shared kind grammar.
+ *
+ * @param trimmed - Trimmed header line.
+ * @param line - Absolute 1-based line number for diagnostics.
+ * @returns The header, or `undefined` when the line is not a call header.
+ */
+function parseCallHeader(trimmed: string, line: number): CallHeader | undefined {
+  const match = CALL_PATTERN.exec(trimmed);
+
+  if (match === null) {
+    return undefined;
+  }
+
+  const first = match[1] ?? '';
+  const second = match[2];
+
+  if (first === '') {
+    throw new BrudParseError('empty operation name in [CALL]', line);
+  }
+
+  if (second === undefined) {
+    return { kind: BRUD_DEFAULT_KIND, name: first };
+  }
+
+  if (second === '') {
+    throw new BrudParseError('empty operation name in [CALL]', line);
+  }
+
+  if (!isValidBrudKind(first)) {
+    throw new BrudParseError(`invalid operation kind "${first}"`, line);
+  }
+
+  return { kind: first, name: second };
+}
+
+/** Whether a parameter is protected for an operation whose schema is known. */
 function isProtected(
   protectedNames: readonly string[] | undefined,
   name: string,

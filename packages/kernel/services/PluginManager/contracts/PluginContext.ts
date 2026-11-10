@@ -25,6 +25,7 @@ import type {
 } from './IPluginContext.js';
 import type { ITerminalHandle } from './ITerminalHandle.js';
 import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
+import { CORE_API_NAME } from '../../ExposedApiRegistry/contracts/coreApis.js';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from './permissions.js';
 import type { PluginCapability, PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';
@@ -33,35 +34,16 @@ import { createTerminalHandle } from './TerminalHandle.js';
 /**
  * Resolves scoped capability facades for a single plugin.
  *
- * The manager supplies projected facades; the context never receives raw
- * kernel services or a broker.
+ * The manager supplies a Registry-backed resolver; the context never receives
+ * raw kernel services or a broker.
  */
 export interface PluginCapabilityProviders {
-  /** Builds the filesystem facade scoped to the owning plugin. */
-  readonly fileSystem: () => IBrudFileSystem;
-
-  /** Builds the universal history facade scoped to the owning plugin. */
-  readonly universalHistory: () => IUniversalHistoryService;
-
-  /** Builds the namespace-bound history handle for the owning plugin. */
-  readonly history?: () => NamespaceHistoryHandle;
-
-  /** Resolves the live `brud.core.tools` registry. */
-  readonly brudTools?: () => IBrudToolsService;
-
   /**
-   * Resolves the UI-only `brud.core.actions` manager.
+   * Resolves any registered API name through the Exposed API Registry.
    *
-   * The context uses this accessor solely to forward `registerAction`; the
-   * manager instance is never returned to the plugin.
+   * Returns `null` when no registration matches the plugin's capabilities.
    */
-  readonly actionManager?: () => IActionManager;
-
-  /** Resolves the pure `brud.core.utils` service. */
-  readonly utilities?: () => IUtilityService;
-
-  /** Resolves the `brud.core.terminal` execution service. */
-  readonly terminal?: () => ITerminalService;
+  readonly resolveApi: (apiName: string) => unknown | null;
 }
 
 /** Construction options for {@link PluginContext}. */
@@ -128,6 +110,8 @@ export class PluginContext implements IPluginContext {
 
   private terminalHandle: ITerminalHandle | null | undefined;
 
+  private readonly resolvedApis = new Map<string, unknown>();
+
   constructor(options: PluginContextOptions) {
     this.pluginId = options.pluginId;
     this.workspaceRoot = options.workspaceRoot;
@@ -142,10 +126,17 @@ export class PluginContext implements IPluginContext {
     return this.permissions.has(permission);
   }
 
+  public resolve<T = unknown>(apiName: string): T | null {
+    return this.resolveApi(apiName) as T | null;
+  }
+
   public getFileSystem(): IBrudFileSystem {
     this.assertCapability('getFileSystem', 'fileSystem');
 
-    this.fileSystem ??= this.capabilities.fileSystem();
+    this.fileSystem ??= this.requireApi<IBrudFileSystem>(
+      CORE_API_NAME.fileSystem,
+      'Filesystem',
+    );
 
     return this.fileSystem;
   }
@@ -163,7 +154,10 @@ export class PluginContext implements IPluginContext {
     }
 
     if (this.universalHistory === undefined) {
-      const history = this.capabilities.universalHistory();
+      const history = this.requireApi<IUniversalHistoryService>(
+        CORE_API_NAME.universalHistory,
+        'Universal history',
+      );
 
       if (!isPluginHistoryService(history)) {
         throw new Error(
@@ -180,14 +174,11 @@ export class PluginContext implements IPluginContext {
   public getHistory(): NamespaceHistoryHandle {
     this.assertCapability('getHistory', 'universalHistory');
 
-    const history = this.capabilities.history;
-
-    if (history === undefined) {
-      throw new Error('Namespace history capability is not available in this context');
-    }
-
     if (this.history === undefined) {
-      const inner = history();
+      const inner = this.requireApi<NamespaceHistoryHandle>(
+        CORE_API_NAME.namespaceHistory,
+        'Namespace history',
+      );
       // Entry types live as long as the plugin: their disposables join the
       // plugin's subscriptions, so deactivation unregisters reversal handlers.
       this.history = Object.freeze({
@@ -210,13 +201,10 @@ export class PluginContext implements IPluginContext {
    * so a plugin needs no manifest permission to call `resolveImports`.
    */
   public getUtilities(): IUtilityService {
-    const utilities = this.capabilities.utilities;
-
-    if (utilities === undefined) {
-      throw new Error('Utility service is not available in this context');
-    }
-
-    this.utilities ??= Object.freeze(utilities());
+    this.utilities ??= Object.freeze(this.requireApi<IUtilityService>(
+      CORE_API_NAME.utilities,
+      'Utility',
+    ));
 
     return this.utilities;
   }
@@ -238,9 +226,9 @@ export class PluginContext implements IPluginContext {
       return null;
     }
 
-    const terminal = this.capabilities.terminal;
+    const terminal = this.resolveApi(CORE_API_NAME.terminal) as ITerminalService | null;
 
-    if (terminal === undefined) {
+    if (terminal === null) {
       this.terminalHandle = null;
 
       return null;
@@ -248,7 +236,7 @@ export class PluginContext implements IPluginContext {
 
     try {
       this.terminalHandle = createTerminalHandle({
-        service: terminal(),
+        service: terminal,
         callerId: this.pluginId,
         workspaceRoot: this.workspaceRoot,
       });
@@ -330,29 +318,49 @@ export class PluginContext implements IPluginContext {
   }
 
   private resolveActionManager(): IActionManager {
-    if (this.actionManager !== undefined) {
-      return this.actionManager;
-    }
-
-    const actionManager = this.capabilities.actionManager;
-
-    if (actionManager === undefined) {
-      throw new Error('ActionManager capability is not available in this context');
-    }
-
-    this.actionManager = actionManager();
+    this.actionManager ??= this.requireApi<IActionManager>(
+      CORE_API_NAME.actionManager,
+      'ActionManager',
+    );
 
     return this.actionManager;
   }
 
   private resolveBrudTools(): IBrudToolsService {
-    const brudTools = this.capabilities.brudTools;
+    return this.requireApi<IBrudToolsService>(
+      CORE_API_NAME.brudTools,
+      'Tools',
+    );
+  }
 
-    if (brudTools === undefined) {
-      throw new Error('Tools capability is not available in this context');
+  /** Resolves and caches one Registry projection by canonical API name. */
+  private resolveApi(apiName: string): unknown | null {
+    if (this.resolvedApis.has(apiName)) {
+      return this.resolvedApis.get(apiName) ?? null;
     }
 
-    return brudTools();
+    const projection = this.capabilities.resolveApi(apiName);
+
+    if (projection === null || projection === undefined) {
+      return null;
+    }
+
+    this.resolvedApis.set(apiName, projection);
+
+    return projection;
+  }
+
+  /** Requires a Registry projection, throwing a composition-gap error when absent. */
+  private requireApi<T>(apiName: string, label: string): T {
+    const projection = this.resolveApi(apiName);
+
+    if (projection === null) {
+      throw new Error(
+        `${label} API "${apiName}" is not registered for plugin "${this.pluginId}"`,
+      );
+    }
+
+    return projection as T;
   }
 
   /**

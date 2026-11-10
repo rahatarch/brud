@@ -81,7 +81,7 @@ export interface RequestDispatcherOptions {
    * {@link kernel} for {@link workspaceRoot}.
    */
   readonly registry?: WorkspaceRegistry;
-  /** Legacy single-kernel composition. */
+  /** Single-kernel composition. */
   readonly kernel?: BrudKernel;
   readonly toolsToken?: ServiceToken<IBrudToolsService>;
   readonly actionsToken?: ServiceToken<IActionManager>;

@@ -42,7 +42,7 @@ export interface TerminalGroupOutcome {
  * `execute()` (interactive) and `executeCommand()` (single) resolve to
  * {@link TerminalRunOutcome}; every composite mode resolves to
  * {@link TerminalGroupOutcome}. Consumers branch on the request mode they
- * sent, exactly as the legacy executor contract already requires.
+ * sent, exactly as the executor contract already requires.
  */
 export type TerminalResult = TerminalRunOutcome | TerminalGroupOutcome;
 
@@ -68,7 +68,7 @@ export type TerminalRunMode = 'single' | 'interactive' | 'sequential' | 'paralle
  *
  * The orchestrator re-validates every command in this request — including the
  * `onSuccess` and `onFailure` trees — before anything spawns, so a request is
- * not trusted merely because a legacy dispatcher already checked it.
+ * not trusted merely because a dispatcher already checked it.
  */
 export interface TerminalRunRequest {
   /** Primary command, used by `single`, `interactive` and `conditional`. */
@@ -166,7 +166,7 @@ export interface ITerminalService {
    */
   run(request: TerminalRunRequest, options?: TerminalRunOptions): Promise<TerminalDecision>;
 
-  /** Registers a session that was spawned outside the service (legacy bridge). */
+  /** Registers a session that was spawned outside the service (host bridge). */
   registerExternal(session: TerminalSessionInfo, controls?: TerminalSessionControls): void;
 
   /**

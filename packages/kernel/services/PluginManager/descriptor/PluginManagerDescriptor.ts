@@ -5,17 +5,14 @@ import type {
 } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
-import type { IActionManager } from '../../ActionManager/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
 import { ActionManagerToken } from '../../ActionManager/descriptor/tokens.js';
-import type { IBrudToolsService } from '../../BrudTools/contracts/index.js';
 import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
-import type { IBrudFileSystem } from '../../BrudFileSystem/contracts/index.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
-import type { IUniversalHistoryService } from '../../UniversalHistory/contracts/index.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
-import type { IUtilityService } from '../../UtilityService/contracts/IUtilityService.js';
 import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
-import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
 import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
@@ -112,8 +109,8 @@ export function createPluginManagerDescriptor(
   const withTerminal = options?.withTerminal ?? false;
 
   const dependencies: ServiceToken<unknown>[] = withUniversalHistory
-    ? [FileSystemToken, UniversalHistoryToken]
-    : [FileSystemToken];
+    ? [FileSystemToken, UniversalHistoryToken, ExposedApiRegistryToken]
+    : [FileSystemToken, ExposedApiRegistryToken];
 
   if (withTools) {
     dependencies.push(BrudToolsToken);
@@ -145,48 +142,23 @@ export function createPluginManagerDescriptor(
         workspaceRoot: context.workspaceRoot,
       };
 
-      const fileSystem = (): IBrudFileSystem => broker.requestAccess(caller, FileSystemToken);
-
-      const universalHistory: (() => IUniversalHistoryService) | undefined =
-        broker.hasService(UniversalHistoryToken)
-          ? (): IUniversalHistoryService => broker.requestAccess(caller, UniversalHistoryToken)
-          : undefined;
-
-      const brudTools: (() => IBrudToolsService) | undefined =
-        withTools && broker.hasService(BrudToolsToken)
-          ? (): IBrudToolsService => broker.requestAccess(caller, BrudToolsToken)
-          : undefined;
-
-      const actionManager: (() => IActionManager) | undefined =
-        withActions && broker.hasService(ActionManagerToken)
-          ? (): IActionManager => broker.requestAccess(caller, ActionManagerToken)
-          : undefined;
-
-      const utilities: (() => IUtilityService) | undefined =
-        withUtilities && broker.hasService(UtilityToken)
-          ? (): IUtilityService => broker.requestAccess(caller, UtilityToken)
-          : undefined;
-
-      const terminal: (() => ITerminalService) | undefined =
-        withTerminal && broker.hasService(TerminalToken)
-          ? (): ITerminalService => broker.requestAccess(caller, TerminalToken)
-          : undefined;
+      const apiRegistry = (): IExposedApiRegistry =>
+        broker.requestAccess(caller, ExposedApiRegistryToken);
 
       const manager = new PluginManagerService({
         workspaceRoot: context.workspaceRoot,
-        fileSystem,
-        ...(universalHistory === undefined ? {} : { universalHistory }),
-        ...(brudTools === undefined ? {} : { brudTools }),
-        ...(actionManager === undefined ? {} : { actionManager }),
-        ...(utilities === undefined ? {} : { utilities }),
-        ...(terminal === undefined ? {} : { terminal }),
+        apiRegistry,
       });
 
       for (const plugin of initialPlugins) {
         manager.register(plugin);
       }
 
-      return manager;
+      return withExposedApis(manager, (registry) => {
+        registry.registerApi(CORE_API_NAME.pluginManager, PluginManagerToken, {
+          capability: 'plugins:manage',
+        });
+      });
     },
   };
 }

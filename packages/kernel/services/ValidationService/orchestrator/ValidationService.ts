@@ -15,7 +15,7 @@ import { InputSchemaEngine, METADATA_RULE_CODES } from '../engine/InputSchemaEng
 import type { MetadataRule, SchemaOutcome, SchemaFailure } from '../engine/InputSchemaEngine.js';
 import { PathEvaluationEngine } from '../engine/PathEvaluationEngine.js';
 import { PolicyGateEngine } from '../engine/PolicyGateEngine.js';
-import { legacyMessages, ruleTraits } from '../engine/errorCatalog.js';
+import { externalMessages, ruleTraits } from '../engine/errorCatalog.js';
 import { kindConstraint } from '../engine/kindMatrix.js';
 import { IgnoreRulesRegistry } from '../model/ignoreRules.js';
 import type { IgnoreFileReader } from '../model/ignoreRules.js';
@@ -56,52 +56,52 @@ export interface ValidationBootDependencies {
 }
 
 /**
- * Kernel path-rule → kernel code and legacy boundary code.
+ * Kernel path-rule → kernel code and synchronous boundary code.
  *
  * This is the Appendix C mapping with the audit's six corrections applied
  * (`PROTECTED_PATH_DENIED`, `INVALID_INPUT`, `CANNOT_WRITE_DIRECTORY`,
  * `CANNOT_DELETE_DIRECTORY`, `COMMITTED_WITH_DURABILITY_WARNING`) plus the
  * `EXECUTION_ERROR` → `UNEXPECTED_ERROR` correction, so there is exactly one
- * table deciding what a legacy caller sees.
+ * table deciding what an external caller sees.
  */
 
 /** A `cd`-family token anywhere in a command. */
 const CD_TOKEN_PATTERN = /(?:^|[\s;&|(])(?:cd|pushd|chdir)(?:\s|$)/u;
 
-const PATH_BOUNDARY_CODE: Readonly<Record<PathRule, { readonly code: ValidationCode; readonly legacy: string }>> =
+const PATH_BOUNDARY_CODE: Readonly<Record<PathRule, { readonly code: ValidationCode; readonly external: string }>> =
   Object.freeze({
-    'PATH.NULL_BYTE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'VALIDATION_ERROR' },
-    'PATH.UNC_OR_DEVICE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.DRIVE_QUALIFIED': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.DRIVE_RELATIVE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.ABSOLUTE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.PARENT_SEGMENT': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.WIN_TRAILING_DOT_OR_SPACE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.WIN_TRAILING_ALIAS_TRAVERSAL': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.WIN_RESERVED_DEVICE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'VALIDATION_ERROR' },
-    'PATH.WIN_ALT_DATA_STREAM': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'VALIDATION_ERROR' },
-    'PATH.OUTSIDE_ROOT': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.NULL_BYTE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'VALIDATION_ERROR' },
+    'PATH.UNC_OR_DEVICE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.DRIVE_QUALIFIED': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.DRIVE_RELATIVE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.ABSOLUTE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.PARENT_SEGMENT': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.WIN_TRAILING_DOT_OR_SPACE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.WIN_TRAILING_ALIAS_TRAVERSAL': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.WIN_RESERVED_DEVICE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'VALIDATION_ERROR' },
+    'PATH.WIN_ALT_DATA_STREAM': { code: 'PATH_TRAVERSAL_DETECTED', external: 'VALIDATION_ERROR' },
+    'PATH.OUTSIDE_ROOT': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
     // Appendix C row 3: non-containment `WorkspaceViolationRule` members are
-    // not path escapes, so the legacy lexical boundary renders them as
+    // not path escapes, so the external lexical boundary renders them as
     // `VALIDATION_ERROR` (audit §6.1 / §6.2 W-10).
-    'PATH.SIBLING_PREFIX': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'VALIDATION_ERROR' },
-    'PATH.SYMLINK_ESCAPE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.UNVERIFIABLE_LINEAGE': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
-    'PATH.AMBIGUOUS_ROOT': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
-    'PATH.UNKNOWN_ROOT': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
-    'PATH.INVALID_ROOT': { code: 'WORKSPACE_CONFIGURATION_INVALID', legacy: 'NO_WORKSPACE' },
-    'PATH.NO_WORKSPACE': { code: 'NO_WORKSPACE', legacy: 'NO_WORKSPACE' },
-    'PATH.PROTECTED_DENY': { code: 'PROTECTED_PATH_DENIED', legacy: 'VALIDATION_ERROR' },
-    'PATH.USER_IGNORED': { code: 'PATH_IGNORED_BY_USER', legacy: 'VALIDATION_ERROR' },
-    'PATH.ROOT_NOT_MUTABLE': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
-    'PATH.CWD_ESCAPE': { code: 'CWD_ESCAPE', legacy: 'CWD_ESCAPE' },
-    'PATH.CWD_DYNAMIC': { code: 'DYNAMIC_PATH', legacy: 'DYNAMIC_PATH' },
-    'PATH.CWD_INVALID': { code: 'INVALID_CWD', legacy: 'INVALID_CWD' },
-    'PATH.LISTING_OUTSIDE': { code: 'PATH_TRAVERSAL_DETECTED', legacy: 'PATH_OUTSIDE_WORKSPACE' },
-    'PATH.NON_STRING': { code: 'WORKSPACE_PATH_VIOLATION', legacy: 'VALIDATION_ERROR' },
+    'PATH.SIBLING_PREFIX': { code: 'PATH_TRAVERSAL_DETECTED', external: 'VALIDATION_ERROR' },
+    'PATH.SYMLINK_ESCAPE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.UNVERIFIABLE_LINEAGE': { code: 'WORKSPACE_PATH_VIOLATION', external: 'VALIDATION_ERROR' },
+    'PATH.AMBIGUOUS_ROOT': { code: 'WORKSPACE_PATH_VIOLATION', external: 'VALIDATION_ERROR' },
+    'PATH.UNKNOWN_ROOT': { code: 'WORKSPACE_PATH_VIOLATION', external: 'VALIDATION_ERROR' },
+    'PATH.INVALID_ROOT': { code: 'WORKSPACE_CONFIGURATION_INVALID', external: 'NO_WORKSPACE' },
+    'PATH.NO_WORKSPACE': { code: 'NO_WORKSPACE', external: 'NO_WORKSPACE' },
+    'PATH.PROTECTED_DENY': { code: 'PROTECTED_PATH_DENIED', external: 'VALIDATION_ERROR' },
+    'PATH.USER_IGNORED': { code: 'PATH_IGNORED_BY_USER', external: 'VALIDATION_ERROR' },
+    'PATH.ROOT_NOT_MUTABLE': { code: 'WORKSPACE_PATH_VIOLATION', external: 'VALIDATION_ERROR' },
+    'PATH.CWD_ESCAPE': { code: 'CWD_ESCAPE', external: 'CWD_ESCAPE' },
+    'PATH.CWD_DYNAMIC': { code: 'DYNAMIC_PATH', external: 'DYNAMIC_PATH' },
+    'PATH.CWD_INVALID': { code: 'INVALID_CWD', external: 'INVALID_CWD' },
+    'PATH.LISTING_OUTSIDE': { code: 'PATH_TRAVERSAL_DETECTED', external: 'PATH_OUTSIDE_WORKSPACE' },
+    'PATH.NON_STRING': { code: 'WORKSPACE_PATH_VIOLATION', external: 'VALIDATION_ERROR' },
   });
 
-/** Rules whose legacy rendering is the bare `VALIDATION_ERROR` pair. */
+/** Rules whose external rendering is the bare `VALIDATION_ERROR` pair. */
 const VALIDATION_ERROR_RULES: ReadonlySet<PathRule> = new Set<PathRule>([
   'PATH.ROOT_NOT_MUTABLE',
   'PATH.SIBLING_PREFIX',
@@ -193,25 +193,25 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     const traits = ruleTraits(evaluation.rule);
 
     if (evaluation.rule === 'PATH.NO_WORKSPACE') {
-      const messages = legacyMessages('NO_WORKSPACE');
+      const messages = externalMessages('NO_WORKSPACE');
 
       return this.failure({
         code: 'NO_WORKSPACE',
         rule: evaluation.rule,
-        legacyCode: 'NO_WORKSPACE',
+        externalCode: 'NO_WORKSPACE',
         messages,
         operationKind,
         traits,
       });
     }
 
-    if (boundary.legacy === 'VALIDATION_ERROR') {
+    if (boundary.external === 'VALIDATION_ERROR') {
       // Appendix C row 2: lexical integrity failures surface as
       // `VALIDATION_ERROR` with the violated rule appended to the details.
       return this.failure({
         code: boundary.code,
         rule: evaluation.rule,
-        legacyCode: 'VALIDATION_ERROR',
+        externalCode: 'VALIDATION_ERROR',
         messages: {
           friendly: evaluation.reason,
           details: `${evaluation.reason} (rule ${evaluation.rule})`,
@@ -226,7 +226,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: boundary.code,
         rule: evaluation.rule,
-        legacyCode: 'VALIDATION_ERROR',
+        externalCode: 'VALIDATION_ERROR',
         messages: { friendly: evaluation.reason, details: evaluation.reason },
         path: input,
         operationKind,
@@ -237,7 +237,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return this.failure({
       code: boundary.code,
       rule: evaluation.rule,
-      legacyCode: boundary.legacy,
+      externalCode: boundary.external,
       messages: this.pathMessages(boundary.code, input, evaluation.reason, evaluation.rule),
       path: input,
       operationKind,
@@ -248,7 +248,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
   /**
    * Synchronous path validation.
    *
-   * Exists for the legacy synchronous boundary (`BrudAPI.validate.path`),
+   * Exists for the synchronous boundary (`BrudAPI.validate.path`),
    * which cannot await. It runs the same engines and the same mapping as
    * {@link validatePath}; only the containment proof is lexical rather than
    * `realpath`-based.
@@ -265,8 +265,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: 'MISSING_FIELD',
         rule: 'CMD.NO_COMMAND',
-        legacyCode: 'MISSING_FIELD',
-        messages: legacyMessages('MISSING_FIELD', { field: 'command' }),
+        externalCode: 'MISSING_FIELD',
+        messages: externalMessages('MISSING_FIELD', { field: 'command' }),
         traits: ruleTraits('CMD.NO_COMMAND'),
       });
     }
@@ -275,8 +275,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: 'MISSING_FIELD',
         rule: 'CMD.NO_COMMAND',
-        legacyCode: 'MISSING_FIELD',
-        messages: legacyMessages('MISSING_FIELD', { field: 'command or commands' }),
+        externalCode: 'MISSING_FIELD',
+        messages: externalMessages('MISSING_FIELD', { field: 'command or commands' }),
         traits: ruleTraits('CMD.NO_COMMAND'),
       });
     }
@@ -288,8 +288,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'INVALID_CWD',
           rule: 'PATH.CWD_INVALID',
-          legacyCode: 'INVALID_CWD',
-          messages: legacyMessages('INVALID_CWD', { path: cwd }),
+          externalCode: 'INVALID_CWD',
+          messages: externalMessages('INVALID_CWD', { path: cwd }),
           path: cwd,
           traits: ruleTraits('PATH.CWD_INVALID'),
         });
@@ -303,12 +303,12 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'DANGEROUS_COMMAND',
           rule: match.rule,
-          legacyCode: 'DANGEROUS_COMMAND',
-          messages: legacyMessages('DANGEROUS_COMMAND', { command }),
+          externalCode: 'DANGEROUS_COMMAND',
+          messages: externalMessages('DANGEROUS_COMMAND', { command }),
           command,
           traits: ruleTraits(match.rule),
           metadata: {
-            patternIndex: match.legacyIndex ?? -1,
+            patternIndex: match.externalIndex ?? -1,
             family: match.description,
           },
         });
@@ -331,8 +331,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: 'NO_WORKSPACE',
         rule: 'PATH.NO_WORKSPACE',
-        legacyCode: 'NO_WORKSPACE',
-        messages: legacyMessages('NO_WORKSPACE'),
+        externalCode: 'NO_WORKSPACE',
+        messages: externalMessages('NO_WORKSPACE'),
         traits: ruleTraits('PATH.NO_WORKSPACE'),
       });
     }
@@ -354,10 +354,10 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return this.failure({
       code: resolvedCode,
       rule,
-      legacyCode: resolvedCode,
+      externalCode: resolvedCode,
       messages: isEscape
-        ? legacyMessages('CWD_ESCAPE', { command, target: chain.target ?? command })
-        : legacyMessages('DYNAMIC_PATH', { target: chain.target ?? command }),
+        ? externalMessages('CWD_ESCAPE', { command, target: chain.target ?? command })
+        : externalMessages('DYNAMIC_PATH', { target: chain.target ?? command }),
       command,
       path: chain.target ?? command,
       traits: ruleTraits(rule),
@@ -366,7 +366,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
   }
 
   /**
-   * Resolves a working directory synchronously for the legacy boundary.
+   * Resolves a working directory synchronously for the synchronous boundary.
    *
    * @param cwd - Declared working directory.
    */
@@ -395,8 +395,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return this.failure({
       code: 'INVALID_LINE_RANGE',
       rule: 'INPUT.LINE_RANGE',
-      legacyCode: 'INVALID_LINE_RANGE',
-      messages: legacyMessages('INVALID_LINE_RANGE', { startLine, endLine, totalLines }),
+      externalCode: 'INVALID_LINE_RANGE',
+      messages: externalMessages('INVALID_LINE_RANGE', { startLine, endLine, totalLines }),
       traits: ruleTraits('INPUT.LINE_RANGE'),
     });
   }
@@ -406,8 +406,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: 'UNKNOWN_OPERATION',
         rule: 'INPUT.UNKNOWN_OPERATION',
-        legacyCode: 'UNKNOWN_OPERATION',
-        messages: legacyMessages('UNKNOWN_OPERATION', { operation: String(kind) }),
+        externalCode: 'UNKNOWN_OPERATION',
+        messages: externalMessages('UNKNOWN_OPERATION', { operation: String(kind) }),
         traits: ruleTraits('INPUT.UNKNOWN_OPERATION'),
       });
     }
@@ -488,7 +488,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
    *
    * Two forms are accepted:
    * - `validateBatch(requested, isImportRead?)` checks the file count only
-   *   through `INPUT.BATCH_LIMIT` (the legacy read governor call).
+   *   through `INPUT.BATCH_LIMIT` (the read governor call).
    * - `validateBatch(requested, totalBytes, isImportRead?)` also checks the
    *   aggregate footprint and fails through `POLICY.AGGREGATE_BYTES`, so the
    *   pre-execution read pipeline rejects oversized batches through the same
@@ -512,8 +512,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: 'BATCH_LIMIT_EXCEEDED',
         rule: 'INPUT.BATCH_LIMIT',
-        legacyCode: 'BATCH_LIMIT_EXCEEDED',
-        messages: legacyMessages('BATCH_LIMIT_EXCEEDED', {
+        externalCode: 'BATCH_LIMIT_EXCEEDED',
+        messages: externalMessages('BATCH_LIMIT_EXCEEDED', {
           requested,
           limit: this.gate.readMaxBatchFiles,
         }),
@@ -535,7 +535,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return this.failure({
       code: 'BATCH_LIMIT_EXCEEDED',
       rule: 'POLICY.AGGREGATE_BYTES',
-      legacyCode: 'BATCH_LIMIT_EXCEEDED',
+      externalCode: 'BATCH_LIMIT_EXCEEDED',
       messages: {
         friendly: 'Read batch too large.',
         details: `The batch of ${requested} files requests ${totalBytes} bytes; the limit is ${this.gate.readMaxAggregateBytes} bytes per batch. Narrow the pattern, add excludePatterns, or split the read into sequential batches.`,
@@ -560,8 +560,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return this.failure({
       code: 'READ_ONLY_VIOLATION',
       rule: 'INPUT.READ_ONLY_PROJECTION',
-      legacyCode: 'VALIDATION_ERROR',
-      messages: legacyMessages('READ_ONLY_VIOLATION', {
+      externalCode: 'VALIDATION_ERROR',
+      messages: externalMessages('READ_ONLY_VIOLATION', {
         reason: `"${operationKind}" cannot mutate a read-only projection${
           input === undefined ? '' : ` ("${input}")`
         }.`,
@@ -710,8 +710,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
       return this.failure({
         code: METADATA_RULE_CODES[metadataRule],
         rule: metadataRule,
-        legacyCode: METADATA_RULE_CODES[metadataRule],
-        messages: legacyMessages(METADATA_RULE_CODES[metadataRule], failure.values),
+        externalCode: METADATA_RULE_CODES[metadataRule],
+        messages: externalMessages(METADATA_RULE_CODES[metadataRule], failure.values),
         operationKind: kind,
         traits: ruleTraits(metadataRule),
       });
@@ -722,8 +722,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'MISSING_FIELD',
           rule,
-          legacyCode: 'MISSING_FIELD',
-          messages: legacyMessages('MISSING_FIELD', { field: failure.field, operation: kind }),
+          externalCode: 'MISSING_FIELD',
+          messages: externalMessages('MISSING_FIELD', { field: failure.field, operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -731,8 +731,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'TERMINAL_UNAVAILABLE',
           rule,
-          legacyCode: 'TERMINAL_UNAVAILABLE',
-          messages: legacyMessages('TERMINAL_UNAVAILABLE'),
+          externalCode: 'TERMINAL_UNAVAILABLE',
+          messages: externalMessages('TERMINAL_UNAVAILABLE'),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -740,8 +740,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'UNKNOWN_OPERATION',
           rule,
-          legacyCode: 'UNKNOWN_OPERATION',
-          messages: legacyMessages('UNKNOWN_OPERATION', { operation: kind }),
+          externalCode: 'UNKNOWN_OPERATION',
+          messages: externalMessages('UNKNOWN_OPERATION', { operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -749,8 +749,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'TOOL_NOT_FOUND',
           rule,
-          legacyCode: 'TOOL_NOT_FOUND',
-          messages: legacyMessages('TOOL_NOT_FOUND', { operation: kind }),
+          externalCode: 'TOOL_NOT_FOUND',
+          messages: externalMessages('TOOL_NOT_FOUND', { operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -758,8 +758,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'TOOL_DISABLED',
           rule,
-          legacyCode: 'TOOL_DISABLED',
-          messages: legacyMessages('TOOL_DISABLED', { operation: kind }),
+          externalCode: 'TOOL_DISABLED',
+          messages: externalMessages('TOOL_DISABLED', { operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -767,8 +767,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'MISSING_INDEX',
           rule,
-          legacyCode: 'MISSING_INDEX',
-          messages: legacyMessages('MISSING_INDEX'),
+          externalCode: 'MISSING_INDEX',
+          messages: externalMessages('MISSING_INDEX'),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -776,8 +776,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'MISSING_FIELD',
           rule,
-          legacyCode: 'MISSING_FIELD',
-          messages: legacyMessages('MISSING_FIELD', { field: 'patterns', operation: kind }),
+          externalCode: 'MISSING_FIELD',
+          messages: externalMessages('MISSING_FIELD', { field: 'patterns', operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -786,8 +786,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'INVALID_FIELD',
           rule,
-          legacyCode: 'INVALID_FIELD',
-          messages: legacyMessages('INVALID_FIELD', { field: failure.field, reason: failure.reason }),
+          externalCode: 'INVALID_FIELD',
+          messages: externalMessages('INVALID_FIELD', { field: failure.field, reason: failure.reason }),
           operationKind: kind,
           traits: ruleTraits(rule),
           metadata: { field: failure.field ?? '' },
@@ -797,8 +797,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'MISSING_FIELD',
           rule,
-          legacyCode: 'MISSING_FIELD',
-          messages: legacyMessages('MISSING_FIELD', { field: 'answers', operation: kind }),
+          externalCode: 'MISSING_FIELD',
+          messages: externalMessages('MISSING_FIELD', { field: 'answers', operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -806,32 +806,32 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'NO_VALID_OPERATIONS',
           rule,
-          legacyCode: 'NO_VALID_OPERATIONS',
-          messages: legacyMessages('NO_VALID_OPERATIONS'),
+          externalCode: 'NO_VALID_OPERATIONS',
+          messages: externalMessages('NO_VALID_OPERATIONS'),
           traits: ruleTraits(rule),
         });
       case 'INPUT.NO_EXTRACT_OPS':
         return this.failure({
           code: 'NO_EXTRACT_OPERATIONS',
           rule,
-          legacyCode: 'NO_EXTRACT_OPERATIONS',
-          messages: legacyMessages('NO_EXTRACT_OPERATIONS'),
+          externalCode: 'NO_EXTRACT_OPERATIONS',
+          messages: externalMessages('NO_EXTRACT_OPERATIONS'),
           traits: ruleTraits(rule),
         });
       case 'INPUT.PARSE_FORMAT':
         return this.failure({
           code: 'PARSE_ERROR',
           rule,
-          legacyCode: 'PARSE_ERROR',
-          messages: legacyMessages('PARSE_ERROR'),
+          externalCode: 'PARSE_ERROR',
+          messages: externalMessages('PARSE_ERROR'),
           traits: ruleTraits(rule),
         });
       case 'INPUT.PREVIEW_UNSUPPORTED':
         return this.failure({
           code: 'PREVIEW_NOT_AVAILABLE',
           rule,
-          legacyCode: 'PREVIEW_NOT_AVAILABLE',
-          messages: legacyMessages('PREVIEW_NOT_AVAILABLE'),
+          externalCode: 'PREVIEW_NOT_AVAILABLE',
+          messages: externalMessages('PREVIEW_NOT_AVAILABLE'),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -839,8 +839,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'NO_PREVIEW',
           rule,
-          legacyCode: 'NO_PREVIEW',
-          messages: legacyMessages('NO_PREVIEW'),
+          externalCode: 'NO_PREVIEW',
+          messages: externalMessages('NO_PREVIEW'),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -848,8 +848,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'SEARCH_NOT_FOUND',
           rule,
-          legacyCode: 'SEARCH_NOT_FOUND',
-          messages: legacyMessages('SEARCH_NOT_FOUND', { reason: failure.reason }),
+          externalCode: 'SEARCH_NOT_FOUND',
+          messages: externalMessages('SEARCH_NOT_FOUND', { reason: failure.reason }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -857,8 +857,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'MULTIPLE_MATCHES',
           rule,
-          legacyCode: 'MULTIPLE_MATCHES',
-          messages: legacyMessages('MULTIPLE_MATCHES', { reason: failure.reason }),
+          externalCode: 'MULTIPLE_MATCHES',
+          messages: externalMessages('MULTIPLE_MATCHES', { reason: failure.reason }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -866,8 +866,8 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'INVALID_LINE_RANGE',
           rule,
-          legacyCode: 'INVALID_LINE_RANGE',
-          messages: legacyMessages('INVALID_LINE_RANGE', { reason: failure.reason }),
+          externalCode: 'INVALID_LINE_RANGE',
+          messages: externalMessages('INVALID_LINE_RANGE', { reason: failure.reason }),
           details: failure.reason,
           operationKind: kind,
           traits: ruleTraits(rule),
@@ -876,7 +876,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: kind === 'delete_file' ? 'CANNOT_DELETE_DIRECTORY' : 'CANNOT_WRITE_DIRECTORY',
           rule,
-          legacyCode: 'VALIDATION_ERROR',
+          externalCode: 'VALIDATION_ERROR',
           messages: { friendly: failure.reason, details: failure.reason },
           operationKind: kind,
           traits: ruleTraits(rule),
@@ -885,16 +885,16 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: 'SESSION_NOT_FOUND',
           rule,
-          legacyCode: 'SESSION_NOT_FOUND',
-          messages: legacyMessages('SESSION_NOT_FOUND', { reason: failure.reason }),
+          externalCode: 'SESSION_NOT_FOUND',
+          messages: externalMessages('SESSION_NOT_FOUND', { reason: failure.reason }),
           traits: ruleTraits(rule),
         });
       case 'INPUT.REVERT_REQUEST':
         return this.failure({
           code: 'INVALID_REVERT_REQUEST',
           rule,
-          legacyCode: 'INVALID_REVERT_REQUEST',
-          messages: legacyMessages('INVALID_REVERT_REQUEST'),
+          externalCode: 'INVALID_REVERT_REQUEST',
+          messages: externalMessages('INVALID_REVERT_REQUEST'),
           traits: ruleTraits(rule),
         });
       case 'INPUT.MISSING_FIELD':
@@ -902,10 +902,10 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
         return this.failure({
           code: failure.field === 'index' ? 'MISSING_INDEX' : 'MISSING_FIELD',
           rule,
-          legacyCode: failure.field === 'index' ? 'MISSING_INDEX' : 'MISSING_FIELD',
+          externalCode: failure.field === 'index' ? 'MISSING_INDEX' : 'MISSING_FIELD',
           messages: failure.field === 'index'
-            ? legacyMessages('MISSING_INDEX')
-            : legacyMessages('MISSING_FIELD', { field: failure.field, operation: kind }),
+            ? externalMessages('MISSING_INDEX')
+            : externalMessages('MISSING_FIELD', { field: failure.field, operation: kind }),
           operationKind: kind,
           traits: ruleTraits(rule),
         });
@@ -919,7 +919,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     rule: PathRule,
   ): { readonly friendly: string; readonly details: string } {
     if (code === 'PATH_TRAVERSAL_DETECTED') {
-      return legacyMessages(code, { path: input });
+      return externalMessages(code, { path: input });
     }
 
     if (code === 'WORKSPACE_PATH_VIOLATION') {
@@ -927,16 +927,16 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     }
 
     if (code === 'WORKSPACE_CONFIGURATION_INVALID') {
-      return legacyMessages(code, { reason, path: input });
+      return externalMessages(code, { reason, path: input });
     }
 
-    return legacyMessages(code, { path: input, reason });
+    return externalMessages(code, { path: input, reason });
   }
 
   private failure(input: {
     readonly code: ValidationCode;
     readonly rule: ValidationRule;
-    readonly legacyCode: string;
+    readonly externalCode: string;
     readonly messages: { readonly friendly: string; readonly details: string };
     readonly path?: string;
     readonly operationKind?: string;
@@ -948,7 +948,7 @@ export class ValidationService implements IValidationService, IServiceLifecycle,
     return validationFailure({
       code: input.code,
       rule: input.rule,
-      legacyCode: input.legacyCode,
+      externalCode: input.externalCode,
       friendly: input.messages.friendly,
       details: input.details ?? input.messages.details,
       actionable: input.traits.actionable,

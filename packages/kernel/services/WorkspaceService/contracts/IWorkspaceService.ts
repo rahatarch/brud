@@ -33,7 +33,7 @@ export interface WorkspaceLocation {
 /**
  * Canonical workspace identity and path translation authority.
  *
- * The kernel speaks workspace-relative paths only. Hosts and legacy callers
+ * The kernel speaks workspace-relative paths only. Hosts and external callers
  * speak absolute paths and may have several roots; this service is the single
  * place where the two are reconciled.
  *
@@ -153,7 +153,7 @@ export interface WorkspaceBatchStats {
  * Batch-scoped view over {@link IWorkspaceService}.
  *
  * A batch reuses canonicalization results for its lifetime, which is what the
- * legacy path cache did per operation batch. Results for paths that do not
+ * path cache did per operation batch. Results for paths that do not
  * exist are never memoized, so create targets stay accurate.
  */
 export interface IWorkspaceResolutionBatch {

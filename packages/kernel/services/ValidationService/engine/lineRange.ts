@@ -4,7 +4,7 @@
  * The semantics are the audited `BrudAPI.validate.lineRange`
  * (`api/index.ts:551-575`) plus the read engine's total-line count
  * (`read-engine:65-68`). Both are reproduced here so the validator and the
- * legacy facade compute identical ranges instead of re-deriving them.
+ * external facade compute identical ranges instead of re-deriving them.
  */
 
 /** Normalized line range. */

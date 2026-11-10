@@ -7,21 +7,29 @@ import v8 from 'node:v8';
 import {
   BrudToolsService,
   BrudToolsToken,
+  CORE_API_NAME,
+  ExposedApiRegistryService,
   PluginContext,
   PluginManagerService,
   PluginManagerToken,
+  createRegistryCapabilityProviders,
   createStandardKernel,
+  lastProjectionWins,
 } from '@brud/kernel';
 import type {
   BrudKernel,
   IBrudPlugin,
   IBrudToolsService,
+  IKernelAccessBroker,
+  InternalPluginRecord,
   IPluginDisposable,
   OperationResult,
   PluginManifest,
   PluginPermission,
   RegisteredToolInfo,
   ServiceContext,
+  ServiceInfo,
+  ServiceToken,
   ToolRegistrationOptions,
 } from '@brud/kernel';
 import { CATALOG_MANDATE, catalogPlugin, sanitizeDescription } from '../plugin.js';
@@ -294,11 +302,69 @@ export function makeFailingActivationPlugin(id: string, tools: readonly Syntheti
   };
 }
 
+class CatalogServiceBroker implements IKernelAccessBroker {
+  constructor(private readonly brudTools: IBrudToolsService | undefined) {}
+
+  requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {
+    void caller;
+
+    if (token.id === BrudToolsToken.id && this.brudTools !== undefined) {
+      return this.brudTools as TService;
+    }
+
+    throw new Error(`Service "${token.id}" is not registered`);
+  }
+
+  hasService(token: ServiceToken<unknown>): boolean {
+    return token.id === BrudToolsToken.id && this.brudTools !== undefined;
+  }
+
+  listServices(): readonly ServiceInfo[] {
+    return Object.freeze([]);
+  }
+}
+
 export function makePluginContext(
   brudTools: IBrudToolsService | undefined,
   permissions: readonly PluginPermission[],
   pluginId = 'test.context.plugin',
 ): PluginContext {
+  const broker = new CatalogServiceBroker(brudTools);
+  const registry = new ExposedApiRegistryService({
+    broker,
+    callerContext: {
+      callerId: 'test.api.registry',
+      tier: 'core',
+      workspaceRoot: '/workspace',
+    },
+  });
+
+  if (brudTools !== undefined) {
+    registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+      capability: 'tools:register',
+      combine: lastProjectionWins,
+    });
+    registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+      capability: 'tools:execute',
+      combine: lastProjectionWins,
+    });
+  }
+
+  registry.closeRegistration();
+
+  const manifest: PluginManifest = {
+    id: pluginId,
+    name: pluginId,
+    version: '1.0.0',
+    permissions: [...permissions],
+  };
+  const record: InternalPluginRecord = {
+    plugin: { manifest, activate: (): void => undefined },
+    manifest,
+    official: false,
+    state: 'unloaded',
+  };
+
   return new PluginContext({
     pluginId,
     workspaceRoot: '/workspace',
@@ -308,15 +374,12 @@ export function makePluginContext(
       warn: (): void => undefined,
       error: (): void => undefined,
     },
-    capabilities: {
-      fileSystem: () => {
-        throw new Error('filesystem unavailable in catalog verification');
-      },
-      universalHistory: () => {
-        throw new Error('history unavailable in catalog verification');
-      },
-      ...(brudTools === undefined ? {} : { brudTools: () => brudTools }),
-    },
+    capabilities: createRegistryCapabilityProviders(
+      registry,
+      record,
+      permissions,
+      '/workspace',
+    ),
   });
 }
 

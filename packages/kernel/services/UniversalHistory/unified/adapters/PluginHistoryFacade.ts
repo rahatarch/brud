@@ -180,7 +180,7 @@ export class PluginHistoryFacade implements IPluginHistoryService {
     for (const path of view.declaredTargets) {
       const before = view.baseline[path];
       if (before === undefined) {
-        // Imported legacy sessions record no baseline for unchanged targets.
+        // Imported sessions record no baseline for unchanged targets.
         continue;
       }
       preDigests[path] = digest(path, before);

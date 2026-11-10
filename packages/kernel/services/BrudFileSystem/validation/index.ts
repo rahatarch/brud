@@ -1,6 +1,6 @@
 export {
   PathValidator,
-  PathTraversalViolationError,
+  PathRuleViolationError,
   assertSafeRelativePath,
   defaultPathFlavor,
 } from './PathValidator/PathValidator.js';
@@ -11,5 +11,5 @@ export type {
   PathResolutionSuccess,
   PathValidatorOptions,
   PathViolationDetails,
-  PathViolationRule,
+  ExternalPathRule,
 } from './PathValidator/PathValidator.js';

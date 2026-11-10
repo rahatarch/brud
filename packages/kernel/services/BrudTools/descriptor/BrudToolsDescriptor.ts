@@ -1,5 +1,6 @@
 import type { ServiceContext, ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
 import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext.js';
 import type { ISettingsReader } from '../../SettingsService/contracts/ISettingsService.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
@@ -25,7 +26,7 @@ export interface BrudToolsDescriptorOptions {
  * The service validates every payload against the target tool's registered
  * `parametersSchema` through the kernel's zero-dependency JSON Schema
  * compiler. It therefore declares no validation-service dependency: the
- * compiler is a pure module, and no legacy operation-kind gate is involved.
+ * compiler is a pure module, and no operation-kind gate is involved.
  *
  * Boot position is before the plugin manager (rollout plan §2.3.4): the
  * routing table must exist before any plugin activates, so a plugin's tools
@@ -68,7 +69,18 @@ export function createBrudToolsDescriptor(
         getToolAllowList,
       };
 
-      return new BrudToolsService(dependencies);
+      const service = new BrudToolsService(dependencies);
+
+      return withExposedApis(service, (registry) => {
+        registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+          capability: 'tools:register',
+          combine: lastProjectionWins,
+        });
+        registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
+          capability: 'tools:execute',
+          combine: lastProjectionWins,
+        });
+      });
     },
   };
 }

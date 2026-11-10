@@ -126,15 +126,24 @@ describe('validatePluginManifest', () => {
     }
   });
 
-  it('rejects unknown and duplicate permissions', () => {
+  it('accepts extensible permissions and rejects malformed or duplicate tokens', () => {
+    const flexible = validatePluginManifest({
+      id: 'acme.tools',
+      name: 'Tools',
+      version: '1.0.0',
+      permissions: ['fs:delete', 'photoshop:access'],
+    });
+
+    assert.equal(flexible.ok, true);
+
     assert.match(
       errorOf({
         id: 'acme.tools',
         name: 'Tools',
         version: '1.0.0',
-        permissions: ['fs:delete'],
+        permissions: ['FS:DELETE'],
       }),
-      /unknown permission/,
+      /invalid capability token/,
     );
 
     assert.match(

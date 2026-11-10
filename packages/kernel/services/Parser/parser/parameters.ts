@@ -8,8 +8,8 @@ import { BRACE_PATTERN, BrudParseError, KEY_PATTERN } from './syntax.js';
  * protocol-like markers. Duplicate keys and malformed lines fail closed.
  *
  * @param lines - Block body lines, opener excluded and `[END]` excluded.
- * @param protectedNames - Protected names for the tool, or `undefined` when the
- * tool has no registered schema (every brace region is then opaque).
+ * @param protectedNames - Protected names for the operation, or `undefined`
+ * when every brace region is opaque (the schema-agnostic Parser default).
  * @param firstLine - Absolute 1-based line number of the first body line.
  * @returns The parsed parameter map.
  */
@@ -69,7 +69,7 @@ export function parseParameters(
     const key = parameter[1] ?? '';
     const value = (parameter[2] ?? '').trim();
 
-    if (isProtected(protectedNames, key)) {
+    if (isDeclaredProtected(protectedNames, key)) {
       throw new BrudParseError(
         `protected parameter "${key}" requires the {${key}} … {/${key}} form`,
         line,
@@ -88,12 +88,29 @@ export function parseParameters(
   return Object.freeze(parameters);
 }
 
-/** Whether a name is protected for a tool whose schema is known. */
+/**
+ * Whether a brace region is protected.
+ *
+ * `undefined` means the schema is unknown and every brace region is opaque.
+ */
 function isProtected(
   protectedNames: readonly string[] | undefined,
   name: string,
 ): boolean {
   return protectedNames === undefined || protectedNames.includes(name);
+}
+
+/**
+ * Whether a plain `key: value` parameter is declared protected.
+ *
+ * Only an explicit schema declaration can force the brace form; when the
+ * schema is unknown, plain parameters remain admissible.
+ */
+function isDeclaredProtected(
+  protectedNames: readonly string[] | undefined,
+  name: string,
+): boolean {
+  return protectedNames !== undefined && protectedNames.includes(name);
 }
 
 /** Finds the own-line closer for a protected region, or -1 when absent. */

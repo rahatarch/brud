@@ -183,7 +183,7 @@ describe('LexicalPathEngine — migrated canonical rules', () => {
   describe('diagnostics', () => {
     const engine = new LexicalPathEngine('/workspace', { flavor: 'posix' });
 
-    it('reports rule, root, candidate, reason and legacy aliases', () => {
+    it('reports rule, root, candidate, reason and external aliases', () => {
       try {
         engine.resolve('../secret.txt');
         assert.fail('expected a PathViolationError');

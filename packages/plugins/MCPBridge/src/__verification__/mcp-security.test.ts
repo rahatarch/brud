@@ -10,6 +10,12 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import type { IBrudPlugin, IPluginLogger, OperationResult } from '@brud/kernel';
 import { PluginContext } from '../../../../kernel/services/PluginManager/contracts/PluginContext.js';
+import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { createRegistryCapabilityProviders } from '../../../../kernel/services/PluginManager/orchestrator/registryCapabilities.js';
+import type { InternalPluginRecord } from '../../../../kernel/services/PluginManager/orchestrator/types.js';
+import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';
+import type { ServiceContext } from '../../../../kernel/src/contracts/lifecycle.js';
+import type { ServiceToken } from '../../../../kernel/src/contracts/serviceToken.js';
 import { bootBridgeHarness, isErrorOf, textOf } from './support/harness.test.js';
 import type { BridgeHarness } from './support/harness.test.js';
 import { HttpMcpTransport } from '../../../../daemon/src/mcpTransport.js';
@@ -124,22 +130,65 @@ after(async () => {
   await officialHarness.shutdown();
 });
 
+
+class EmptyBroker implements IKernelAccessBroker {
+  requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {
+    void caller;
+    throw new Error(`Service "${token.id}" is not registered`);
+  }
+
+  hasService(): boolean {
+    return false;
+  }
+
+  listServices(): readonly ServiceInfo[] {
+    return Object.freeze([]);
+  }
+}
+
+function createContextWithoutTools(root: string): PluginContext {
+  const permissions = ['terminal:execute'] as const;
+  const registry = new ExposedApiRegistryService({
+    broker: new EmptyBroker(),
+    callerContext: {
+      callerId: 'test.api.registry',
+      tier: 'core',
+      workspaceRoot: root,
+    },
+  });
+
+  registry.closeRegistration();
+
+  const manifest = {
+    id: 'test.security.no-tools',
+    name: 'MCP security no-tools probe',
+    version: '1.0.0',
+    permissions: [...permissions],
+  };
+  const record: InternalPluginRecord = {
+    plugin: { manifest, activate: (): void => undefined },
+    manifest,
+    official: false,
+    state: 'unloaded',
+  };
+
+  return new PluginContext({
+    pluginId: 'test.security.no-tools',
+    workspaceRoot: root,
+    permissions,
+    logger: LOGGER,
+    capabilities: createRegistryCapabilityProviders(
+      registry,
+      record,
+      permissions,
+      root,
+    ),
+  });
+}
+
 describe('Goal 8 — capability boundary', () => {
   it('throws when a plugin without tools:execute calls executeTool', async () => {
-    const context = new PluginContext({
-      pluginId: 'test.security.no-tools',
-      workspaceRoot: securityHarness.root,
-      permissions: ['terminal:execute'],
-      logger: LOGGER,
-      capabilities: {
-        fileSystem: () => {
-          throw new Error('not used');
-        },
-        universalHistory: () => {
-          throw new Error('not used');
-        },
-      },
-    });
+    const context = createContextWithoutTools(securityHarness.root);
 
     await assert.rejects(
       context.executeTool('read_file', {}),

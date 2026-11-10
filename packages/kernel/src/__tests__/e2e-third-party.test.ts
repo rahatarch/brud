@@ -12,6 +12,7 @@ import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import type { PluginPermission } from '../../services/PluginManager/contracts/permissions.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { ParserRouterHarness } from './support/parserRouterHarness.js';
 
 const PLUGIN_ID = 'com.test.custom-plugin';
 const TOOL_NAME = 'deploy_lambda';
@@ -110,11 +111,12 @@ describe('third-party plugin [BRUD] execution', () => {
       initialPlugins: [plugin],
     });
     const tools = kernel.requestAccess<IBrudToolsService>(serviceCaller(root), BrudToolsToken);
+    const parserRouter = ParserRouterHarness.fromKernel(kernel, root);
 
     assert.equal(tools.getTool(TOOL_NAME)?.ownerPluginId, PLUGIN_ID);
     assert.equal(tools.getTool(TOOL_NAME)?.isOfficial, false);
 
-    const routed = await tools.parseAndRoute(RAW_DOCUMENT, {
+    const routed = await parserRouter.parseAndRoute(RAW_DOCUMENT, {
       callerContext: dispatchContext(root, plugin),
     });
 
@@ -143,10 +145,11 @@ describe('third-party plugin [BRUD] execution', () => {
       initialPlugins: [plugin],
     });
     const tools = kernel.requestAccess<IBrudToolsService>(serviceCaller(root), BrudToolsToken);
+    const parserRouter = ParserRouterHarness.fromKernel(kernel, root);
 
     assert.equal(tools.getTool(TOOL_NAME)?.ownerPluginId, PLUGIN_ID);
 
-    const routed = await tools.parseAndRoute(RAW_DOCUMENT, {
+    const routed = await parserRouter.parseAndRoute(RAW_DOCUMENT, {
       callerContext: dispatchContext(root, plugin),
     });
 

@@ -1,7 +1,7 @@
 /**
  * Plugin-facing history contract (Phase 3A).
  *
- * Extends the legacy-shaped {@link IUniversalHistoryService} with the Phase 2
+ * Extends the {@link IUniversalHistoryService} with the Phase 2
  * lifecycle, per-operation reversal, snapshot, and audit-log surface. The
  * projection is additive: every existing method keeps its shape, and the new
  * methods are implemented by `PluginHistoryFacade` (write authority) and

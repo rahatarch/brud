@@ -1,9 +1,9 @@
 /**
- * Behaviour carried over from the legacy history test suites (D-15 U-7).
+ * Behaviour carried over from the previous history test suites (D-15 U-7).
  *
- * Every legacy behaviour still offered by the unified engine but not already
+ * Every carried-over behaviour still offered by the unified engine but not already
  * covered by the parity oracle or another unified suite is pinned here before
- * the legacy tests are deleted. The source of each case is named in its title.
+ * the previous tests are deleted. The source of each case is named in its title.
  */
 import { mkdtemp, rm, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -42,8 +42,8 @@ async function boot(root: string, logger?: KernelLogger): Promise<BrudKernel> {
 
 const caller = (root: string): ServiceContext => ({ callerId: 'test.history', tier: 'core', workspaceRoot: root });
 
-describe('unified history — carried-over legacy behaviour', () => {
-  it('round-trips an empty file through a session revert (legacy baseline capture: empty files)', async (context) => {
+describe('unified history — carried-over behaviour', () => {
+  it('round-trips an empty file through a session revert (baseline capture: empty files)', async (context) => {
     const root = await workspace(context);
     const kernel = await boot(root);
     try {
@@ -64,7 +64,7 @@ describe('unified history — carried-over legacy behaviour', () => {
     }
   });
 
-  it('classifies binary content only by a NUL byte inside the probe window (legacy baseline capture: binary rules)', () => {
+  it('classifies binary content only by a NUL byte inside the probe window (baseline capture: binary rules)', () => {
     assert.equal(isBinaryContent(Uint8Array.from([0xc3, 0xa9, 0xff, 0xfe, 0x80])), false);
     assert.equal(isBinaryContent(Uint8Array.from([0x41, 0x00, 0x42])), true);
     const lateNul = new Uint8Array(BINARY_PROBE_LENGTH + 10).fill(0x41);
@@ -76,7 +76,7 @@ describe('unified history — carried-over legacy behaviour', () => {
     assert.equal(isBinaryContent(text('')), false);
   });
 
-  it('normalizes declared targets and rejects unsafe ones before any write (legacy baseline capture and session ledger: paths)', async (context) => {
+  it('normalizes declared targets and rejects unsafe ones before any write (baseline capture and session ledger: paths)', async (context) => {
     assert.equal(normalizeTargetPath('./src\\a.ts'), 'src/a.ts');
     assert.equal(normalizeTargetPath('src/dir/'), 'src/dir');
     for (const bad of ['', '/etc/passwd', 'C:/x', '../escape', 'a/../../b', 'a//b', 'nul\0byte']) {
@@ -100,7 +100,7 @@ describe('unified history — carried-over legacy behaviour', () => {
     }
   });
 
-  it('commits and reverts a session that stayed active across a restart (legacy session service: predating sessions)', async (context) => {
+  it('commits and reverts a session that stayed active across a restart (session service: predating sessions)', async (context) => {
     const root = await workspace(context);
     const first = await boot(root);
     let session: string;
@@ -132,7 +132,7 @@ describe('unified history — carried-over legacy behaviour', () => {
     }
   });
 
-  it('pages sessions with limit and offset, newest first (legacy session ledger: pagination)', async (context) => {
+  it('pages sessions with limit and offset, newest first (session ledger: pagination)', async (context) => {
     const root = await workspace(context);
     const kernel = await boot(root);
     try {
@@ -167,7 +167,7 @@ describe('unified history — carried-over legacy behaviour', () => {
     assert.deepEqual(descriptors.journal.dependencies.map((token) => token.id), [UniversalHistoryToken.id]);
   });
 
-  it('boots with a malformed legacy seq.json, reports it, and still allocates ids (legacy id allocator: malformed counter)', async (context) => {
+  it('boots with a malformed previous seq.json, reports it, and still allocates ids (id allocator: malformed counter)', async (context) => {
     const root = await workspace(context);
     await mkdir(join(root, '.brud', 'history'), { recursive: true });
     await writeFile(join(root, '.brud', 'history', 'seq.json'), '{ not json');

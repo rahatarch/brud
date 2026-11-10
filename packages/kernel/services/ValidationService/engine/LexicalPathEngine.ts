@@ -139,7 +139,6 @@ export class LexicalPathEngine {
   /**
    * Meets the `PathValidator` contract used by `ScopedPartitionFacade`.
    *
-   * @deprecated Use {@link assertValid}; retained for the Phase 5 flip.
    * @param relativePath - Relative path text.
    */
   assertSafeRelativePath(relativePath: string): string {

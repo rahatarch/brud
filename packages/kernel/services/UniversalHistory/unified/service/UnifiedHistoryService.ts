@@ -150,15 +150,15 @@ export interface UnifiedHistoryServiceOptions {
   /** Mutation feed recorded as `brud.core.file`. Optional for standalone use. */
   readonly journal?: IFileMutationJournal;
   readonly now?: () => number;
-  /** Background recording failures (legacy F5). */
+  /** Background recording failures (recording failure contract). */
   readonly onError?: (error: unknown, context: Readonly<Record<string, unknown>>) => void;
-  /** Import legacy `history.db` / `ledger.db` / `seq.json` at start (B-D4). */
-  readonly importLegacy?: boolean;
-  /** Storage driver for the importer (required when `importLegacy` is true). */
+  /** Import previous `history.db` / `ledger.db` / `seq.json` at start (B-D4). */
+  readonly importPreviousHistory?: boolean;
+  /** Storage driver for the importer (required when `importPreviousHistory` is true). */
   readonly driver?: IStorageDriver;
   /**
    * Trash retention window in milliseconds. Defaults to seven days, the
-   * legacy monorepo's window.
+   * previous monorepo's window.
    */
   readonly trashRetentionMs?: number;
 }
@@ -283,8 +283,8 @@ export class UnifiedHistoryService {
     const opened = await this.options.store.open();
 
     if (opened.mode === 'writable') {
-      if (this.options.importLegacy === true && this.options.driver !== undefined) {
-        await this.runLegacyImport(this.options.driver);
+      if (this.options.importPreviousHistory === true && this.options.driver !== undefined) {
+        await this.runHistoryImport(this.options.driver);
       }
       for (const builtin of BUILTIN_ENTRY_TYPES) {
         this.registerEntryType(CORE_NAMESPACE, {
@@ -360,14 +360,14 @@ export class UnifiedHistoryService {
     this.options.store.close();
   }
 
-  /** Reports from the legacy import run at start, if any. */
+  /** Reports from the previous-history import run at start, if any. */
   get importReports(): readonly LegacyImportReport[] {
     return this.lastImportReports;
   }
 
   private lastImportReports: readonly LegacyImportReport[] = [];
 
-  private async runLegacyImport(driver: IStorageDriver): Promise<void> {
+  private async runHistoryImport(driver: IStorageDriver): Promise<void> {
     // Built-in types must exist before imported entries reference them.
     for (const builtin of BUILTIN_ENTRY_TYPES) {
       this.registerEntryType(CORE_NAMESPACE, {
@@ -385,12 +385,12 @@ export class UnifiedHistoryService {
         now: this.now,
       }).run();
     } catch (error) {
-      this.report(error, { phase: 'legacy-import' });
+      this.report(error, { phase: 'history-import' });
       return;
     }
     for (const report of this.lastImportReports) {
       if (report.status === 'failed' || report.status === 'source-changed') {
-        this.report(new Error(report.message ?? report.status), { phase: 'legacy-import', source: report.source, status: report.status });
+        this.report(new Error(report.message ?? report.status), { phase: 'history-import', source: report.source, status: report.status });
       }
     }
   }
@@ -815,7 +815,7 @@ export class UnifiedHistoryService {
   }
 
   /**
-   * Starts a new implicit recording session (legacy journal `beginSession`).
+   * Starts a new implicit recording session (journal `beginSession`).
    * The previous implicit session is closed as committed.
    */
   openRecordingSession(label: string): string {

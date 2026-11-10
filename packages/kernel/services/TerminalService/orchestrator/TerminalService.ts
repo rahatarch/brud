@@ -2,7 +2,7 @@ import type { ValidationDecision } from '../../ValidationService/contracts/error
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import type { KernelLogger } from '../../../src/contracts/lifecycle.js';
 import {
-  legacyCodeFor,
+  externalCodeFor,
   terminalFailure,
   terminalFailureFromValidation,
   terminalSuccess,
@@ -272,7 +272,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
 
   registerChild(child: ChildProcessLike, onChunk?: TerminalChunkCallback): string {
     const sessionId = this.manager.nextSessionId();
-    const info = sessionInfo(sessionId, 'single', 'legacy', {
+    const info = sessionInfo(sessionId, 'single', 'child', {
       ...(child.pid === undefined ? {} : { pid: child.pid }),
     });
     this.registry.register(info, {
@@ -377,7 +377,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
     if (!environment.ok) {
       return terminalFailure({
         code: environment.code,
-        legacyCode: 'INVALID_FIELD',
+        externalCode: 'INVALID_FIELD',
         friendly: 'The terminal environment contains a rejected entry.',
         details: environment.message,
         command: primary,
@@ -422,7 +422,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
       if (commands.length > this.policy.maxBatchCommands) {
         return terminalFailure({
           code: 'TERMINAL_INVALID_REQUEST',
-          legacyCode: 'BATCH_LIMIT_EXCEEDED',
+          externalCode: 'BATCH_LIMIT_EXCEEDED',
           friendly: 'The terminal batch is too large.',
           details: `The request carries ${commands.length} commands; at most ${this.policy.maxBatchCommands} may run in one batch.`,
           cwd: request.cwd,
@@ -547,7 +547,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
 
       return terminalFailure({
         code: 'TERMINAL_INTERNAL',
-        legacyCode: 'INTERNAL_ERROR',
+        externalCode: 'INTERNAL_ERROR',
         friendly: 'Validation authority failed unexpectedly',
         details: message,
         command,
@@ -997,7 +997,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
    * Converts a measured result into a decision.
    *
    * A failure is never rewrapped as a success: the decision carries the code,
-   * the legacy code, the exit status, the terminating signal and the flags a
+   * the external code, the exit status, the terminating signal and the flags a
    * host needs. For a group decision the first terminating result is
    * projected onto the decision fields; the full transcript stays in
    * `result`.
@@ -1013,7 +1013,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
       if (failing !== undefined && isInternalFailure(failing)) {
         return terminalFailure({
           code: 'TERMINAL_INTERNAL',
-          legacyCode: 'INTERNAL_ERROR',
+          externalCode: 'INTERNAL_ERROR',
           friendly: FRIENDLY_FAILURES.TERMINAL_INTERNAL,
           details: failing.internalFailure,
           actionable: false,
@@ -1044,7 +1044,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
       // with the thrown text as its diagnostic.
       return terminalFailure({
         code: 'TERMINAL_INTERNAL',
-        legacyCode: 'INTERNAL_ERROR',
+        externalCode: 'INTERNAL_ERROR',
         friendly: FRIENDLY_FAILURES.TERMINAL_INTERNAL,
         details: outcome.internalFailure,
         actionable: false,
@@ -1073,7 +1073,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
 
     return terminalFailure({
       code,
-      legacyCode: legacyCodeFor(code),
+      externalCode: externalCodeFor(code),
       exitCode,
       // The measured outcome travels with the failure so a host keeps the
       // per-command transcript of a failed batch.
@@ -1091,7 +1091,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
   private invalid(message: string, cwd?: string): TerminalDecision {
     return terminalFailure({
       code: 'TERMINAL_INVALID_REQUEST',
-      legacyCode: 'MISSING_FIELD',
+      externalCode: 'MISSING_FIELD',
       friendly: 'The terminal request is not usable.',
       details: message,
       ...(cwd === undefined ? {} : { cwd }),
@@ -1103,7 +1103,7 @@ export class TerminalService implements ITerminalService, IServiceLifecycle {
   private interrupted(command: string, cwd?: string): TerminalDecision {
     return terminalFailure({
       code: 'TERMINAL_INTERRUPTED',
-      legacyCode: 'TERMINAL_INTERRUPTED',
+      externalCode: 'TERMINAL_INTERRUPTED',
       friendly: 'The terminal command was interrupted.',
       details: 'The request was cancelled before a process was spawned.',
       command,

@@ -121,6 +121,17 @@ export interface IActionManager {
     rawInput: unknown,
     callerContext: IActionExecutionContext,
   ): Promise<OperationResult>;
+
+  /**
+   * Validates a payload against an action without invoking its handler.
+   *
+   * This is the dry-run gate used by the Router. Lookup and the schema gate
+   * run; no handler is called.
+   *
+   * @param name - Action name.
+   * @param rawInput - Untrusted payload supplied by the UI caller.
+   */
+  validateAction(name: string, rawInput: unknown): OperationResult;
 }
 
 /**
@@ -150,4 +161,5 @@ export const ACTION_MANAGER_ALLOWED_CALLERS: readonly string[] = Object.freeze([
   'kernel',
   'PluginManager',
   ACTION_MANAGER_DAEMON_CALLER_ID,
+  'brud.core.router',
 ]);

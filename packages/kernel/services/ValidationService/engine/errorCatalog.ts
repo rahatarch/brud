@@ -6,10 +6,10 @@ import type { ValidationRule } from '../contracts/rules.js';
  * Rule traits and message templates.
  *
  * `friendly` strings are reproduced verbatim from
- * the quarantined legacy engine's `api/errors.ts` so the legacy facade keeps producing the
+ * the quarantined quarantined engine's `api/errors.ts` so the external facade keeps producing the
  * exact text its callers, tests and UI already show. Actionability and
  * retryability are the audited §2 last column: a value that appears nowhere in
- * the legacy code base but is required by the `ValidationDecision` contract.
+ * the external code base but is required by the `ValidationDecision` contract.
  */
 
 const TRAITS: Readonly<Record<ValidationRule, RuleTraits>> = Object.freeze({
@@ -127,15 +127,15 @@ export interface MessageValues {
 }
 
 /**
- * Verbatim legacy message pair for a code.
+ * Verbatim baseline message pair for a code.
  *
  * Every string here is copied from `api/errors.ts`; `details` uses the same
- * template variables, so a legacy caller observes byte-identical output.
+ * template variables, so a external caller observes byte-identical output.
  *
  * @param code - Kernel code.
  * @param values - Template values.
  */
-export function legacyMessages(code: ValidationCode, values: MessageValues = {}): MessagePair {
+export function externalMessages(code: ValidationCode, values: MessageValues = {}): MessagePair {
   const path = values.path ?? '';
   const operation = values.operation;
 
@@ -250,7 +250,7 @@ export function legacyMessages(code: ValidationCode, values: MessageValues = {})
     case 'PARSE_ERROR':
       return {
         friendly: 'I couldn\'t understand the format of your message.',
-        details: 'Brud Code understands two formats: the legacy block format and YAML. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
+        details: 'Brud Code understands two formats: the block format and YAML. If you are an AI, call GET_TOOL_INFO first to fetch the tool syntax.',
       };
     case 'UNKNOWN_OPERATION':
       return {
@@ -377,7 +377,7 @@ export function legacyMessages(code: ValidationCode, values: MessageValues = {})
 }
 
 /**
- * Builds the `VALIDATION_ERROR`-style pair a legacy caller expected when no
+ * Builds the `VALIDATION_ERROR`-style pair a external caller expected when no
  * dedicated factory existed.
  *
  * @param string - Friendly text, also used as details.

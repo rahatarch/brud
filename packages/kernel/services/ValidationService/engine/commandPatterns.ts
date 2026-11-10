@@ -4,14 +4,14 @@ import type { CommandRule } from '../contracts/rules.js';
  * Dangerous-command pattern catalog.
  *
  * `LEGACY_PATTERNS` is a byte-for-byte copy of
- * the quarantined legacy engine's `api/index.ts:105-123`. It is kept verbatim so the legacy
+ * the quarantined engine's `api/index.ts:105-123`. It is kept verbatim so the existing
  * `validation/terminal.test.ts` gate stays green; the facade runs it first and
  * reports the first match exactly as the old implementation did.
  *
  * `HARDENED_PATTERNS` closes the nine exploitable bypasses catalogued in
  * audit §3.6. They are additive: nothing that was blocked before is allowed
- * now, and the pattern index a legacy caller observes is unchanged because
- * the hardened set is only consulted after the legacy set misses.
+ * now, and the pattern index a external caller observes is unchanged because
+ * the hardened set is only consulted after the baseline set misses.
  */
 
 /** One dangerous-command family. */
@@ -24,7 +24,7 @@ export interface CommandPattern {
   readonly description: string;
 }
 
-/** The 17 legacy regexes, in their original order. */
+/** The 17 baseline regexes, in their original order. */
 export const LEGACY_PATTERNS: readonly RegExp[] = Object.freeze([
   /\brm\s+-(?:rf|fr)\s+(\/|\/\*|~|\.)(?:$|\s)/,
   /\brm\s+-(?:rf|fr)\s+\*\s*$/,
@@ -45,7 +45,7 @@ export const LEGACY_PATTERNS: readonly RegExp[] = Object.freeze([
   /\bnpm\s+--unsafe-perm\b/,
 ] satisfies readonly RegExp[]);
 
-/** Rule ids paired with the legacy pattern array, by index. */
+/** Rule ids paired with the baseline pattern array, by index. */
 export const LEGACY_PATTERN_RULES: readonly CommandRule[] = Object.freeze([
   'CMD.RM_ROOT',
   'CMD.RM_GLOB',
@@ -69,8 +69,8 @@ export const LEGACY_PATTERN_RULES: readonly CommandRule[] = Object.freeze([
 export interface CommandScanMatch {
   /** Rule violated. */
   readonly rule: CommandRule;
-  /** Index in the legacy pattern array, when the match came from it. */
-  readonly legacyIndex?: number;
+  /** Index in the baseline pattern array, when the match came from it. */
+  readonly externalIndex?: number;
   /** Short description of the family that matched. */
   readonly description: string;
 }
@@ -135,7 +135,7 @@ const FORK_BOMB_PATTERN = /:\s*\(\)\s*\{[^}]*:[^}]*:[^}]*\}/u;
 /**
  * Normalizes command text for the hardened rules.
  *
- * Only quoting and whitespace are normalized; the legacy patterns run against
+ * Only quoting and whitespace are normalized; the baseline patterns run against
  * the caller's original text so their case sensitivity is unchanged.
  *
  * @param command - Raw command text.
@@ -182,13 +182,13 @@ export function splitCommandSegments(command: string): readonly string[] {
     .filter((segment) => segment.length > 0);
 }
 
-function findLegacyMatch(command: string): CommandScanMatch | null {
+function findExternalMatch(command: string): CommandScanMatch | null {
   for (const [index, pattern] of LEGACY_PATTERNS.entries()) {
     if (pattern.test(command)) {
       return {
         rule: LEGACY_PATTERN_RULES[index] ?? 'CMD.RM_ROOT',
-        legacyIndex: index,
-        description: `legacy pattern #${index}`,
+        externalIndex: index,
+        description: `baseline pattern #${index}`,
       };
     }
   }
@@ -333,16 +333,16 @@ function scanSegment(segment: string): CommandScanMatch | null {
 /**
  * Runs the full command scan.
  *
- * Order of evaluation matches the audited gate: legacy patterns first (so the
- * legacy contract and its indexes are preserved), then the hardened families.
+ * Order of evaluation matches the audited gate: baseline patterns first (so the
+ * existing contract and its indexes are preserved), then the hardened families.
  *
  * @param command - Raw command text.
  */
 export function scanCommand(command: string): CommandScanMatch | null {
-  const legacy = findLegacyMatch(command);
+  const external = findExternalMatch(command);
 
-  if (legacy !== null) {
-    return legacy;
+  if (external !== null) {
+    return external;
   }
 
   const normalized = normalizeCommand(command);

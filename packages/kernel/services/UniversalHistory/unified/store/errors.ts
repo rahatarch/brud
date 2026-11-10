@@ -1,6 +1,6 @@
 /**
  * Errors of the unified history store. Names live in the unified namespace;
- * the legacy classes are untouched.
+ * the previous classes are untouched.
  */
 import type { HistoryDegradedReason } from './types.js';
 

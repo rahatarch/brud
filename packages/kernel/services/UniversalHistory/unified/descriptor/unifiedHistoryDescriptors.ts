@@ -18,11 +18,14 @@ import { SettingsReaderToken } from '../../../SettingsService/descriptor/tokens.
 import type { IFileMutationJournal } from '../../../BrudFileSystem/events/types.js';
 import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../../ExposedApiRegistry/contracts/index.js';
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
+import { ReadOnlyUniversalHistoryFacade } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
-import { JournalAdapter } from '../compat/JournalAdapter.js';
-import { PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
+import { JournalAdapter } from '../adapters/JournalAdapter.js';
+import { PluginHistoryFacade, namespaceHistoryFor } from '../adapters/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
+import { createReadOnlyNamespaceHandle } from '../service/NamespaceHandle.js';
 import { UnifiedHistoryService } from '../service/UnifiedHistoryService.js';
 import type { HistoryRetentionReport } from '../service/UnifiedHistoryService.js';
 import { UnifiedHistoryStore } from '../store/UnifiedHistoryStore.js';
@@ -81,7 +84,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
         fileSystem: resolveFileSystem,
         journal: options.journal,
         driver: options.driver,
-        importLegacy: options.inMemory !== true && options.dbPath === undefined,
+        importPreviousHistory: options.inMemory !== true && options.dbPath === undefined,
         onError: (error, details) => {
           // D9': a replacement implicit session is a self-healed condition, not
           // a recording failure; it gets its own code so a genuine recording
@@ -94,8 +97,8 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
             });
             return;
           }
-          const importing = details.phase === 'legacy-import';
-          context.logger?.warn(importing ? 'Legacy history import did not complete' : 'Universal history could not record a mutation', {
+          const importing = details.phase === 'history-import';
+          context.logger?.warn(importing ? 'Previous history import did not complete' : 'Universal history could not record a mutation', {
             code: importing ? 'HISTORY_IMPORT_FAILED' : 'HISTORY_RECORDING_FAILED',
             error: error instanceof Error ? error.message : String(error),
             ...details,
@@ -133,7 +136,61 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
           });
         }
       };
-      return new PluginHistoryFacade(service, engine, retain);
+      const facade = new PluginHistoryFacade(service, engine, retain);
+
+      return withExposedApis(facade, (registry) => {
+        registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
+          capability: 'history:read',
+          projection: (resolved, caller) => (
+            caller.capabilities.has('history:write') && caller.official
+              ? resolved
+              : new ReadOnlyUniversalHistoryFacade(resolved as IUniversalHistoryService)
+          ),
+          combine: lastProjectionWins,
+        });
+        registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
+          capability: 'history:write',
+          projection: (resolved, caller) => (
+            caller.official
+              ? resolved
+              : new ReadOnlyUniversalHistoryFacade(resolved as IUniversalHistoryService)
+          ),
+          combine: lastProjectionWins,
+        });
+
+        const namespaceProjection = (resolved: unknown, caller: {
+          readonly capabilities: ReadonlySet<string>;
+          readonly official: boolean;
+          readonly subjectId: string;
+        }): unknown => {
+          const handle = namespaceHistoryFor(
+            resolved as IUniversalHistoryService,
+            caller.subjectId,
+            { official: caller.official },
+          );
+
+          if (handle === undefined) {
+            throw new Error(
+              `Namespace history requires the unified history engine (plugin "${caller.subjectId}")`,
+            );
+          }
+
+          return caller.capabilities.has('history:write')
+            ? handle
+            : createReadOnlyNamespaceHandle(handle);
+        };
+
+        registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
+          capability: 'history:read',
+          projection: namespaceProjection,
+          combine: lastProjectionWins,
+        });
+        registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
+          capability: 'history:write',
+          projection: namespaceProjection,
+          combine: lastProjectionWins,
+        });
+      });
     },
   };
 

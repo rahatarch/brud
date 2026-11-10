@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSystem.js';
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
-import { ForeignReversalPlanError, PluginHistoryFacade } from '../compat/PluginHistoryFacade.js';
+import { ForeignReversalPlanError, PluginHistoryFacade } from '../adapters/PluginHistoryFacade.js';
 import { UnifiedReversalConflictError } from '../engine/errors.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, UnifiedHistoryService } from '../service/index.js';

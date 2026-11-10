@@ -545,7 +545,7 @@ export class WorkspaceService implements IWorkspaceService, IServiceLifecycle {
     }
 
     // A root reached through a symbolic link is still a legitimate prefix for
-    // a legacy caller: the declared alias is admitted here and the canonical
+    // an external caller: the declared alias is admitted here and the canonical
     // routing below still has to prove containment.
     const declaredMatches = this.entries.filter(
       (entry) => isContainedInRoot(entry.declared, lexicalTarget, this.flavorValue),
