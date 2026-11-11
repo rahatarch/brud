@@ -56,3 +56,7 @@ jobs:
 
       - name: Check package boundaries
         run: npm run check:boundaries
+
+      - name: Windows D-01 client process identity (production mirror)
+        if: runner.os == 'Windows'
+        run: node --import tsx --test packages/daemon/src/__verification__/windows_peer_identity.test.ts

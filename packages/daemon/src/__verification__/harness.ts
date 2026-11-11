@@ -9,7 +9,6 @@
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { access, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { createConnection } from 'node:net';
@@ -25,6 +24,7 @@ import {
 } from '../security/channel.js';
 import type { RecordType } from '../security/channel.js';
 import { derivePsk } from '../security/noise.js';
+import { resolveEndpoint } from '../lifecycle/endpoint.js';
 
 /** Repository root, four directories above this file. */
 export const REPO_ROOT = resolve(__dirname, '../../../..');
@@ -525,13 +525,9 @@ export interface AttackDaemon {
   stop(): Promise<void>;
 }
 
-function endpointHash(workspaceRoot: string): string {
-  return createHash('sha256').update(workspaceRoot).digest('hex').slice(0, 24);
-}
-
 async function waitForBoot(
   process: ChildProcessWithoutNullStreams,
-  socketPath: string,
+  metaPath: string,
   tokenPath: string,
   aiTokenPath: string,
   stderr: () => string,
@@ -546,7 +542,7 @@ async function waitForBoot(
     }
 
     if (
-      await pathExists(socketPath)
+      await pathExists(metaPath)
       && await pathExists(tokenPath)
       && await pathExists(aiTokenPath)
     ) {
@@ -554,7 +550,7 @@ async function waitForBoot(
     }
 
     if (Date.now() >= deadline) {
-      throw new Error(`daemon did not bind ${socketPath} within ${DAEMON_BOOT_TIMEOUT_MS}ms\n${stderr()}`);
+      throw new Error(`daemon did not publish ${metaPath} within ${DAEMON_BOOT_TIMEOUT_MS}ms\n${stderr()}`);
     }
 
     await delay(50);
@@ -590,13 +586,26 @@ export async function startAttackDaemon(
   }
 
   const runtimeDir = await realpath(await mkdtemp(join(tmpdir(), 'brud-redteam-runtime-')));
-  const hash = endpointHash(workspace.root);
-  const isWindows = process.platform === 'win32';
-  const socketPath = isWindows
-    ? `\\\\.\\pipe\\brud-redteam-${hash}`
-    : join(runtimeDir, `d-${hash}.sock`);
-  const tokenPath = join(runtimeDir, `d-${hash}.token`);
-  const aiTokenPath = join(runtimeDir, `d-${hash}.ai.token`);
+  const previousRuntimeDir = process.env.BRUD_DAEMON_RUNTIME_DIR;
+  process.env.BRUD_DAEMON_RUNTIME_DIR = runtimeDir;
+
+  let endpoint: Awaited<ReturnType<typeof resolveEndpoint>>;
+
+  try {
+    endpoint = await resolveEndpoint(workspace.root);
+  } finally {
+    if (previousRuntimeDir === undefined) {
+      delete process.env.BRUD_DAEMON_RUNTIME_DIR;
+    } else {
+      process.env.BRUD_DAEMON_RUNTIME_DIR = previousRuntimeDir;
+    }
+  }
+
+  const socketPath = endpoint.socketPath;
+  const tokenPath = endpoint.tokenPath;
+  const aiTokenPath = endpoint.aiTokenPath;
+  const metaPath = endpoint.metaPath;
+  const lockPath = endpoint.lockPath;
   const prologue = channelPrologue(socketPath);
 
   let stdout = '';
@@ -632,12 +641,16 @@ export async function startAttackDaemon(
   });
 
   try {
-    await waitForBoot(child, socketPath, tokenPath, aiTokenPath, () => stderr);
+    await waitForBoot(child, metaPath, tokenPath, aiTokenPath, () => stderr);
   } catch (error: unknown) {
     child.kill('SIGKILL');
     await Promise.race([once(child, 'exit'), delay(5_000)]);
     await rm(workspace.root, { recursive: true, force: true });
     await rm(runtimeDir, { recursive: true, force: true });
+    await rm(tokenPath, { force: true }).catch(() => undefined);
+    await rm(aiTokenPath, { force: true }).catch(() => undefined);
+    await rm(metaPath, { force: true }).catch(() => undefined);
+    await rm(lockPath, { force: true }).catch(() => undefined);
     throw error;
   }
 
@@ -713,6 +726,10 @@ export async function startAttackDaemon(
 
       await rm(workspace.root, { recursive: true, force: true });
       await rm(runtimeDir, { recursive: true, force: true });
+      await rm(tokenPath, { force: true }).catch(() => undefined);
+      await rm(aiTokenPath, { force: true }).catch(() => undefined);
+      await rm(metaPath, { force: true }).catch(() => undefined);
+      await rm(lockPath, { force: true }).catch(() => undefined);
     },
   };
 }

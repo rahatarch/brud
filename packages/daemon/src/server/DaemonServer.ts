@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
-import type { Server, Socket } from 'node:net';
+import { createServer, Socket } from 'node:net';
+import type { Server } from 'node:net';
 import type {
   BrudKernel,
   IActionManager,
@@ -25,16 +25,30 @@ import type { SecureChannelHandshakeContext } from '../security/channel.js';
 import { enforceEndpointOwnership } from '../security/ownership.js';
 import {
   captureExpectedPeer,
+  isPipePeer,
   loadPeerCredentialHost,
   PeerCredentialError,
   verifyPeerCredentials,
+  verifyWindowsPeer,
 } from '../security/peerCredentials.js';
-import type { ExpectedPeer } from '../security/peerCredentials.js';
+import type {
+  ExpectedPeer,
+  PipeListener,
+  PipePeer,
+  PipeRefused,
+} from '../security/peerCredentials.js';
 import { derivePsk } from '../security/noise.js';
 import * as DaemonVersion from '../version.js';
 
 /** Default ceiling on simultaneously open local connections. */
 export const DEFAULT_MAX_CONNECTIONS = 64;
+
+function isAbortedAccept(error: unknown): boolean {
+  return typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && (error as { readonly code?: unknown }).code === 'ECANCELED';
+}
 
 export interface DaemonServerConfig {
   /** Multi-workspace registry. Preferred over `kernel`. */
@@ -119,9 +133,13 @@ export class DaemonServer {
 
   private expectedPeer: ExpectedPeer | undefined;
 
+  private pipeListener: PipeListener | undefined;
+
   private inFlightRequests = 0;
 
   private listening = false;
+
+  private stopping = false;
 
   private closedPromise: Promise<void> | undefined;
 
@@ -188,19 +206,23 @@ export class DaemonServer {
       throw new Error('Daemon server is already listening');
     }
 
-    // Capture the expected peer before the socket can accept anything. The
-    // credential helper is prebuilt; it is never compiled at install time.
-    // Windows is deliberately left on its previous ownership-only path until
-    // the separate Windows peer-credential task.
-    if (process.platform !== 'win32') {
-      const host = await loadPeerCredentialHost();
-      this.peerCredentialHost = host;
-      this.expectedPeer = captureExpectedPeer(host, this.expectedPeerPid);
+    if (process.platform === 'win32') {
+      await this.listenWindows();
+    } else {
+      await this.listenPosix();
     }
 
-    const previousUmask = process.platform === 'win32'
-      ? undefined
-      : process.umask(0o177);
+    this.listening = true;
+  }
+
+  private async listenPosix(): Promise<void> {
+    // Capture the expected peer before the socket can accept anything. The
+    // credential helper is prebuilt; it is never compiled at install time.
+    const host = await loadPeerCredentialHost();
+    this.peerCredentialHost = host;
+    this.expectedPeer = captureExpectedPeer(host, this.expectedPeerPid);
+
+    const previousUmask = process.umask(0o177);
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -219,9 +241,7 @@ export class DaemonServer {
         this.server.listen(this.socketPath);
       });
     } finally {
-      if (previousUmask !== undefined) {
-        process.umask(previousUmask);
-      }
+      process.umask(previousUmask);
     }
 
     const ownership = await enforceEndpointOwnership(this.socketPath);
@@ -231,8 +251,123 @@ export class DaemonServer {
         `brud-daemon: peer endpoint ownership is not verifiable on ${ownership.platform}: ${ownership.reason}\n`,
       );
     }
+  }
 
-    this.listening = true;
+  private async listenWindows(): Promise<void> {
+    // The Windows helper owns the named pipe: it creates every instance with a
+    // protected DACL for this user, rejects remote clients, and reads the
+    // connecting process's PID, token user SID, and creation time before
+    // handing the connection to Node. Capture the expected host first so no
+    // connection can arrive before the baseline exists.
+    const host = await loadPeerCredentialHost();
+    this.peerCredentialHost = host;
+    this.expectedPeer = captureExpectedPeer(host, this.expectedPeerPid);
+
+    if (typeof host.listenPipe !== 'function') {
+      throw new PeerCredentialError(
+        'the installed peer-credential helper does not expose the Windows named-pipe listener',
+      );
+    }
+
+    let listener: PipeListener;
+
+    try {
+      listener = host.listenPipe(this.socketPath);
+    } catch (error: unknown) {
+      throw new PeerCredentialError(
+        `cannot serve the Windows named pipe "${this.socketPath}": ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+
+    this.pipeListener = listener;
+
+    // Windows named pipes do not expose ownership or mode through node:fs, so
+    // the existing file-ownership check keeps reporting `unsupported`. It stays
+    // in the path as a visible layer; the helper's DACL and the client process
+    // identity below are the Windows defenses.
+    const ownership = await enforceEndpointOwnership(this.socketPath);
+
+    if (ownership.status === 'unsupported') {
+      process.stderr.write(
+        `brud-daemon: peer endpoint ownership is not verifiable on ${ownership.platform}: ${ownership.reason}\n`,
+      );
+    }
+
+    this.acceptPipeConnections(listener, this.expectedPeer);
+  }
+
+  private acceptPipeConnections(listener: PipeListener, expected: ExpectedPeer): void {
+    const loop = async (): Promise<void> => {
+      for (;;) {
+        let result: PipePeer | PipeRefused;
+
+        try {
+          result = await listener.accept();
+        } catch (error: unknown) {
+          if (this.stopping || isAbortedAccept(error)) {
+            return;
+          }
+
+          process.stderr.write(
+            `brud-daemon: named-pipe accept failed: ${
+              error instanceof Error ? error.message : String(error)
+            }\n`,
+          );
+          return;
+        }
+
+        if (this.stopping) {
+          if (isPipePeer(result)) {
+            this.discardPipePeer(result);
+          }
+
+          return;
+        }
+
+        if (!isPipePeer(result)) {
+          // The helper already closed this connection unread because it could
+          // not read the client's identity. Fail closed and keep serving.
+          process.stderr.write(
+            `brud-daemon: refused connection: ${result.refused}\n`,
+          );
+          continue;
+        }
+
+        let socket: Socket;
+
+        try {
+          verifyWindowsPeer(result, expected);
+          socket = new Socket({ fd: result.fd });
+        } catch (error: unknown) {
+          const refusal = error instanceof Error
+            ? error
+            : new PeerCredentialError(String(error));
+
+          try {
+            socket = new Socket({ fd: result.fd });
+          } catch {
+            continue;
+          }
+
+          this.refuseConnection(socket, refusal);
+          continue;
+        }
+
+        this.admit(socket);
+      }
+    };
+
+    void loop();
+  }
+
+  private discardPipePeer(peer: PipePeer): void {
+    try {
+      new Socket({ fd: peer.fd }).destroy();
+    } catch {
+      // The descriptor is already unusable; nothing else can release it here.
+    }
   }
 
   stopAccepting(): void {
@@ -241,6 +376,16 @@ export class DaemonServer {
     }
 
     this.listening = false;
+    this.stopping = true;
+
+    if (process.platform === 'win32') {
+      const listener = this.pipeListener;
+      this.pipeListener = undefined;
+      listener?.close();
+      this.closedPromise = Promise.resolve();
+      return;
+    }
+
     this.closedPromise = new Promise<void>((resolve, reject) => {
       this.server.close((error?: Error) => {
         if (error === undefined) {
@@ -305,6 +450,10 @@ export class DaemonServer {
       }
     }
 
+    this.admit(socket);
+  }
+
+  private admit(socket: Socket): void {
     if (this.connectionCount >= this.maxConnections) {
       // The limit is applied before the handshake or any dispatch work.
       socket.destroy();

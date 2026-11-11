@@ -3,7 +3,8 @@
  *
  * It is a real process with its own PID. The daemon must refuse it because it
  * is not the process that spawned the daemon, even though it runs as the same
- * user. Nothing is mocked: the child opens a real Unix socket.
+ * user. Nothing is mocked: the child opens a real Unix socket, or the real
+ * Windows named pipe, through the same production transport.
  */
 import { createConnection } from 'node:net';
 import * as Protocol from '@brud/protocol';
@@ -31,6 +32,8 @@ if (
 }
 
 async function run(): Promise<void> {
+  process.stdout.write(`PID:${process.pid}\n`);
+
   if (mode === 'raw') {
     let received = '';
 

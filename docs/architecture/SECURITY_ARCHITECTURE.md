@@ -20,13 +20,13 @@ Fourteen threats apply to this boundary. The identifiers are stable and are used
 
 Another operating-system user on the same machine discovers the local channel and opens a connection to the daemon. The daemon treats that connection as the legitimate host and exposes the authority behind the channel.
 
-**Chosen solution.** Peer-credential authentication of the connecting principal (D-01).
+**Chosen solution.** Operating-system verification of the connecting process (D-01).
 
 ### T-02 — Rogue Endpoint
 
 A different process binds or replaces the channel endpoint before the legitimate daemon does. The host connects to the impostor, discloses requests to it, and accepts forged responses from it.
 
-**Chosen solution.** Peer-credential verification of the endpoint and operating-system ownership rules (D-01).
+**Chosen solution.** Operating-system verification of the endpoint process and ownership rules (D-01).
 
 ### T-03 — Passive Eavesdropping
 
@@ -108,9 +108,9 @@ Six architectural decisions define the controls. Each decision states the threat
 
 **Addresses:** T-01, T-02.
 
-**Mechanism.** Peer credentials establish the identity of the process at each end of the local channel. The daemon admits only the operating-system identity of the installed host, and the host accepts only an endpoint whose ownership and identity match the expected daemon.
+**Mechanism.** The operating system establishes the identity of the process at each end of the local channel, using the mechanism the transport exposes on each platform. On Linux and macOS the transport is a Unix-domain socket and the mechanism is kernel peer credentials: the peer's process identifier and user/group, together with its process start time. On Windows the transport is a named pipe and the mechanism is client process identity: the connecting process's identifier, token user SID, and creation time, read by the pipe server at accept. The daemon admits only the process that spawned it, which is the installed host, and the host accepts only an endpoint whose ownership and identity match the expected daemon.
 
-**Rationale.** The operating system already knows which principal owns each end of a local connection, so identity does not rest on a secret that can be copied. Checking peer credentials at connection acceptance and endpoint opening is the earliest point at which a foreign user is separated from the legitimate host.
+**Rationale.** The operating system already knows which process is on each end of a local connection, so identity does not rest on a secret that can be copied. Checking that identity at connection acceptance and endpoint opening is the earliest point at which a foreign user, or a different process of the same user, is separated from the legitimate host. The per-platform mechanisms differ because the transports differ; the decision and the guarantee do not.
 
 ### Decision D-02 — Authenticated Key Exchange
 
@@ -158,9 +158,9 @@ Six architectural decisions define the controls. Each decision states the threat
 
 A process running as the same operating-system user has the same authority as the host and the daemon. It can read or alter their memory, attach to either process, replace either application, obtain the channel keys, or act through the host's own credentials.
 
-This risk is accepted. The system does not defend against it. Peer credentials establish which user owns a connection; they do not distinguish two processes owned by the same user. A same-user attacker is already inside the trust boundary, so no control on the local channel can deny authority that the attacker already holds.
+This risk is accepted. The system does not defend against it. D-01 identifies the expected process rather than only its user, so a different process of the same user is refused at accept on every shipped platform. That does not help against this threat, because a same-user attacker is already inside the trust boundary and can act outside the channel: no control on the local channel can deny authority that the attacker already holds.
 
-The security guarantee therefore begins at the user-account boundary. The channel protects the daemon and the workspace from other local users, unauthenticated peers, and hostile messages. It does not protect the user from a process that already runs with the user's full authority. Defending against that would require a separate privilege boundary, such as a distinct account or an operating-system sandbox, which is outside this document's scope.
+The guarantee against this threat therefore begins at the user-account boundary. The channel protects the daemon and the workspace from other local users, unauthenticated peers, and hostile messages. It does not protect the user from a process that already runs with the user's full authority. Defending against that would require a separate privilege boundary, such as a distinct account or an operating-system sandbox, which is outside this document's scope.
 
 ## 5. Mechanism-to-Threat Mapping
 
@@ -186,6 +186,8 @@ The mechanism columns correspond to the decisions: M1 is D-01, M2 is D-02, M3 is
 
 Every covered threat appears under exactly one mechanism. Threat 9 is the sole accepted risk and is intentionally uncovered, so the fourteen threats resolve to thirteen defended and one accepted. No threat is counted twice, and no mechanism is redundant: each covers a distinct category of exposure.
 
+M1 is implemented per platform: Linux and macOS use kernel peer credentials, while Windows uses named-pipe client process identity. Both mechanisms bind the connection to the expected process, not merely to the expected user.
+
 Where two mechanisms could be described as contributing, the threat is assigned to the mechanism that actually provides the control. Tampering and replay are record-level controls under M3, not handshake controls under M2. Caller authorization is a principal control under M4, not message validation under M5. Malformed structure and state confusion are message-contract controls under M5, not resource controls under M6.
 
 ## 6. Out of Scope
@@ -195,7 +197,7 @@ This document does not cover:
 - The confinement of third-party components inside either process beyond the trust-tier decision. The daemon's official components and the host application are treated as trusted once the user-account boundary is crossed.
 - The terminal service's operating-system-level isolation. A command that passes policy can still act outside the workspace.
 - The release pipeline for signing released components and verifying publishers.
-- The cross-platform implementation of peer credentials, including what each operating system exposes and how it is obtained.
+- The implementation details of peer identity on each platform, including the native transport used to read client process identity.
 - Anything about configuration content or composition, including which components are declared official.
 
 Remote machines and network transports are outside the threat boundary and are not covered here.
