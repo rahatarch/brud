@@ -1,250 +1,211 @@
-import { describe, it } from 'node:test';
+import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
-import {
-  WorkspaceRegistry,
-  type WorkspaceRegistryScheduler,
-  type WorkspaceRegistryTimerHandle,
-} from '../workspaceRegistry.js';
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { WorkspaceRegistry } from '../workspaceRegistry.js';
 
-interface ScheduledTimer {
-  readonly callback: () => void;
-  readonly delayMs: number;
-  cancelled: boolean;
-  unrefCount: number;
+const NAMESPACED_KEYS = [
+  'filesystem.root',
+  'history.root',
+  'pluginManager.root',
+  'plugins',
+  'router.root',
+  'settings.root',
+  'terminal.root',
+  'workspace.root',
+].sort();
+
+let root = '';
+
+async function makeWorkspace(directory: string): Promise<string> {
+  await mkdir(directory, { recursive: true });
+
+  return await realpath(directory);
 }
 
-class FakeScheduler implements WorkspaceRegistryScheduler {
-  readonly timers: ScheduledTimer[] = [];
+function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
 
-  private readonly handles = new Map<WorkspaceRegistryTimerHandle, ScheduledTimer>();
+  return new Promise<void>((resolve, reject) => {
+    const poll = (): void => {
+      if (predicate()) {
+        resolve();
+        return;
+      }
 
-  setTimeout(callback: () => void, delayMs: number): WorkspaceRegistryTimerHandle {
-    const timer: ScheduledTimer = {
-      callback,
-      delayMs,
-      cancelled: false,
-      unrefCount: 0,
+      if (Date.now() >= deadline) {
+        reject(new Error('condition was not met before the deadline'));
+        return;
+      }
+
+      setTimeout(poll, 20);
     };
-    const handle: WorkspaceRegistryTimerHandle = {
-      unref: () => {
-        timer.unrefCount += 1;
-      },
-    };
 
-    this.timers.push(timer);
-    this.handles.set(handle, timer);
-
-    return handle;
-  }
-
-  clearTimeout(handle: WorkspaceRegistryTimerHandle): void {
-    const timer = this.handles.get(handle);
-
-    if (timer !== undefined) {
-      timer.cancelled = true;
-    }
-  }
-
-  get pending(): readonly ScheduledTimer[] {
-    return this.timers.filter((timer) => !timer.cancelled);
-  }
-
-  firePending(): void {
-    for (const timer of this.pending) {
-      timer.cancelled = true;
-      timer.callback();
-    }
-  }
-}
-
-class FakeKernel {
-  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
-
-  public bootCount = 0;
-
-  public shutdownCount = 0;
-
-  public bootedAtNamespaced: string | undefined;
-
-  public bootedKeys: readonly string[] = [];
-
-  async boot(options: {
-    readonly options?: {
-      readonly 'workspace.root'?: unknown;
-    };
-  }): Promise<void> {
-    this.bootCount += 1;
-    this.bootedKeys = Object.keys(options.options ?? {});
-    this.bootedAtNamespaced = typeof options.options?.['workspace.root'] === 'string'
-      ? options.options['workspace.root']
-      : undefined;
-    this.lifecycleState = 'RUNNING';
-  }
-
-  async shutdown(): Promise<void> {
-    this.shutdownCount += 1;
-    this.lifecycleState = 'DISPOSED';
-  }
-}
-
-interface Harness {
-  readonly registry: WorkspaceRegistry;
-  readonly kernels: Map<string, FakeKernel>;
-  readonly scheduler: FakeScheduler;
-  readonly now: { value: number };
-}
-
-function createHarness(idleTimeoutMs?: number): Harness {
-  const kernels = new Map<string, FakeKernel>();
-  const scheduler = new FakeScheduler();
-  const now = { value: 1_000 };
-  const registry = new WorkspaceRegistry({
-    scheduler,
-    now: () => now.value,
-    kernelFactory: async ({ workspaceRoot }) => {
-      const kernel = new FakeKernel();
-      kernels.set(workspaceRoot, kernel);
-      return kernel as unknown as BrudKernel;
-    },
-    ...(idleTimeoutMs === undefined ? {} : { idleTimeoutMs }),
+    poll();
   });
-
-  return { registry, kernels, scheduler, now };
 }
 
-async function flush(): Promise<void> {
-  await new Promise<void>((resolve) => setImmediate(resolve));
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, timeoutMs);
+  });
 }
+
+after(async () => {
+  if (root !== '') {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 describe('WorkspaceRegistry', () => {
   it('spawns, boots, and lists a workspace', async () => {
-    const { registry, kernels } = createHarness();
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-'));
+    const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
+    const registry = new WorkspaceRegistry();
 
     try {
-      const workspace = await registry.spawn('/ws-a', []);
+      const workspace = await registry.spawn(workspaceRoot, []);
 
-      assert.equal(workspace.root, '/ws-a');
+      assert.equal(workspace.root, workspaceRoot);
       assert.equal(workspace.kernel.lifecycleState, 'RUNNING');
-      assert.equal(kernels.get('/ws-a')?.bootCount, 1);
-      assert.equal(kernels.get('/ws-a')?.bootedAtNamespaced, '/ws-a');
       assert.deepEqual(
-        [...(kernels.get('/ws-a')?.bootedKeys ?? [])].sort(),
-        [
-          'filesystem.root',
-          'history.root',
-          'pluginManager.root',
-          'plugins',
-          'router.root',
-          'settings.root',
-          'terminal.root',
-          'workspace.root',
-        ].sort(),
+        [...Object.keys(workspace.options)].sort(),
+        NAMESPACED_KEYS,
       );
-      assert.equal(kernels.get('/ws-a')?.bootedKeys.includes('workspaceRoot'), false);
-      assert.deepEqual(registry.list().map((entry) => entry.root), ['/ws-a']);
-      assert.equal(registry.get('/ws-a'), workspace);
+      assert.equal('workspaceRoot' in workspace.options, false);
+      assert.deepEqual(registry.list().map((entry) => entry.root), [workspaceRoot]);
+      assert.equal(registry.get(workspaceRoot), workspace);
     } finally {
       await registry.disposeAll();
     }
   });
 
   it('attaches and detaches clients and updates lastUsedAt', async () => {
-    const { registry, now } = createHarness();
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-attach-'));
+    const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
+    const registry = new WorkspaceRegistry();
 
     try {
-      const workspace = await registry.spawn('/ws-a', []);
+      const workspace = await registry.spawn(workspaceRoot, []);
       const spawnedAt = workspace.lastUsedAt.getTime();
 
-      now.value += 500;
-      registry.attachClient('/ws-a', 'client-1');
+      await delay(10);
+      registry.attachClient(workspaceRoot, 'client-1');
 
       assert.equal(workspace.clients.has('client-1'), true);
-      assert.equal(workspace.lastUsedAt.getTime(), spawnedAt + 500);
+      assert.ok(
+        workspace.lastUsedAt.getTime() > spawnedAt,
+        'attach must advance lastUsedAt',
+      );
+      const attachedAt = workspace.lastUsedAt.getTime();
 
-      now.value += 500;
+      await delay(10);
       registry.detachClient('client-1');
 
       assert.equal(workspace.clients.has('client-1'), false);
-      assert.equal(workspace.lastUsedAt.getTime(), spawnedAt + 1_000);
+      assert.ok(
+        workspace.lastUsedAt.getTime() > attachedAt,
+        'detach must advance lastUsedAt',
+      );
     } finally {
       await registry.disposeAll();
     }
   });
 
   it('rejects attaching to an unknown workspace', () => {
-    const { registry } = createHarness();
+    const registry = new WorkspaceRegistry();
 
-    assert.throws(() => registry.attachClient('/missing', 'client-1'), /not registered/u);
+    try {
+      assert.throws(() => registry.attachClient('/missing', 'client-1'), /not registered/u);
+    } finally {
+      void registry.disposeAll();
+    }
   });
 
   it('disposes a workspace by shutting its kernel down', async () => {
-    const { registry, kernels } = createHarness();
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-dispose-'));
+    const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
+    const registry = new WorkspaceRegistry();
 
-    await registry.spawn('/ws-a', []);
-    await registry.dispose('/ws-a');
+    await registry.spawn(workspaceRoot, []);
+    const kernel = registry.get(workspaceRoot)?.kernel;
+    assert.ok(kernel !== undefined);
 
-    assert.equal(registry.get('/ws-a'), undefined);
+    await registry.dispose(workspaceRoot);
+
+    assert.equal(registry.get(workspaceRoot), undefined);
     assert.deepEqual(registry.list(), []);
-    assert.equal(kernels.get('/ws-a')?.shutdownCount, 1);
-    assert.equal(kernels.get('/ws-a')?.lifecycleState, 'DISPOSED');
+    assert.equal(kernel.lifecycleState, 'DISPOSED');
 
     await registry.disposeAll();
   });
 
   it('disposes client-less workspaces after the idle window', async () => {
-    const { registry, kernels, scheduler, now } = createHarness(100);
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-idle-'));
+    const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
+    const registry = new WorkspaceRegistry({
+      idleTimeoutMs: 60,
+      idleCheckIntervalMs: 10,
+    });
 
     try {
-      await registry.spawn('/ws-a', []);
+      await registry.spawn(workspaceRoot, []);
+      const kernel = registry.get(workspaceRoot)?.kernel;
+      assert.ok(kernel !== undefined);
 
-      now.value += 500;
-      scheduler.firePending();
-      await flush();
+      await waitFor(() => registry.get(workspaceRoot) === undefined);
 
-      assert.equal(registry.get('/ws-a'), undefined);
-      assert.equal(kernels.get('/ws-a')?.shutdownCount, 1);
+      assert.equal(registry.get(workspaceRoot), undefined);
+      assert.equal(kernel.lifecycleState, 'DISPOSED');
     } finally {
       await registry.disposeAll();
     }
   });
 
   it('keeps attached workspaces alive across idle sweeps', async () => {
-    const { registry, scheduler, now } = createHarness(100);
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-keepalive-'));
+    const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
+    const registry = new WorkspaceRegistry({
+      idleTimeoutMs: 40,
+      idleCheckIntervalMs: 10,
+    });
 
     try {
-      await registry.spawn('/ws-a', []);
-      registry.attachClient('/ws-a', 'client-1');
+      await registry.spawn(workspaceRoot, []);
+      registry.attachClient(workspaceRoot, 'client-1');
 
-      now.value += 500;
-      scheduler.firePending();
-      await flush();
+      await delay(150);
 
-      assert.notEqual(registry.get('/ws-a'), undefined);
+      assert.notEqual(registry.get(workspaceRoot), undefined);
     } finally {
       await registry.disposeAll();
     }
   });
 
   it('isolates kernels per workspace and per registry', async () => {
-    const first = createHarness();
-    const second = createHarness();
+    root = await mkdtemp(join(tmpdir(), 'brud-registry-isolation-'));
+    const rootA = await makeWorkspace(join(root, 'ws-a'));
+    const rootB = await makeWorkspace(join(root, 'ws-b'));
+    const rootC = await makeWorkspace(join(root, 'ws-c'));
+    const first = new WorkspaceRegistry();
+    const second = new WorkspaceRegistry();
 
     try {
-      const workspaceA = await first.registry.spawn('/ws-a', []);
-      const workspaceB = await first.registry.spawn('/ws-b', []);
-      const otherRegistryA = await second.registry.spawn('/ws-a', []);
+      const workspaceA = await first.spawn(rootA, []);
+      const workspaceB = await first.spawn(rootB, []);
+      const otherRegistryA = await second.spawn(rootC, []);
 
       assert.notEqual(workspaceA.kernel, workspaceB.kernel);
       assert.notEqual(workspaceA.kernel, otherRegistryA.kernel);
       assert.deepEqual(
-        first.registry.list().map((entry) => entry.root),
-        ['/ws-a', '/ws-b'],
+        first.list().map((entry) => entry.root),
+        [rootA, rootB],
       );
-      assert.deepEqual(second.registry.list().map((entry) => entry.root), ['/ws-a']);
+      assert.deepEqual(second.list().map((entry) => entry.root), [rootC]);
     } finally {
-      await first.registry.disposeAll();
-      await second.registry.disposeAll();
+      await first.disposeAll();
+      await second.disposeAll();
     }
   });
 });

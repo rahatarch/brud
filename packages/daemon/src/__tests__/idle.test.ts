@@ -1,100 +1,91 @@
 import { strict as assert } from 'node:assert';
-import { describe, it } from 'node:test';
+import { mkdir, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { after, before, describe, it } from 'node:test';
 import {
   DEFAULT_IDLE_TIMEOUT_MS,
   IdleMonitor,
   MINIMUM_IDLE_TIMEOUT_MS,
 } from '../lifecycle/idle.js';
-import type { IdleTimerHandle, IdleTimerScheduler } from '../lifecycle/idle.js';
+import { createDaemon } from '../server/createDaemon.js';
+import type { RunningDaemon } from '../server/createDaemon.js';
 
-interface ScheduledTimer {
-  readonly callback: () => void;
-  readonly delayMs: number;
-  unrefCount: number;
-  cancelled: boolean;
-}
+let root = '';
+let workspaceRoot = '';
+let daemon: RunningDaemon | undefined;
+let previousRuntimeDir: string | undefined;
 
-class FakeScheduler implements IdleTimerScheduler {
-  readonly timers: ScheduledTimer[] = [];
+before(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-idle-'));
+  previousRuntimeDir = process.env.BRUD_DAEMON_RUNTIME_DIR;
+  process.env.BRUD_DAEMON_RUNTIME_DIR = join(root, 'runtime');
+  workspaceRoot = join(root, 'workspace');
+  await mkdir(workspaceRoot, { recursive: true });
+  workspaceRoot = await realpath(workspaceRoot);
 
-  private readonly handles = new Map<IdleTimerHandle, ScheduledTimer>();
+  daemon = await createDaemon({ workspaceRoot });
+});
 
-  setTimeout(callback: () => void, delayMs: number): IdleTimerHandle {
-    const timer: ScheduledTimer = { callback, delayMs, unrefCount: 0, cancelled: false };
-    const handle: IdleTimerHandle = {
-      unref: () => {
-        timer.unrefCount += 1;
-      },
+after(async () => {
+  if (daemon !== undefined) {
+    await daemon.shutdown();
+  }
+
+  if (previousRuntimeDir === undefined) {
+    delete process.env.BRUD_DAEMON_RUNTIME_DIR;
+  } else {
+    process.env.BRUD_DAEMON_RUNTIME_DIR = previousRuntimeDir;
+  }
+
+  await rm(root, { recursive: true, force: true });
+});
+
+function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  return new Promise<void>((resolve, reject) => {
+    const poll = (): void => {
+      if (predicate()) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() >= deadline) {
+        reject(new Error('condition was not met before the deadline'));
+        return;
+      }
+
+      setTimeout(poll, 5);
     };
 
-    this.timers.push(timer);
-    this.handles.set(handle, timer);
-
-    return handle;
-  }
-
-  clearTimeout(handle: IdleTimerHandle): void {
-    const timer = this.handles.get(handle);
-
-    if (timer !== undefined) {
-      timer.cancelled = true;
-    }
-  }
-
-  get pending(): readonly ScheduledTimer[] {
-    return this.timers.filter((timer) => !timer.cancelled);
-  }
-
-  firePending(): void {
-    const pending = this.pending;
-
-    for (const timer of pending) {
-      timer.cancelled = true;
-      timer.callback();
-    }
-  }
-}
-
-function createMonitor(
-  scheduler: FakeScheduler,
-  idleTimeoutMs?: number,
-): { monitor: IdleMonitor; idleCount: () => number } {
-  let idleCount = 0;
-  const monitor = new IdleMonitor({
-    scheduler,
-    ...(idleTimeoutMs === undefined ? {} : { idleTimeoutMs }),
-    onIdleShutdown: () => {
-      idleCount += 1;
-    },
+    poll();
   });
-
-  return { monitor, idleCount: () => idleCount };
 }
 
 describe('IdleMonitor', () => {
   it('defaults to the five minute idle window', () => {
-    const scheduler = new FakeScheduler();
-    const { monitor } = createMonitor(scheduler);
-
-    assert.equal(monitor.idleTimeoutMs, DEFAULT_IDLE_TIMEOUT_MS);
-    monitor.dispose();
+    assert.ok(daemon !== undefined);
+    assert.equal(daemon.idleMonitor.idleTimeoutMs, DEFAULT_IDLE_TIMEOUT_MS);
   });
 
   it('clamps the configured timeout to the minimum window', () => {
-    const scheduler = new FakeScheduler();
-    const { monitor } = createMonitor(scheduler, 25);
+    const monitor = new IdleMonitor({
+      idleTimeoutMs: 25,
+      onIdleShutdown: () => undefined,
+    });
 
-    assert.equal(monitor.idleTimeoutMs, MINIMUM_IDLE_TIMEOUT_MS);
-    monitor.dispose();
+    try {
+      assert.equal(monitor.idleTimeoutMs, MINIMUM_IDLE_TIMEOUT_MS);
+    } finally {
+      monitor.dispose();
+    }
   });
 
   it('rejects non-positive and non-finite timeouts', () => {
-    const scheduler = new FakeScheduler();
-
     for (const invalid of [0, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       assert.throws(
         () => new IdleMonitor({
-          scheduler,
           idleTimeoutMs: invalid,
           onIdleShutdown: () => undefined,
         }),
@@ -104,58 +95,72 @@ describe('IdleMonitor', () => {
   });
 
   it('arms only when both connections and in-flight requests are zero', () => {
-    const scheduler = new FakeScheduler();
-    const { monitor } = createMonitor(scheduler, 5_000);
+    assert.ok(daemon !== undefined);
+    const monitor = daemon.idleMonitor;
 
     monitor.update(0, 0);
     assert.equal(monitor.isArmed, true);
-    assert.equal(scheduler.pending.length, 1);
-    assert.equal(scheduler.pending[0]?.delayMs, 5_000);
-    assert.equal(scheduler.pending[0]?.unrefCount, 1);
 
     monitor.update(0, 0);
-    assert.equal(scheduler.timers.length, 1, 'arming twice must not duplicate timers');
+    assert.equal(monitor.isArmed, true, 'arming twice must keep a single armed monitor');
 
     monitor.update(1, 0);
     assert.equal(monitor.isArmed, false);
-    assert.equal(scheduler.pending.length, 0);
 
     monitor.update(0, 2);
     assert.equal(monitor.isArmed, false);
 
     monitor.update(0, 0);
     assert.equal(monitor.isArmed, true);
-    assert.equal(scheduler.pending.length, 1);
 
-    monitor.dispose();
+    monitor.update(1, 0);
   });
 
-  it('invokes the idle shutdown callback once when the timer fires', () => {
-    const scheduler = new FakeScheduler();
-    const { monitor, idleCount } = createMonitor(scheduler, 5_000);
+  it('invokes the idle shutdown callback once per armed window', async () => {
+    let idleCount = 0;
+    const monitor = new IdleMonitor({
+      idleTimeoutMs: 30,
+      minimumIdleTimeoutMs: 20,
+      onIdleShutdown: () => {
+        idleCount += 1;
+      },
+    });
 
-    monitor.update(0, 0);
-    scheduler.firePending();
+    try {
+      monitor.update(0, 0);
+      monitor.update(0, 0);
+      await waitFor(() => idleCount === 1);
 
-    assert.equal(idleCount(), 1);
-    assert.equal(monitor.isArmed, false);
+      assert.equal(idleCount, 1, 'arming twice must not duplicate timers');
+      assert.equal(monitor.isArmed, false);
 
-    monitor.update(0, 0);
-    scheduler.firePending();
+      monitor.update(0, 0);
+      await waitFor(() => idleCount === 2);
 
-    assert.equal(idleCount(), 2);
-    monitor.dispose();
+      assert.equal(idleCount, 2);
+    } finally {
+      monitor.dispose();
+    }
   });
 
-  it('does not fire after disposal', () => {
-    const scheduler = new FakeScheduler();
-    const { monitor, idleCount } = createMonitor(scheduler, 5_000);
+  it('does not fire after disposal', async () => {
+    let idleCount = 0;
+    const monitor = new IdleMonitor({
+      idleTimeoutMs: 30,
+      minimumIdleTimeoutMs: 20,
+      onIdleShutdown: () => {
+        idleCount += 1;
+      },
+    });
 
     monitor.update(0, 0);
     monitor.dispose();
-    scheduler.firePending();
 
-    assert.equal(idleCount(), 0);
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 80);
+    });
+
+    assert.equal(idleCount, 0);
     assert.equal(monitor.isArmed, false);
 
     monitor.update(0, 0);

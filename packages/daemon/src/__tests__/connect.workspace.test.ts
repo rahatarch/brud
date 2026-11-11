@@ -1,39 +1,19 @@
-import { before, describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as Protocol from '@brud/protocol';
 import type { DaemonCallerTier, RpcRequest } from '@brud/protocol';
 import type {
-  BrudKernel,
   IBrudToolsService,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { DispatchSession, RequestDispatcher } from '../server/dispatch.js';
+import { RequestDispatcher as Dispatcher } from '../server/dispatch.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 
 const TOKEN = 'connect-workspace-token-0123456789abcdef';
-const PRIMARY_ROOT = join(tmpdir(), 'brud-connect-primary');
-
-class FakeKernel {
-  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
-
-  public bootCount = 0;
-
-  async boot(): Promise<void> {
-    this.bootCount += 1;
-    this.lifecycleState = 'RUNNING';
-  }
-
-  async shutdown(): Promise<void> {
-    this.lifecycleState = 'DISPOSED';
-  }
-
-  requestAccess<TService>(): TService {
-    throw new Error('not used');
-  }
-}
 
 class TestSession implements DispatchSession {
   public workspaceRoot: string | undefined;
@@ -49,9 +29,17 @@ class TestSession implements DispatchSession {
   }
 }
 
+let baseRoot = '';
+let primaryRoot = '';
 let dispatcher: RequestDispatcher;
 let registry: WorkspaceRegistry;
-let spawnedRoots: string[];
+
+async function makeWorkspace(name: string): Promise<string> {
+  const root = join(baseRoot, name);
+  await mkdir(root, { recursive: true });
+
+  return await realpath(root);
+}
 
 function connectRequest(params: Record<string, unknown>, id: number): RpcRequest {
   return {
@@ -64,23 +52,22 @@ function connectRequest(params: Record<string, unknown>, id: number): RpcRequest
 }
 
 before(async () => {
+  baseRoot = await mkdtemp(join(tmpdir(), 'brud-connect-'));
+  primaryRoot = await makeWorkspace('primary');
   const kernelModule = await import('@brud/kernel');
-  const { RequestDispatcher } = await import('../server/dispatch.js');
+  registry = new WorkspaceRegistry();
 
-  spawnedRoots = [];
-  registry = new WorkspaceRegistry({
-    kernelFactory: async ({ workspaceRoot }) => {
-      spawnedRoots.push(workspaceRoot);
-      return new FakeKernel() as unknown as BrudKernel;
-    },
-  });
-
-  dispatcher = new RequestDispatcher({
+  dispatcher = new Dispatcher({
     registry,
     toolsToken: kernelModule.BrudToolsToken as ServiceToken<IBrudToolsService>,
     token: TOKEN,
-    workspaceRoot: PRIMARY_ROOT,
+    workspaceRoot: primaryRoot,
   });
+});
+
+after(async () => {
+  await registry.disposeAll();
+  await rm(baseRoot, { recursive: true, force: true });
 });
 
 describe('daemon.connect workspace routing', () => {
@@ -112,7 +99,7 @@ describe('daemon.connect workspace routing', () => {
         params: {
           protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
           token: TOKEN,
-          workspaceRoot: join(tmpdir(), 'brud-connect-missing-tier'),
+          workspaceRoot: await makeWorkspace('missing-tier'),
         },
       },
       session,
@@ -132,7 +119,7 @@ describe('daemon.connect workspace routing', () => {
         {
           protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
           token: TOKEN,
-          workspaceRoot: join(tmpdir(), 'brud-connect-invalid-tier'),
+          workspaceRoot: await makeWorkspace('invalid-tier'),
           tier: 'admin',
         },
         11,
@@ -191,10 +178,7 @@ describe('daemon.connect workspace routing', () => {
       assert.equal(response.error.code, Protocol.INVALID_PARAMS);
       assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
       assert.equal(session.handshaken, false);
-    }
-
-    for (const root of deniedRoots) {
-      assert.equal(spawnedRoots.includes(root), false, `${root} must never be spawned`);
+      assert.equal(registry.get(root), undefined, `${root} must never be spawned`);
     }
   });
 
@@ -220,13 +204,14 @@ describe('daemon.connect workspace routing', () => {
       assert.ok(Protocol.isRpcErrorResponse(response), JSON.stringify(response));
       assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
       assert.equal(session.handshaken, false);
+      assert.equal(registry.get(link), undefined);
     } finally {
       await rm(base, { recursive: true, force: true });
     }
   });
 
   it('spawns a kernel for a valid absolute workspaceRoot and attaches the client', async () => {
-    const root = join(tmpdir(), 'brud-connect-workspace-a');
+    const root = await makeWorkspace('workspace-a');
     const session = new TestSession('c_valid');
     const response = await dispatcher.dispatch(
       connectRequest(
@@ -251,11 +236,11 @@ describe('daemon.connect workspace routing', () => {
     assert.equal(session.tier, 'ui');
     assert.equal(session.handshaken, true);
     assert.equal(registry.get(root)?.clients.has('c_valid'), true);
-    assert.equal(spawnedRoots.filter((entry) => entry === root).length, 1);
+    assert.equal(registry.get(root)?.kernel.lifecycleState, 'RUNNING');
   });
 
   it('reuses an existing workspace kernel for a second client', async () => {
-    const root = join(tmpdir(), 'brud-connect-workspace-b');
+    const root = await makeWorkspace('workspace-b');
     const first = new TestSession('c_reuse_1');
     const second = new TestSession('c_reuse_2');
 
@@ -270,6 +255,9 @@ describe('daemon.connect workspace routing', () => {
       ),
       first,
     );
+    const kernel = registry.get(root)?.kernel;
+    assert.ok(kernel !== undefined);
+
     const response = await dispatcher.dispatch(
       connectRequest(
         {
@@ -283,12 +271,12 @@ describe('daemon.connect workspace routing', () => {
     );
 
     assert.ok(Protocol.isRpcSuccessResponse(response));
-    assert.equal(spawnedRoots.filter((entry) => entry === root).length, 1);
+    assert.equal(registry.get(root)?.kernel, kernel);
     assert.equal(registry.get(root)?.clients.size, 2);
   });
 
   it('rejects an invalid token before spawning', async () => {
-    const root = join(tmpdir(), 'brud-connect-workspace-c');
+    const root = await makeWorkspace('workspace-c');
     const session = new TestSession('c_bad_token');
     const response = await dispatcher.dispatch(
       connectRequest(

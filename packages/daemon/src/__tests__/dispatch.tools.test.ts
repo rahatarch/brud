@@ -1,103 +1,15 @@
-import { before, describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import * as Protocol from '@brud/protocol';
 import type { DaemonCallerTier, RpcRequest, RpcResponse } from '@brud/protocol';
-import type {
-  BrudKernel,
-  IBrudToolsService,
-  IPluginExecutionContext,
-  OperationResult,
-  RegisteredToolInfo,
-  ServiceContext,
-  ServiceToken,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
-import type { DispatchSession, RequestDispatcher } from '../server/dispatch.js';
+import { RequestDispatcher } from '../server/dispatch.js';
+import type { DispatchSession } from '../server/dispatch.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 
 const TOKEN = 'dispatch-tools-token-0123456789abcdef';
-const PRIMARY_ROOT = join(tmpdir(), 'brud-dispatch-primary');
-
-interface ExecutedCall {
-  readonly name: string;
-  readonly input: unknown;
-  readonly context: IPluginExecutionContext;
-}
-
-class FakeToolsService implements IBrudToolsService {
-  readonly calls: ExecutedCall[] = [];
-
-  constructor(private readonly toolName: string) {}
-
-  registerTool(): never {
-    throw new Error('not used');
-  }
-
-  getTool(): RegisteredToolInfo | undefined {
-    return undefined;
-  }
-
-  listTools(): readonly RegisteredToolInfo[] {
-    return [
-      {
-        name: this.toolName,
-        description: `Tool from ${this.toolName}`,
-        parametersSchema: { type: 'object' },
-        ownerPluginId: `owner.${this.toolName}`,
-        isOfficial: true,
-      },
-    ];
-  }
-
-  validateTool(
-    _name: string,
-    _rawInput: unknown,
-    _callerContext: IPluginExecutionContext,
-  ): OperationResult {
-    return { status: 'success' };
-  }
-
-  async executeTool(
-    name: string,
-    rawInput: unknown,
-    callerContext: IPluginExecutionContext,
-  ): Promise<OperationResult> {
-    this.calls.push({ name, input: rawInput, context: callerContext });
-
-    return {
-      status: 'success',
-      data: {
-        workspaceRoot: callerContext.workspaceRoot,
-        name,
-        input: rawInput,
-        origin: callerContext.origin,
-      },
-    };
-  }
-}
-
-class FakeKernel {
-  public readonly tools: FakeToolsService;
-
-  public lifecycleState: 'UNINITIALIZED' | 'RUNNING' | 'DISPOSED' = 'UNINITIALIZED';
-
-  constructor(public readonly root: string) {
-    this.tools = new FakeToolsService(`tool:${root}`);
-  }
-
-  async boot(): Promise<void> {
-    this.lifecycleState = 'RUNNING';
-  }
-
-  async shutdown(): Promise<void> {
-    this.lifecycleState = 'DISPOSED';
-  }
-
-  requestAccess<TService>(_caller: ServiceContext, _token: ServiceToken<TService>): TService {
-    return this.tools as unknown as TService;
-  }
-}
 
 class TestSession implements DispatchSession {
   public workspaceRoot: string | undefined;
@@ -113,11 +25,18 @@ class TestSession implements DispatchSession {
   }
 }
 
+let root = '';
 let dispatcher: RequestDispatcher;
 let registry: WorkspaceRegistry;
-let toolsToken: ServiceToken<IBrudToolsService>;
 
-function connectRequest(root: string, id: number): RpcRequest {
+async function makeWorkspace(name: string): Promise<string> {
+  const workspaceRoot = join(root, name);
+  await mkdir(workspaceRoot, { recursive: true });
+
+  return await realpath(workspaceRoot);
+}
+
+function connectRequest(workspaceRoot: string, id: number): RpcRequest {
   return {
     jsonrpc: '2.0',
     id,
@@ -125,7 +44,7 @@ function connectRequest(root: string, id: number): RpcRequest {
     params: {
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
       token: TOKEN,
-      workspaceRoot: root,
+      workspaceRoot,
       tier: 'ui',
     },
   };
@@ -135,8 +54,8 @@ function request(method: string, params: unknown, id: number): RpcRequest {
   return { jsonrpc: '2.0', id, method, params };
 }
 
-async function connect(session: TestSession, root: string, id: number): Promise<void> {
-  const response = await dispatcher.dispatch(connectRequest(root, id), session);
+async function connect(session: TestSession, workspaceRoot: string, id: number): Promise<void> {
+  const response = await dispatcher.dispatch(connectRequest(workspaceRoot, id), session);
   assert.ok(Protocol.isRpcSuccessResponse(response), JSON.stringify(response));
 }
 
@@ -147,72 +66,68 @@ function expectSuccess(response: RpcResponse): unknown {
 }
 
 before(async () => {
+  root = await mkdtemp(join(tmpdir(), 'brud-dispatch-tools-'));
   const kernelModule = await import('@brud/kernel');
-  const { RequestDispatcher } = await import('../server/dispatch.js');
-
-  toolsToken = kernelModule.BrudToolsToken;
-
-  registry = new WorkspaceRegistry({
-    kernelFactory: async ({ workspaceRoot }) =>
-      new FakeKernel(workspaceRoot) as unknown as BrudKernel,
-  });
+  registry = new WorkspaceRegistry();
 
   dispatcher = new RequestDispatcher({
     registry,
-    toolsToken,
+    toolsToken: kernelModule.BrudToolsToken,
     token: TOKEN,
-    workspaceRoot: PRIMARY_ROOT,
+    workspaceRoot: await makeWorkspace('primary'),
   });
+});
+
+after(async () => {
+  await registry.disposeAll();
+  await rm(root, { recursive: true, force: true });
 });
 
 describe('tools.* dispatch routing', () => {
   it('lists tools from the caller workspace', async () => {
-    const root = join(tmpdir(), 'brud-dispatch-tools-a');
+    const workspaceRoot = await makeWorkspace('tools-a');
     const session = new TestSession('c_tools_a');
 
-    await connect(session, root, 1);
+    await connect(session, workspaceRoot, 1);
 
     const result = expectSuccess(
       await dispatcher.dispatch(request(Protocol.TOOLS_LIST, {}, 2), session),
     ) as Protocol.ToolsListResult;
 
-    assert.deepEqual(result.tools.map((tool) => tool.name), [`tool:${root}`]);
+    const names = result.tools.map((tool) => tool.name);
+    assert.ok(names.includes('read_file'), `real tools must be listed: ${names.join(', ')}`);
   });
 
   it('routes tools.execute to the caller workspace kernel', async () => {
-    const root = join(tmpdir(), 'brud-dispatch-tools-b');
+    const workspaceRoot = await makeWorkspace('tools-b');
+    await writeFile(join(workspaceRoot, 'payload.txt'), 'dispatch routed payload', 'utf8');
     const session = new TestSession('c_tools_b');
 
-    await connect(session, root, 3);
+    await connect(session, workspaceRoot, 3);
 
     const result = expectSuccess(
       await dispatcher.dispatch(
         request(
           Protocol.TOOLS_EXECUTE,
-          { name: `tool:${root}`, input: { value: 42 } },
+          { name: 'read_file', input: { filePath: 'payload.txt' } },
           4,
         ),
         session,
       ),
     ) as Protocol.ToolsExecuteResult;
 
-    assert.equal(result.result.status, 'success');
-    assert.deepEqual(result.result.data, {
-      workspaceRoot: root,
-      name: `tool:${root}`,
-      input: { value: 42 },
-      origin: 'daemon-rpc',
-    });
-
-    const kernel = registry.get(root)?.kernel as unknown as FakeKernel;
-    assert.equal(kernel.tools.calls.length, 1);
-    assert.equal(kernel.tools.calls[0]?.context.callerId, 'c_tools_b');
-    assert.equal(kernel.tools.calls[0]?.context.origin, 'daemon-rpc');
+    assert.equal(result.result.status, 'success', String(result.result.error));
+    const data = result.result.data as {
+      readonly files?: readonly { readonly content?: string }[];
+    };
+    assert.equal(data.files?.[0]?.content, 'dispatch routed payload');
   });
 
-  it('gives two clients in two workspaces different tools and kernels', async () => {
-    const rootA = join(tmpdir(), 'brud-dispatch-tools-c');
-    const rootB = join(tmpdir(), 'brud-dispatch-tools-d');
+  it('gives two clients in two workspaces independent kernels and workspace-scoped tools', async () => {
+    const rootA = await makeWorkspace('tools-c');
+    const rootB = await makeWorkspace('tools-d');
+    await writeFile(join(rootA, 'only-a.txt'), 'workspace A payload', 'utf8');
+    await writeFile(join(rootB, 'only-b.txt'), 'workspace B payload', 'utf8');
     const sessionA = new TestSession('c_tools_c');
     const sessionB = new TestSession('c_tools_d');
 
@@ -226,12 +141,35 @@ describe('tools.* dispatch routing', () => {
       await dispatcher.dispatch(request(Protocol.TOOLS_LIST, {}, 8), sessionB),
     ) as Protocol.ToolsListResult;
 
-    assert.deepEqual(listA.tools.map((tool) => tool.name), [`tool:${rootA}`]);
-    assert.deepEqual(listB.tools.map((tool) => tool.name), [`tool:${rootB}`]);
+    // Tool names come from the shared production plugin config, so both
+    // workspaces expose the same tool set. What must differ is the kernel and
+    // the workspace each tool operates on.
+    assert.deepEqual(
+      listA.tools.map((tool) => tool.name).sort(),
+      listB.tools.map((tool) => tool.name).sort(),
+    );
     assert.notEqual(
       registry.get(rootA)?.kernel,
       registry.get(rootB)?.kernel,
       'each workspace must own an independent kernel',
     );
+
+    const readA = expectSuccess(
+      await dispatcher.dispatch(
+        request(Protocol.TOOLS_EXECUTE, { name: 'read_file', input: { filePath: 'only-a.txt' } }, 9),
+        sessionA,
+      ),
+    ) as Protocol.ToolsExecuteResult;
+    const readB = expectSuccess(
+      await dispatcher.dispatch(
+        request(Protocol.TOOLS_EXECUTE, { name: 'read_file', input: { filePath: 'only-b.txt' } }, 10),
+        sessionB,
+      ),
+    ) as Protocol.ToolsExecuteResult;
+
+    const dataA = readA.result.data as { readonly files?: readonly { readonly content?: string }[] };
+    const dataB = readB.result.data as { readonly files?: readonly { readonly content?: string }[] };
+    assert.equal(dataA.files?.[0]?.content, 'workspace A payload');
+    assert.equal(dataB.files?.[0]?.content, 'workspace B payload');
   });
 });

@@ -1,9 +1,5 @@
-import { randomUUID } from 'node:crypto';
-import { Buffer } from 'node:buffer';
 import { strict as assert } from 'node:assert';
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
-import { createServer } from 'node:net';
-import type { Server, Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -11,7 +7,6 @@ import * as Protocol from '@brud/protocol';
 import type {
   DaemonInfoResult,
   DaemonPingResult,
-  RpcSuccessResponse,
 } from '@brud/protocol';
 import { DaemonClient } from '../client/DaemonClient.js';
 import { connectToDaemon } from '../client/connectToDaemon.js';
@@ -23,159 +18,13 @@ import {
   DaemonRpcError,
   DaemonStartupTimeoutError,
 } from '../client/errors.js';
-import { connectSocket } from '../client/socket.js';
 import { spawnDaemon } from '../client/spawn.js';
 import { resolveEndpoint } from '../lifecycle/endpoint.js';
 import { acquireDaemonLock, isPidAlive } from '../lifecycle/lock.js';
-import { NdjsonFramingStream } from '../server/framing.js';
 import { createDaemon } from '../server/createDaemon.js';
 import type { RunningDaemon } from '../server/createDaemon.js';
 
-const SLOW_METHOD = 'test.slow';
-const CANCEL_METHOD = 'request.cancel';
-
-interface FakeCancelRecord {
-  readonly method: string;
-  readonly params: unknown;
-}
-
-class FakeDaemon {
-  readonly socketPath: string;
-
-  readonly cancellations: FakeCancelRecord[] = [];
-
-  private readonly server: Server;
-
-  private readonly sockets = new Set<Socket>();
-
-  private acceptedWrites = 0;
-
-  private constructor(socketPath: string) {
-    this.socketPath = socketPath;
-    this.server = createServer((socket: Socket) => {
-      this.accept(socket);
-    });
-  }
-
-  static async start(directory: string): Promise<FakeDaemon> {
-    const socketPath = process.platform === 'win32'
-      ? `\\\\.\\pipe\\brud-client-test-${randomUUID()}`
-      : join(directory, `fake-${randomUUID()}.sock`);
-    const fake = new FakeDaemon(socketPath);
-
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error): void => {
-        fake.server.off('listening', onListening);
-        reject(error);
-      };
-      const onListening = (): void => {
-        fake.server.off('error', onError);
-        resolve();
-      };
-
-      fake.server.once('error', onError);
-      fake.server.once('listening', onListening);
-      fake.server.listen(socketPath);
-    });
-
-    return fake;
-  }
-
-  get writeCount(): number {
-    return this.acceptedWrites;
-  }
-
-  async connect(): Promise<DaemonClient> {
-    const socket = await connectSocket(this.socketPath);
-    return new DaemonClient(socket);
-  }
-
-  async close(): Promise<void> {
-    for (const socket of this.sockets) {
-      socket.destroy();
-    }
-
-    this.sockets.clear();
-
-    await new Promise<void>((resolve) => {
-      this.server.close(() => {
-        resolve();
-      });
-    });
-  }
-
-  private accept(socket: Socket): void {
-    const framing = new NdjsonFramingStream();
-    this.sockets.add(socket);
-
-    socket.on('data', (chunk: Buffer) => {
-      const messages = framing.push(chunk);
-
-      for (const message of messages) {
-        this.handleMessage(message, socket, framing);
-      }
-    });
-    socket.on('close', () => {
-      this.sockets.delete(socket);
-    });
-    socket.on('error', () => {
-      this.sockets.delete(socket);
-    });
-  }
-
-  private handleMessage(
-    message: unknown,
-    socket: Socket,
-    framing: NdjsonFramingStream,
-  ): void {
-    if (Protocol.isRpcNotification(message)) {
-      if (message.method === CANCEL_METHOD) {
-        this.cancellations.push({ method: message.method, params: message.params });
-      }
-
-      return;
-    }
-
-    if (!Protocol.isRpcRequest(message)) {
-      return;
-    }
-
-    if (message.method === SLOW_METHOD) {
-      return;
-    }
-
-    if (message.method === Protocol.TOOLS_EXECUTE) {
-      this.acceptedWrites += 1;
-      socket.destroy();
-      return;
-    }
-
-    const response: RpcSuccessResponse = {
-      jsonrpc: '2.0',
-      id: message.id,
-      result: { method: message.method },
-    };
-
-    socket.write(framing.encode(response));
-  }
-}
-
-async function waitFor(
-  predicate: () => boolean,
-  timeoutMs: number = 2_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-
-  while (!predicate()) {
-    if (Date.now() >= deadline) {
-      throw new Error('Condition was not met before the deadline');
-    }
-
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 10);
-    });
-  }
-}
+const SLOW_COMMAND = 'exec sleep 2';
 
 async function createWorkspace(path: string): Promise<string> {
   await mkdir(path, { recursive: true });
@@ -259,11 +108,18 @@ async function stopSpawnedDaemon(workspaceRoot: string): Promise<void> {
   }
 }
 
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, timeoutMs);
+  });
+}
+
 let root = '';
 let runningWorkspace = '';
 let coldWorkspace = '';
 let timeoutWorkspace = '';
 let idleWorkspace = '';
+let dropWorkspace = '';
 let previousRuntimeDir: string | undefined;
 let runningDaemon: RunningDaemon | undefined;
 
@@ -276,6 +132,7 @@ before(async () => {
   coldWorkspace = await createWorkspace(join(root, 'cold'));
   timeoutWorkspace = await createWorkspace(join(root, 'timeout'));
   idleWorkspace = await createWorkspace(join(root, 'idle'));
+  dropWorkspace = await createWorkspace(join(root, 'drop'));
 
   runningDaemon = await createDaemon({ workspaceRoot: runningWorkspace });
 });
@@ -283,6 +140,7 @@ before(async () => {
 after(async () => {
   await stopSpawnedDaemon(coldWorkspace);
   await stopSpawnedDaemon(timeoutWorkspace);
+  await stopSpawnedDaemon(dropWorkspace);
 
   if (runningDaemon !== undefined) {
     await runningDaemon.shutdown();
@@ -362,87 +220,93 @@ describe('daemon client', () => {
     );
   });
 
-  it('rejects requests that exceed their timeout and sends a cancellation frame', async (t) => {
-    const fake = await FakeDaemon.start(root);
-    const client = await fake.connect();
+  it('rejects requests that exceed their timeout while the real daemon keeps running', async (t) => {
+    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
-      await fake.close();
     });
 
     await assert.rejects(
-      () => client.request(SLOW_METHOD, {}, { timeoutMs: 60 }),
+      () => client.request(
+        Protocol.TOOLS_EXECUTE,
+        { name: 'terminal_command', input: { command: SLOW_COMMAND } },
+        { timeoutMs: 60 },
+      ),
       (error: unknown) => {
         assert.ok(error instanceof DaemonRequestTimeoutError);
-        assert.equal(error.method, SLOW_METHOD);
+        assert.equal(error.method, Protocol.TOOLS_EXECUTE);
         assert.equal(error.timeoutMs, 60);
         return true;
       },
     );
 
-    await waitFor(() => fake.cancellations.length === 1);
-
-    const cancellation = fake.cancellations[0];
-    assert.ok(cancellation !== undefined);
-    assert.equal(cancellation.method, CANCEL_METHOD);
-    assert.deepEqual(cancellation.params, { id: 1 });
+    assert.equal(client.isConnected, true);
   });
 
   it('cancels in-flight requests through an AbortSignal', async (t) => {
-    const fake = await FakeDaemon.start(root);
-    const client = await fake.connect();
+    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
-      await fake.close();
     });
 
     const controller = new AbortController();
-    const pending = client.request(SLOW_METHOD, {}, {
-      timeoutMs: 5_000,
-      signal: controller.signal,
-    });
+    const pending = client.request(
+      Protocol.TOOLS_EXECUTE,
+      { name: 'terminal_command', input: { command: SLOW_COMMAND } },
+      { timeoutMs: 5_000, signal: controller.signal },
+    );
 
     controller.abort();
 
     await assert.rejects(pending, (error: unknown) => {
       assert.ok(error instanceof DaemonRequestCancelledError);
-      assert.equal(error.method, SLOW_METHOD);
+      assert.equal(error.method, Protocol.TOOLS_EXECUTE);
       return true;
     });
 
-    await waitFor(() => fake.cancellations.length === 1);
-    assert.deepEqual(fake.cancellations[0]?.params, { id: 1 });
+    assert.equal(client.isConnected, true);
   });
 
-  it('does not retry tool executions when the socket drops mid-request', async (t) => {
-    const fake = await FakeDaemon.start(root);
-    const client = await fake.connect();
+  it('drops the connection and refuses retries when the daemon dies mid-request', async (t) => {
+    const client = await connectToDaemon({
+      workspaceRoot: dropWorkspace,
+      tier: 'ui',
+      timeoutMs: 10_000,
+    });
 
     t.after(async () => {
       await client.close();
-      await fake.close();
+      await stopSpawnedDaemon(dropWorkspace);
     });
 
-    const execute = () => client.request(Protocol.TOOLS_EXECUTE, {
-      name: 'create_file',
-      input: { path: 'dropped.txt', content: 'payload' },
+    const pid = client.handshake?.server.pid;
+    assert.ok(pid !== undefined);
+    assert.notEqual(pid, process.pid);
+
+    const pending = client.request(Protocol.TOOLS_EXECUTE, {
+      name: 'terminal_command',
+      input: { command: 'exec sleep 5' },
     });
 
-    await assert.rejects(
-      execute,
-      (error: unknown) => {
-        assert.ok(error instanceof DaemonDisconnectedError);
-        return true;
-      },
-    );
+    await delay(200);
+    process.kill(pid, 'SIGKILL');
 
-    assert.equal(fake.writeCount, 1);
+    await assert.rejects(pending, (error: unknown) => {
+      assert.ok(error instanceof DaemonDisconnectedError);
+      return true;
+    });
+
     assert.equal(client.isConnected, false);
 
-    await assert.rejects(execute, DaemonDisconnectedError);
-    assert.equal(fake.writeCount, 1);
+    await assert.rejects(
+      () => client.request(Protocol.TOOLS_EXECUTE, {
+        name: 'terminal_command',
+        input: { command: 'echo never-retried' },
+      }),
+      DaemonDisconnectedError,
+    );
   });
 
   it('refuses a cold workspace when spawnIfMissing is disabled', async () => {

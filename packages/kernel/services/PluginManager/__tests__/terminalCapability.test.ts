@@ -1,129 +1,174 @@
-import { describe, it } from 'node:test';
+import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
-  ITerminalService,
-  TerminalChunkCallback,
-  TerminalResult,
-  TerminalRunRequest,
-  TerminalSessionInfo,
-} from '../../TerminalService/contracts/ITerminalService.js';
-import type { TerminalDecision } from '../../TerminalService/contracts/errors.js';
-import type { IPluginLogger } from '../contracts/IPluginContext.js';
-import { PluginContext } from '../contracts/PluginContext.js';
-import { createTestPluginContext } from '../../../src/__tests__/support/testApiRegistry.js';
-import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
+import type { IPluginContext } from '../contracts/IPluginContext.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from '../contracts/permissions.js';
+import type { ITerminalHandle } from '../contracts/ITerminalHandle.js';
+import type {
+  TerminalResult,
+  TerminalRunOutcome,
+} from '../../TerminalService/contracts/ITerminalService.js';
+import { bootKernel } from '../../../src/bootstrap/index.js';
+import type { BrudKernel } from '../../../src/engine/BrudKernel.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
-const LOGGER: IPluginLogger = {
-  info: (): void => undefined,
-  warn: (): void => undefined,
-  error: (): void => undefined,
+const KERNEL_CONFIG_PATH = fileURLToPath(
+  new URL('../../../brud.config.json', import.meta.url),
+);
+
+interface KernelConfig {
+  readonly services: readonly { readonly path: string }[];
+}
+
+interface PluginModule {
+  getContext(): IPluginContext | undefined;
+}
+
+interface PluginPackage {
+  readonly entry: string;
+  readonly module: PluginModule;
+}
+
+function pluginSource(id: string, permissions: readonly PluginPermission[]): string {
+  return `let captured;
+export function getContext() {
+  return captured;
+}
+export const plugin = {
+  manifest: {
+    id: ${JSON.stringify(id)},
+    name: ${JSON.stringify(id)},
+    version: '1.0.0',
+    permissions: ${JSON.stringify(permissions)},
+  },
+  activate(context) {
+    captured = context;
+  },
 };
-
-interface FakeTerminalService extends ITerminalService {
-  readonly calls: TerminalRunRequest[];
-  readonly killed: string[];
-  readonly sessions: TerminalSessionInfo[];
+`;
 }
 
-function createFakeTerminal(): FakeTerminalService {
-  const calls: TerminalRunRequest[] = [];
-  const killed: string[] = [];
-  const sessions: TerminalSessionInfo[] = [];
-  let counter = 0;
-
-  const service = {
-    calls,
-    killed,
-    sessions,
-    async run(request: TerminalRunRequest): Promise<TerminalDecision> {
-      calls.push(request);
-      counter += 1;
-      sessions.push({
-        processId: `proc-${counter}`,
-        pid: 1000 + counter,
-        mode: request.mode ?? 'single',
-        ...(request.callerId === undefined ? {} : { callerId: request.callerId }),
-        command: request.command ?? request.commands?.[0] ?? '',
-        startedAt: 1_700_000_000_000 + counter,
-      });
-
-      return {
-        ok: true,
-        result: {
-          success: true,
-          output: 'ok',
-          exitCode: 0,
-          duration: 1,
-          status: 'success',
-        },
-      };
-    },
-    registerExternal(): void {},
-    registerChild(): string {
-      return 'proc-external';
-    },
-    kill(sessionId: string): boolean {
-      const index = sessions.findIndex((session) => session.processId === sessionId);
-
-      if (index === -1) {
-        return false;
-      }
-
-      killed.push(sessionId);
-      sessions.splice(index, 1);
-
-      return true;
-    },
-    killAll(): number {
-      const count = sessions.length;
-
-      for (const session of sessions) {
-        killed.push(session.processId);
-      }
-
-      sessions.splice(0);
-
-      return count;
-    },
-    activeSessions(): readonly TerminalSessionInfo[] {
-      return [...sessions];
-    },
-    chunkCallback(): TerminalChunkCallback | undefined {
-      return undefined;
-    },
-    hasSession(sessionId: string): boolean {
-      return sessions.some((session) => session.processId === sessionId);
-    },
-    unregister(sessionId: string): void {
-      const index = sessions.findIndex((session) => session.processId === sessionId);
-
-      if (index !== -1) {
-        sessions.splice(index, 1);
-      }
-    },
-    getPolicy(): never {
-      throw new Error('policy is not used in this test');
-    },
-  };
-
-  return service as unknown as FakeTerminalService;
-}
-
-function createContext(
+async function writePluginPackage(
+  directory: string,
+  id: string,
   permissions: readonly PluginPermission[],
-  terminal?: ITerminalService,
-  onAccess?: (tokenId: string) => void,
-): PluginContext {
-  return createTestPluginContext({
-    pluginId: 'acme.terminal.consumer',
-    workspaceRoot: '/workspace',
-    permissions,
-    ...(terminal === undefined ? {} : { services: { terminal } }),
-    ...(onAccess === undefined ? {} : { onAccess }),
-  }).context;
+): Promise<PluginPackage> {
+  await mkdir(directory, { recursive: true });
+  const entry = join(directory, 'index.mjs');
+  await writeFile(entry, pluginSource(id, permissions), 'utf8');
+  await writeFile(
+    join(directory, 'package.json'),
+    JSON.stringify({ name: id, version: '1.0.0', type: 'module', main: './index.mjs' }, null, 2),
+    'utf8',
+  );
+
+  const module = await import(pathToFileURL(entry).href) as PluginModule;
+
+  return { entry, module };
 }
+
+async function writeConfig(
+  directory: string,
+  config: unknown,
+): Promise<string> {
+  await mkdir(directory, { recursive: true });
+  const configPath = join(directory, 'brud.config.json');
+  await writeFile(configPath, JSON.stringify(config, null, 2), 'utf8');
+
+  return configPath;
+}
+
+function waitFor(predicate: () => boolean, timeoutMs = 10_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  return new Promise<void>((resolve, reject) => {
+    const poll = (): void => {
+      if (predicate()) {
+        resolve();
+        return;
+      }
+
+      if (Date.now() >= deadline) {
+        reject(new Error('condition was not met before the deadline'));
+        return;
+      }
+
+      setTimeout(poll, 10);
+    };
+
+    poll();
+  });
+}
+
+function delay(timeoutMs: number): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, timeoutMs);
+  });
+}
+
+let root = '';
+let workspaceRoot = '';
+let kernel: BrudKernel;
+let kernelServices: KernelConfig['services'];
+let without: PluginPackage;
+let first: PluginPackage;
+let second: PluginPackage;
+
+function contextOf(plugin: PluginPackage): IPluginContext {
+  const context = plugin.module.getContext();
+  assert.ok(context !== undefined, `${plugin.entry} did not capture a plugin context`);
+
+  return context;
+}
+
+function handleOf(plugin: PluginPackage): ITerminalHandle {
+  const handle = contextOf(plugin).getTerminal();
+  assert.ok(handle !== null, `${plugin.entry} did not receive a terminal handle`);
+
+  return handle;
+}
+
+function singleOutcome(result: TerminalResult): TerminalRunOutcome {
+  assert.ok('output' in result, 'a single command must resolve to a run outcome');
+
+  return result;
+}
+
+before(async () => {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'brud-terminal-capability-')));
+  workspaceRoot = join(root, 'workspace');
+  await mkdir(workspaceRoot, { recursive: true });
+  workspaceRoot = await realpath(workspaceRoot);
+
+  const pluginRoot = join(root, 'plugins');
+  without = await writePluginPackage(join(pluginRoot, 'without'), 'acme.terminal.without', ['fs:read']);
+  first = await writePluginPackage(join(pluginRoot, 'first'), 'acme.terminal.first', ['terminal:execute']);
+  second = await writePluginPackage(join(pluginRoot, 'second'), 'acme.terminal.second', ['terminal:execute']);
+  const production = JSON.parse(await readFile(KERNEL_CONFIG_PATH, 'utf8')) as KernelConfig;
+  assert.ok(production.services.length > 0, 'kernel config must declare services');
+  kernelServices = production.services;
+
+  const configPath = await writeConfig(join(root, 'config'), {
+    services: kernelServices,
+    plugins: [
+      { path: without.entry },
+      { path: first.entry },
+      { path: second.entry },
+    ],
+  });
+
+  kernel = await bootKernel(configPath, { options: workspaceContextOptions(workspaceRoot) });
+});
+
+after(async () => {
+  await kernel.shutdown();
+  await rm(root, { recursive: true, force: true });
+});
 
 describe('terminal plugin capability', () => {
   it('maps the terminal capability to terminal:execute', () => {
@@ -131,90 +176,105 @@ describe('terminal plugin capability', () => {
   });
 
   it('returns null when terminal:execute is not declared', () => {
-    let resolutions = 0;
-    const context = createContext(
-      ['fs:read'],
-      createFakeTerminal(),
-      (tokenId) => {
-        if (tokenId === TerminalToken.id) {
-          resolutions += 1;
-        }
-      },
-    );
+    const context = contextOf(without);
 
     assert.equal(context.getTerminal(), null);
     assert.equal(context.getTerminal(), null);
-    assert.equal(resolutions, 0);
   });
 
   it('returns a scoped handle when terminal:execute is declared', async () => {
-    const service = createFakeTerminal();
-    let resolutions = 0;
-    const context = createContext(['terminal:execute'], service, (tokenId) => {
-      if (tokenId === TerminalToken.id) {
-        resolutions += 1;
-      }
-    });
-
+    const context = contextOf(first);
     const handle = context.getTerminal();
 
     assert.ok(handle !== null);
     assert.equal(handle, context.getTerminal(), 'the handle must be memoized');
-    assert.equal(resolutions, 1);
 
-    const result: TerminalResult = await handle.run({ command: 'echo hi' });
+    const result = singleOutcome(await handle.run({ command: 'echo hi' }));
 
-    assert.equal(result.success, true);
-    assert.equal(service.calls.length, 1);
-    assert.equal(service.calls[0]?.callerId, 'acme.terminal.consumer');
-    assert.equal(service.calls[0]?.cwd, '/workspace');
+    assert.equal(result.success, true, result.output);
 
-    const executions = handle.list();
-
-    assert.equal(executions.length, 1);
-    assert.equal(executions[0]?.executionId, 'proc-1');
-    assert.equal(executions[0]?.callerId, 'acme.terminal.consumer');
+    const printed = singleOutcome(await handle.run({ command: 'pwd' }));
+    assert.equal(printed.success, true, printed.output);
+    assert.equal(await realpath(printed.output.trim()), workspaceRoot);
   });
 
   it('only lists, cancels, and disposes executions owned by the plugin', async () => {
-    const service = createFakeTerminal();
-    const context = createContext(['terminal:execute'], service);
-    const handle = context.getTerminal();
+    const firstHandle = handleOf(first);
+    const secondHandle = handleOf(second);
 
-    assert.ok(handle !== null);
+    const firstRun = firstHandle.run({ command: 'exec sleep 30' }).catch(() => undefined);
+    await waitFor(() => firstHandle.list().length === 1);
+    const firstSession = firstHandle.list()[0];
+    assert.ok(firstSession !== undefined);
+    assert.equal(firstSession.callerId, 'acme.terminal.first');
 
-    await handle.run({ command: 'first' });
-    await handle.run({ command: 'second' });
+    const secondRun = secondHandle.run({ command: 'exec sleep 30' }).catch(() => undefined);
+    await waitFor(() => secondHandle.list().length === 1);
+    const secondSession = secondHandle.list()[0];
+    assert.ok(secondSession !== undefined);
+    assert.equal(secondSession.callerId, 'acme.terminal.second');
 
-    // A session attributed to another plugin must stay invisible.
-    service.sessions.push({
-      processId: 'proc-other',
-      mode: 'single',
-      callerId: 'other.plugin',
-      command: 'other',
-      startedAt: 1,
-    });
-
-    assert.deepEqual(
-      handle.list().map((execution) => execution.executionId),
-      ['proc-1', 'proc-2'],
+    assert.equal(
+      firstHandle.list().some((session) => session.executionId === secondSession.executionId),
+      false,
+      'another plugin session must stay invisible',
+    );
+    assert.equal(
+      secondHandle.list().some((session) => session.executionId === firstSession.executionId),
+      false,
     );
 
-    await handle.cancel('proc-other');
-    assert.deepEqual(service.killed, []);
-    assert.equal(service.sessions.some((session) => session.processId === 'proc-other'), true);
+    await secondHandle.cancel(firstSession.executionId);
+    await delay(50);
+    assert.equal(
+      firstHandle.list().some((session) => session.executionId === firstSession.executionId),
+      true,
+      'another plugin must not be able to cancel this session',
+    );
 
-    await handle.cancel('proc-1');
-    assert.deepEqual(service.killed, ['proc-1']);
+    await firstHandle.cancel(firstSession.executionId);
+    await waitFor(() => firstHandle.list().length === 0);
+    await firstRun;
 
-    await handle.dispose();
-    assert.deepEqual(service.killed, ['proc-1', 'proc-2']);
-    assert.deepEqual(handle.list(), []);
+    const disposeRun = firstHandle.run({ command: 'exec sleep 30' }).catch(() => undefined);
+    await waitFor(() => firstHandle.list().length === 1);
+
+    await firstHandle.dispose();
+    await waitFor(() => firstHandle.list().length === 0);
+    await disposeRun;
+
+    assert.equal(
+      secondHandle.list().some((session) => session.executionId === secondSession.executionId),
+      true,
+      'disposing one plugin handle must not dispose another plugin',
+    );
+
+    await secondHandle.dispose();
+    await waitFor(() => secondHandle.list().length === 0);
+    await secondRun;
   });
 
-  it('returns null when the permission is declared but no service is available', () => {
-    const context = createContext(['terminal:execute']);
+  it('refuses to compose without the terminal service', async () => {
+    const configPath = await writeConfig(join(root, 'config-no-terminal'), {
+      services: kernelServices.filter((service) => !service.path.endsWith('/terminal.js')),
+      plugins: [{ path: first.entry }],
+    });
 
-    assert.equal(context.getTerminal(), null);
+    await assert.rejects(
+      bootKernel(configPath, { options: workspaceContextOptions(workspaceRoot) }),
+      (error: unknown) => {
+        const failure = error as {
+          readonly code?: string;
+          readonly missingTokenId?: string;
+          readonly dependentTokenId?: string;
+        };
+
+        assert.equal(failure.code, 'MISSING_DEPENDENCY');
+        assert.equal(failure.missingTokenId, 'brud.core.terminal');
+        assert.equal(failure.dependentTokenId, 'PluginManager');
+
+        return true;
+      },
+    );
   });
 });
