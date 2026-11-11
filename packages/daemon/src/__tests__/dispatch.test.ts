@@ -1,9 +1,6 @@
 import { after, before, describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { Buffer } from 'node:buffer';
 import { mkdtemp, rm } from 'node:fs/promises';
-import { createConnection } from 'node:net';
-import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import * as Protocol from '@brud/protocol';
@@ -15,6 +12,9 @@ import type {
 } from '@brud/protocol';
 import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import { DaemonServer } from '../server/DaemonServer.js';
+import { connectSocket } from '../client/socket.js';
+import { channelPrologue, SecureChannel } from '../security/channel.js';
+import { derivePsk } from '../security/noise.js';
 
 const TOKEN = 'test-daemon-token-0123456789abcdef';
 const CALL_TIMEOUT_MS = 5_000;
@@ -26,100 +26,84 @@ interface PendingCall {
 }
 
 class TestClient {
-  private readonly socket: Socket;
-
-  private buffer: Buffer = Buffer.alloc(0);
+  private readonly channel: SecureChannel;
 
   private readonly pending: PendingCall[] = [];
 
-  private constructor(socket: Socket) {
-    this.socket = socket;
+  private constructor(channel: SecureChannel) {
+    this.channel = channel;
 
-    socket.on('data', (chunk: Buffer) => {
-      this.onData(chunk);
+    channel.onMessage((type, text) => {
+      if (type === 1) {
+        return;
+      }
+
+      let parsed: unknown;
+
+      try {
+        parsed = JSON.parse(text) as unknown;
+      } catch (error: unknown) {
+        this.failPending(error instanceof Error ? error : new Error(String(error)));
+        return;
+      }
+
+      assert.ok(Protocol.isRpcResponse(parsed), 'Expected a JSON-RPC response');
+
+      const pending = this.pending.shift();
+
+      if (pending === undefined) {
+        this.failPending(new Error('Received a response with no pending call'));
+        return;
+      }
+
+      clearTimeout(pending.timer);
+      pending.resolve(parsed);
     });
-    socket.on('error', (error: Error) => {
-      this.failPending(error);
-    });
-    socket.on('close', () => {
+    channel.onClose(() => {
       this.failPending(new Error('Daemon connection closed'));
     });
   }
 
-  static async connect(socketPath: string): Promise<TestClient> {
-    const socket = await new Promise<Socket>((resolve, reject) => {
-      const candidate = createConnection(socketPath);
-      const onConnect = (): void => {
-        candidate.off('error', onError);
-        resolve(candidate);
-      };
-      const onError = (error: Error): void => {
-        candidate.off('connect', onConnect);
-        reject(error);
-      };
-
-      candidate.once('connect', onConnect);
-      candidate.once('error', onError);
+  static async connect(
+    socketPath: string,
+    psk: string = TOKEN,
+    workspaceRoot: string,
+  ): Promise<TestClient> {
+    const socket = await connectSocket(socketPath);
+    const { channel } = await SecureChannel.connect(socket, {
+      psk: derivePsk(psk),
+      prologue: channelPrologue(socketPath),
+      context: { principal: 'ui', workspaceRoot },
     });
 
-    return new TestClient(socket);
+    return new TestClient(channel);
   }
 
   call(request: RpcRequest): Promise<RpcResponse> {
     return new Promise<RpcResponse>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.removePending(entry);
-        reject(new Error(`Timed out waiting for response to "${request.method}"`));
-      }, CALL_TIMEOUT_MS);
-      const entry: PendingCall = { resolve, reject, timer };
+      const entry: PendingCall = {
+        resolve,
+        reject,
+        timer: setTimeout(() => {
+          this.removePending(entry);
+          reject(new Error(`Timed out waiting for response to "${request.method}"`));
+        }, CALL_TIMEOUT_MS),
+      };
 
       this.pending.push(entry);
-      this.socket.write(Buffer.from(`${JSON.stringify(request)}\n`, 'utf8'));
+
+      try {
+        this.channel.send(request);
+      } catch (error: unknown) {
+        this.removePending(entry);
+        clearTimeout(entry.timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      }
     });
   }
 
   async close(): Promise<void> {
-    if (this.socket.destroyed) {
-      return;
-    }
-
-    const closed = new Promise<void>((resolve) => {
-      this.socket.once('close', () => {
-        resolve();
-      });
-    });
-
-    this.socket.destroy();
-    await closed;
-  }
-
-  private onData(chunk: Buffer): void {
-    this.buffer = Buffer.concat([this.buffer, chunk]);
-
-    try {
-      for (;;) {
-        const newlineIndex = this.buffer.indexOf(0x0a);
-        if (newlineIndex === -1) {
-          break;
-        }
-
-        const line = this.buffer.subarray(0, newlineIndex).toString('utf8');
-        this.buffer = Buffer.from(this.buffer.subarray(newlineIndex + 1));
-
-        const parsed: unknown = JSON.parse(line);
-        assert.ok(Protocol.isRpcResponse(parsed), 'Expected a JSON-RPC response');
-
-        const pending = this.pending.shift();
-        if (pending === undefined) {
-          throw new Error('Received a response with no pending call');
-        }
-
-        clearTimeout(pending.timer);
-        pending.resolve(parsed);
-      }
-    } catch (error: unknown) {
-      this.failPending(error instanceof Error ? error : new Error(String(error)));
-    }
+    this.channel.end();
   }
 
   private removePending(entry: PendingCall): void {
@@ -176,9 +160,6 @@ function createRequest(method: string, params?: unknown): RpcRequest {
 function createConnectRequest(overrides?: Partial<DaemonConnectParams>): RpcRequest {
   const params: DaemonConnectParams = {
     protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-    token: TOKEN,
-    workspaceRoot,
-    tier: 'ui',
     ...overrides,
   };
 
@@ -202,7 +183,7 @@ function requireServer(): DaemonServer {
 }
 
 async function openClient(): Promise<TestClient> {
-  return TestClient.connect(socketPath);
+  return TestClient.connect(socketPath, TOKEN, workspaceRoot);
 }
 
 async function openHandshakenClient(): Promise<TestClient> {
@@ -242,7 +223,7 @@ describe('DaemonServer dispatch', () => {
     server = await DaemonServer.create({
       kernel: createdKernel,
       socketPath,
-      token: TOKEN,
+      principals: { ui: TOKEN, ai: TOKEN },
       workspaceRoot,
     });
     await server.listen();
@@ -266,34 +247,24 @@ describe('DaemonServer dispatch', () => {
     }
   });
 
-  it('rejects handshakes with an invalid token and keeps the connection unauthenticated', async (t) => {
-    const client = await openClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(createConnectRequest({ token: 'wrong-token' }));
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.AUTH_FAILED);
-
-    const existsResponse = await client.call(
-      createRequest(Protocol.TOOLS_LIST, {}),
+  it('rejects a wrong principal key during the authenticated handshake', async () => {
+    await assert.rejects(
+      () => TestClient.connect(socketPath, 'wrong-token', workspaceRoot),
+      /Noise|handshake|channel|authentication/i,
     );
-    assert.ok(Protocol.isRpcErrorResponse(existsResponse));
-    assert.equal(existsResponse.error.code, Protocol.HANDSHAKE_REQUIRED);
+
+    const client = await openClient();
+    const response = await client.call(createRequest(Protocol.TOOLS_LIST, {}));
+    assert.ok(Protocol.isRpcErrorResponse(response));
+    assert.equal(response.error.code, Protocol.HANDSHAKE_REQUIRED);
+    await client.close();
   });
 
-  it('rejects handshakes with a mismatched workspace root', async (t) => {
-    const client = await openClient();
-    t.after(async () => {
-      await client.close();
-    });
-
-    const response = await client.call(
-      createConnectRequest({ workspaceRoot: '/workspace-other' }),
+  it('rejects a workspace root outside the configured daemon scope', async () => {
+    await assert.rejects(
+      () => TestClient.connect(socketPath, TOKEN, join(tmpdir(), 'brud-other-workspace')),
+      /Noise|handshake|channel|authentication|workspace/i,
     );
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.WORKSPACE_MISMATCH);
   });
 
   it('completes a handshake with capabilities and connection identity', async (t) => {

@@ -156,6 +156,7 @@ export class GracefulShutdownCoordinator {
     }
 
     await unlinkIfPresent(this.endpoint.tokenPath);
+    await unlinkIfPresent(this.endpoint.aiTokenPath);
     await unlinkIfPresent(this.endpoint.lockPath);
     await unlinkIfPresent(this.endpoint.metaPath);
   }

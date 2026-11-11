@@ -11,9 +11,11 @@ import type {
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { DispatchSession, RequestDispatcher } from '../server/dispatch.js';
 import { RequestDispatcher as Dispatcher } from '../server/dispatch.js';
+import {
+  canonicalizeWorkspaceRoot,
+  validateAuthenticatedWorkspaceRoot,
+} from '../server/handshake.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
-
-const TOKEN = 'connect-workspace-token-0123456789abcdef';
 
 class TestSession implements DispatchSession {
   public workspaceRoot: string | undefined;
@@ -22,7 +24,14 @@ class TestSession implements DispatchSession {
 
   public tier: DaemonCallerTier | undefined;
 
-  constructor(public readonly connectionId: string) {}
+  constructor(
+    public readonly connectionId: string,
+    workspaceRoot?: string,
+    tier: DaemonCallerTier = 'ui',
+  ) {
+    this.workspaceRoot = workspaceRoot;
+    this.tier = tier;
+  }
 
   markHandshaken(): void {
     this.handshaken = true;
@@ -41,13 +50,18 @@ async function makeWorkspace(name: string): Promise<string> {
   return await realpath(root);
 }
 
-function connectRequest(params: Record<string, unknown>, id: number): RpcRequest {
+function connectRequest(
+  overrides: Record<string, unknown> = {},
+  id = 1,
+): RpcRequest {
   return {
     jsonrpc: '2.0',
     id,
     method: Protocol.DAEMON_CONNECT,
-    // Existing fixtures are UI callers unless a test overrides the tier.
-    params: { tier: 'ui', ...params },
+    params: {
+      protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
+      ...overrides,
+    },
   };
 }
 
@@ -60,7 +74,6 @@ before(async () => {
   dispatcher = new Dispatcher({
     registry,
     toolsToken: kernelModule.BrudToolsToken as ServiceToken<IBrudToolsService>,
-    token: TOKEN,
     workspaceRoot: primaryRoot,
   });
 });
@@ -70,159 +83,64 @@ after(async () => {
   await rm(baseRoot, { recursive: true, force: true });
 });
 
-describe('daemon.connect workspace routing', () => {
-  it('requires workspaceRoot', async () => {
-    const session = new TestSession('c_missing');
-    const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-        },
-        1,
-      ),
-      session,
-    );
+describe('daemon.connect post-handshake contract', () => {
+  it('rejects a session that never authenticated a workspace or principal', async () => {
+    const session = new TestSession('c_unauthenticated');
+    const response = await dispatcher.dispatch(connectRequest(), session);
 
     assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.INVALID_PARAMS);
+    assert.equal(response.error.code, Protocol.INTERNAL_ERROR);
     assert.equal(session.handshaken, false);
   });
 
-  it('rejects a handshake that omits tier', async () => {
-    const session = new TestSession('c_missing_tier');
+  it('rejects a missing protocolVersion', async () => {
+    const root = await makeWorkspace('missing-version');
+    const session = new TestSession('c_missing_version', root);
     const response = await dispatcher.dispatch(
       {
         jsonrpc: '2.0',
-        id: 10,
+        id: 2,
         method: Protocol.DAEMON_CONNECT,
-        params: {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: await makeWorkspace('missing-tier'),
-        },
+        params: {},
       },
       session,
     );
 
     assert.ok(Protocol.isRpcErrorResponse(response));
     assert.equal(response.error.code, Protocol.INVALID_PARAMS);
-    assert.equal(response.error.data?.errorCode, 'INVALID_TIER');
-    assert.equal(session.tier, undefined);
     assert.equal(session.handshaken, false);
   });
 
-  it('rejects an unknown tier value', async () => {
-    const session = new TestSession('c_invalid_tier');
+  it('rejects a protocol version mismatch', async () => {
+    const root = await makeWorkspace('version-mismatch');
+    const session = new TestSession('c_version_mismatch', root);
     const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: await makeWorkspace('invalid-tier'),
-          tier: 'admin',
-        },
-        11,
-      ),
+      connectRequest({ protocolVersion: '0.0.0' }, 3),
       session,
     );
 
     assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.INVALID_PARAMS);
-    assert.equal(response.error.data?.errorCode, 'INVALID_TIER');
-    assert.equal(response.error.data?.actual, 'admin');
-    assert.equal(session.tier, undefined);
+    assert.equal(response.error.code, Protocol.PROTOCOL_VERSION_MISMATCH);
     assert.equal(session.handshaken, false);
   });
 
-  it('rejects a workspaceRoot that is not an absolute path', async () => {
-    const session = new TestSession('c_relative');
-    const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: 'relative/workspace',
-        },
-        2,
-      ),
-      session,
-    );
+  it('rejects a second connect on the same session', async () => {
+    const root = await makeWorkspace('second-connect');
+    const session = new TestSession('c_second', root);
 
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.INVALID_PARAMS);
-    assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
-    assert.equal(session.handshaken, false);
+    const first = await dispatcher.dispatch(connectRequest({}, 4), session);
+    assert.ok(Protocol.isRpcSuccessResponse(first));
+
+    const second = await dispatcher.dispatch(connectRequest({}, 5), session);
+    assert.ok(Protocol.isRpcErrorResponse(second));
+    assert.equal(second.error.code, Protocol.ALREADY_HANDSHAKEN);
   });
 
-  it('rejects the filesystem root and known system directories', async () => {
-    const deniedRoots = process.platform === 'win32'
-      ? ['C:\\', 'C:\\Windows', 'C:\\Program Files', 'C:\\ProgramData']
-      : ['/', '/etc', '/usr', '/bin', '/sbin', '/var', '/sys', '/proc', '/dev', '/boot', '/private'];
-
-    for (const [index, root] of deniedRoots.entries()) {
-      const session = new TestSession(`c_denied_${index}`);
-      const response = await dispatcher.dispatch(
-        connectRequest(
-          {
-            protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-            token: TOKEN,
-            workspaceRoot: root,
-          },
-          100 + index,
-        ),
-        session,
-      );
-
-      assert.ok(Protocol.isRpcErrorResponse(response), `${root}: ${JSON.stringify(response)}`);
-      assert.equal(response.error.code, Protocol.INVALID_PARAMS);
-      assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
-      assert.equal(session.handshaken, false);
-      assert.equal(registry.get(root), undefined, `${root} must never be spawned`);
-    }
-  });
-
-  it('rejects a symlink that resolves to a system directory', { skip: process.platform === 'win32' }, async () => {
-    const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-connect-symlink-')));
-    const link = join(base, 'rogue');
-    await symlink('/etc', link);
-
-    try {
-      const session = new TestSession('c_denied_symlink');
-      const response = await dispatcher.dispatch(
-        connectRequest(
-          {
-            protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-            token: TOKEN,
-            workspaceRoot: link,
-          },
-          200,
-        ),
-        session,
-      );
-
-      assert.ok(Protocol.isRpcErrorResponse(response), JSON.stringify(response));
-      assert.equal(response.error.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
-      assert.equal(session.handshaken, false);
-      assert.equal(registry.get(link), undefined);
-    } finally {
-      await rm(base, { recursive: true, force: true });
-    }
-  });
-
-  it('spawns a kernel for a valid absolute workspaceRoot and attaches the client', async () => {
+  it('spawns a kernel for the authenticated workspace and attaches the client', async () => {
     const root = await makeWorkspace('workspace-a');
-    const session = new TestSession('c_valid');
+    const session = new TestSession('c_valid', root);
     const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: root,
-          clientInfo: { name: 'test-client', version: '1.0.0' },
-        },
-        3,
-      ),
+      connectRequest({ clientInfo: { name: 'test-client', version: '1.0.0' } }, 6),
       session,
     );
 
@@ -241,57 +159,89 @@ describe('daemon.connect workspace routing', () => {
 
   it('reuses an existing workspace kernel for a second client', async () => {
     const root = await makeWorkspace('workspace-b');
-    const first = new TestSession('c_reuse_1');
-    const second = new TestSession('c_reuse_2');
+    const first = new TestSession('c_reuse_1', root);
+    const second = new TestSession('c_reuse_2', root);
 
-    await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: root,
-        },
-        4,
-      ),
-      first,
-    );
+    await dispatcher.dispatch(connectRequest({}, 7), first);
     const kernel = registry.get(root)?.kernel;
     assert.ok(kernel !== undefined);
 
-    const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: TOKEN,
-          workspaceRoot: root,
-        },
-        5,
-      ),
-      second,
-    );
+    const response = await dispatcher.dispatch(connectRequest({}, 8), second);
 
     assert.ok(Protocol.isRpcSuccessResponse(response));
     assert.equal(registry.get(root)?.kernel, kernel);
     assert.equal(registry.get(root)?.clients.size, 2);
   });
+});
 
-  it('rejects an invalid token before spawning', async () => {
-    const root = await makeWorkspace('workspace-c');
-    const session = new TestSession('c_bad_token');
-    const response = await dispatcher.dispatch(
-      connectRequest(
-        {
-          protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-          token: 'wrong-token',
-          workspaceRoot: root,
-        },
-        6,
-      ),
-      session,
-    );
+describe('authenticated workspace scope', () => {
+  it('rejects a workspaceRoot that is not an absolute path', () => {
+    const outcome = validateAuthenticatedWorkspaceRoot('relative/workspace', {
+      primaryRoot,
+      enforcePrimary: false,
+    });
 
-    assert.ok(Protocol.isRpcErrorResponse(response));
-    assert.equal(response.error.code, Protocol.AUTH_FAILED);
-    assert.equal(registry.get(root), undefined);
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.code, Protocol.INVALID_PARAMS);
+    assert.equal(outcome.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
+  });
+
+  it('rejects the filesystem root and known system directories', () => {
+    const deniedRoots = process.platform === 'win32'
+      ? ['C:\\', 'C:\\Windows', 'C:\\Program Files', 'C:\\ProgramData']
+      : ['/', '/etc', '/usr', '/bin', '/sbin', '/var', '/sys', '/proc', '/dev', '/boot', '/private'];
+
+    for (const root of deniedRoots) {
+      const outcome = validateAuthenticatedWorkspaceRoot(root, {
+        primaryRoot,
+        enforcePrimary: false,
+      });
+
+      assert.equal(outcome.ok, false, `${root}: ${JSON.stringify(outcome)}`);
+      assert.equal(outcome.code, Protocol.INVALID_PARAMS);
+      assert.equal(outcome.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
+      assert.equal(registry.get(root), undefined, `${root} must never be spawned`);
+    }
+  });
+
+  it('rejects a symlink that resolves to a system directory', { skip: process.platform === 'win32' }, async () => {
+    const base = await realpath(await mkdtemp(join(tmpdir(), 'brud-connect-symlink-')));
+    const link = join(base, 'rogue');
+    await symlink('/etc', link);
+
+    try {
+      const outcome = validateAuthenticatedWorkspaceRoot(link, {
+        primaryRoot,
+        enforcePrimary: false,
+      });
+
+      assert.equal(outcome.ok, false, JSON.stringify(outcome));
+      assert.equal(outcome.data?.errorCode, 'INVALID_WORKSPACE_ROOT');
+      assert.equal(registry.get(link), undefined);
+    } finally {
+      await rm(base, { recursive: true, force: true });
+    }
+  });
+
+  it('enforces the configured primary root for a single-kernel daemon', async () => {
+    const other = await makeWorkspace('other-root');
+    const outcome = validateAuthenticatedWorkspaceRoot(other, {
+      primaryRoot: canonicalizeWorkspaceRoot(primaryRoot),
+      enforcePrimary: true,
+    });
+
+    assert.equal(outcome.ok, false);
+    assert.equal(outcome.code, Protocol.WORKSPACE_MISMATCH);
+  });
+
+  it('accepts a valid absolute root for a registry daemon', async () => {
+    const root = await makeWorkspace('registry-valid');
+    const outcome = validateAuthenticatedWorkspaceRoot(root, {
+      primaryRoot,
+      enforcePrimary: false,
+    });
+
+    assert.equal(outcome.ok, true);
+    assert.equal(outcome.ok ? outcome.workspaceRoot : undefined, root);
   });
 });

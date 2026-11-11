@@ -26,6 +26,17 @@ export interface CreateDaemonOptions {
    */
   readonly stdio?: boolean;
   readonly storageDriver?: IStorageDriver;
+  /** Ceiling on simultaneously open connections. */
+  readonly maxConnections?: number;
+  /** Ceiling on concurrent in-flight requests per connection. */
+  readonly maxInFlightPerConnection?: number;
+  /** Server-side deadline for one request. */
+  readonly requestTimeoutMs?: number;
+  /**
+   * Process allowed to connect over the socket. Defaults to the current
+   * process, which is the host when the daemon is embedded in it.
+   */
+  readonly expectedPeerPid?: number;
 }
 
 export interface DaemonMetadataRecord {
@@ -36,12 +47,15 @@ export interface DaemonMetadataRecord {
   readonly socketPath: string;
   readonly lockPath: string;
   readonly tokenPath: string;
+  readonly aiTokenPath: string;
   readonly startedAt: number;
 }
 
 export interface RunningDaemon {
   readonly endpoint: DaemonEndpoint;
+  /** UI-principal pre-shared key (legacy single-token field). */
   readonly token: string;
+  readonly tokens: Readonly<Record<'ui' | 'ai', string>>;
   readonly lock: LockHandle;
   /** Primary workspace kernel, kept for single-workspace callers. */
   readonly kernel: BrudKernel;
@@ -138,6 +152,7 @@ async function rollbackStartup(
   }
 
   await unlinkIfPresent(endpoint.tokenPath).catch(() => undefined);
+  await unlinkIfPresent(endpoint.aiTokenPath).catch(() => undefined);
   await unlinkIfPresent(endpoint.metaPath).catch(() => undefined);
   await lock.release().catch(() => undefined);
 }
@@ -145,14 +160,15 @@ async function rollbackStartup(
 async function startRuntime(
   endpoint: DaemonEndpoint,
   lock: LockHandle,
-  token: string,
+  tokens: Readonly<Record<'ui' | 'ai', string>>,
   options: CreateDaemonOptions,
 ): Promise<DaemonRuntime> {
   let registry: WorkspaceRegistry | undefined;
   let server: DaemonServer | undefined;
 
   try {
-    await writeFile(endpoint.tokenPath, token, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(endpoint.tokenPath, tokens.ui, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(endpoint.aiTokenPath, tokens.ai, { encoding: 'utf8', mode: 0o600 });
 
     const createdRegistry = createWorkspaceRegistry(options, false);
     registry = createdRegistry;
@@ -162,8 +178,21 @@ async function startRuntime(
     const createdServer = await DaemonServer.create({
       registry: createdRegistry,
       socketPath: endpoint.socketPath,
-      token,
+      principals: tokens,
       workspaceRoot: endpoint.workspaceRoot,
+      enforcePrimaryRoot: true,
+      ...(options.maxConnections === undefined
+        ? {}
+        : { maxConnections: options.maxConnections }),
+      ...(options.maxInFlightPerConnection === undefined
+        ? {}
+        : { maxInFlightPerConnection: options.maxInFlightPerConnection }),
+      ...(options.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: options.requestTimeoutMs }),
+      ...(options.expectedPeerPid === undefined
+        ? {}
+        : { expectedPeerPid: options.expectedPeerPid }),
     });
     server = createdServer;
     await createdServer.listen();
@@ -176,6 +205,7 @@ async function startRuntime(
       socketPath: endpoint.socketPath,
       lockPath: endpoint.lockPath,
       tokenPath: endpoint.tokenPath,
+      aiTokenPath: endpoint.aiTokenPath,
       startedAt: lock.record.startedAt,
     };
     await writeFile(endpoint.metaPath, JSON.stringify(metadata), {
@@ -252,8 +282,11 @@ export async function createDaemon(
     pid: process.pid,
     version: DaemonVersion.DAEMON_SERVER_VERSION,
   });
-  const token = randomBytes(32).toString('hex');
-  const runtime = await startRuntime(endpoint, lock, token, options);
+  const tokens = {
+    ui: randomBytes(32).toString('hex'),
+    ai: randomBytes(32).toString('hex'),
+  } as const;
+  const runtime = await startRuntime(endpoint, lock, tokens, options);
 
   try {
     const idleMonitor = new IdleMonitor({
@@ -280,7 +313,8 @@ export async function createDaemon(
 
     return {
       endpoint,
-      token,
+      token: tokens.ui,
+      tokens,
       lock,
       kernel: runtime.workspace.kernel,
       registry: runtime.registry,

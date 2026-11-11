@@ -164,8 +164,8 @@ describe('Attack 4 — Malformed Batch Bomb', () => {
         params: JSON.parse('{"__proto__":{"polluted":true}}'),
       }));
       // JSON cannot encode a real cycle. A self-referential `$ref` marker plus
-      // a duplicate key is the closest wire-level analogue; the dispatcher must
-      // treat it as an ordinary tools.list request.
+      // a duplicate key is the closest wire-level analogue; the closed contract
+      // rejects the duplicate key before dispatch.
       lines.push(
         `{"jsonrpc":"2.0","id":${markerId},"method":"tools.list","params":{"self":{"$ref":"#"},"a":1,"a":2}}`,
       );
@@ -187,9 +187,10 @@ describe('Attack 4 — Malformed Batch Bomb', () => {
       `valid tools.list frames were dropped: ${JSON.stringify(received.map((frame) => frame.id))}`,
     );
     assert.equal(
-      count((frame) => typeof frame.id === 'number' && markerIds.includes(frame.id)),
+      count((frame) => typeof frame.id === 'number' && markerIds.includes(frame.id)
+        && frame.error?.code === Protocol.PARSE_ERROR),
       markerIds.length,
-      `cyclic-marker frames were dropped: ${JSON.stringify(received.map((frame) => frame.id))}`,
+      `duplicate-key marker frames were not rejected: ${JSON.stringify(received.map((frame) => frame.id))}`,
     );
     assert.equal(
       count((frame) => typeof frame.id === 'number' && ghostIds.includes(frame.id)
@@ -209,12 +210,15 @@ describe('Attack 4 — Malformed Batch Bomb', () => {
 
     assert.equal(
       parseErrors.length,
-      10,
-      `malformed frames were not all rejected: ${JSON.stringify(received.map((frame) => frame.id))}`,
+      20,
+      `malformed and duplicate-key frames were not all rejected: ${JSON.stringify(received.map((frame) => frame.id))}`,
     );
     assert.deepEqual(
       parseErrors.map((frame) => frame.id).sort((left, right) => Number(left) - Number(right)),
-      Array.from({ length: 10 }, (_, index) => 200 + index),
+      [
+        ...Array.from({ length: 10 }, (_, index) => 130 + index),
+        ...Array.from({ length: 10 }, (_, index) => 200 + index),
+      ].sort((left, right) => Number(left) - Number(right)),
       'each malformed frame must report its own extractable id',
     );
 

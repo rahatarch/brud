@@ -15,7 +15,8 @@
     "@brud/kernel": "^0.1.4",
     "@brud/plugin-mcp-bridge": "*",
     "@brud/plugin-terminal": "*",
-    "@brud/protocol": "*"
+    "@brud/protocol": "*",
+    "@cotal-ai/seat": "0.160.4"
   },
   "devDependencies": {
     "@types/node": "22.x"

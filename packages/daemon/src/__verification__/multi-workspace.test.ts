@@ -117,10 +117,11 @@ async function startMultiDaemon(options: MultiDaemonOptions): Promise<MultiDaemo
   const socketDir = await createWorkspace(`${options.prefix}socket-`);
   const socketPath = join(socketDir, 'd.sock');
   const token = randomBytes(32).toString('hex');
+  const aiToken = randomBytes(32).toString('hex');
   const server = await DaemonServer.create({
     registry,
     socketPath,
-    token,
+    principals: { ui: token, ai: aiToken },
     workspaceRoot: rootA,
   });
 

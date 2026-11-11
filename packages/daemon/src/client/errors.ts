@@ -88,6 +88,17 @@ export class DaemonConnectionError extends DaemonClientError {
   }
 }
 
+/**
+ * The authenticated channel could not be established: wrong principal key,
+ * invalid handshake payload, tampered record, or a rejected workspace scope.
+ */
+export class DaemonAuthError extends DaemonClientError {
+  constructor(message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'DaemonAuthError';
+  }
+}
+
 export class DaemonSpawnError extends DaemonClientError {
   constructor(message: string, options?: ErrorOptions) {
     super(message, options);

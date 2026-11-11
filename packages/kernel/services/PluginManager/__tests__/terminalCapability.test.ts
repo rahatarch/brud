@@ -9,10 +9,12 @@ import type { IPluginContext } from '../contracts/IPluginContext.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from '../contracts/permissions.js';
 import type { ITerminalHandle } from '../contracts/ITerminalHandle.js';
+import { PluginManagerToken } from '../contracts/tokens.js';
 import type {
   TerminalResult,
   TerminalRunOutcome,
 } from '../../TerminalService/contracts/ITerminalService.js';
+import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
 import { bootKernel } from '../../../src/bootstrap/index.js';
 import type { BrudKernel } from '../../../src/engine/BrudKernel.js';
 import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
@@ -254,27 +256,37 @@ describe('terminal plugin capability', () => {
     await secondRun;
   });
 
-  it('refuses to compose without the terminal service', async () => {
+  it('boots a real kernel without the terminal service', async () => {
     const configPath = await writeConfig(join(root, 'config-no-terminal'), {
       services: kernelServices.filter((service) => !service.path.endsWith('/terminal.js')),
       plugins: [{ path: first.entry }],
     });
 
-    await assert.rejects(
-      bootKernel(configPath, { options: workspaceContextOptions(workspaceRoot) }),
-      (error: unknown) => {
-        const failure = error as {
-          readonly code?: string;
-          readonly missingTokenId?: string;
-          readonly dependentTokenId?: string;
-        };
+    const terminalFreeKernel = await bootKernel(configPath, {
+      options: workspaceContextOptions(workspaceRoot),
+    });
 
-        assert.equal(failure.code, 'MISSING_DEPENDENCY');
-        assert.equal(failure.missingTokenId, 'brud.core.terminal');
-        assert.equal(failure.dependentTokenId, 'PluginManager');
+    try {
+      assert.equal(terminalFreeKernel.lifecycleState, 'RUNNING');
+      assert.equal(
+        terminalFreeKernel.hasService(TerminalToken),
+        false,
+        'the terminal service must be absent from this composition',
+      );
 
-        return true;
-      },
-    );
+      const manager = terminalFreeKernel.requestAccess(
+        {
+          callerId: 'terminal-free-proof',
+          tier: 'core',
+          options: workspaceContextOptions(workspaceRoot),
+        },
+        PluginManagerToken,
+      );
+
+      assert.equal(manager.getPlugin('acme.terminal.first')?.state, 'active');
+      assert.equal(contextOf(first).getTerminal(), null);
+    } finally {
+      await terminalFreeKernel.shutdown();
+    }
   });
 });

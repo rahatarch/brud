@@ -47,6 +47,10 @@ describe('resolveEndpoint', () => {
     assert.equal(dirname(endpoint.socketPath), runtimeDir);
     assert.equal(endpoint.lockPath, join(runtimeDir, `d-${endpoint.workspaceHash}.lock`));
     assert.equal(endpoint.tokenPath, join(runtimeDir, `d-${endpoint.workspaceHash}.token`));
+    assert.equal(
+      endpoint.aiTokenPath,
+      join(runtimeDir, `d-${endpoint.workspaceHash}.ai.token`),
+    );
     assert.equal(endpoint.metaPath, join(runtimeDir, `d-${endpoint.workspaceHash}.json`));
   });
 

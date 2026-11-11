@@ -8,11 +8,33 @@ import type {
   IBrudToolsService,
   ServiceToken,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { DaemonCallerTier } from '@brud/protocol';
 import { Connection } from './Connection.js';
 import { RequestDispatcher } from './dispatch.js';
+import {
+  canonicalizeWorkspaceRoot,
+  validateAuthenticatedWorkspaceRoot,
+} from './handshake.js';
 import { loadKernelModule } from '../kernelRuntime.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
+import {
+  channelPrologue,
+  SecureChannel,
+} from '../security/channel.js';
+import type { SecureChannelHandshakeContext } from '../security/channel.js';
+import { enforceEndpointOwnership } from '../security/ownership.js';
+import {
+  captureExpectedPeer,
+  loadPeerCredentialHost,
+  PeerCredentialError,
+  verifyPeerCredentials,
+} from '../security/peerCredentials.js';
+import type { ExpectedPeer } from '../security/peerCredentials.js';
+import { derivePsk } from '../security/noise.js';
 import * as DaemonVersion from '../version.js';
+
+/** Default ceiling on simultaneously open local connections. */
+export const DEFAULT_MAX_CONNECTIONS = 64;
 
 export interface DaemonServerConfig {
   /** Multi-workspace registry. Preferred over `kernel`. */
@@ -21,10 +43,41 @@ export interface DaemonServerConfig {
   /** Single-kernel composition adopted for `workspaceRoot`. */
   readonly kernel?: BrudKernel;
   readonly socketPath: string;
-  readonly token: string;
+
+  /**
+   * Per-principal pre-shared keys used to authenticate the Noise handshake.
+   * `ui` and `ai` are distinct, so the principal is fixed by whichever PSK
+   * authenticates rather than by a request field.
+   */
+  readonly principals: Readonly<Record<DaemonCallerTier, string>>;
+
   readonly workspaceRoot: string;
   readonly serverName?: string;
   readonly serverVersion?: string;
+
+  /**
+   * Restricts authenticated handshakes to `workspaceRoot`.
+   *
+   * A registry-backed daemon may serve several workspaces; a daemon bound to a
+   * single workspace endpoint must not be widened by a client handshake.
+   */
+  readonly enforcePrimaryRoot?: boolean;
+
+  /** Maximum simultaneously open connections. */
+  readonly maxConnections?: number;
+
+  /** Maximum concurrent in-flight requests per connection. */
+  readonly maxInFlightPerConnection?: number;
+
+  /** Server-side deadline for one request. */
+  readonly requestTimeoutMs?: number;
+
+  /**
+   * Process that is allowed to connect: normally the host that spawned the
+   * daemon. Defaults to the current process, which is the host when the
+   * daemon is embedded in it (tests and in-process embeddings).
+   */
+  readonly expectedPeerPid?: number;
 }
 
 export interface DaemonActivitySnapshot {
@@ -43,7 +96,28 @@ export class DaemonServer {
 
   private readonly connections = new Map<string, Connection>();
 
+  /** Sockets that have been accepted but have not finished the handshake. */
+  private readonly handshaking = new Set<Socket>();
+
   private readonly activityListeners = new Set<DaemonActivityListener>();
+
+  private readonly principals: Readonly<Record<DaemonCallerTier, string>>;
+
+  private readonly primaryWorkspaceRoot: string;
+
+  private readonly enforcePrimaryRoot: boolean;
+
+  private readonly maxConnections: number;
+
+  private readonly maxInFlightPerConnection: number | undefined;
+
+  private readonly requestTimeoutMs: number | undefined;
+
+  private readonly expectedPeerPid: number;
+
+  private peerCredentialHost: Awaited<ReturnType<typeof loadPeerCredentialHost>> | undefined;
+
+  private expectedPeer: ExpectedPeer | undefined;
 
   private inFlightRequests = 0;
 
@@ -66,12 +140,18 @@ export class DaemonServer {
     actionsToken: ServiceToken<IActionManager>,
   ) {
     this.socketPath = config.socketPath;
+    this.principals = config.principals;
+    this.primaryWorkspaceRoot = canonicalizeWorkspaceRoot(config.workspaceRoot);
+    this.enforcePrimaryRoot = config.enforcePrimaryRoot ?? (config.registry === undefined);
+    this.maxConnections = Math.max(1, Math.trunc(config.maxConnections ?? DEFAULT_MAX_CONNECTIONS));
+    this.maxInFlightPerConnection = config.maxInFlightPerConnection;
+    this.requestTimeoutMs = config.requestTimeoutMs;
+    this.expectedPeerPid = config.expectedPeerPid ?? process.pid;
     this.dispatcher = new RequestDispatcher({
       ...(config.registry === undefined ? {} : { registry: config.registry }),
       ...(config.kernel === undefined ? {} : { kernel: config.kernel }),
       toolsToken,
       actionsToken,
-      token: config.token,
       workspaceRoot: config.workspaceRoot,
       serverName: config.serverName ?? DaemonVersion.DAEMON_SERVER_NAME,
       serverVersion: config.serverVersion ?? DaemonVersion.DAEMON_SERVER_VERSION,
@@ -82,7 +162,7 @@ export class DaemonServer {
   }
 
   get connectionCount(): number {
-    return this.connections.size;
+    return this.connections.size + this.handshaking.size;
   }
 
   get inFlightCount(): number {
@@ -91,7 +171,7 @@ export class DaemonServer {
 
   get activity(): DaemonActivitySnapshot {
     return {
-      activeConnections: this.connections.size,
+      activeConnections: this.connectionCount,
       inFlightRequests: this.inFlightRequests,
     };
   }
@@ -108,21 +188,49 @@ export class DaemonServer {
       throw new Error('Daemon server is already listening');
     }
 
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error): void => {
-        this.server.off('listening', onListening);
-        reject(error);
-      };
+    // Capture the expected peer before the socket can accept anything. The
+    // credential helper is prebuilt; it is never compiled at install time.
+    // Windows is deliberately left on its previous ownership-only path until
+    // the separate Windows peer-credential task.
+    if (process.platform !== 'win32') {
+      const host = await loadPeerCredentialHost();
+      this.peerCredentialHost = host;
+      this.expectedPeer = captureExpectedPeer(host, this.expectedPeerPid);
+    }
 
-      const onListening = (): void => {
-        this.server.off('error', onError);
-        resolve();
-      };
+    const previousUmask = process.platform === 'win32'
+      ? undefined
+      : process.umask(0o177);
 
-      this.server.once('error', onError);
-      this.server.once('listening', onListening);
-      this.server.listen(this.socketPath);
-    });
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const onError = (error: Error): void => {
+          this.server.off('listening', onListening);
+          reject(error);
+        };
+
+        const onListening = (): void => {
+          this.server.off('error', onError);
+          resolve();
+        };
+
+        this.server.once('error', onError);
+        this.server.once('listening', onListening);
+        this.server.listen(this.socketPath);
+      });
+    } finally {
+      if (previousUmask !== undefined) {
+        process.umask(previousUmask);
+      }
+    }
+
+    const ownership = await enforceEndpointOwnership(this.socketPath);
+
+    if (ownership.status === 'unsupported') {
+      process.stderr.write(
+        `brud-daemon: peer endpoint ownership is not verifiable on ${ownership.platform}: ${ownership.reason}\n`,
+      );
+    }
 
     this.listening = true;
   }
@@ -151,6 +259,11 @@ export class DaemonServer {
       connection.end();
     }
 
+    for (const socket of this.handshaking) {
+      socket.destroy();
+    }
+
+    this.handshaking.clear();
     this.connections.clear();
     this.notifyActivity();
   }
@@ -169,8 +282,103 @@ export class DaemonServer {
   }
 
   private accept(socket: Socket): void {
+    if (process.platform !== 'win32') {
+      const host = this.peerCredentialHost;
+      const expectedPeer = this.expectedPeer;
+
+      if (host === undefined || expectedPeer === undefined) {
+        this.refuseConnection(
+          socket,
+          new PeerCredentialError('peer-credential verification is not initialized'),
+        );
+        return;
+      }
+
+      try {
+        verifyPeerCredentials(socket, expectedPeer, host);
+      } catch (error: unknown) {
+        this.refuseConnection(
+          socket,
+          error instanceof Error ? error : new PeerCredentialError(String(error)),
+        );
+        return;
+      }
+    }
+
+    if (this.connectionCount >= this.maxConnections) {
+      // The limit is applied before the handshake or any dispatch work.
+      socket.destroy();
+      return;
+    }
+
+    this.handshaking.add(socket);
+    this.notifyActivity();
+
+    const prologue = channelPrologue(this.socketPath);
+    const serverInfo = {
+      name: DaemonVersion.DAEMON_SERVER_NAME,
+      version: DaemonVersion.DAEMON_SERVER_VERSION,
+      pid: process.pid,
+    };
+
+    void SecureChannel.accept(socket, {
+      prologue,
+      psks: [
+        { principal: 'ui' as const, psk: derivePsk(this.principals.ui) },
+        { principal: 'ai' as const, psk: derivePsk(this.principals.ai) },
+      ],
+      server: serverInfo,
+      validateWorkspaceRoot: (workspaceRoot: string): void => {
+        const outcome = validateAuthenticatedWorkspaceRoot(workspaceRoot, {
+          primaryRoot: this.primaryWorkspaceRoot,
+          enforcePrimary: this.enforcePrimaryRoot,
+        });
+
+        if (!outcome.ok) {
+          throw new Error(outcome.message);
+        }
+      },
+    }).then(({ channel, context }) => {
+      this.handshaking.delete(socket);
+
+      if (channel.isClosed) {
+        this.notifyActivity();
+        return;
+      }
+
+      this.attachConnection(channel, context);
+    }).catch(() => {
+      this.handshaking.delete(socket);
+
+      if (!socket.destroyed) {
+        socket.destroy();
+      }
+
+      this.notifyActivity();
+    });
+  }
+
+  private refuseConnection(socket: Socket, error: Error): void {
+    const message = `brud-daemon: refused connection: ${error.message}\n`;
+
+    process.stderr.write(message);
+
+    if (socket.destroyed) {
+      return;
+    }
+
+    socket.once('error', () => undefined);
+    socket.end(message, () => {
+      socket.destroy();
+    });
+  }
+
+  private attachConnection(
+    channel: SecureChannel,
+    context: SecureChannelHandshakeContext,
+  ): void {
     const connectionId = `c_${randomUUID()}`;
-    const connection = new Connection(connectionId, socket, this.dispatcher, {
+    const connection = new Connection(connectionId, channel, context, this.dispatcher, {
       onRequestStart: () => {
         this.inFlightRequests += 1;
         this.notifyActivity();
@@ -179,15 +387,19 @@ export class DaemonServer {
         this.inFlightRequests = Math.max(0, this.inFlightRequests - 1);
         this.notifyActivity();
       },
+    }, {
+      ...(this.maxInFlightPerConnection === undefined
+        ? {}
+        : { maxInFlight: this.maxInFlightPerConnection }),
+      ...(this.requestTimeoutMs === undefined
+        ? {}
+        : { requestTimeoutMs: this.requestTimeoutMs }),
     });
 
     this.connections.set(connectionId, connection);
     connection.onClose(() => {
       this.connections.delete(connectionId);
       this.notifyActivity();
-    });
-    socket.on('error', () => {
-      connection.destroy();
     });
 
     this.notifyActivity();

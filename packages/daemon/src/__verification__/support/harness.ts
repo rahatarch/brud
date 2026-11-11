@@ -15,6 +15,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import * as Protocol from '@brud/protocol';
 import { connectSocket } from '../../client/socket.js';
+import { channelPrologue } from '../../security/channel.js';
 import { DaemonClient } from '../../client/DaemonClient.js';
 import { resolveEndpoint } from '../../lifecycle/endpoint.js';
 import type { DaemonEndpoint } from '../../lifecycle/endpoint.js';
@@ -325,13 +326,15 @@ export async function connectSocketClient(
   workspaceRoot: string,
 ): Promise<DaemonClient> {
   const socket = await connectSocket(endpoint.socketPath, 5_000);
-  const client = new DaemonClient(socket);
+  const client = new DaemonClient(socket, {
+    psk: token,
+    principal: 'ui',
+    workspaceRoot,
+    prologue: channelPrologue(endpoint.socketPath),
+  });
 
   await client.connect({
     protocolVersion: DAEMON_PROTOCOL_VERSION,
-    token,
-    workspaceRoot,
-    tier: 'ui',
     clientInfo: { name: 'brud-verification-socket-client', version: '0.0.1' },
   });
 

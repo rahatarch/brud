@@ -1,7 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
+import type { DaemonCallerTier } from '@brud/protocol';
 import type { DaemonEndpoint } from '../lifecycle/endpoint.js';
+import {
+  EndpointOwnershipError,
+  verifyEndpointOwnership,
+} from '../security/ownership.js';
 import { DaemonConnectionError } from './errors.js';
 
 export const DEFAULT_CONNECT_TIMEOUT_MS = 5_000;
@@ -18,30 +23,66 @@ export function normalizeTimeout(value: number | undefined, fallback: number): n
   return Math.max(1, Math.trunc(value));
 }
 
-export async function readDaemonToken(endpoint: DaemonEndpoint): Promise<string> {
+/** Path of the pre-shared key that authenticates one caller principal. */
+export function principalTokenPath(
+  endpoint: DaemonEndpoint,
+  principal: DaemonCallerTier,
+): string {
+  return principal === 'ai' ? endpoint.aiTokenPath : endpoint.tokenPath;
+}
+
+export async function readDaemonToken(
+  endpoint: DaemonEndpoint,
+  principal: DaemonCallerTier = 'ui',
+): Promise<string> {
+  const tokenPath = principalTokenPath(endpoint, principal);
   let token: string;
 
   try {
-    token = (await readFile(endpoint.tokenPath, 'utf8')).trim();
+    token = (await readFile(tokenPath, 'utf8')).trim();
   } catch (error: unknown) {
     throw new DaemonConnectionError(
-      `Unable to read daemon token at "${endpoint.tokenPath}"`,
+      `Unable to read daemon token at "${tokenPath}"`,
       { cause: error },
     );
   }
 
   if (token.length === 0) {
-    throw new DaemonConnectionError(`Daemon token at "${endpoint.tokenPath}" is empty`);
+    throw new DaemonConnectionError(`Daemon token at "${tokenPath}" is empty`);
   }
 
   return token;
 }
 
-export function connectSocket(
+/**
+ * Verifies the endpoint's on-disk ownership before opening a connection.
+ *
+ * On POSIX this refuses a socket owned by another user or reachable by group
+ * or world. Windows named pipes report `unsupported`; the caller proceeds on
+ * the platform's pipe ACL, which Node cannot inspect.
+ */
+async function assertEndpointOwnership(socketPath: string): Promise<void> {
+  try {
+    await verifyEndpointOwnership(socketPath);
+  } catch (error: unknown) {
+    if (error instanceof EndpointOwnershipError) {
+      throw new DaemonConnectionError(error.message, { cause: error });
+    }
+
+    throw new DaemonConnectionError(
+      `Cannot verify daemon endpoint ownership at "${socketPath}"`,
+      { cause: error },
+    );
+  }
+}
+
+export async function connectSocket(
   socketPath: string,
   timeoutMs: number = DEFAULT_CONNECT_TIMEOUT_MS,
 ): Promise<Socket> {
   const timeout = normalizeTimeout(timeoutMs, DEFAULT_CONNECT_TIMEOUT_MS);
+
+  await assertEndpointOwnership(socketPath);
 
   return new Promise<Socket>((resolve, reject) => {
     const socket = createConnection(socketPath);

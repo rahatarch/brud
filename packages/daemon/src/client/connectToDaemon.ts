@@ -25,12 +25,16 @@ import {
   normalizeTimeout,
   readDaemonToken,
 } from './socket.js';
+import { channelPrologue } from '../security/channel.js';
 
 export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 export interface ConnectDaemonOptions {
   readonly workspaceRoot: string;
-  /** Caller tier asserted during the handshake. Required to prevent bypass. */
+  /**
+   * Principal the client authenticates as. The key at the matching token path
+   * is the pre-shared key; the value is not transmitted in a request field.
+   */
   readonly tier: DaemonCallerTier;
   readonly spawnIfMissing?: boolean;
   readonly timeoutMs?: number;
@@ -59,17 +63,20 @@ async function openClient(
   connectTimeoutMs: number,
   handshakeTimeoutMs: number,
 ): Promise<DaemonClient> {
-  const token = await readDaemonToken(endpoint);
+  const token = await readDaemonToken(endpoint, options.tier);
   const socket = await connectSocket(endpoint.socketPath, connectTimeoutMs);
-  const client = new DaemonClient(socket);
+  const client = new DaemonClient(socket, {
+    psk: token,
+    principal: options.tier,
+    workspaceRoot: endpoint.workspaceRoot,
+    prologue: channelPrologue(endpoint.socketPath),
+    handshakeTimeoutMs,
+  });
 
   try {
     await client.connect(
       {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        token,
-        workspaceRoot: endpoint.workspaceRoot,
-        tier: options.tier,
         client: options.clientInfo
           ?? options.client
           ?? { name: DAEMON_CLIENT_NAME, version: DAEMON_CLIENT_VERSION },

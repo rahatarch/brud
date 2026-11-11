@@ -18,6 +18,13 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { DurableNodeStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import * as Protocol from '@brud/protocol';
+import {
+  channelPrologue,
+  RECORD_REQUEST,
+  SecureChannel,
+} from '../security/channel.js';
+import type { RecordType } from '../security/channel.js';
+import { derivePsk } from '../security/noise.js';
 
 /** Repository root, four directories above this file. */
 export const REPO_ROOT = resolve(__dirname, '../../../..');
@@ -78,55 +85,77 @@ async function pathExists(path: string): Promise<boolean> {
  * `sendRaw` bypasses every client-side serializer so tests can send malformed
  * JSON, JSON-RPC batch arrays, and arbitrarily large frames verbatim.
  */
+export interface RawClientSecurity {
+  readonly psk: string;
+  readonly principal: 'ui' | 'ai';
+  readonly workspaceRoot: string;
+  readonly prologue: Buffer;
+}
+
+/**
+ * Raw JSON-RPC client over a real, authenticated secure channel.
+ *
+ * `sendRaw` bypasses every client-side serializer so tests can send malformed
+ * JSON, JSON-RPC batch arrays, and arbitrarily large frames verbatim. The
+ * plaintext still travels through the production Noise/AEAD path; the daemon's
+ * post-decryption validator is the real one.
+ */
 export class RawJsonRpcClient {
   /** Every parsed frame received, in arrival order. */
   public readonly frames: RawJsonRpcFrame[] = [];
 
-  /** Every physical response line received, before parsing. */
+  /** Every physical response payload received, before parsing. */
   public readonly rawFrames: string[] = [];
 
-  /** Response lines that were not valid JSON. */
+  /** Response payloads that were not valid JSON. */
   public readonly nonJsonLines: string[] = [];
 
   private readonly socket: Socket;
+
+  private readonly channel: SecureChannel;
 
   private readonly pending = new Map<number, PendingRequest>();
 
   private readonly waiters = new Set<FrameWaiter>();
 
-  private buffer = '';
-
   private nextId = 1;
 
   private closed = false;
 
-  private constructor(socket: Socket) {
+  private constructor(socket: Socket, channel: SecureChannel) {
     this.socket = socket;
-    this.socket.setEncoding('utf8');
-    this.socket.setNoDelay(true);
+    this.channel = channel;
 
-    this.socket.on('data', (chunk: string) => {
-      this.consume(chunk);
+    channel.onMessage((type: RecordType, text: string) => {
+      this.consume(type, text);
     });
-    this.socket.on('error', () => {
+    channel.onClose(() => {
+      this.closed = true;
+      this.failAll(new Error('Raw secure channel closed'));
+    });
+    socket.on('error', () => {
       this.failAll(new Error('Raw socket error'));
     });
-    this.socket.on('close', () => {
+    socket.on('close', () => {
       this.closed = true;
       this.failAll(new Error('Raw socket closed'));
     });
   }
 
-  /** Connects to a daemon endpoint with a bounded retry window. */
+  /** Opens a real connection and completes the real Noise handshake. */
   public static async connect(
     socketPath: string,
+    security?: RawClientSecurity,
     timeoutMs: number = 5_000,
   ): Promise<RawJsonRpcClient> {
     const deadline = Date.now() + timeoutMs;
 
+    if (security === undefined) {
+      throw new Error('RawJsonRpcClient.connect requires a principal key and scope');
+    }
+
     for (;;) {
       const socket = createConnection(socketPath);
-      const client = new RawJsonRpcClient(socket);
 
       try {
         await new Promise<void>((resolveConnect, rejectConnect) => {
@@ -143,9 +172,19 @@ export class RawJsonRpcClient {
           socket.once('error', onError);
         });
 
-        return client;
+        const { channel } = await SecureChannel.connect(socket, {
+          psk: derivePsk(security.psk),
+          prologue: security.prologue,
+          context: {
+            principal: security.principal,
+            workspaceRoot: security.workspaceRoot,
+          },
+          handshakeTimeoutMs: timeoutMs,
+        });
+
+        return new RawJsonRpcClient(socket, channel);
       } catch (error: unknown) {
-        client.destroy();
+        socket.destroy();
 
         if (Date.now() >= deadline) {
           throw error instanceof Error ? error : new Error(String(error));
@@ -157,21 +196,54 @@ export class RawJsonRpcClient {
   }
 
   public get isOpen(): boolean {
-    return !this.closed && !this.socket.destroyed;
+    return !this.closed && !this.channel.isClosed;
   }
 
-  /** Writes one raw line exactly as supplied (a newline is appended once). */
+  /**
+   * Writes raw plaintext request records exactly as supplied.
+   *
+   * Newline-delimited input is split into one authenticated record per line,
+   * matching the daemon's one-record-per-message contract. Multiple lines may
+   * arrive in one call; each is independently validated by the daemon.
+   */
   public sendRaw(line: string): void {
     if (!this.isOpen) {
       throw new Error('Cannot write to a closed raw JSON-RPC client');
     }
 
-    this.socket.write(line.endsWith('\n') ? line : `${line}\n`);
+    const lines = line.split('\n');
+
+    for (const rawLine of lines) {
+      const record = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+
+      if (record.length === 0) {
+        continue;
+      }
+
+      this.channel.sendRaw(record, RECORD_REQUEST);
+    }
+  }
+
+  /**
+   * Writes arbitrary bytes to the real socket, bypassing the channel's
+   * sender-side bound. Used to model a hostile peer that does not use this
+   * client's framing; the daemon's receiver-side bound remains the control.
+   */
+  public sendUnframedBytes(bytes: Buffer): void {
+    if (this.socket.destroyed) {
+      throw new Error('Cannot write to a closed raw JSON-RPC client');
+    }
+
+    this.socket.write(bytes);
   }
 
   /** Serializes and sends one JSON-RPC message. */
   public send(message: unknown): void {
-    this.sendRaw(JSON.stringify(message));
+    if (!this.isOpen) {
+      throw new Error('Cannot write to a closed raw JSON-RPC client');
+    }
+
+    this.channel.send(message);
   }
 
   /** Sends a request and resolves with the response carrying the same id. */
@@ -304,13 +376,13 @@ export class RawJsonRpcClient {
     ]);
   }
 
-  /** Gracefully ends the socket. */
+  /** Gracefully ends the secure channel. */
   public async close(): Promise<void> {
     if (this.socket.destroyed) {
       return;
     }
 
-    this.socket.end();
+    this.channel.end();
     await this.waitForClose(1_000);
     this.socket.destroy();
   }
@@ -318,44 +390,34 @@ export class RawJsonRpcClient {
   /** Hard-destroys the socket, used for mid-flight disconnect attacks. */
   public destroy(): void {
     this.closed = true;
+    this.channel.destroy();
 
     if (!this.socket.destroyed) {
       this.socket.destroy();
     }
   }
 
-  private consume(chunk: string): void {
-    this.buffer += chunk;
-
-    for (;;) {
-      const newlineIndex = this.buffer.indexOf('\n');
-
-      if (newlineIndex === -1) {
-        return;
-      }
-
-      const line = this.buffer.slice(0, newlineIndex);
-      this.buffer = this.buffer.slice(newlineIndex + 1);
-
-      if (line.trim().length === 0) {
-        continue;
-      }
-
-      this.rawFrames.push(line);
-
-      let frame: RawJsonRpcFrame;
-
-      try {
-        frame = JSON.parse(line) as RawJsonRpcFrame;
-      } catch {
-        this.nonJsonLines.push(line);
-        continue;
-      }
-
-      this.frames.push(frame);
-      this.deliverPending(frame);
-      this.deliverWaiters(frame);
+  private consume(type: RecordType, text: string): void {
+    // The daemon never initiates requests; only responses and notifications
+    // are valid server-to-client records.
+    if (type === RECORD_REQUEST) {
+      return;
     }
+
+    this.rawFrames.push(text);
+
+    let frame: RawJsonRpcFrame;
+
+    try {
+      frame = JSON.parse(text) as RawJsonRpcFrame;
+    } catch {
+      this.nonJsonLines.push(text);
+      return;
+    }
+
+    this.frames.push(frame);
+    this.deliverPending(frame);
+    this.deliverWaiters(frame);
   }
 
   private deliverPending(frame: RawJsonRpcFrame): void {
@@ -438,22 +500,25 @@ export interface AttackDaemon {
   readonly runtimeDir: string;
   readonly socketPath: string;
   readonly tokenPath: string;
+  readonly aiTokenPath: string;
   readonly token: string;
+  readonly aiToken: string;
+  readonly prologue: Buffer;
   readonly process: ChildProcessWithoutNullStreams;
   readonly stdout: () => string;
   readonly stderr: () => string;
-  /** Opens a fresh raw connection to the daemon socket. */
-  connect(): Promise<RawJsonRpcClient>;
+  /** Opens a fresh authenticated connection to the daemon socket. */
+  connect(options?: {
+    readonly principal?: 'ui' | 'ai';
+    readonly workspaceRoot?: string;
+  }): Promise<RawJsonRpcClient>;
   /** Opens a fresh connection and performs the real `daemon.connect`. */
   connectAndHandshake(): Promise<{
     readonly client: RawJsonRpcClient;
     readonly result: Protocol.DaemonHandshakeResult;
   }>;
-  /** Performs `daemon.connect` on an existing raw connection. */
-  handshake(
-    client: RawJsonRpcClient,
-    workspaceRoot?: string,
-  ): Promise<Protocol.DaemonHandshakeResult>;
+  /** Performs `daemon.connect` on an existing authenticated connection. */
+  handshake(client: RawJsonRpcClient): Promise<Protocol.DaemonHandshakeResult>;
   /** Whether the daemon process is still addressable. */
   isAlive(): boolean;
   /** Stops the daemon and removes the workspace and runtime directory. */
@@ -468,6 +533,7 @@ async function waitForBoot(
   process: ChildProcessWithoutNullStreams,
   socketPath: string,
   tokenPath: string,
+  aiTokenPath: string,
   stderr: () => string,
 ): Promise<void> {
   const deadline = Date.now() + DAEMON_BOOT_TIMEOUT_MS;
@@ -479,7 +545,11 @@ async function waitForBoot(
       );
     }
 
-    if (await pathExists(socketPath) && await pathExists(tokenPath)) {
+    if (
+      await pathExists(socketPath)
+      && await pathExists(tokenPath)
+      && await pathExists(aiTokenPath)
+    ) {
       return;
     }
 
@@ -526,6 +596,8 @@ export async function startAttackDaemon(
     ? `\\\\.\\pipe\\brud-redteam-${hash}`
     : join(runtimeDir, `d-${hash}.sock`);
   const tokenPath = join(runtimeDir, `d-${hash}.token`);
+  const aiTokenPath = join(runtimeDir, `d-${hash}.ai.token`);
+  const prologue = channelPrologue(socketPath);
 
   let stdout = '';
   let stderr = '';
@@ -560,7 +632,7 @@ export async function startAttackDaemon(
   });
 
   try {
-    await waitForBoot(child, socketPath, tokenPath, () => stderr);
+    await waitForBoot(child, socketPath, tokenPath, aiTokenPath, () => stderr);
   } catch (error: unknown) {
     child.kill('SIGKILL');
     await Promise.race([once(child, 'exit'), delay(5_000)]);
@@ -570,19 +642,27 @@ export async function startAttackDaemon(
   }
 
   const token = (await readFile(tokenPath, 'utf8')).trim();
+  const aiToken = (await readFile(aiTokenPath, 'utf8')).trim();
 
-  const connect = async (): Promise<RawJsonRpcClient> =>
-    await RawJsonRpcClient.connect(socketPath);
+  const connect = async (options: {
+    readonly principal?: 'ui' | 'ai';
+    readonly workspaceRoot?: string;
+  } = {}): Promise<RawJsonRpcClient> => {
+    const principal = options.principal ?? 'ui';
+
+    return await RawJsonRpcClient.connect(socketPath, {
+      psk: principal === 'ai' ? aiToken : token,
+      principal,
+      workspaceRoot: options.workspaceRoot ?? workspace.root,
+      prologue,
+    });
+  };
 
   const handshake = async (
     client: RawJsonRpcClient,
-    workspaceRoot: string = workspace.root,
   ): Promise<Protocol.DaemonHandshakeResult> => {
     const frame = await client.request(Protocol.DAEMON_CONNECT, {
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      token,
-      workspaceRoot,
-      tier: 'ui',
       clientInfo: { name: 'brud-redteam-client', version: '0.0.1' },
     });
 
@@ -600,7 +680,10 @@ export async function startAttackDaemon(
     runtimeDir,
     socketPath,
     tokenPath,
+    aiTokenPath,
     token,
+    aiToken,
+    prologue,
     process: child,
     stdout: () => stdout,
     stderr: () => stderr,

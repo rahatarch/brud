@@ -21,7 +21,7 @@ import type {
   RpcResponse,
   RpcSuccessResponse,
 } from '@brud/protocol';
-import { HandshakeValidator } from './handshake.js';
+import { canonicalizeWorkspaceRoot, ConnectValidator } from './handshake.js';
 import { createRpcErrorResponse, toRpcErrorResponse } from './wireErrors.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 import type { KernelWorkspace } from '../workspaceRegistry.js';
@@ -30,9 +30,17 @@ import * as DaemonVersion from '../version.js';
 export interface DispatchSession {
   readonly connectionId: string;
   readonly handshaken: boolean;
-  /** Workspace the connection attached to during `daemon.connect`. */
+  /**
+   * Workspace fixed by the authenticated handshake before any dispatch.
+   *
+   * `daemon.connect` cannot change it; it may only attach the session to this
+   * already-authenticated root.
+   */
   workspaceRoot: string | undefined;
-  /** Caller tier asserted during `daemon.connect`; undefined before handshake. */
+  /**
+   * Caller principal fixed by the authenticated handshake. Undefined only
+   * before the secure channel has established a session.
+   */
   tier: DaemonCallerTier | undefined;
   markHandshaken(): void;
 }
@@ -75,6 +83,11 @@ export function requireTier(
  */
 const ACTION_MANAGER_CALLER_ID = 'brud.host.daemon';
 
+export interface DispatchOptions {
+  /** Cancellation signal owned by the transport connection. */
+  readonly signal?: AbortSignal;
+}
+
 export interface RequestDispatcherOptions {
   /**
    * Multi-workspace registry. When omitted, a private registry adopts
@@ -85,7 +98,6 @@ export interface RequestDispatcherOptions {
   readonly kernel?: BrudKernel;
   readonly toolsToken?: ServiceToken<IBrudToolsService>;
   readonly actionsToken?: ServiceToken<IActionManager>;
-  readonly token: string;
   readonly workspaceRoot: string;
   readonly serverName?: string;
   readonly serverVersion?: string;
@@ -167,9 +179,7 @@ export class RequestDispatcher {
 
   private readonly defaultWorkspaceRoot: string;
 
-  private readonly enforcePrimaryWorkspaceRoot: boolean;
-
-  private readonly handshake: HandshakeValidator;
+  private readonly connectValidator = new ConnectValidator();
 
   private readonly serverName: string;
 
@@ -190,18 +200,17 @@ export class RequestDispatcher {
     this.toolsToken = options.toolsToken;
     this.actionsToken = options.actionsToken;
     this.defaultWorkspaceRoot = options.workspaceRoot;
-    this.enforcePrimaryWorkspaceRoot = options.registry === undefined;
-    this.handshake = new HandshakeValidator({
-      token: options.token,
-      workspaceRoot: options.workspaceRoot,
-    });
     this.serverName = options.serverName ?? DaemonVersion.DAEMON_SERVER_NAME;
     this.serverVersion = options.serverVersion ?? DaemonVersion.DAEMON_SERVER_VERSION;
   }
 
-  async dispatch(request: RpcRequest, session: DispatchSession): Promise<RpcResponse> {
+  async dispatch(
+    request: RpcRequest,
+    session: DispatchSession,
+    options: DispatchOptions = {},
+  ): Promise<RpcResponse> {
     try {
-      return await this.route(request, session);
+      return await this.route(request, session, options);
     } catch (error: unknown) {
       if (error instanceof MethodError) {
         return createRpcErrorResponse(request.id, error.rpcCode, error.message, error.details);
@@ -214,6 +223,7 @@ export class RequestDispatcher {
   private async route(
     request: RpcRequest,
     session: DispatchSession,
+    options: DispatchOptions,
   ): Promise<RpcResponse> {
     if (request.method === Protocol.DAEMON_CONNECT) {
       return success(request.id, await this.connect(request.params, session));
@@ -233,7 +243,7 @@ export class RequestDispatcher {
       case Protocol.DAEMON_INFO:
         return success(request.id, this.info(session));
       case Protocol.WORKSPACE_LIST:
-        return success(request.id, this.listWorkspaces());
+        return success(request.id, this.listWorkspaces(session));
       case Protocol.WORKSPACE_STATUS:
         return success(request.id, this.workspaceStatus(request.params, session));
       case Protocol.WORKSPACE_DISPOSE:
@@ -241,13 +251,19 @@ export class RequestDispatcher {
       case Protocol.TOOLS_LIST:
         return success(request.id, this.listTools(session));
       case Protocol.TOOLS_EXECUTE:
-        return success(request.id, await this.executeTool(request.params, session));
+        return success(
+          request.id,
+          await this.executeTool(request.params, session, options.signal),
+        );
       case Protocol.ACTIONS_LIST:
         requireTier(session, 'ui');
         return success(request.id, this.listActions(session));
       case Protocol.ACTIONS_EXECUTE:
         requireTier(session, 'ui');
-        return success(request.id, await this.executeAction(request.params, session));
+        return success(
+          request.id,
+          await this.executeAction(request.params, session, options.signal),
+        );
       default:
         throw new MethodError(
           Protocol.METHOD_NOT_FOUND,
@@ -261,18 +277,27 @@ export class RequestDispatcher {
     value: unknown,
     session: DispatchSession,
   ): Promise<DaemonHandshakeResult> {
-    const outcome = this.enforcePrimaryWorkspaceRoot
-      ? this.handshake.validate(value)
-      : this.handshake.validateForRegistry(value);
+    if (session.handshaken) {
+      throw new MethodError(
+        Protocol.ALREADY_HANDSHAKEN,
+        'This connection has already completed the daemon handshake',
+      );
+    }
+
+    const outcome = this.connectValidator.validate(value);
 
     if (!outcome.ok) {
       throw new MethodError(outcome.code, outcome.message, outcome.data);
     }
 
-    const workspaceRoot = outcome.params.workspaceRoot;
+    const workspaceRoot = session.workspaceRoot;
+    const tier = session.tier;
 
-    if (session.workspaceRoot !== undefined && session.workspaceRoot !== workspaceRoot) {
-      this.registry.detachClient(session.connectionId);
+    if (workspaceRoot === undefined || tier === undefined) {
+      throw new MethodError(
+        Protocol.INTERNAL_ERROR,
+        'The connection has no authenticated workspace or principal',
+      );
     }
 
     let workspace = this.registry.get(workspaceRoot);
@@ -282,15 +307,13 @@ export class RequestDispatcher {
     }
 
     this.registry.attachClient(workspaceRoot, session.connectionId);
-    session.workspaceRoot = workspaceRoot;
-    session.tier = outcome.tier;
     session.markHandshaken();
 
     return {
       connectionId: session.connectionId,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
       workspaceRoot,
-      tier: outcome.tier,
+      tier,
       workspaceId: workspace.root,
       kernelState: 'running',
       capabilities: {
@@ -407,9 +430,14 @@ export class RequestDispatcher {
     return workspace.kernel.requestAccess(caller, token);
   }
 
-  private listWorkspaces(): Protocol.WorkspaceListResult {
+  private listWorkspaces(session: DispatchSession): Protocol.WorkspaceListResult {
+    const root = session.workspaceRoot;
+
     return {
-      workspaces: this.registry.list().map(describeWorkspace),
+      workspaces: this.registry
+        .list()
+        .filter((workspace) => root !== undefined && workspace.root === root)
+        .map(describeWorkspace),
     };
   }
 
@@ -418,14 +446,8 @@ export class RequestDispatcher {
     session: DispatchSession,
   ): Protocol.WorkspaceStatusResult {
     const params = asParams(value);
-    const root = optionalString(params, 'workspaceRoot') ?? session.workspaceRoot;
-
-    if (root === undefined) {
-      throw new MethodError(
-        Protocol.INVALID_PARAMS,
-        'workspaceRoot is required when the connection is not attached to a workspace',
-      );
-    }
+    const requested = optionalString(params, 'workspaceRoot');
+    const root = this.requireSessionScope(session, requested);
 
     const workspace = this.registry.get(root);
 
@@ -437,7 +459,8 @@ export class RequestDispatcher {
     session: DispatchSession,
   ): Promise<Protocol.WorkspaceDisposeResult> {
     const params = asParams(value);
-    const root = requireString(params, 'workspaceRoot');
+    const requested = requireString(params, 'workspaceRoot');
+    const root = this.requireSessionScope(session, requested);
     const existed = this.registry.get(root) !== undefined;
 
     await this.registry.dispose(root);
@@ -447,6 +470,44 @@ export class RequestDispatcher {
     }
 
     return { root, disposed: existed };
+  }
+
+  /**
+   * Rejects a request that names a workspace other than the one fixed by the
+   * authenticated connection.
+   */
+  private requireSessionScope(
+    session: DispatchSession,
+    requested: string | undefined,
+  ): string {
+    const scope = session.workspaceRoot;
+
+    if (scope === undefined) {
+      throw new MethodError(
+        Protocol.HANDSHAKE_REQUIRED,
+        'The connection is not attached to a workspace',
+      );
+    }
+
+    if (requested === undefined) {
+      return scope;
+    }
+
+    const canonical = canonicalizeWorkspaceRoot(requested);
+
+    if (canonical !== scope) {
+      throw new MethodError(
+        Protocol.ACCESS_DENIED,
+        'The requested workspace is outside the authenticated connection scope',
+        {
+          errorCode: 'WORKSPACE_SCOPE_VIOLATION',
+          expected: scope,
+          actual: canonical,
+        },
+      );
+    }
+
+    return scope;
   }
 
   private listTools(session: DispatchSession): Protocol.ToolsListResult {
@@ -469,6 +530,7 @@ export class RequestDispatcher {
   private async executeTool(
     value: unknown,
     session: DispatchSession,
+    signal?: AbortSignal,
   ): Promise<Protocol.ToolsExecuteResult> {
     const params = asParams(value);
     const name = requireString(params, 'name');
@@ -478,6 +540,7 @@ export class RequestDispatcher {
       callerId: session.connectionId,
       permissions: [],
       origin: 'daemon-rpc',
+      ...(signal === undefined ? {} : { signal }),
     };
     const result = await this.brudTools(session).executeTool(
       name,
@@ -500,6 +563,7 @@ export class RequestDispatcher {
   private async executeAction(
     value: unknown,
     session: DispatchSession,
+    signal?: AbortSignal,
   ): Promise<ActionsExecuteResult> {
     const params = asParams(value);
     const name = requireString(params, 'name');
@@ -509,6 +573,7 @@ export class RequestDispatcher {
       workspaceRoot: workspace.root,
       callerId: session.connectionId,
       origin: 'daemon-rpc',
+      ...(signal === undefined ? {} : { signal }),
     });
 
     return toProtocolOperationResult(result);

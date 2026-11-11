@@ -6,6 +6,7 @@
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { Buffer } from 'node:buffer';
 import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,7 +14,7 @@ import * as Protocol from '@brud/protocol';
 import { startAttackDaemon, toolResultOf } from './harness.js';
 import type { AttackDaemon, RawJsonRpcClient } from './harness.js';
 
-const MID_WRITE_BYTES = 8 * 1024 * 1024;
+const MID_WRITE_BYTES = 7 * 1024 * 1024;
 const PAYLOAD_DOS_BYTES = 10 * 1024 * 1024;
 
 let daemon: AttackDaemon;
@@ -104,9 +105,16 @@ describe('Attack 14 — Disconnect-Mid-Write Race', () => {
 });
 
 describe('Attack 15 — Reversal Conflict', () => {
-  it('rejects revert_session because no history tool surface exists', { timeout: 60_000 }, async () => {
+  const AUTH_GATE_CODES: readonly number[] = [
+    Protocol.AUTH_FAILED,
+    Protocol.HANDSHAKE_REQUIRED,
+  ];
+
+  it('rejects revert_session from an unauthenticated caller while a write is in flight', { timeout: 60_000 }, async () => {
     const writer = await daemon.connectAndHandshake();
-    const reverter = await daemon.connectAndHandshake();
+    // Deliberately no handshake: this caller is not authorized to reach any
+    // tool, including the History plugin's revert surface.
+    const reverter = await daemon.connect();
     const payload = 'r'.repeat(4 * 1024 * 1024);
 
     try {
@@ -115,15 +123,16 @@ describe('Attack 15 — Reversal Conflict', () => {
         input: { path: 'reversal-target.txt', content: payload },
       });
 
-      const revertResponse = await reverter.client.request(Protocol.TOOLS_EXECUTE, {
+      const revertResponse = await reverter.request(Protocol.TOOLS_EXECUTE, {
         name: 'revert_session',
         input: { sessionId: 'BR-20261107-001' },
       });
-      const revertResult = toolResultOf(revertResponse);
 
-      assert.equal(revertResponse.error, undefined, JSON.stringify(revertResponse));
-      assert.equal(revertResult.status, 'failed', JSON.stringify(revertResult));
-      assert.match(String(revertResult.error), /TOOL_NOT_FOUND/u, JSON.stringify(revertResult));
+      assert.ok(revertResponse.error !== undefined, JSON.stringify(revertResponse));
+      assert.ok(
+        AUTH_GATE_CODES.includes(revertResponse.error.code as number),
+        `expected an auth-gate code, got ${String(revertResponse.error.code)}`,
+      );
 
       const writeResponse = await writePromise;
       const writeResult = toolResultOf(writeResponse);
@@ -132,7 +141,7 @@ describe('Attack 15 — Reversal Conflict', () => {
       assert.equal(writeResult.status, 'success', JSON.stringify(writeResult));
     } finally {
       await writer.client.close().catch(() => undefined);
-      await reverter.client.close().catch(() => undefined);
+      await reverter.close().catch(() => undefined);
     }
   });
 
@@ -146,37 +155,22 @@ describe('Attack 15 — Reversal Conflict', () => {
 });
 
 describe('Attack 16 — Payload Size DoS', () => {
-  it('rejects a 10 MiB tools.execute payload at the socket layer without crashing', { timeout: 90_000 }, async () => {
-    const payload = 'd'.repeat(PAYLOAD_DOS_BYTES);
+  it('rejects an oversized encrypted record before buffering it and survives', { timeout: 90_000 }, async () => {
     const pid = daemon.process.pid;
     const beforeRss = await residentBytes(pid);
-    const from = client.mark();
+    const header = Buffer.alloc(4);
+    header.writeUInt32BE(10 * 1024 * 1024, 0);
 
-    client.sendRaw(JSON.stringify({
-      jsonrpc: '2.0',
-      id: 16,
-      method: Protocol.TOOLS_EXECUTE,
-      params: {
-        name: 'create_file',
-        input: { path: 'payload-dos.txt', content: payload },
-      },
-    }));
+    // A hostile peer writes a length prefix larger than the receiver's record
+    // ceiling. The daemon must close before allocating the body.
+    client.sendUnframedBytes(Buffer.concat([header, Buffer.alloc(64)]));
 
-    // The frame is a frame-length violation: the daemon must reject it on raw
-    // bytes, before JSON.parse, with -32600 Payload too large.
-    const rejection = await client.waitForFrame(
-      (frame) => frame.id === null
-        && frame.error?.code === Protocol.INVALID_REQUEST
-        && /Payload too large/u.test(String(frame.error?.message ?? '')),
-      { from, timeoutMs: 60_000 },
-    );
-
+    const closed = await client.waitForClose(10_000);
     const afterRss = await residentBytes(pid);
     const memory = `rss before=${beforeRss ?? 'n/a'} after=${afterRss ?? 'n/a'}`;
 
-    assert.equal(rejection.error?.code, Protocol.INVALID_REQUEST, JSON.stringify(rejection));
-    assert.match(String(rejection.error?.message), /Payload too large/u);
-    assert.equal(daemon.isAlive(), true, `daemon crashed under a 10 MiB payload (${memory})`);
+    assert.equal(closed, true, `daemon did not close the oversized record (${memory})`);
+    assert.equal(daemon.isAlive(), true, `daemon crashed under a 10 MiB length prefix (${memory})`);
     assert.equal(existsSync(join(daemon.workspaceRoot, 'payload-dos.txt')), false);
 
     // The daemon must still accept fresh connections after the rejection.

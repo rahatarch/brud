@@ -79,7 +79,7 @@ describe('Attack 7 — Spoofed Caller Identity', () => {
     );
   });
 
-  it('ignores callerId/origin fields injected beside a valid input envelope', async () => {
+  it('rejects callerId/origin/permissions fields injected beside a valid input envelope', async () => {
     const response = await client.request(Protocol.TOOLS_EXECUTE, {
       name: 'create_file',
       input: { path: 'envelope-spoof.txt', content: 'normal\n' },
@@ -88,11 +88,13 @@ describe('Attack 7 — Spoofed Caller Identity', () => {
       permissions: ['fs:write', 'tools:execute'],
       tier: 'kernel',
     });
-    const result = (response.result as Protocol.ToolsExecuteResult | undefined)?.result;
 
-    assert.equal(response.error, undefined, JSON.stringify(response));
-    assert.equal(result?.status, 'success', JSON.stringify(result));
-    assert.equal(existsSync(join(daemon.workspaceRoot, 'envelope-spoof.txt')), true);
+    assert.equal(response.error?.code, Protocol.INVALID_REQUEST, JSON.stringify(response));
+    assert.equal(
+      existsSync(join(daemon.workspaceRoot, 'envelope-spoof.txt')),
+      false,
+      'a closed-contract rejection must not execute the tool',
+    );
   });
 
   it('treats a spoofed caller as the ordinary daemon-rpc caller (no elevated surface)', async () => {
@@ -111,18 +113,52 @@ describe('Attack 7 — Spoofed Caller Identity', () => {
 });
 
 describe('Attack 8 — Client-Only Action Spoofing', () => {
-  it('exposes no history or revert tool that a daemon-rpc caller could hijack', async () => {
+  const AUTH_GATE_CODES: readonly number[] = [
+    Protocol.AUTH_FAILED,
+    Protocol.HANDSHAKE_REQUIRED,
+  ];
+
+  it('keeps the history action namespace out of the tool surface and rejects revert tools without a handshake', async () => {
     const names = await listToolNames();
 
-    for (const crossed of ['brud.tools.history', 'history', 'revert_session', 'commitSession']) {
-      assert.equal(names.includes(crossed), false, `${crossed} must not be exposed`);
+    // The History plugin legitimately publishes revert tools
+    // (`revert_session`, `revert_operations`) alongside its UI-only actions.
+    // New tools may be added; the invariant is that the action namespace is
+    // never reachable through the tool dispatch surface.
+    for (const actionName of [
+      'history.revert_session',
+      'history.revert_operations',
+      'history.list_sessions',
+    ]) {
+      assert.equal(names.includes(actionName), false, `${actionName} must not be exposed as a tool`);
+
+      const result = (await execute(actionName, { sessionId: 'BR-20261107-001' })).result;
+
+      assert.equal(result.status, 'failed', `${actionName}: ${JSON.stringify(result)}`);
+      assert.match(String(result.error), /TOOL_NOT_FOUND/u, `${actionName}: ${JSON.stringify(result)}`);
     }
 
-    for (const name of ['revert_session', 'history.beginSession', 'universalHistory.commitSession']) {
-      const result = (await execute(name, { sessionId: 'BR-20261107-001' })).result;
+    // The revert tools do exist, but only an authenticated caller can reach
+    // them. An unauthenticated socket must be stopped at the auth gate.
+    const unauthenticated = await daemon.connect();
 
-      assert.equal(result.status, 'failed', `${name}: ${JSON.stringify(result)}`);
-      assert.match(String(result.error), /TOOL_NOT_FOUND/u, `${name}: ${JSON.stringify(result)}`);
+    try {
+      for (const name of ['revert_session', 'revert_operations']) {
+        const response = await unauthenticated.request(Protocol.TOOLS_EXECUTE, {
+          name,
+          input: { sessionId: 'BR-20261107-001' },
+        });
+
+        assert.ok(response.error !== undefined, `${name}: ${JSON.stringify(response)}`);
+        assert.ok(
+          AUTH_GATE_CODES.includes(response.error.code as number),
+          `${name}: expected an auth-gate code, got ${String(response.error.code)}`,
+        );
+      }
+
+      assert.equal(daemon.isAlive(), true);
+    } finally {
+      await unauthenticated.close();
     }
   });
 

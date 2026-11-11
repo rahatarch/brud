@@ -13,7 +13,10 @@ export interface DaemonEndpoint {
   readonly runtimeDir: string;
   readonly socketPath: string;
   readonly lockPath: string;
+  /** UI-principal pre-shared key. */
   readonly tokenPath: string;
+  /** AI-principal pre-shared key. */
+  readonly aiTokenPath: string;
   readonly metaPath: string;
   readonly isWindows: boolean;
 }
@@ -138,6 +141,7 @@ export async function resolveEndpoint(workspaceRoot: string): Promise<DaemonEndp
       socketPath: `\\\\.\\pipe\\brud-${workspaceHash}`,
       lockPath: join(runtimeDir, `d-${workspaceHash}.lock`),
       tokenPath: join(runtimeDir, `d-${workspaceHash}.token`),
+      aiTokenPath: join(runtimeDir, `d-${workspaceHash}.ai.token`),
       metaPath: join(runtimeDir, `d-${workspaceHash}.json`),
       isWindows,
     };
@@ -153,6 +157,7 @@ export async function resolveEndpoint(workspaceRoot: string): Promise<DaemonEndp
     socketPath: derivePosixSocketPath(runtimeDir, workspaceHash),
     lockPath: join(runtimeDir, `d-${workspaceHash}.lock`),
     tokenPath: join(runtimeDir, `d-${workspaceHash}.token`),
+    aiTokenPath: join(runtimeDir, `d-${workspaceHash}.ai.token`),
     metaPath: join(runtimeDir, `d-${workspaceHash}.json`),
     isWindows,
   };

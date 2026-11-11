@@ -1,9 +1,7 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { realpathSync } from 'node:fs';
 import { isAbsolute, posix, resolve, sep, win32 } from 'node:path';
 import * as Protocol from '@brud/protocol';
 import type {
-  DaemonCallerTier,
   DaemonClientIdentity,
   DaemonConnectParams,
   RpcErrorCode,
@@ -14,22 +12,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isUnknownArray(value: unknown): value is readonly unknown[] {
-  return Array.isArray(value);
-}
-
-function sha256(value: string): Buffer {
-  return createHash('sha256').update(value, 'utf8').digest();
-}
-
 function canonicalizePath(input: string): string {
   const resolved = resolve(input);
   let canonical = resolved;
 
   try {
-    if (existsSync(resolved)) {
-      canonical = realpathSync.native(resolved);
-    }
+    canonical = realpathSync.native(resolved);
   } catch {
     canonical = resolved;
   }
@@ -82,8 +70,6 @@ function rootComparisonKey(value: string): string {
 /**
  * Reports whether a canonical root is the host filesystem root or a known
  * system directory.
- *
- * @param canonicalRoot - Absolute path already passed through `realpath`.
  */
 export function isDeniedWorkspaceRoot(canonicalRoot: string): boolean {
   const api = process.platform === 'win32' ? win32 : posix;
@@ -105,19 +91,12 @@ export interface HandshakeFailure {
   readonly data?: RpcErrorDetails;
 }
 
-export interface HandshakeSuccess {
+export interface WorkspaceScopeSuccess {
   readonly ok: true;
-  readonly params: DaemonConnectParams;
-  /** Validated caller tier, copied onto the dispatch session by `daemon.connect`. */
-  readonly tier: DaemonCallerTier;
-}
-
-export type HandshakeOutcome = HandshakeSuccess | HandshakeFailure;
-
-export interface HandshakeConfig {
-  readonly token: string;
   readonly workspaceRoot: string;
 }
+
+export type WorkspaceScopeOutcome = WorkspaceScopeSuccess | HandshakeFailure;
 
 function failure(
   code: RpcErrorCode,
@@ -125,6 +104,60 @@ function failure(
   data?: RpcErrorDetails,
 ): HandshakeFailure {
   return data === undefined ? { ok: false, code, message } : { ok: false, code, message, data };
+}
+
+export interface WorkspaceScopeOptions {
+  /** Canonical root the daemon was configured with. */
+  readonly primaryRoot: string;
+  /** True for single-kernel compositions that serve only `primaryRoot`. */
+  readonly enforcePrimary: boolean;
+}
+
+/**
+ * Validates the workspace root claimed inside the authenticated Noise payload.
+ *
+ * This runs at the daemon's secure accept boundary, before any JSON-RPC
+ * dispatch, so a caller cannot widen its scope with a later request.
+ */
+export function validateAuthenticatedWorkspaceRoot(
+  value: unknown,
+  options: WorkspaceScopeOptions,
+): WorkspaceScopeOutcome {
+  if (typeof value !== 'string') {
+    return failure(Protocol.INVALID_PARAMS, 'Handshake workspaceRoot must be a string');
+  }
+
+  if (!isAbsolute(value)) {
+    return failure(
+      Protocol.INVALID_PARAMS,
+      'Handshake workspaceRoot must be an absolute path',
+      { errorCode: 'INVALID_WORKSPACE_ROOT', path: value },
+    );
+  }
+
+  const lexicalRoot = resolve(value);
+  const candidateRoot = canonicalizeWorkspaceRoot(value);
+
+  if (isDeniedWorkspaceRoot(lexicalRoot) || isDeniedWorkspaceRoot(candidateRoot)) {
+    return failure(
+      Protocol.INVALID_PARAMS,
+      'ROGUE WORKSPACE ROOT REJECTED (INVALID_WORKSPACE_ROOT): the filesystem root or a system directory cannot be a workspace',
+      { errorCode: 'INVALID_WORKSPACE_ROOT', path: candidateRoot },
+    );
+  }
+
+  if (options.enforcePrimary && candidateRoot !== options.primaryRoot) {
+    return failure(
+      Protocol.WORKSPACE_MISMATCH,
+      'Workspace root does not match the daemon workspace',
+      {
+        expected: options.primaryRoot,
+        actual: candidateRoot,
+      },
+    );
+  }
+
+  return { ok: true, workspaceRoot: candidateRoot };
 }
 
 function parseClientIdentity(value: unknown): DaemonClientIdentity | undefined {
@@ -142,81 +175,30 @@ function parseClientIdentity(value: unknown): DaemonClientIdentity | undefined {
   return { name, version };
 }
 
-export class HandshakeValidator {
-  private readonly expectedTokenHash: Buffer;
+export interface ConnectSuccess {
+  readonly ok: true;
+  readonly params: DaemonConnectParams;
+}
 
-  private readonly canonicalWorkspaceRoot: string;
+export type ConnectOutcome = ConnectSuccess | HandshakeFailure;
 
-  constructor(config: HandshakeConfig) {
-    this.expectedTokenHash = sha256(config.token);
-    this.canonicalWorkspaceRoot = canonicalizeWorkspaceRoot(config.workspaceRoot);
-  }
-
-  get workspaceRoot(): string {
-    return this.canonicalWorkspaceRoot;
-  }
-
-  /**
-   * Validates a connect request against the daemon's primary workspace.
-   *
-   * Retained for single-workspace callers. Multi-workspace daemons use
-   * {@link validateForRegistry}, which accepts any absolute root.
-   */
-  validate(value: unknown): HandshakeOutcome {
-    return this.parse(value, true);
-  }
-
-  /**
-   * Validates a connect request for the multi-workspace registry.
-   *
-   * The root must be an absolute path but is not constrained to the daemon's
-   * primary workspace; the registry decides whether to reuse or spawn it.
-   */
-  validateForRegistry(value: unknown): HandshakeOutcome {
-    return this.parse(value, false);
-  }
-
-  private parse(value: unknown, enforcePrimaryRoot: boolean): HandshakeOutcome {
+/**
+ * Validates the post-handshake `daemon.connect` payload.
+ *
+ * Identity, principal, and scope were authenticated by the Noise session
+ * before this method ran. This validator only checks the protocol version and
+ * the optional presentation fields; it never accepts a token, tier, or scope.
+ */
+export class ConnectValidator {
+  validate(value: unknown): ConnectOutcome {
     if (!isRecord(value)) {
       return failure(Protocol.INVALID_PARAMS, 'daemon.connect requires a params object');
     }
 
     const protocolVersion = value.protocolVersion;
-    const token = value.token;
-    const workspaceRoot = value.workspaceRoot;
-    const tier = value.tier;
 
     if (typeof protocolVersion !== 'string') {
       return failure(Protocol.INVALID_PARAMS, 'protocolVersion must be a string');
-    }
-
-    if (typeof token !== 'string') {
-      return failure(Protocol.INVALID_PARAMS, 'token must be a string');
-    }
-
-    if (typeof workspaceRoot !== 'string') {
-      return failure(Protocol.INVALID_PARAMS, 'workspaceRoot must be a string');
-    }
-
-    // `tier` is deliberately mandatory: defaulting it would let a caller omit
-    // the field and slip past UI-only guards.
-    if (tier !== 'ui' && tier !== 'ai') {
-      return failure(
-        Protocol.INVALID_PARAMS,
-        'tier is required and must be "ui" or "ai"',
-        {
-          errorCode: 'INVALID_TIER',
-          ...(typeof tier === 'string' ? { actual: tier } : { reason: 'missing' }),
-        },
-      );
-    }
-
-    if (!enforcePrimaryRoot && !isAbsolute(workspaceRoot)) {
-      return failure(
-        Protocol.INVALID_PARAMS,
-        'workspaceRoot must be an absolute path',
-        { errorCode: 'INVALID_WORKSPACE_ROOT', path: workspaceRoot },
-      );
     }
 
     if (protocolVersion !== Protocol.DAEMON_PROTOCOL_VERSION) {
@@ -230,56 +212,20 @@ export class HandshakeValidator {
       );
     }
 
-    if (!this.tokensMatch(token)) {
-      return failure(Protocol.AUTH_FAILED, 'Invalid daemon authentication token');
-    }
-
-    const lexicalRoot = resolve(workspaceRoot);
-    const candidateRoot = canonicalizeWorkspaceRoot(workspaceRoot);
-
-    // Check both the lexical root and the realpath-resolved root. The lexical
-    // check catches direct `/bin` or `/sbin` aliases that realpath rewrites
-    // into `/usr/...`; the resolved check catches a symlink anywhere on disk
-    // that points at a system directory.
-    if (isDeniedWorkspaceRoot(lexicalRoot) || isDeniedWorkspaceRoot(candidateRoot)) {
-      return failure(
-        Protocol.INVALID_PARAMS,
-        'ROGUE WORKSPACE ROOT REJECTED (INVALID_WORKSPACE_ROOT): the filesystem root or a system directory cannot be a workspace',
-        { errorCode: 'INVALID_WORKSPACE_ROOT', path: candidateRoot },
-      );
-    }
-
-    if (enforcePrimaryRoot && candidateRoot !== this.canonicalWorkspaceRoot) {
-      return failure(
-        Protocol.WORKSPACE_MISMATCH,
-        'Workspace root does not match the daemon workspace',
-        {
-          expected: this.canonicalWorkspaceRoot,
-          actual: candidateRoot,
-        },
-      );
-    }
-
     const clientInfo = parseClientIdentity(value.clientInfo);
-    const client = clientInfo ?? parseClientIdentity(value.client);
-    const capabilities = isUnknownArray(value.capabilities)
+    const client = parseClientIdentity(value.client);
+    const capabilities = Array.isArray(value.capabilities)
       ? value.capabilities.filter((entry): entry is string => typeof entry === 'string')
       : undefined;
 
-    const params: DaemonConnectParams = {
-      protocolVersion,
-      token,
-      workspaceRoot: candidateRoot,
-      tier,
-      ...(client === undefined ? {} : { client }),
-      ...(clientInfo === undefined ? {} : { clientInfo }),
-      ...(capabilities === undefined ? {} : { capabilities }),
+    return {
+      ok: true,
+      params: {
+        protocolVersion,
+        ...(client === undefined ? {} : { client }),
+        ...(clientInfo === undefined ? {} : { clientInfo }),
+        ...(capabilities === undefined ? {} : { capabilities }),
+      },
     };
-
-    return { ok: true, params, tier };
-  }
-
-  private tokensMatch(candidate: string): boolean {
-    return timingSafeEqual(this.expectedTokenHash, sha256(candidate));
   }
 }

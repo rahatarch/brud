@@ -137,6 +137,8 @@ async function runStdio(options: CliOptions): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  // The host that spawned this process is the only socket peer admitted.
+  const expectedPeerPid = process.ppid;
   const options = parseOptions(process.argv.slice(2));
 
   if (options.stdio) {
@@ -154,6 +156,7 @@ async function main(): Promise<void> {
     ...(options.workspaceIdleTimeoutMs === undefined
       ? {}
       : { workspaceIdleTimeoutMs: options.workspaceIdleTimeoutMs }),
+    expectedPeerPid,
   });
 
   process.stdout.write(

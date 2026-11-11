@@ -41,7 +41,6 @@ export function createService(context: KernelServiceModuleContext) {
     withUniversalHistory: true,
     withTools: true,
     withUtilities: true,
-    withTerminal: true,
     withActions: true,
   });
 

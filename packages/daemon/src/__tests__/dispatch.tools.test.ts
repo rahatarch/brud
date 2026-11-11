@@ -9,7 +9,6 @@ import { RequestDispatcher } from '../server/dispatch.js';
 import type { DispatchSession } from '../server/dispatch.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 
-const TOKEN = 'dispatch-tools-token-0123456789abcdef';
 
 class TestSession implements DispatchSession {
   public workspaceRoot: string | undefined;
@@ -36,16 +35,13 @@ async function makeWorkspace(name: string): Promise<string> {
   return await realpath(workspaceRoot);
 }
 
-function connectRequest(workspaceRoot: string, id: number): RpcRequest {
+function connectRequest(id: number): RpcRequest {
   return {
     jsonrpc: '2.0',
     id,
     method: Protocol.DAEMON_CONNECT,
     params: {
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      token: TOKEN,
-      workspaceRoot,
-      tier: 'ui',
     },
   };
 }
@@ -55,7 +51,9 @@ function request(method: string, params: unknown, id: number): RpcRequest {
 }
 
 async function connect(session: TestSession, workspaceRoot: string, id: number): Promise<void> {
-  const response = await dispatcher.dispatch(connectRequest(workspaceRoot, id), session);
+  session.workspaceRoot = workspaceRoot;
+  session.tier = 'ui';
+  const response = await dispatcher.dispatch(connectRequest(id), session);
   assert.ok(Protocol.isRpcSuccessResponse(response), JSON.stringify(response));
 }
 
@@ -73,7 +71,6 @@ before(async () => {
   dispatcher = new RequestDispatcher({
     registry,
     toolsToken: kernelModule.BrudToolsToken,
-    token: TOKEN,
     workspaceRoot: await makeWorkspace('primary'),
   });
 });

@@ -52,6 +52,7 @@ describe('daemon lifecycle', () => {
     assert.equal(daemon.kernel.lifecycleState, 'RUNNING');
     assert.equal(await pathExists(daemon.endpoint.lockPath), true);
     assert.equal(await pathExists(daemon.endpoint.tokenPath), true);
+    assert.equal(await pathExists(daemon.endpoint.aiTokenPath), true);
     assert.equal(await pathExists(daemon.endpoint.metaPath), true);
     assert.equal(daemon.isShuttingDown(), false);
 
@@ -66,6 +67,14 @@ describe('daemon lifecycle', () => {
 
     const tokenInfo = await stat(daemon.endpoint.tokenPath);
     assert.equal(tokenInfo.mode & 0o777, 0o600);
+
+    const aiTokenContent = await readFile(daemon.endpoint.aiTokenPath, 'utf8');
+    assert.equal(aiTokenContent, daemon.tokens.ai);
+    assert.match(aiTokenContent, /^[0-9a-f]{64}$/);
+    assert.notEqual(aiTokenContent, daemon.tokens.ui);
+
+    const aiTokenInfo = await stat(daemon.endpoint.aiTokenPath);
+    assert.equal(aiTokenInfo.mode & 0o777, 0o600);
 
     const metadata = JSON.parse(await readFile(daemon.endpoint.metaPath, 'utf8')) as unknown;
     assert.equal(typeof metadata, 'object');
@@ -89,6 +98,7 @@ describe('daemon lifecycle', () => {
     assert.equal(daemon.kernel.lifecycleState, 'DISPOSED');
     assert.equal(await pathExists(daemon.endpoint.lockPath), false);
     assert.equal(await pathExists(daemon.endpoint.tokenPath), false);
+    assert.equal(await pathExists(daemon.endpoint.aiTokenPath), false);
     assert.equal(await pathExists(daemon.endpoint.metaPath), false);
 
     if (process.platform !== 'win32') {

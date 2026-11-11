@@ -17,6 +17,7 @@ import {
   DAEMON_CLIENT_VERSION,
 } from './identity.js';
 import { connectSocket, normalizeTimeout, readDaemonToken } from './socket.js';
+import { channelPrologue } from '../security/channel.js';
 
 export const DEFAULT_SPAWN_TIMEOUT_MS = 5_000;
 
@@ -46,6 +47,7 @@ async function fileExists(path: string): Promise<boolean> {
 export async function resolveDaemonCliPath(): Promise<string> {
   const candidates = [
     resolve(__dirname, '..', 'cli.js'),
+    resolve(__dirname, '..', 'cli.ts'),
     resolve(__dirname, 'daemon', 'cli.js'),
     resolve(__dirname, '..', '..', 'dist', 'cli.js'),
   ];
@@ -105,18 +107,20 @@ async function probeDaemonReadiness(
 ): Promise<void> {
   await readReadyMetadata(endpoint);
 
-  const token = await readDaemonToken(endpoint);
+  const token = await readDaemonToken(endpoint, 'ui');
   const socket = await connectSocket(endpoint.socketPath, timeoutMs);
-  const client = new DaemonClient(socket);
+  const client = new DaemonClient(socket, {
+    psk: token,
+    principal: 'ui',
+    workspaceRoot: endpoint.workspaceRoot,
+    prologue: channelPrologue(endpoint.socketPath),
+    handshakeTimeoutMs: timeoutMs,
+  });
 
   try {
     await client.connect(
       {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        token,
-        workspaceRoot: endpoint.workspaceRoot,
-        // Readiness probe only; the real caller connects with its own tier.
-        tier: 'ui',
         client: { name: DAEMON_CLIENT_NAME, version: DAEMON_CLIENT_VERSION },
         capabilities: [...DAEMON_CLIENT_CAPABILITIES],
       },
@@ -135,7 +139,10 @@ export async function spawnDaemon(
   const endpoint = await resolveEndpoint(workspaceRoot);
   const cliPath = await resolveDaemonCliPath();
 
-  const child = spawn(process.execPath, [cliPath, '--workspace', endpoint.workspaceRoot], {
+  const invocation = cliPath.endsWith('.ts')
+    ? ['--import', 'tsx', cliPath]
+    : [cliPath];
+  const child = spawn(process.execPath, [...invocation, '--workspace', endpoint.workspaceRoot], {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,

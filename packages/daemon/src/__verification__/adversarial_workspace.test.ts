@@ -75,64 +75,24 @@ describe('Attack 13 — The Rogue Workspace Connect', () => {
     assert.equal(response.error?.code, Protocol.METHOD_NOT_FOUND, JSON.stringify(response));
   });
 
-  it('rejects the host filesystem root ("/")', { timeout: 60_000 }, async () => {
-    const rogue = await daemon.connect();
-
-    try {
-      const response = await rogue.request(Protocol.DAEMON_CONNECT, {
-        protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        token: daemon.token,
-        workspaceRoot: '/',
-        tier: 'ui',
-      });
-      const text = rendered(response);
-
-      assert.ok(
-        response.error !== undefined,
-        `daemon attached to the host filesystem root: ${text}`,
-      );
-      assert.match(
-        text,
-        /FILESYSTEM_ROOT|filesystem root|WORKSPACE_CONFIGURATION_INVALID/u,
-        `expected a filesystem-root rejection: ${text}`,
-      );
-    } finally {
-      await rogue.close();
-    }
+  it('rejects the host filesystem root ("/") at the authenticated handshake', { timeout: 60_000 }, async () => {
+    await assert.rejects(
+      () => daemon.connect({ workspaceRoot: '/' }),
+      /Noise|handshake|channel|workspace|root|authentication/i,
+    );
 
     // The daemon must still serve the legitimate workspace afterwards.
     const list = await client.request(Protocol.TOOLS_LIST, {});
     assert.equal(list.error, undefined, JSON.stringify(list));
   });
 
-  it('rejects a host directory outside the declared workspace ("/etc")', { timeout: 60_000 }, async () => {
-    const rogue = await daemon.connect();
+  it('rejects a host directory outside the declared workspace ("/etc") at the authenticated handshake', { timeout: 60_000 }, async () => {
+    await assert.rejects(
+      () => daemon.connect({ workspaceRoot: '/etc' }),
+      /Noise|handshake|channel|workspace|root|authentication/i,
+    );
 
-    try {
-      const response = await rogue.request(Protocol.DAEMON_CONNECT, {
-        protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        token: daemon.token,
-        workspaceRoot: '/etc',
-        tier: 'ui',
-      });
-      const text = rendered(response);
-
-      assert.ok(
-        response.error !== undefined,
-        `daemon attached a rogue workspace root outside the declared workspace: ${text}`,
-      );
-      assert.match(
-        text,
-        /FILESYSTEM_ROOT|ROGUE|OUTSIDE|WORKSPACE_MISMATCH/u,
-        `expected a rogue-root rejection: ${text}`,
-      );
-
-      if (response.error === undefined) {
-        // Clean up the accepted rogue kernel before failing the assertion path.
-        await client.request(Protocol.WORKSPACE_DISPOSE, { workspaceRoot: '/etc' });
-      }
-    } finally {
-      await rogue.close();
-    }
+    const list = await client.request(Protocol.TOOLS_LIST, {});
+    assert.equal(list.error, undefined, JSON.stringify(list));
   });
 });

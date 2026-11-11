@@ -108,10 +108,12 @@ export interface PluginManagerDescriptorOptions {
   /**
    * Declares {@link TerminalToken} as a boot dependency.
    *
-   * Defaults to `false`. The standard kernel opts in so plugins holding
-   * `terminal:execute` can call `context.getTerminal()`. Regardless of this
-   * flag, the terminal handle is only exposed when the token is actually
-   * registered.
+   * Defaults to `false`, and the standard composition does not opt in: the
+   * plugin manager never uses the terminal at boot or during activation.
+   * Plugins holding `terminal:execute` still receive a handle when the terminal
+   * service is composed, because `context.getTerminal()` resolves through the
+   * exposed API registry on demand. Compositions that need terminal boot
+   * ordering ahead of the manager may opt in explicitly.
    */
   readonly withTerminal?: boolean;
 }

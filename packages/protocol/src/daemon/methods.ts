@@ -1,3 +1,4 @@
+import type { JsonRpcId } from './framing.js';
 import type { DaemonProtocolVersion } from './version.js';
 
 export const DAEMON_CONNECT = 'daemon.connect';
@@ -13,6 +14,24 @@ export const TOOLS_EXECUTE = 'tools.execute';
 
 export const ACTIONS_LIST = 'actions.list';
 export const ACTIONS_EXECUTE = 'actions.execute';
+
+/**
+ * Client-to-daemon cancellation frame.
+ *
+ * Retained as a notification for every existing client. A newer client may
+ * send it as a request and receive the outcome as that request's result.
+ */
+export const REQUEST_CANCEL = 'request.cancel';
+
+/**
+ * Daemon-to-client acknowledgment for a cancellation notification.
+ *
+ * Additive: existing clients that ignore unknown notifications are unaffected.
+ */
+export const REQUEST_CANCELLED = 'request.cancelled';
+
+export const REQUEST_METHODS = [REQUEST_CANCEL] as const;
+export type RequestMethod = (typeof REQUEST_METHODS)[number];
 
 export const DAEMON_METHODS = [DAEMON_CONNECT, DAEMON_PING, DAEMON_INFO] as const;
 export type DaemonMethod = (typeof DAEMON_METHODS)[number];
@@ -44,17 +63,17 @@ export interface DaemonClientIdentity {
  */
 export type DaemonCallerTier = 'ui' | 'ai';
 
+/**
+ * Post-handshake connect parameters.
+ *
+ * Authentication, the caller principal, and the workspace scope are fixed by
+ * the authenticated Noise session before this request is accepted. They are
+ * deliberately absent from this payload: a caller cannot re-assert or override
+ * its tier or scope here.
+ */
 export interface DaemonConnectParams {
   readonly protocolVersion: string;
-  readonly token: string;
-  readonly workspaceRoot: string;
-  /**
-   * Caller tier. Required for every new client: omitting `tier` is rejected as
-   * `INVALID_PARAMS` rather than defaulted, so a caller cannot accidentally
-   * bypass a UI-only guard. Legacy internal fixtures must send it explicitly.
-   */
-  readonly tier: DaemonCallerTier;
-  /** Client identity supplied by newer clients. */
+  /** Client identity supplied by the authenticated client. */
   readonly clientInfo?: DaemonClientIdentity;
   /** Legacy client identity field retained for wire compatibility. */
   readonly client?: DaemonClientIdentity;
@@ -222,6 +241,37 @@ export interface DaemonInfoResult {
   readonly uptimeMs: number;
 }
 
+export interface RequestCancelParams {
+  /** Id of the in-flight request the caller is abandoning. */
+  readonly id: JsonRpcId;
+}
+
+/**
+ * Outcome the daemon observed for a cancellation.
+ *
+ * - `cancelled`: the signal was delivered and the operation settled as
+ *   `aborted`, so the work stopped.
+ * - `not-abortable`: the signal was delivered but the operation completed
+ *   normally; it does not honor cancellation.
+ * - `aborting`: the signal was delivered but the operation had not settled
+ *   within the acknowledgement grace window.
+ * - `not-found`: no matching request was in flight (already finished).
+ * - `invalid`: the cancellation frame did not name a valid request id.
+ */
+export type RequestCancelStatus =
+  | 'cancelled'
+  | 'not-abortable'
+  | 'aborting'
+  | 'not-found'
+  | 'invalid';
+
+export interface RequestCancelledParams {
+  /** Id of the request the cancellation referred to. */
+  readonly id: JsonRpcId;
+  readonly status: RequestCancelStatus;
+  readonly message?: string;
+}
+
 export interface DaemonMethodMap {
   readonly 'daemon.connect': { readonly params: DaemonConnectParams; readonly result: DaemonHandshakeResult };
   readonly 'daemon.ping': { readonly params: DaemonPingParams; readonly result: DaemonPingResult };
@@ -253,6 +303,10 @@ export interface DaemonMethodMap {
   readonly 'actions.execute': {
     readonly params: ActionsExecuteParams;
     readonly result: ActionsExecuteResult;
+  };
+  readonly 'request.cancel': {
+    readonly params: RequestCancelParams;
+    readonly result: RequestCancelledParams;
   };
 }
 
