@@ -1,21 +1,27 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStandardKernel } from '../bootstrap/index.js';
-import { MissingWorkspaceRootError } from '../../services/WorkspaceService/bootOptions.js';
+import { ContextContractError } from '../contracts/contextContract.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 describe('kernel boot options purity', () => {
-  it('fails from the Workspace Service, not the Core, when booted with an empty bag', async () => {
+  it('fails at the contract boundary, not from a service, when booted with an empty bag', async () => {
     const kernel = createStandardKernel();
 
     await assert.rejects(
       kernel.boot({ options: {} }),
       (error: unknown) => {
-        assert.ok(error instanceof MissingWorkspaceRootError);
-        assert.equal(error.name, 'MissingWorkspaceRootError');
-        assert.match(error.message, /brud\.core\.workspace/u);
-        assert.match(error.message, /options\['workspace\.root'\]/u);
-        assert.doesNotMatch(error.name, /BrudKernel|LifecycleStateError/u);
+        assert.ok(error instanceof ContextContractError);
+        assert.equal(error.name, 'ContextContractError');
+        const field = error.field ?? '';
+
+        assert.match(field, /\.root$/u);
+        assert.equal(error.service, field.split('.')[0]);
+        assert.equal(error.expectedType, 'string');
+        assert.equal(error.actualType, 'missing');
+        assert.match(error.message, /Required context field/u);
+        assert.match(error.message, /Expected string/u);
+        assert.doesNotMatch(error.name, /MissingWorkspaceRootError|BrudKernel|LifecycleStateError/u);
         return true;
       },
     );

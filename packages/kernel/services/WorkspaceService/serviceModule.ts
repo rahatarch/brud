@@ -7,7 +7,6 @@ import { createWorkspaceDescriptor } from './descriptor/descriptor.js';
 import {
   WORKSPACE_CONTEXT_SCOPE,
   WORKSPACE_ROOT_CONTEXT_FIELD,
-  requireNamespacedWorkspaceRoot,
 } from './bootOptions.js';
 
 const WORKSPACE_SLOT = 'brud.core.workspace.instance';
@@ -22,20 +21,16 @@ export function createService(context: KernelServiceModuleContext) {
     },
   ]);
 
-  const workspaceRoot = requireNamespacedWorkspaceRoot(
-    context.options,
-    'brud.core.workspace',
-  );
-
   const options = context.options['workspace'] as WorkspaceDescriptorOptions | undefined;
   const driver = options?.driver
     ?? (context.options['storageDriver'] as IStorageDriver | undefined);
+
+  // The root itself is read by the descriptor factory at boot, after the
+  // context contract has validated every required field. Composition must not
+  // enforce it here: that would make this one field fail in a different phase
+  // and with a service-specific error type.
   const descriptor = createWorkspaceDescriptor({
     ...options,
-    roots: options?.roots !== undefined && options.roots.length > 0
-      ? options.roots
-      : [workspaceRoot],
-    primaryRoot: options?.primaryRoot ?? workspaceRoot,
     ...(driver === undefined ? {} : { driver }),
   });
 

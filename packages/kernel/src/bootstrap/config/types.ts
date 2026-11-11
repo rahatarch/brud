@@ -18,6 +18,7 @@ export type BrudConfigErrorCode =
   | 'CONFIG_READ'
   | 'CONFIG_PARSE'
   | 'CONFIG_SCHEMA'
+  | 'CONFIG_INTEGRITY'
   | 'MODULE_RESOLVE'
   | 'MODULE_CONTRACT';
 

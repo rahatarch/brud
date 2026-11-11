@@ -11,6 +11,12 @@ import {
 import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
+import {
+  protectConfigFile,
+  recordConfigRead,
+  releaseConfigProtection,
+  verifyConfigIntegrity,
+} from './config/integrity.js';
 import { parseBrudConfig } from './config/parse.js';
 import {
   BrudConfigError,
@@ -151,10 +157,14 @@ export function createDeferredKernel(
   });
 
   let composition: Promise<void> | undefined;
+  let protectedThisKernel = false;
 
   const compose = (bootOptions: KernelBootOptions): Promise<void> => {
     composition ??= (async (): Promise<void> => {
       const raw = await readConfig(configPath);
+      recordConfigRead(configPath, raw);
+      protectConfigFile(configPath);
+      protectedThisKernel = true;
       const config = parseBrudConfig(raw, configPath);
       const services = await loadServiceModules(config.services, configPath, raw);
       const mergedOptions: Record<string, unknown> = {
@@ -199,20 +209,47 @@ export function createDeferredKernel(
 
   const boot = kernel.boot.bind(kernel);
   kernel.boot = async (bootOptions: KernelBootOptions): Promise<void> => {
-    await compose(bootOptions);
+    try {
+      await compose(bootOptions);
 
-    // Compose enriched the bag during service construction (the filesystem
-    // module publishes its driver and journal there). Store that exact bag so
-    // runtime contexts see the same object the service modules saw.
-    const bootBag = serviceContext?.options ?? {
-      ...(options.options ?? {}),
-      ...(bootOptions.options ?? {}),
-    };
+      // Compose enriched the bag during service construction (the filesystem
+      // module publishes its driver and journal there). Store that exact bag so
+      // runtime contexts see the same object the service modules saw.
+      const bootBag = serviceContext?.options ?? {
+        ...(options.options ?? {}),
+        ...(bootOptions.options ?? {}),
+      };
 
-    await boot({
-      options: bootBag,
-      logger: bootOptions.logger ?? options.logger ?? DEFAULT_KERNEL_LOGGER,
-    });
+      await boot({
+        options: bootBag,
+        logger: bootOptions.logger ?? options.logger ?? DEFAULT_KERNEL_LOGGER,
+      });
+
+      // Plugins activate during boot. Re-read the document the kernel actually
+      // used and refuse to hand back a kernel if it changed underneath us.
+      await verifyConfigIntegrity(configPath);
+    } catch (error: unknown) {
+      if (kernel.lifecycleState === 'RUNNING') {
+        await kernel.shutdown().catch(() => undefined);
+      }
+
+      if (protectedThisKernel) {
+        protectedThisKernel = false;
+        releaseConfigProtection(configPath);
+      }
+
+      throw error;
+    }
+  };
+
+  const shutdown = kernel.shutdown.bind(kernel);
+  kernel.shutdown = async (): Promise<void> => {
+    await shutdown();
+
+    if (protectedThisKernel) {
+      protectedThisKernel = false;
+      releaseConfigProtection(configPath);
+    }
   };
 
   return kernel;
