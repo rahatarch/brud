@@ -12,6 +12,7 @@ import type {
 } from '../../ValidationService/contracts/IValidationService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
+import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
 import type { ITerminalService } from '../contracts/ITerminalService.js';
 import {
   DEFAULT_TERMINAL_POLICY,
@@ -119,7 +120,7 @@ export function createTerminalDescriptor(
       const kernelCaller: ServiceContext = {
         callerId: 'kernel',
         tier: 'kernel',
-        workspaceRoot: context.workspaceRoot,
+        options: context.options,
       };
       // The broker only serves requests while the kernel is RUNNING and
       // factories run during BOOTING, so dependencies are resolved lazily and
@@ -162,7 +163,8 @@ export function createTerminalDescriptor(
       const service = new TerminalService({
         policy: options?.policy ?? DEFAULT_TERMINAL_POLICY,
         ...(options?.validator === undefined ? {} : { validator: options.validator }),
-        workspaceRoot: options?.workspaceRoot ?? context.workspaceRoot,
+        workspaceRoot: options?.workspaceRoot
+          ?? requireWorkspaceRoot(context.options, TerminalToken.id),
         processes: new ProcessManager(new ShellAdapter()),
         ...(context.logger === undefined ? {} : { logger: context.logger }),
       });

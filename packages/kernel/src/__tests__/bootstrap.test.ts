@@ -26,7 +26,7 @@ function createCaller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.runner',
     tier: 'core',
-    workspaceRoot,
+    options: { workspaceRoot },
     ...overrides,
   };
 }

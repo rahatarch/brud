@@ -169,6 +169,7 @@ export function interfaceMethodNames(
 /** Property names that leak a service concept into a core boot boundary. */
 const FORBIDDEN_CORE_PROPERTIES = [
   'workspaceRoot',
+  'projectRoot',
   'storageDriver',
   'mutationJournal',
   'plugins',
@@ -304,6 +305,74 @@ describe('kernel core purity', () => {
     }
 
     assert.deepEqual(leaked, [], `Core boundaries name service concepts:\n${leaked.join('\n')}`);
+  });
+
+  it('keeps runtime contexts generic: no service vocabulary, only the options bag', async () => {
+    const lifecycle = await readFile(join(SOURCE_ROOT, 'contracts', 'lifecycle.ts'), 'utf8');
+    const context = await readFile(join(SOURCE_ROOT, 'contracts', 'context.ts'), 'utf8');
+
+    assert.deepEqual(
+      [...interfacePropertyNames(lifecycle, 'ServiceContext')].sort(),
+      ['callerId', 'logger', 'options', 'partitionPrefix', 'tier'],
+      'ServiceContext must carry only caller identity, a logger, a partition, and the generic options bag',
+    );
+    assert.deepEqual(
+      [...interfacePropertyNames(context, 'ExecutionContext')].sort(),
+      ['callDepth', 'metadata', 'options', 'sessionId', 'signal'],
+      'ExecutionContext must carry only generic execution state and the generic options bag',
+    );
+
+    const leaked: string[] = [];
+
+    for (const [source, interfaceName] of [
+      [lifecycle, 'ServiceContext'],
+      [context, 'ExecutionContext'],
+    ] as const) {
+      for (const property of interfacePropertyNames(source, interfaceName)) {
+        if ((FORBIDDEN_CORE_PROPERTIES as readonly string[]).includes(property)) {
+          leaked.push(`${interfaceName}.${property}`);
+        }
+      }
+    }
+
+    assert.deepEqual(leaked, [], `Runtime contexts name service concepts:\n${leaked.join('\n')}`);
+
+    const allowedBags = new Set(['options']);
+    const bags = [
+      ...interfacePropertyNames(lifecycle, 'ServiceContext'),
+      ...interfacePropertyNames(context, 'ExecutionContext'),
+    ].filter((property) => property === 'options' || property.endsWith('Bag') || property.endsWith('Options'));
+
+    assert.deepEqual(
+      bags.filter((property) => !allowedBags.has(property)),
+      [],
+      'The only generic bag allowed on a runtime context is `options`',
+    );
+  });
+
+  it('detects service-specific runtime context properties in a canary interface', () => {
+    const source = `
+      interface ExecutionContext {
+        sessionId: string;
+        workspaceRoot: string;
+        projectRoot?: string;
+        storageDriver?: unknown;
+        mutationJournal?: unknown;
+        options: Record<string, unknown>;
+      }
+    `;
+
+    assert.deepEqual(
+      [...interfacePropertyNames(source, 'ExecutionContext')].sort(),
+      [
+        'mutationJournal',
+        'options',
+        'projectRoot',
+        'sessionId',
+        'storageDriver',
+        'workspaceRoot',
+      ],
+    );
   });
 
   it('detects service-specific properties in a canary interface', () => {

@@ -13,6 +13,7 @@ import {
   createSettingsReader,
 } from '../orchestrator/SettingsService.js';
 import { ConfigStore } from '../storage/ConfigStore.js';
+import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
 import { SettingsReaderToken, SettingsToken } from './tokens.js';
 
 /** Tier assigned to the settings descriptors. */
@@ -68,7 +69,7 @@ export function createSettingsDescriptor(
     },
     factory: (context: ServiceContext): SettingsService => {
       const store = options?.store ?? new ConfigStore({
-        workspaceRoot: context.workspaceRoot,
+        workspaceRoot: requireWorkspaceRoot(context.options, SettingsToken.id),
         ...(options?.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
       });
 
@@ -121,7 +122,7 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
           {
             callerId: 'kernel',
             tier: 'kernel',
-            workspaceRoot: context.workspaceRoot,
+            options: context.options,
           },
           SettingsToken,
         );

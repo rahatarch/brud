@@ -24,7 +24,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ACTION_MANAGER_ROOT = resolve(HERE, '../../services/ActionManager');
 
 function caller(root: string, callerId = 'kernel'): ServiceContext {
-  return { callerId, tier: 'core', workspaceRoot: root };
+  return { callerId, tier: 'core', options: { workspaceRoot: root } };
 }
 
 function actionManager(kernel: BrudKernel, root: string): IActionManager {

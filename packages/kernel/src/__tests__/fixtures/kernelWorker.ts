@@ -44,7 +44,7 @@ const kernel = createStandardKernel({
 await kernel.boot({ options: { workspaceRoot } });
 
 const tools = kernel.requestAccess(
-  { callerId: `worker.${workerId}`, tier: 'core', workspaceRoot },
+  { callerId: `worker.${workerId}`, tier: 'core', options: { workspaceRoot } },
   BrudToolsToken,
 );
 

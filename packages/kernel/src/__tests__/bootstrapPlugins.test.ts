@@ -50,7 +50,7 @@ function createCaller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.plugins',
     tier: 'core',
-    workspaceRoot: WORKSPACE_ROOT,
+    options: { workspaceRoot: WORKSPACE_ROOT },
     ...overrides,
   };
 }
@@ -123,7 +123,7 @@ function createTracingFileSystemDescriptor(
     tier: 'core',
     dependencies: [],
     factory: (context: ServiceContext): TracingFileSystem =>
-      new TracingFileSystem(context.workspaceRoot, new DurableNodeStorageDriver(), log),
+      new TracingFileSystem(context.options['workspaceRoot'] as string, new DurableNodeStorageDriver(), log),
   };
 }
 
@@ -401,7 +401,7 @@ describe('plugin capabilities requested during activation at boot', () => {
 
       // A human session exists, but the plugin cannot see it (D3, D10).
       const core = kernel.requestAccess(
-        { callerId: 'test.plugins', tier: 'core', workspaceRoot: WORKSPACE_ROOT },
+        { callerId: 'test.plugins', tier: 'core', options: { workspaceRoot: WORKSPACE_ROOT } },
         UniversalHistoryToken,
       );
       const human = await core.beginSession('human edit', []);
@@ -446,7 +446,7 @@ describe('plugin capabilities requested during activation at boot', () => {
       await handle.commitSession(own, 'completed');
 
       const core = kernel.requestAccess(
-        { callerId: 'test.plugins', tier: 'core', workspaceRoot: WORKSPACE_ROOT },
+        { callerId: 'test.plugins', tier: 'core', options: { workspaceRoot: WORKSPACE_ROOT } },
         UniversalHistoryToken,
       );
       const human = await core.beginSession('human edit', []);

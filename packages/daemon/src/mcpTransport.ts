@@ -386,7 +386,7 @@ export async function attachMcpTransports(
     {
       callerId: 'brud.daemon',
       tier: 'core',
-      workspaceRoot: workspace.root,
+      options: workspace.options,
     },
     kernelModule.PluginManagerToken,
   );

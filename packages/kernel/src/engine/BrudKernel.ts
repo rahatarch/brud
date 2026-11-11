@@ -21,7 +21,6 @@ export interface KernelExecuteOptions {
   signal?: AbortSignal;
   metadata?: Record<string, unknown>;
   maxCallDepth?: number;
-  workspaceRoot?: string;
 }
 
 export interface PromptManifestEntry {
@@ -48,6 +47,13 @@ export class BrudKernel implements IBrudKernel {
   private readonly initializedServices: InitializedService[] = [];
   private state: KernelLifecycleState = 'UNINITIALIZED';
   private runningHooksPending = false;
+  /**
+   * The host-supplied options bag, stored once at boot.
+   *
+   * The kernel treats it as opaque: it is attached unchanged to every service
+   * and execution context and is never indexed here.
+   */
+  private bootOptions: Readonly<Record<string, unknown>> = {};
   private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
 
   constructor(options?: { maxCallDepth?: number; bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void> }) {
@@ -85,14 +91,13 @@ export class BrudKernel implements IBrudKernel {
     try {
       const ordered = topologicalSort(this.descriptorMap());
       this.initializedServices.length = 0;
-      const bootWorkspaceRoot = options.options?.['workspaceRoot'];
-      const workspaceRoot = typeof bootWorkspaceRoot === 'string' ? bootWorkspaceRoot : '';
+      this.bootOptions = options.options ?? {};
 
       for (const descriptor of ordered) {
         const context: ServiceContext = {
           callerId: 'kernel',
           tier: descriptor.tier,
-          workspaceRoot,
+          options: this.bootOptions,
           ...(options.logger === undefined ? {} : { logger: options.logger }),
         };
 
@@ -236,10 +241,6 @@ export class BrudKernel implements IBrudKernel {
     const kernel = this;
     const effectiveMaxDepth = options?.maxCallDepth ?? this.maxCallDepth;
     const sessionId = crypto.randomUUID();
-    const workspaceRoot =
-      options?.workspaceRoot ??
-      (typeof options?.metadata?.workspaceRoot === 'string' ? options.metadata.workspaceRoot : undefined) ??
-      process.cwd();
 
     async function invokeImpl<TInput, TOutput>(
       this: ExecutionContext,
@@ -268,7 +269,7 @@ export class BrudKernel implements IBrudKernel {
     function createChildContextImpl(this: ExecutionContext, overrides?: Partial<ExecutionContext>): ExecutionContext {
       return {
         sessionId: overrides?.sessionId ?? this.sessionId,
-        workspaceRoot: overrides?.workspaceRoot ?? this.workspaceRoot,
+        options: overrides?.options ?? this.options,
         signal: overrides?.signal ?? this.signal,
         callDepth: overrides?.callDepth ?? this.callDepth,
         metadata: overrides?.metadata ?? this.metadata,
@@ -280,7 +281,7 @@ export class BrudKernel implements IBrudKernel {
 
     const ctx: ExecutionContext = {
       sessionId,
-      workspaceRoot,
+      options: this.bootOptions,
       signal: options?.signal,
       callDepth: 0,
       metadata: options?.metadata,

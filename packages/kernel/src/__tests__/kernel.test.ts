@@ -25,7 +25,7 @@ const CAP_TOKEN = createToken<string>('required.capability');
 function createMinimalContext(overrides?: Partial<ExecutionContext>): ExecutionContext {
   return {
     sessionId: 'test-session',
-    workspaceRoot: '/tmp',
+    options: { workspaceRoot: '/tmp' },
     callDepth: 0,
     resolve: <T>(_token: Token<T>) => { throw new Error('unresolved'); },
     invoke: async <T1, T2>(_kind: string, _input: T1) => ({ status: 'skipped' as const }),
@@ -333,33 +333,34 @@ describe('BrudKernel recursion & invoke', () => {
 
 // ── Workspace Root Propagation Tests ────────────────────────────
 
-describe('BrudKernel workspaceRoot', () => {
+describe('BrudKernel runtime options bag', () => {
   let kernel: BrudKernel;
 
   beforeEach(() => {
     kernel = new BrudKernel();
   });
 
-  it('passes workspaceRoot from options to context', async () => {
+  it('passes the boot options bag to the execution context', async () => {
     const customRoot = '/custom/workspace/path';
     const handler: OperationHandler<void, string> = {
       kind: 'test_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.workspaceRoot };
+        return { status: 'success', data: ctx.options['workspaceRoot'] as string };
       },
     };
     kernel.operations.register(handler);
-    const result = await kernel.execute<void, string>('test_workspace', undefined, { workspaceRoot: customRoot });
+    await kernel.boot({ options: { workspaceRoot: customRoot } });
+    const result = await kernel.execute<void, string>('test_workspace', undefined);
     assert.strictEqual(result.status, 'success');
     assert.strictEqual(result.data, customRoot);
   });
 
-  it('child context inherits workspaceRoot from parent via invoke', async () => {
+  it('child context inherits the boot options bag from parent via invoke', async () => {
     const customRoot = '/custom/workspace/path';
     const inner: OperationHandler<void, string> = {
       kind: 'inner_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.workspaceRoot };
+        return { status: 'success', data: ctx.options['workspaceRoot'] as string };
       },
     };
     const outer: OperationHandler<void, string> = {
@@ -374,7 +375,8 @@ describe('BrudKernel workspaceRoot', () => {
     };
     kernel.operations.register(inner);
     kernel.operations.register(outer);
-    const result = await kernel.execute<void, string>('outer_workspace', undefined, { workspaceRoot: customRoot });
+    await kernel.boot({ options: { workspaceRoot: customRoot } });
+    const result = await kernel.execute<void, string>('outer_workspace', undefined);
     assert.strictEqual(result.status, 'success');
     assert.strictEqual(result.data, customRoot);
   });
@@ -481,7 +483,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
   const callerContext: ServiceContext = {
     callerId: 'test-suite',
     tier: 'userland',
-    workspaceRoot,
+    options: { workspaceRoot },
   };
 
   it('boots services, resolves them, and shuts down cleanly', async () => {
@@ -494,7 +496,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       onFactory: (context) => {
         assert.strictEqual(context.callerId, 'kernel');
         assert.strictEqual(context.tier, 'core');
-        assert.strictEqual(context.workspaceRoot, workspaceRoot);
+        assert.strictEqual(context.options['workspaceRoot'], workspaceRoot);
         events.push('factory:alpha');
       },
       onInitialize: () => events.push('init:alpha'),
@@ -773,7 +775,7 @@ function runningProbeDescriptor(options: RunningProbeOptions): ServiceDescriptor
 
 describe('BrudKernel onRunning hook', () => {
   const workspaceRoot = '/tmp/brud-kernel-running';
-  const hookCaller: ServiceContext = { callerId: 'hook', tier: 'core', workspaceRoot };
+  const hookCaller: ServiceContext = { callerId: 'hook', tier: 'core', options: { workspaceRoot } };
 
   it('runs once per service, in dependency order, after every initialize, while RUNNING with broker access', async () => {
     const kernel = new BrudKernel();

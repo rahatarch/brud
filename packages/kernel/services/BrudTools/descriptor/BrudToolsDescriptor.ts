@@ -56,7 +56,7 @@ export function createBrudToolsDescriptor(
           {
             callerId: 'kernel',
             tier: 'kernel',
-            workspaceRoot: context.workspaceRoot,
+            options: context.options,
           },
           SettingsReaderToken,
         );

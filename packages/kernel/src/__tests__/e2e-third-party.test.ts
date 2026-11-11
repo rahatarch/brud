@@ -92,7 +92,7 @@ function customPlugin(
 }
 
 function serviceCaller(root: string): ServiceContext {
-  return { callerId: 'e2e.third-party', tier: 'core', workspaceRoot: root };
+  return { callerId: 'e2e.third-party', tier: 'core', options: { workspaceRoot: root } };
 }
 
 function dispatchContext(root: string, plugin: IBrudPlugin): IPluginExecutionContext {

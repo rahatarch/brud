@@ -81,7 +81,7 @@ function routingPlugin(): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', workspaceRoot: root };
+  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
 }
 
 describe('Parser and Router Level-1 services', () => {

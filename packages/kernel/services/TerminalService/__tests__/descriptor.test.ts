@@ -20,7 +20,7 @@ after(async () => {
 });
 
 function caller(overrides?: Partial<ServiceContext>): ServiceContext {
-  return { callerId: 'test', tier: 'core', workspaceRoot, ...overrides };
+  return { callerId: 'test', tier: 'core', options: { workspaceRoot }, ...overrides };
 }
 
 describe('TerminalService bootstrap registration', () => {

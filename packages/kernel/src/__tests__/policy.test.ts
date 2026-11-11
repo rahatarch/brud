@@ -25,7 +25,7 @@ function caller(callerId: string): ServiceContext {
   return {
     callerId,
     tier: 'userland',
-    workspaceRoot: '/tmp/brud-policy-test',
+    options: { workspaceRoot: '/tmp/brud-policy-test' },
   };
 }
 

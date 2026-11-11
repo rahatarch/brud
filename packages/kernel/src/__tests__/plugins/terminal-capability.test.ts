@@ -161,7 +161,7 @@ before(async () => {
 
   await kernel.boot({ options: { workspaceRoot: root } });
   tools = kernel.requestAccess(
-    { callerId: 'verification.capability', tier: 'core', workspaceRoot: root },
+    { callerId: 'verification.capability', tier: 'core', options: { workspaceRoot: root } },
     BrudToolsToken,
   );
 });

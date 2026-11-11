@@ -759,7 +759,7 @@ describe('ValidationService — standard kernel registration', () => {
       assert.ok(ids.indexOf('brud.core.validation') < ids.indexOf('brud.core.history'));
 
       const validation = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
+        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
         ValidationToken,
       );
 
@@ -768,11 +768,11 @@ describe('ValidationService — standard kernel registration', () => {
       assert.equal(Object.isFrozen(validation.getPolicy()), true);
 
       const workspace = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
+        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
         WorkspaceToken,
       );
       const settings = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', workspaceRoot: root },
+        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
         SettingsReaderToken,
       );
 

@@ -15,7 +15,7 @@ import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPl
 import { bootRealKernel } from './support/realKernel.js';
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'purification', tier: 'core', workspaceRoot: root };
+  return { callerId: 'purification', tier: 'core', options: { workspaceRoot: root } };
 }
 
 function toolPlugin(

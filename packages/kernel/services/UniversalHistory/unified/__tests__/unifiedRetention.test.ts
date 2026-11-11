@@ -356,7 +356,7 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
   it('runs after RUNNING with the frozen settings: a longer user retention keeps what the default removes', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-boot-')));
     context.after(() => safeRm(root));
-    const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', workspaceRoot: root };
+    const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', options: { workspaceRoot: root } };
     const boot = async (user: Record<string, unknown> | null): Promise<ReturnType<typeof createStandardKernel>> => {
       const kernel = createStandardKernel({
         settings: { store: new InMemoryConfigStore({ userContent: user === null ? null : JSON.stringify(user) }) },

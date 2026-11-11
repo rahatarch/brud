@@ -16,6 +16,13 @@ export const DEFAULT_WORKSPACE_IDLE_CHECK_INTERVAL_MS = 60 * 1000;
 export interface KernelWorkspace {
   readonly root: string;
   readonly kernel: BrudKernel;
+  /**
+   * The options bag the host used to boot this kernel.
+   *
+   * Runtime broker callers attach this bag unchanged so services see the same
+   * options at execution time that they saw at boot.
+   */
+  readonly options: Readonly<Record<string, unknown>>;
   readonly clients: Set<string>;
   lastUsedAt: Date;
 }
@@ -339,7 +346,11 @@ export class WorkspaceRegistry {
    * Used by `DaemonServer` compositions that still supply a pre-booted kernel
    * directly. The caller owns boot; the registry owns shutdown.
    */
-  adopt(root: string, kernel: BrudKernel): KernelWorkspace {
+  adopt(
+    root: string,
+    kernel: BrudKernel,
+    options: Readonly<Record<string, unknown>> = { workspaceRoot: root },
+  ): KernelWorkspace {
     const existing = this.workspaces.get(root);
 
     if (existing !== undefined) {
@@ -349,6 +360,7 @@ export class WorkspaceRegistry {
     const workspace: KernelWorkspace = {
       root,
       kernel,
+      options,
       clients: new Set<string>(),
       lastUsedAt: new Date(this.now()),
     };
@@ -362,6 +374,14 @@ export class WorkspaceRegistry {
     root: string,
     initialPlugins: readonly IBrudPlugin[] | undefined,
   ): Promise<KernelWorkspace> {
+    const options: Record<string, unknown> = {
+      workspaceRoot: root,
+      ...(this.storageDriver === undefined ? {} : { storageDriver: this.storageDriver }),
+      ...(initialPlugins === undefined ? {} : { plugins: initialPlugins }),
+      ...(this.certifyInitialPlugins === undefined
+        ? {}
+        : { certifyPlugins: this.certifyInitialPlugins }),
+    };
     const kernel = await this.kernelFactory({
       workspaceRoot: root,
       initialPlugins,
@@ -372,12 +392,13 @@ export class WorkspaceRegistry {
     });
 
     if (kernel.lifecycleState === 'UNINITIALIZED') {
-      await kernel.boot({ options: { workspaceRoot: root } });
+      await kernel.boot({ options });
     }
 
     const workspace: KernelWorkspace = {
       root,
       kernel,
+      options,
       clients: new Set<string>(),
       lastUsedAt: new Date(this.now()),
     };

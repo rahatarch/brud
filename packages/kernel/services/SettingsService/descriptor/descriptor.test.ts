@@ -16,7 +16,7 @@ function caller(overrides: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.settings',
     tier: 'core',
-    workspaceRoot: '/workspace',
+    options: { workspaceRoot: '/workspace' },
     ...overrides,
   };
 }

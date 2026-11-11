@@ -38,7 +38,7 @@ export function createExposedApiRegistryDescriptor(
         callerContext: {
           callerId: ExposedApiRegistryToken.id,
           tier: 'core',
-          workspaceRoot: context.workspaceRoot,
+          options: context.options,
         },
       });
 

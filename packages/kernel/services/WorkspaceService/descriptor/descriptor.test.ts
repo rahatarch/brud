@@ -38,7 +38,7 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.workspace',
     tier: 'core',
-    workspaceRoot: WORKSPACE_ROOT,
+    options: { workspaceRoot: WORKSPACE_ROOT },
     ...overrides,
   };
 }
@@ -138,7 +138,7 @@ describe('createWorkspaceDescriptor', () => {
     await kernel.boot({ options: { workspaceRoot: serverRoot } });
 
     try {
-      const workspace = kernel.requestAccess(caller({ workspaceRoot: serverRoot }), WorkspaceToken);
+      const workspace = kernel.requestAccess(caller({ options: { workspaceRoot: serverRoot } }), WorkspaceToken);
 
       assert.deepEqual(workspace.roots, [clientRoot, serverRoot]);
       assert.equal(workspace.primaryRoot, serverRoot);

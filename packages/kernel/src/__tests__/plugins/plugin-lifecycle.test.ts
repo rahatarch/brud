@@ -63,7 +63,7 @@ describe('plugin lifecycle invariant', () => {
       const caller: ServiceContext = {
         callerId: 'test.leaf-plugin-lifecycle',
         tier: 'core',
-        workspaceRoot: root,
+        options: { workspaceRoot: root },
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken) as PluginManagerService;
       const tools = kernel.requestAccess(caller, BrudToolsToken);

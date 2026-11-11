@@ -110,7 +110,7 @@ describe('brud.core.utils service', () => {
     const caller: ServiceContext = {
       callerId: 'test.utility-service',
       tier: 'core',
-      workspaceRoot: root,
+      options: { workspaceRoot: root },
     };
     const utilities = kernel.requestAccess(caller, UtilityToken);
 

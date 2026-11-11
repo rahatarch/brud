@@ -39,7 +39,7 @@ function caller(workspaceRoot: string, overrides?: Partial<ServiceContext>): Ser
   return {
     callerId: 'brud.host.desktop',
     tier: 'core',
-    workspaceRoot,
+    options: { workspaceRoot },
     ...overrides,
   };
 }

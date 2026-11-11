@@ -51,7 +51,7 @@ interface PreparedKernel {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', workspaceRoot: root };
+  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
 }
 
 function brud(...blocks: readonly string[]): string {

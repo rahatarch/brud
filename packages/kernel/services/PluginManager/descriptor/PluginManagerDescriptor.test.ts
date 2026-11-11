@@ -217,7 +217,7 @@ function createCaller(): ServiceContext {
   return {
     callerId: 'plugin-manager-descriptor-suite',
     tier: PLUGIN_MANAGER_SERVICE_TIER,
-    workspaceRoot: workspaceRoots[workspaceRoots.length - 1] ?? tmpdir(),
+    options: { workspaceRoot: workspaceRoots[workspaceRoots.length - 1] ?? tmpdir() },
   };
 }
 

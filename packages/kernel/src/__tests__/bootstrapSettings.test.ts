@@ -28,7 +28,7 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'kernel',
     tier: 'kernel',
-    workspaceRoot: WORKSPACE_ROOT,
+    options: { workspaceRoot: WORKSPACE_ROOT },
     ...overrides,
   };
 }

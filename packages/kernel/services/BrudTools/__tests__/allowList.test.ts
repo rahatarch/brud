@@ -118,7 +118,7 @@ describe('BrudTools allow-list kernel wiring', () => {
     return {
       callerId: 'kernel',
       tier: 'kernel',
-      workspaceRoot,
+      options: { workspaceRoot },
       ...overrides,
     };
   }

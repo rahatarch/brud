@@ -64,7 +64,7 @@ function expectedNames(): readonly string[] {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'scalability', tier: 'core', workspaceRoot: root };
+  return { callerId: 'scalability', tier: 'core', options: { workspaceRoot: root } };
 }
 
 describe('100 tools from 3 plugins', () => {

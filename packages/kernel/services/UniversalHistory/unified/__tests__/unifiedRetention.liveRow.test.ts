@@ -323,7 +323,7 @@ async function bootParent(context: TestContext, workspaceRoot: string): Promise<
   const kernel = createStandardKernel();
   await kernel.boot({ options: { workspaceRoot } });
   context.after(async () => { await kernel.shutdown(); });
-  const caller: ServiceContext = { callerId: 'retention.liveRow.parent', tier: 'core', workspaceRoot };
+  const caller: ServiceContext = { callerId: 'retention.liveRow.parent', tier: 'core', options: { workspaceRoot } };
   return {
     kernel,
     caller,

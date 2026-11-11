@@ -361,7 +361,7 @@ export class RequestDispatcher {
     const caller: ServiceContext = {
       callerId: session.connectionId,
       tier: 'core',
-      workspaceRoot: workspace.root,
+      options: workspace.options,
     };
 
     return workspace.kernel.requestAccess(caller, token);
@@ -389,7 +389,7 @@ export class RequestDispatcher {
     const caller: ServiceContext = {
       callerId: ACTION_MANAGER_CALLER_ID,
       tier: 'core',
-      workspaceRoot: workspace.root,
+      options: workspace.options,
     };
 
     return workspace.kernel.requestAccess(caller, token);

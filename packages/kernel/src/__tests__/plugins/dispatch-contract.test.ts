@@ -26,7 +26,7 @@ describe('dynamic dispatch contract invariant', () => {
     });
 
     const tools = kernel.requestAccess<IBrudToolsService>(
-      { callerId: 'test.dispatch-contract', tier: 'core', workspaceRoot: root },
+      { callerId: 'test.dispatch-contract', tier: 'core', options: { workspaceRoot: root } },
       BrudToolsToken,
     );
     const context: IPluginExecutionContext = {

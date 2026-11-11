@@ -24,7 +24,7 @@ after(async () => {
 });
 
 function caller(): ServiceContext {
-  return { callerId: 'test', tier: 'core', workspaceRoot };
+  return { callerId: 'test', tier: 'core', options: { workspaceRoot } };
 }
 
 function tool(
@@ -177,7 +177,7 @@ describe('BrudTools descriptor', () => {
   it('validates against the registered schema without a validator service', async () => {
     const descriptor = createBrudToolsDescriptor();
     const service = descriptor.factory(
-      { callerId: 'kernel', tier: 'kernel', workspaceRoot },
+      { callerId: 'kernel', tier: 'kernel', options: { workspaceRoot } },
       {} as never,
     );
 

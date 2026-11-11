@@ -22,6 +22,7 @@ import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../../Exp
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
+import { requireWorkspaceRoot } from '../../../WorkspaceService/bootOptions.js';
 import { JournalAdapter } from '../adapters/JournalAdapter.js';
 import { PluginHistoryFacade, namespaceHistoryFor } from '../adapters/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
@@ -62,17 +63,21 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
     tier: 'core',
     dependencies: [FileSystemToken],
     factory: (context: ServiceContext, broker: IKernelAccessBroker): PluginHistoryFacade => {
-      const historyRoot = join(context.workspaceRoot, '.brud', 'history');
+      const workspaceRoot = requireWorkspaceRoot(
+        context.options,
+        UniversalHistoryToken.id,
+      );
+      const historyRoot = join(workspaceRoot, '.brud', 'history');
       let fileSystem: IBrudFileSystem | undefined;
       const resolveFileSystem = (): IBrudFileSystem => {
         fileSystem ??= broker.requestAccess(
-          { callerId: UniversalHistoryToken.id, tier: 'core', workspaceRoot: context.workspaceRoot },
+          { callerId: UniversalHistoryToken.id, tier: 'core', options: context.options },
           FileSystemToken,
         );
         return fileSystem;
       };
       const store = new UnifiedHistoryStore({
-        dbPath: options.dbPath ?? (options.inMemory === true ? ':memory:' : join(context.workspaceRoot, UNIFIED_HISTORY_DB_RELATIVE_PATH)),
+        dbPath: options.dbPath ?? (options.inMemory === true ? ':memory:' : join(workspaceRoot, UNIFIED_HISTORY_DB_RELATIVE_PATH)),
         historyRoot,
         driver: options.driver,
         onWarning: (warning) => {
@@ -120,7 +125,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
         }
         try {
           const settings = broker.requestAccess(
-            { callerId: UniversalHistoryToken.id, tier: 'core', workspaceRoot: context.workspaceRoot },
+            { callerId: UniversalHistoryToken.id, tier: 'core', options: context.options },
             SettingsReaderToken,
           ).getSnapshot();
           const report = await service.runRetention({

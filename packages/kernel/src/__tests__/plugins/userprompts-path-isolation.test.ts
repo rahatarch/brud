@@ -89,7 +89,7 @@ describe('UserPrompts path isolation invariant', () => {
       const caller: ServiceContext = {
         callerId: 'test.userprompts-path-isolation',
         tier: 'core',
-        workspaceRoot: root,
+        options: { workspaceRoot: root },
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken);
       const fileSystem = kernel.requestAccess(caller, FileSystemToken);

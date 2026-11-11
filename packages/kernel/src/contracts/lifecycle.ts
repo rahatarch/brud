@@ -26,8 +26,14 @@ export interface ServiceContext {
   /** Privilege tier of the caller. */
   readonly tier: ServiceTier;
 
-  /** Absolute path of the workspace the kernel is operating in. */
-  readonly workspaceRoot: string;
+  /**
+   * Opaque host-supplied options bag.
+   *
+   * The kernel stores the bag at boot and attaches it unchanged to every
+   * service context. The core never inspects a key; services read the options
+   * their own domain owns.
+   */
+  readonly options: Readonly<Record<string, unknown>>;
 
   /** Optional partition namespace isolating service state. */
   readonly partitionPrefix?: string;

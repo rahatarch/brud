@@ -43,7 +43,7 @@ export function createRouterDescriptor(
       const callerContext = {
         callerId: ROUTER_CALLER_ID,
         tier: 'core' as const,
-        workspaceRoot: context.workspaceRoot,
+        options: context.options,
       };
 
       const service = new RouterService({

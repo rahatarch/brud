@@ -97,7 +97,7 @@ export function createValidationDescriptor(
       const kernelCaller: ServiceContext = {
         callerId: 'kernel',
         tier: 'kernel',
-        workspaceRoot: context.workspaceRoot,
+        options: context.options,
       };
       // The access broker only serves requests while the kernel is RUNNING and
       // service factories run during BOOTING, so the dependencies are resolved

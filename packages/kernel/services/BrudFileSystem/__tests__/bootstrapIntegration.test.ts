@@ -28,7 +28,7 @@ function caller(): ServiceContext {
   return {
     callerId: 'brud.host.desktop',
     tier: 'core',
-    workspaceRoot: root,
+    options: { workspaceRoot: root },
   };
 }
 

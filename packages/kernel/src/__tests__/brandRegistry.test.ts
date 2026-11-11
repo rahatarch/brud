@@ -14,7 +14,7 @@ import { PLUGIN_MANAGER_SCOPE_NAME } from '../../services/PluginManager/serviceM
 const REGISTRY_SLOT = 'brud.core.brandRegistry.instance';
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'brand.test', tier: 'core', workspaceRoot: root };
+  return { callerId: 'brand.test', tier: 'core', options: { workspaceRoot: root } };
 }
 
 function serviceToken<T>(id: string): ServiceToken<T> {

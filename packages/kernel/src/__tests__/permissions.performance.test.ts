@@ -46,7 +46,7 @@ function plugin(): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'performance', tier: 'core', workspaceRoot: root };
+  return { callerId: 'performance', tier: 'core', options: { workspaceRoot: root } };
 }
 
 function median(values: readonly number[]): number {

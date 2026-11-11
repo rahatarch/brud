@@ -25,7 +25,7 @@ const DAEMON_CONFIG_PATH = fileURLToPath(
 );
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', workspaceRoot: root };
+  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
 }
 
 async function workspace(t: TestContext): Promise<string> {

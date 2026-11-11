@@ -85,7 +85,7 @@ async function runInStandardKernel(
   await kernel.boot({ options: { workspaceRoot: workspace }, logger });
 
   try {
-    const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', workspaceRoot: workspace };
+    const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', options: { workspaceRoot: workspace } };
     const terminal = kernel.requestAccess(caller, TerminalToken);
     const decision = await terminal.run({ command, ...(cwd === undefined ? {} : { cwd }) });
 
@@ -142,7 +142,7 @@ class GatedSettingsBroker implements IKernelAccessBroker {
 const bootContext = (workspace: string, logger?: KernelLogger): ServiceContext => ({
   callerId: 'kernel',
   tier: 'core',
-  workspaceRoot: workspace,
+  options: { workspaceRoot: workspace },
   ...(logger === undefined ? {} : { logger }),
 });
 

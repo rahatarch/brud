@@ -15,6 +15,7 @@ import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
 import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
 import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
+import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
 import {
@@ -163,7 +164,7 @@ export function createPluginManagerDescriptor(
       const caller: ServiceContext = {
         callerId: PluginManagerToken.id,
         tier: PLUGIN_MANAGER_SERVICE_TIER,
-        workspaceRoot: context.workspaceRoot,
+        options: context.options,
       };
 
       const apiRegistry = (): IExposedApiRegistry =>
@@ -186,7 +187,7 @@ export function createPluginManagerDescriptor(
       }
 
       const manager = new PluginManagerService({
-        workspaceRoot: context.workspaceRoot,
+        workspaceRoot: requireWorkspaceRoot(context.options, PluginManagerToken.id),
         apiRegistry,
         isOfficial: (candidate) => brandScope.verify(candidate),
       });

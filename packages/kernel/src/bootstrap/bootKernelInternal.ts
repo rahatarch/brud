@@ -177,13 +177,16 @@ export function createDeferredKernel(
   kernel.boot = async (bootOptions: KernelBootOptions): Promise<void> => {
     await compose(bootOptions);
 
-    const mergedBag = {
+    // Compose enriched the bag during service construction (the filesystem
+    // module publishes its driver and journal there). Store that exact bag so
+    // runtime contexts see the same object the service modules saw.
+    const bootBag = serviceContext?.options ?? {
       ...(options.options ?? {}),
       ...(bootOptions.options ?? {}),
     };
 
     await boot({
-      options: mergedBag,
+      options: bootBag,
       logger: bootOptions.logger ?? options.logger ?? DEFAULT_KERNEL_LOGGER,
     });
   };

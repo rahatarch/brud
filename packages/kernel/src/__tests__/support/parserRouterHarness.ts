@@ -111,7 +111,7 @@ export class ParserRouterHarness {
       callerContext: {
         callerId: ROUTER_CALLER_ID,
         tier: 'core',
-        workspaceRoot: '',
+        options: { workspaceRoot: '' },
       },
       getParser: () => parser,
     });
@@ -129,7 +129,7 @@ export class ParserRouterHarness {
     const caller: ServiceContext = {
       callerId: 'kernel',
       tier: 'core',
-      workspaceRoot: root,
+      options: { workspaceRoot: root },
     };
 
     return new ParserRouterHarness({

@@ -163,18 +163,19 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
       : {
           callerId: access.callerId,
           tier: access.tier,
-          workspaceRoot: access.workspaceRoot,
+          options: { workspaceRoot: access.workspaceRoot },
           ...(access.partitionPrefix === undefined
             ? {}
             : { partitionPrefix: access.partitionPrefix }),
         };
+    const callerWorkspaceRoot = accessContext.options['workspaceRoot'];
 
     const caller: ExposedApiCaller = {
       capabilities,
       official: access?.official === true,
       callerId: accessContext.callerId,
       subjectId: access?.subjectId ?? accessContext.callerId,
-      workspaceRoot: accessContext.workspaceRoot,
+      workspaceRoot: typeof callerWorkspaceRoot === 'string' ? callerWorkspaceRoot : '',
     };
 
     const projections = matching.map((entry) => {

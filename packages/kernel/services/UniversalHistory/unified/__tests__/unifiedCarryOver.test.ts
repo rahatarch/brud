@@ -40,7 +40,7 @@ async function boot(root: string, logger?: KernelLogger): Promise<BrudKernel> {
   return kernel;
 }
 
-const caller = (root: string): ServiceContext => ({ callerId: 'test.history', tier: 'core', workspaceRoot: root });
+const caller = (root: string): ServiceContext => ({ callerId: 'test.history', tier: 'core', options: { workspaceRoot: root } });
 
 describe('unified history — carried-over behaviour', () => {
   it('round-trips an empty file through a session revert (baseline capture: empty files)', async (context) => {

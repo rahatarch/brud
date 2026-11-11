@@ -63,7 +63,7 @@ function permissionPlugin(options: PermissionPluginOptions): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'permissions', tier: 'core', workspaceRoot: root };
+  return { callerId: 'permissions', tier: 'core', options: { workspaceRoot: root } };
 }
 
 async function readResult(path: string): Promise<OperationResult> {

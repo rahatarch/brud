@@ -124,7 +124,7 @@ describe('real environment execution invariant', () => {
       const caller: ServiceContext = {
         callerId: 'test.real-environment-execution',
         tier: 'core',
-        workspaceRoot: root,
+        options: { workspaceRoot: root },
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken);
       const tools = kernel.requestAccess(caller, BrudToolsToken);

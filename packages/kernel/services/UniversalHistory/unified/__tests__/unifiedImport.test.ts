@@ -41,7 +41,7 @@ async function boot(root: string): Promise<Booted> {
   const logger: KernelLogger = { warn: (message, meta) => warnings.push({ message, ...(meta === undefined ? {} : { meta }) }) };
   const kernel = createStandardKernel({ logger });
   await kernel.boot({ options: { workspaceRoot: root } });
-  const caller: ServiceContext = { callerId: 'import.test', tier: 'core', workspaceRoot: root };
+  const caller: ServiceContext = { callerId: 'import.test', tier: 'core', options: { workspaceRoot: root } };
   return {
     kernel,
     fs: kernel.requestAccess(caller, FileSystemToken),
