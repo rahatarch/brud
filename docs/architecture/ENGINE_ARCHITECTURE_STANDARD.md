@@ -32,7 +32,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
 ```text
                 ┌────────────────────────────────────────────────────────┐
                 │                   Boundary Adapters                    │
-                │     apps/vscode  •  packages/plugins/MCPBridge  •  packages/daemon   │
+                │     packages/plugins/MCPBridge  •  packages/daemon     │
                 └───────────────────────────┬────────────────────────────┘
                                             │
                                             ▼ (Strict Protocol Messages)
@@ -53,7 +53,7 @@ The repository enforces a Ports and Adapters (Hexagonal) pattern. The codebase i
    - `packages/core`: Archived at `deprecated/packages/core/` in Phase 11 (2026-11-05, D-14/D-17). It was frozen reference material under D-17 and is no longer part of the live codebase. The live engine is `packages/kernel` plus the official plugins under `packages/plugins/`.
    - `brud.tools.filesystem`: Owns diffing and patch generation in Phase 9, operating over `BrudTools.parseAndRoute` and the patch matcher moved into that plugin.
 2. **Prohibition of Duplicate Business Logic:** If a capability is required by multiple surfaces (for example, both a future CLI binary and the VS Code panel), implementing that capability within the adapter layer is strictly forbidden. The logic must be implemented in the core engine, exposed via `@brud/protocol`, and consumed uniformly.
-3. **The Deletion Invariant:** If any adapter (such as `apps/vscode`) is removed in its entirety, zero core domain logic, verification contracts, or execution capabilities are lost.
+3. **The Deletion Invariant:** If any adapter is removed in its entirety, zero core domain logic, verification contracts, or execution capabilities are lost.
 
 ### 2.2 Boundary Adapter Constraints
 

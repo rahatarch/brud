@@ -1,4 +1,0 @@
-/* Tailwind's preflight and nothing else. Newsreader is self-hosted through
-   next/font in layout.js; every style the site uses lives in src/styles and is
-   imported, in cascade order, from src/app/layout.js. */
-@import "tailwindcss";

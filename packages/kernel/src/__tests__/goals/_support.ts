@@ -25,13 +25,10 @@ const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs']);
 const SKIP_DIRECTORIES = new Set([
   '.git',
   '.kilo',
-  '.next',
   '.turbo',
-  '.vscode-test',
   'build',
   'coverage',
   'dist',
-  'media-source',
   'node_modules',
   'out',
   'temporary',

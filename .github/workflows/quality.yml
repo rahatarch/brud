@@ -38,11 +38,8 @@ jobs:
       - run: npm ci
       - name: Build workspace packages (protocol, kernel)
         run: npm run build:protocol && npm run build:kernel
-      - name: Typecheck workspace packages (excluding apps/vscode)
+      - name: Typecheck workspace packages
         run: npm run typecheck:ci
-      - name: Typecheck apps/vscode (D-16 Phase 6.B known failure)
-        continue-on-error: true
-        run: npm run typecheck:apps
 
   boundaries:
     runs-on: ubuntu-latest

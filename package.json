@@ -1,8 +1,6 @@
 {
   "name": "brud",
-  "displayName": "Brud Code",
-  "description": "Brud Code: A full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot. No API keys, no subscriptions, no setup required.",
-  "publisher": "akkhar-labs",
+  "description": "Brud foundation: kernel, daemon, services, plugins, protocols, and contracts.",
   "author": "Rahat Hasan",
   "license": "MIT",
   "version": "0.1.6",
@@ -16,130 +14,21 @@
   "homepage": "https://github.com/rahatarch/brud#readme",
   "workspaces": [
     "packages/*",
-    "packages/plugins/*",
-    "apps/*"
+    "packages/plugins/*"
   ],
-  "engines": {
-    "vscode": "^1.80.0"
-  },
-  "categories": [
-    "AI",
-    "Other"
-  ],
-  "keywords": [
-    "brud",
-    "ai",
-    "ai coding",
-    "ai coding assistant",
-    "ai code editor",
-    "chatgpt",
-    "claude",
-    "gemini",
-    "deepseek",
-    "grok",
-    "free ai",
-    "no api key",
-    "copy paste code",
-    "apply ai code",
-    "ai file editor",
-    "vscode automation",
-    "edit multiple files",
-    "ai in vscode",
-    "vscode ai extension",
-    "code patch",
-    "cursor free",
-    "unlimited ai"
-  ],
-  "icon": "assets/icons/brud_icon_rounded.png",
-  "activationEvents": [
-    "onStartupFinished"
-  ],
-  "main": "./dist/extension.js",
-  "contributes": {
-    "configuration": {
-      "title": "Brud Code",
-      "properties": {
-        "brud.workspaceBoundaryEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enforce workspace boundary on all operations. When disabled, operations can target files outside the workspace."
-        },
-        "brud.commandValidationEnabled": {
-          "type": "boolean",
-          "default": true,
-          "description": "Enable security validation blocking dangerous terminal commands (e.g., rm -rf, sudo, mkfs). WARNING: Disabling this allows execution of destructive system commands."
-        },
-        "brud.toolAllowList": {
-          "type": "object",
-          "default": {},
-          "description": "Per-tool enable/disable map. Keys are tool kinds (e.g., 'terminal_command', 'delete_file'). Missing keys default to enabled."
-        }
-      }
-    },
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "brud-sidebar",
-          "title": "Brud Code",
-          "icon": "assets/brand/brud_logo_code.svg"
-        }
-      ]
-    },
-    "views": {
-      "brud-sidebar": [
-        {
-          "type": "webview",
-          "id": "brud-view",
-          "name": "Brud Code"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "brud.executePatch",
-        "title": "Brud Code: Execute Surgical Patch",
-        "category": "Brud Code"
-      },
-      {
-        "command": "brud.openManagement",
-        "title": "Open Brud Code Management",
-        "category": "Brud Code"
-      },
-      {
-        "command": "brud.streamTest",
-        "title": "Brud: Open Stream Test",
-        "category": "Brud"
-      }
-    ]
-  },
   "scripts": {
-    "vscode:prepublish": "npm run package",
-    "compile": "npm run build:all && webpack && npm run stage:daemon",
-    "build:webview": "vite build --config packages/ui/vite.config.ts",
-    "watch:webview": "vite build --config packages/ui/vite.config.ts --watch",
-    "watch": "webpack --watch",
-    "package": "npm run build:all && webpack --mode production --devtool hidden-source-map && npm run build:webview && npm run stage:daemon",
-    "package:vsix": "npm run package && npx vsce package --no-dependencies --out brud.vsix",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "npm run compile-tests && npm run compile && npm run lint",
-    "lint": "eslint packages tests",
+    "lint": "eslint packages",
     "typecheck": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
     "typecheck:ci": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
-    "typecheck:apps": "tsc -p apps/vscode/tsconfig.json --noEmit",
-    "test": "vscode-test",
+    "test": "npm run test:kernel && npm run test:daemon",
     "test:kernel": "npm run test --workspace @brud/kernel",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "test:daemon": "npm run test --workspace @brud/daemon",
-    "test:extension": "node --import tsx --test apps/vscode/src/*/__tests__/*.test.ts",
     "build:ui": "npm run build --workspace @brud/ui",
     "build:protocol": "npm run build --workspace @brud/protocol",
     "build:kernel": "npm run build --workspace @brud/kernel",
     "build:daemon": "npm run build --workspace @brud/daemon",
     "stage:daemon": "node scripts/stage-daemon.mjs",
-    "build:web": "npm run build --workspace brud-code-site",
-    "dev:web": "npm run dev --workspace brud-code-site",
-    "lint:web": "npm run lint --workspace brud-code-site",
     "build:all": "npm run build:protocol && npm run build:kernel && npm run build:daemon && npm run build:ui",
     "ci": "npm run build:all && npm run test:kernel && npm run check:boundaries && npm run lint"
   },
@@ -152,24 +41,18 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
-    "@types/mocha": "^10.0.10",    "@types/node": "22.x",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
-    "@types/vscode": "^1.80.0",
     "@vitejs/plugin-react": "^6.1.1",
-    "@vscode/test-cli": "^0.0.12",
-    "@vscode/test-electron": "^2.5.2",
-    "@vscode/vsce": "^4.0.0",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.3",
     "gitarmor": "^1.0.0",
     "tailwindcss": "^4.3.3",
-    "ts-loader": "^9.5.4",
     "tsx": "^4.23.13",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
-    "vite": "^8.2.2",
-    "webpack": "^5.105.3",
-    "webpack-cli": "^6.0.1"
+    "vite": "^8.2.2"
   }
 }

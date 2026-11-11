@@ -1,6 +1,6 @@
-# Contributing to Brud Code
+# Contributing to Brud
 
-Thank you for your interest in Brud Code — a full AI-assisted coding platform for manual paste-and-apply workflows from any AI chatbot.
+Thank you for your interest in Brud — the open foundation that hosts the kernel, the daemon, the services, the plugins, the protocols, and the contracts. Client applications live in the product repository.
 
 ## How to Contribute
 
@@ -18,7 +18,7 @@ Before submitting a bug report, please check the [issue tracker](https://github.
 - Steps to reproduce the issue
 - Expected behavior vs actual behavior
 - Screenshots or logs if applicable
-- Your environment (OS, VS Code version, extension version)
+- Your environment (OS, Node.js version, package version)
 
 ## Development Setup
 
@@ -35,13 +35,15 @@ Before submitting a bug report, please check the [issue tracker](https://github.
    npm run ci
    ```
 
-   This runs `npm run build:all`, `npm run test:kernel`, `npm run test:core`, `npm run test:mcp`, `npm run test:extension`, `npm run check:boundaries`, and `npm run lint`. It does not run `npm run test:integration`, `npm run test:daemon`, or `npm run test:adapter`; run those separately.
+   This runs `npm run build:all`, `npm run test:kernel`, `npm run check:boundaries`, and `npm run lint`. It does not run `npm run test:daemon`; run that separately.
 
 4. **For a quicker feedback loop** during development:
 
    ```bash
-   npm run ci:quick
+   npm run test:kernel
    ```
+
+   Use `npm run test:daemon` for the daemon transport suite and `npm run typecheck:ci` for the package typecheck.
 
 ## Project Structure
 
@@ -51,8 +53,7 @@ Brud Code is organized as a monorepo with npm workspaces. Key directories:
 - `packages/protocol/` — Protocol definitions and data structures
 - `packages/plugins/` — Official leaf plugins (Search, Structure, UserPrompts, Catalog, Reader, Filesystem, Terminal, MCPBridge)
 - `packages/daemon/` — Host transport and JSON-RPC dispatch
-- `packages/ui/` — Webview-based user interface
-- `apps/` — Application entry points
+- `packages/ui/` — Shared webview UI package
 - `deprecated/` — Archived legacy engine and adapter (Phase 11). **Not maintained.** Do not add files or import from it.
 
 Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the architecture and design decisions.
@@ -98,7 +99,7 @@ Capability projection (§1.3 R3 of the rollout plan) is only as strong as the te
 - **Concurrent access** — concurrent writers to the same path through `DurableNodeStorageDriver`, and concurrent history appends against real SQLite.
 - **Resource exhaustion** — oversized payloads, oversized files, and batch/read ceilings against the real reader and terminal surfaces.
 
-**Running the suite.** Run the suite that owns the surface you changed: `npm run test:core`, `npm run test:mcp`, `npm run test:daemon`, `npm run test:adapter`, or `npm run test --workspace @brud/kernel`. All tests must pass before submitting a pull request. The CI pipeline (`npm run ci`) runs `build:all`, `test:kernel`, `test:core`, `test:mcp`, `test:extension`, `check:boundaries`, and `lint`; it does not run `test:integration`, `test:daemon`, or `test:adapter`, so run those separately.
+**Running the suite.** Run the suite that owns the surface you changed: `npm run test:daemon` or `npm run test --workspace @brud/kernel`. All tests must pass before submitting a pull request. The CI pipeline (`npm run ci`) runs `build:all`, `test:kernel`, `check:boundaries`, and `lint`; it does not run `test:daemon`, so run that separately.
 
 **References.** D-14/D-22 (quarantine and adapter archive), D-17 (legacy core frozen and relocated byte-identical), D-18 (the standard), plan §5.5 (`docs/architecture/ROLLOUT_PLAN_CORE_TO_MICROKERNEL.md`), evidence base (`.internal_docs/audits/2026-11-04_test_realism_inventory.md`).
 

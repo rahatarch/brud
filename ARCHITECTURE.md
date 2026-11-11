@@ -13,17 +13,8 @@ packages/
 ├── protocol/       — Message contracts between layers
 ├── ui/             — React application with design system
 ├── adapters/
-│   └── vscode/     — VS Code specific FileSystem and terminal executors
-apps/
-├── vscode/         # VS Code extension entry point
-├── web/            # Marketing and documentation website (Next.js static export)
-tests/
-├── integration/    — Full workflow integration tests
+│   └── vscode/     — Archived VS Code adapter (under deprecated/); clients live in the product repository
 ```
-
-### `apps/web` — Marketing and Documentation Website
-
-`apps/web` is a statically exported Next.js 15 site that serves as the marketing frontend and documentation hub for Brud Code. It is fully self-contained with zero runtime dependencies on the monorepo's packages or any private infrastructure. The site showcases live benchmarks, 3D interactive graphics, onboarding guides, and technical documentation. It uses `output: "export"` in Next.js to produce plain HTML/CSS/JS artifacts deployable to any standard web server or edge CDN.
 
 ## Core Engine
 
@@ -58,25 +49,23 @@ The core engine is platform-agnostic TypeScript. It contained:
 5. **Snapshot System** — Hybrid full pre-snapshot + diff post-snapshot for efficient revert. Trash-based soft-delete with 7-day protection.
 6. **Workspace Validation** — Every file path is validated against workspace boundaries before any operation executes.
 7. **Microkernel Dispatch** — All 21 operations route through the `@brud/kernel` `ExecutionPipeline`, providing deterministic sandboxing, panic boundaries, and a unified capability registry.
-8. **Dependency Flow** — Packages follow a strict dependency chain: `@brud/protocol` → `@brud/kernel` → official plugins/daemon. The pre-Phase-11 chain (`@brud/core` → `@brud/vscode-adapter` → `apps/vscode`) is archived in `deprecated/`; the VS Code client is frozen until its Phase 13 rewrite.
+8. **Dependency Flow** — Packages follow a strict dependency chain: `@brud/protocol` → `@brud/kernel` → official plugins/daemon. The pre-Phase-11 chain (`@brud/core` → `@brud/vscode-adapter` → client applications) is archived in `deprecated/`; clients live in the product repository, not in this foundation.
 
 ## Build System
 
 - npm workspaces for monorepo management
 - TypeScript project references for incremental builds
 - Vite for webview UI bundling (`packages/ui/`)
-- Webpack for VS Code extension bundle
-- GitHub Actions CI pipeline (`ci:quick` and `ci` workflows)
+- GitHub Actions CI pipeline (`ci` workflow)
 
 ## Testing
 
-- 12+ test suites across core modules and integration
+- Kernel, plugin, and daemon test suites
 - Real file system operations (no mocking of I/O)
-- Integration tests for full end-to-end workflows (`tests/integration/`)
 - Parser tests for legacy and YAML format parsing
 - Validation tests for dangerous command and workspace boundary detection
 - History tests for snapshot, revert, and trash operations
-- Run with `npm run test:core` (unit) or `npm run test:integration` (E2E)
+- Run with `npm run test` (kernel and daemon) or `npm run ci` (build, kernel, boundaries, lint)
 
 ## Contributing
 

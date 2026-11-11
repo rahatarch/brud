@@ -2,13 +2,12 @@
 
 ## Purpose
 
-This document defines how to write and maintain READMEs for individual packages in the Brud Code monorepo.
+This document defines how to write and maintain READMEs for individual packages in the Brud foundation monorepo.
 
 ## When to Write a Package README
 
 **Required for:**
 - Every top-level package (`packages/kernel`, `packages/daemon`, `packages/protocol`, `packages/ui`, `packages/plugins/*`)
-- Every app (`apps/vscode`)
 
 **Optional for:**
 - Complex child modules within a package (e.g., `packages/kernel/services/UniversalHistory/`)
