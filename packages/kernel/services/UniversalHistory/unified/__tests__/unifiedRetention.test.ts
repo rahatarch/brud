@@ -26,6 +26,7 @@ import { UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, HISTORY_GC_GRACE_MS, UnifiedHistoryService } from '../service/index.js';
 import { UnifiedHistoryStore, blobPath, sha256Hex } from '../store/index.js';
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 
 const DAY = 86_400_000;
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
@@ -356,12 +357,12 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
   it('runs after RUNNING with the frozen settings: a longer user retention keeps what the default removes', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-retention-boot-')));
     context.after(() => safeRm(root));
-    const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', options: { workspaceRoot: root } };
+    const caller: ServiceContext = { callerId: 'test.retention', tier: 'core', options: {...workspaceContextOptions(root)} };
     const boot = async (user: Record<string, unknown> | null): Promise<ReturnType<typeof createStandardKernel>> => {
       const kernel = createStandardKernel({
         settings: { store: new InMemoryConfigStore({ userContent: user === null ? null : JSON.stringify(user) }) },
       });
-      await kernel.boot({ options: { workspaceRoot: root } });
+      await kernel.boot({ options: {...workspaceContextOptions(root)} });
       return kernel;
     };
 
@@ -560,7 +561,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     const script = `
 const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../src/bootstrap/index.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
-await kernel.boot({ options: { workspaceRoot: process.argv[2] } });
+await kernel.boot({ options: { 'workspace.root': process.argv[2], 'settings.root': process.argv[2], 'filesystem.root': process.argv[2], 'terminal.root': process.argv[2], 'pluginManager.root': process.argv[2], 'history.root': process.argv[2], 'router.root': process.argv[2] } });
 process.stdout.write('ready');
 await new Promise(() => {});
 `;
@@ -656,7 +657,7 @@ await new Promise(() => {});
     const script = `
 const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../src/bootstrap/index.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
-await kernel.boot({ options: { workspaceRoot: process.argv[2] } });
+await kernel.boot({ options: { 'workspace.root': process.argv[2], 'settings.root': process.argv[2], 'filesystem.root': process.argv[2], 'terminal.root': process.argv[2], 'pluginManager.root': process.argv[2], 'history.root': process.argv[2], 'router.root': process.argv[2] } });
 process.stdout.write('ready');
 await new Promise(() => {});
 `;

@@ -1,3 +1,4 @@
+import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
@@ -39,7 +40,7 @@ async function bootKernel(): Promise<Harness> {
     initialPlugins: [createTerminalPlugin()],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const caller: IPluginExecutionContext = {
     workspaceRoot: root,

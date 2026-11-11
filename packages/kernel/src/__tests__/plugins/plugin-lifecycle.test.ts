@@ -14,6 +14,7 @@ import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBru
 import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import type { PluginManagerService } from '../../../services/PluginManager/orchestrator/PluginManagerService.js';
 import { safeRm } from '../support/cleanup.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
@@ -58,12 +59,12 @@ describe('plugin lifecycle invariant', () => {
     });
 
     try {
-      await kernel.boot({ options: { workspaceRoot: root } });
+      await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
       const caller: ServiceContext = {
         callerId: 'test.leaf-plugin-lifecycle',
         tier: 'core',
-        options: { workspaceRoot: root },
+        options: {...workspaceContextOptions(root)},
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken) as PluginManagerService;
       const tools = kernel.requestAccess(caller, BrudToolsToken);

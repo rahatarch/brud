@@ -12,6 +12,7 @@ import {
   createBrudToolsDescriptor,
 } from '../descriptor/BrudToolsDescriptor.js';
 import { BrudToolsToken } from '../descriptor/tokens.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 let workspaceRoot = '';
 
@@ -24,7 +25,7 @@ after(async () => {
 });
 
 function caller(): ServiceContext {
-  return { callerId: 'test', tier: 'core', options: { workspaceRoot } };
+  return { callerId: 'test', tier: 'core', options: {...workspaceContextOptions(workspaceRoot)} };
 }
 
 function tool(
@@ -59,7 +60,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
 
@@ -90,7 +91,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const disposable = tools.registerTool('brud.a', true, tool('synthetic_probe_tool'));
@@ -111,7 +112,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, {
@@ -134,7 +135,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     tools.registerTool('brud.a', true, tool('read_file', {
@@ -160,7 +161,7 @@ describe('BrudTools descriptor', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const tools = kernel.requestAccess<IBrudToolsService>(caller(), BrudToolsToken);
     const result = await tools.executeTool('nope', {}, {
@@ -177,7 +178,7 @@ describe('BrudTools descriptor', () => {
   it('validates against the registered schema without a validator service', async () => {
     const descriptor = createBrudToolsDescriptor();
     const service = descriptor.factory(
-      { callerId: 'kernel', tier: 'kernel', options: { workspaceRoot } },
+      { callerId: 'kernel', tier: 'kernel', options: {...workspaceContextOptions(workspaceRoot)} },
       {} as never,
     );
 

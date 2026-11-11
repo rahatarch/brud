@@ -10,6 +10,7 @@ import type { IBrudPlugin } from '../../../PluginManager/contracts/IBrudPlugin.j
 import type { PluginPermission } from '../../../PluginManager/contracts/permissions.js';
 import type { IPluginHistoryService } from '../../contracts/index.js';
 import { WIPE_CONFIRMATION_PHRASE } from '../index.js';
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 
 interface ProbeState {
   history?: IPluginHistoryService;
@@ -54,7 +55,7 @@ async function boot(context: TestContext): Promise<Harness> {
     ],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   context.after(async () => {
     await kernel.shutdown();

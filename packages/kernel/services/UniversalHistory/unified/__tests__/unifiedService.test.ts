@@ -31,6 +31,7 @@ import {
   sha256Hex,
 } from '../store/index.js';
 import type { EntryRow } from '../store/index.js';
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
@@ -117,8 +118,8 @@ async function boot(ws: Workspace): Promise<KernelHandle> {
       },
     },
   });
-  await kernel.boot({ options: { workspaceRoot: ws.root } });
-  const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', options: { workspaceRoot: ws.root } };
+  await kernel.boot({ options: {...workspaceContextOptions(ws.root)} });
+  const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', options: {...workspaceContextOptions(ws.root)} };
   const fs = kernel.requestAccess(caller, FileSystemToken);
 
   const historyRoot = join(ws.root, '.brud', 'history');

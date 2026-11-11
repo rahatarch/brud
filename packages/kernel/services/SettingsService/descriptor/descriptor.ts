@@ -13,8 +13,14 @@ import {
   createSettingsReader,
 } from '../orchestrator/SettingsService.js';
 import { ConfigStore } from '../storage/ConfigStore.js';
-import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
 import { SettingsReaderToken, SettingsToken } from './tokens.js';
+
+/** Namespace owned by the settings service in the context contract. */
+export const SETTINGS_CONTEXT_SCOPE = 'settings';
+
+/** Namespaced context field holding the workspace root. */
+export const SETTINGS_ROOT_CONTEXT_FIELD = 'settings.root';
 
 /** Tier assigned to the settings descriptors. */
 export const SETTINGS_SERVICE_TIER: ServiceTier = 'core';
@@ -69,7 +75,11 @@ export function createSettingsDescriptor(
     },
     factory: (context: ServiceContext): SettingsService => {
       const store = options?.store ?? new ConfigStore({
-        workspaceRoot: requireWorkspaceRoot(context.options, SettingsToken.id),
+        workspaceRoot: requireContextString(
+          context.options,
+          SETTINGS_ROOT_CONTEXT_FIELD,
+          SettingsToken.id,
+        ),
         ...(options?.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
       });
 

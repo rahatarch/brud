@@ -18,6 +18,7 @@ import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrud
 import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
 import type { IUtilityService } from '../../services/UtilityService/contracts/IUtilityService.js';
 import { UtilityToken } from '../../services/UtilityService/descriptor/tokens.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const KERNEL_CONFIG_PATH = fileURLToPath(new URL('../../brud.config.json', import.meta.url));
 const DAEMON_CONFIG_PATH = fileURLToPath(
@@ -25,7 +26,7 @@ const DAEMON_CONFIG_PATH = fileURLToPath(
 );
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'kernel', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 async function workspace(t: TestContext): Promise<string> {
@@ -53,8 +54,7 @@ async function boot(
   const root = await workspace(t);
   const configPath = await writeConfig(root, config);
   const kernel = await bootKernel(configPath, {
-    options: {
-      workspaceRoot: root,
+    options: {...workspaceContextOptions(root),
       history: { inMemory: true },
     },
   });
@@ -102,7 +102,7 @@ describe('bootKernel config composition', () => {
     });
 
     await assert.rejects(
-      bootKernel(configPath, { options: { workspaceRoot: root } }),
+      bootKernel(configPath, { options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.ok(error instanceof BrudConfigError);
         assert.equal(error.code, 'MODULE_RESOLVE');
@@ -122,7 +122,7 @@ describe('bootKernel config composition', () => {
     });
 
     await assert.rejects(
-      bootKernel(configPath, { options: { workspaceRoot: root } }),
+      bootKernel(configPath, { options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.ok(error instanceof BrudConfigError);
         assert.equal(error.code, 'CONFIG_SCHEMA');
@@ -135,8 +135,7 @@ describe('bootKernel config composition', () => {
   it('boots the daemon default config with the same services and plugins', async (t) => {
     const root = await workspace(t);
     const kernel = await bootKernel(DAEMON_CONFIG_PATH, {
-      options: {
-        workspaceRoot: root,
+      options: {...workspaceContextOptions(root),
         history: { inMemory: true },
       },
     });
@@ -170,8 +169,7 @@ describe('bootKernel config composition', () => {
       plugins: [{ path: pluginPath, official: true }],
     });
     const kernel = await bootKernel(configPath, {
-      options: {
-        workspaceRoot: root,
+      options: {...workspaceContextOptions(root),
         history: { inMemory: true },
       },
     });
@@ -203,8 +201,7 @@ describe('bootKernel config composition', () => {
       plugins: [{ path: pluginPath, official: false }],
     });
     const kernel = await bootKernel(configPath, {
-      options: {
-        workspaceRoot: root,
+      options: {...workspaceContextOptions(root),
         history: { inMemory: true },
       },
     });
@@ -235,7 +232,7 @@ describe('bootKernel config composition', () => {
     });
 
     await assert.rejects(
-      bootKernel(configPath, { options: { workspaceRoot: root } }),
+      bootKernel(configPath, { options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
 

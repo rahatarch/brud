@@ -3,6 +3,8 @@ import type { KernelServiceModuleContext } from '../../src/bootstrap/bootTypes.j
 import type { MutationJournalPort } from '../../src/contracts/mutationJournal.js';
 import type { IFileMutationJournal } from '../BrudFileSystem/events/types.js';
 import {
+  HISTORY_CONTEXT_SCOPE,
+  HISTORY_ROOT_CONTEXT_FIELD,
   MissingHistoryMutationJournalError,
   MissingHistoryStorageDriverError,
 } from './bootOptions.js';
@@ -17,6 +19,7 @@ interface HistoryOptions {
 type HistoryDescriptors = ReturnType<typeof createUnifiedHistoryDescriptors>;
 
 const HISTORY_SLOT = 'brud.core.history.descriptors';
+const HISTORY_CONTRACT_SLOT = 'brud.core.history.contract';
 
 /**
  * Builds the shared history descriptor pair once per kernel.
@@ -26,6 +29,18 @@ const HISTORY_SLOT = 'brud.core.history.descriptors';
  * descriptors close over the same runtime.
  */
 function historyDescriptorsFor(context: KernelServiceModuleContext): HistoryDescriptors {
+  if (context.shared[HISTORY_CONTRACT_SLOT] !== true) {
+    context.declareContextFields(HISTORY_CONTEXT_SCOPE, [
+      {
+        name: HISTORY_ROOT_CONTEXT_FIELD,
+        type: 'string',
+        required: true,
+        description: 'Absolute workspace root that contains the history store.',
+      },
+    ]);
+    context.shared[HISTORY_CONTRACT_SLOT] = true;
+  }
+
   const existing = context.shared[HISTORY_SLOT] as HistoryDescriptors | undefined;
 
   if (existing !== undefined) {

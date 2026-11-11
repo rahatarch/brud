@@ -3,12 +3,25 @@ import type { KernelServiceModuleContext } from '../../src/bootstrap/bootTypes.j
 import type { IValidationService } from '../ValidationService/contracts/IValidationService.js';
 import type { WorkspaceDescriptorOptions } from '../WorkspaceService/descriptor/descriptor.js';
 import type { IWorkspaceService } from '../WorkspaceService/contracts/IWorkspaceService.js';
-import { createFileSystemDescriptor } from './descriptor/descriptor.js';
+import {
+  FILESYSTEM_CONTEXT_SCOPE,
+  FILESYSTEM_ROOT_CONTEXT_FIELD,
+  createFileSystemDescriptor,
+} from './descriptor/descriptor.js';
 import { DurableNodeStorageDriver } from './drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from './events/FileMutationJournal.js';
 import type { IFileMutationJournal } from './events/types.js';
 
 export function createService(context: KernelServiceModuleContext) {
+  context.declareContextFields(FILESYSTEM_CONTEXT_SCOPE, [
+    {
+      name: FILESYSTEM_ROOT_CONTEXT_FIELD,
+      type: 'string',
+      required: true,
+      description: 'Absolute workspace root used by the filesystem service.',
+    },
+  ]);
+
   const options = context.options;
   const workspaceOptions = options['workspace'] as
     | WorkspaceDescriptorOptions

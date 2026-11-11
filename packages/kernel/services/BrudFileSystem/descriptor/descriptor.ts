@@ -5,7 +5,7 @@ import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../Expose
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type { WorkspacePathFlavor } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
-import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
 import type { IBrudFileSystem } from '../contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import type { IFileMutationJournal } from '../events/types.js';
@@ -14,6 +14,12 @@ import type { ValidationAuthority, WorkspaceAuthority } from '../orchestrator/Br
 import { ReadOnlyFacade } from '../projection/ReadOnlyFacade/ReadOnlyFacade.js';
 import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
 import { FileSystemToken } from './tokens.js';
+
+/** Namespace owned by the filesystem service in the context contract. */
+export const FILESYSTEM_CONTEXT_SCOPE = 'filesystem';
+
+/** Namespaced context field holding the workspace root. */
+export const FILESYSTEM_ROOT_CONTEXT_FIELD = 'filesystem.root';
 
 /** Configuration for {@link createFileSystemDescriptor}. */
 export interface FileSystemDescriptorOptions {
@@ -43,7 +49,7 @@ export interface FileSystemDescriptorOptions {
 
   /**
    * Canonical workspace root the service binds to when no workspace authority
-   * is injected. Defaults to `context.options.workspaceRoot`.
+   * is injected. Defaults to the declared `filesystem.root` context field.
    */
   readonly root?: string;
 
@@ -96,7 +102,11 @@ export function createFileSystemDescriptor(
     // userland plugin can still receive a read-only projection.
     accessPolicy: { deniedCallers: [] },
     factory: (context: ServiceContext): BrudFileSystem => {
-      const root = options?.root ?? requireWorkspaceRoot(context.options, FileSystemToken.id);
+      const root = options?.root ?? requireContextString(
+        context.options,
+        FILESYSTEM_ROOT_CONTEXT_FIELD,
+        FileSystemToken.id,
+      );
       const serviceOptions = {
         root,
         ...(options?.mutationJournal === undefined

@@ -94,7 +94,7 @@ export function createTestApiRegistry(options: {
     callerContext: {
       callerId: 'test.api.registry',
       tier: 'core',
-      options: { workspaceRoot: options.workspaceRoot },
+      options: { 'workspace.root': options.workspaceRoot },
     },
   });
   const services = options.services ?? {};

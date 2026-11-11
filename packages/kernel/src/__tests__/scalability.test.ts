@@ -12,6 +12,7 @@ import { PluginManagerToken } from '../../services/PluginManager/contracts/token
 import type { IPluginManagerService } from '../../services/PluginManager/contracts/IPluginManager.js';
 import type { PluginManagerService } from '../../services/PluginManager/orchestrator/PluginManagerService.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const PLUGIN_PERMISSIONS = ['tools:register', 'tools:execute', 'fs:read', 'fs:write'] as const;
 
@@ -64,7 +65,7 @@ function expectedNames(): readonly string[] {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'scalability', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'scalability', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 describe('100 tools from 3 plugins', () => {

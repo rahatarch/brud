@@ -1,3 +1,4 @@
+import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -35,7 +36,7 @@ describe('Catalog plugin', () => {
       history: { dbPath: join(root, '.brud', 'history', 'universal.db') },
     });
 
-    await kernel.boot({ options: { workspaceRoot: root } });
+    await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
     caller = {
       callerId: 'test.catalog',

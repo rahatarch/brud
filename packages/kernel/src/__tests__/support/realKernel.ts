@@ -5,6 +5,7 @@ import type { TestContext } from 'node:test';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
 import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { workspaceContextOptions } from './workspaceContext.js';
 
 /** A booted kernel plus the real workspace and database it owns. */
 export interface RealKernel {
@@ -34,7 +35,7 @@ export async function bootRealKernel(
     ...(options.initialPlugins === undefined ? {} : { initialPlugins: options.initialPlugins }),
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: workspaceContextOptions(root) });
 
   context.after(async () => {
     await kernel.shutdown().catch(() => undefined);

@@ -1,3 +1,9 @@
+/** Namespace owned by the universal history service in the context contract. */
+export const HISTORY_CONTEXT_SCOPE = 'history';
+
+/** Namespaced context field holding the workspace root. */
+export const HISTORY_ROOT_CONTEXT_FIELD = 'history.root';
+
 /**
  * Raised when history is composed without the shared storage primitives it
  * needs. Both are service-owned options placed in the generic boot bag by the

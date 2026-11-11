@@ -26,6 +26,7 @@ import type {
 } from '../../../services/Router/contracts/types.js';
 import { RouterService } from '../../../services/Router/orchestrator/index.js';
 import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
+import { workspaceContextOptions } from './workspaceContext.js';
 
 /** Tool-shaped parsed operation used by the historical parser suites. */
 export interface ToolShapedParsedOperation {
@@ -111,7 +112,7 @@ export class ParserRouterHarness {
       callerContext: {
         callerId: ROUTER_CALLER_ID,
         tier: 'core',
-        options: { workspaceRoot: '' },
+        options: { 'router.root': process.cwd() },
       },
       getParser: () => parser,
     });
@@ -129,7 +130,7 @@ export class ParserRouterHarness {
     const caller: ServiceContext = {
       callerId: 'kernel',
       tier: 'core',
-      options: { workspaceRoot: root },
+      options: workspaceContextOptions(root),
     };
 
     return new ParserRouterHarness({

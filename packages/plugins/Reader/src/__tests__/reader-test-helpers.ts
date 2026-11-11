@@ -6,6 +6,7 @@
  * are candidate-list providers for governor boundary tests and the spying
  * wrappers around the real filesystem service.
  */
+import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { mkdtemp, mkdir, readFile as readHostFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative } from 'node:path';
@@ -77,7 +78,7 @@ export async function bootReaderKernel(
     initialPlugins: [searchPlugin, readerPlugin, ...(options.initialPlugins ?? [])],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const caller: ServiceContext = {
     callerId: 'test.reader',

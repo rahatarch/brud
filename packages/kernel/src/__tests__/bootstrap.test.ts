@@ -11,6 +11,7 @@ import { createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 let workspaceRoot = '';
 
@@ -26,7 +27,7 @@ function createCaller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.runner',
     tier: 'core',
-    options: { workspaceRoot },
+    options: {...workspaceContextOptions(workspaceRoot)},
     ...overrides,
   };
 }
@@ -35,7 +36,7 @@ async function bootStandardKernel(): Promise<BrudKernel> {
   const kernel = createStandardKernel({
     history: { inMemory: true },
   });
-  await kernel.boot({ options: { workspaceRoot } });
+  await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
   return kernel;
 }
 
@@ -47,7 +48,7 @@ describe('createStandardKernel', () => {
 
     assert.equal(kernel.lifecycleState, 'UNINITIALIZED');
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.equal(kernel.hasService(FileSystemToken), true);

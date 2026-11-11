@@ -11,6 +11,7 @@ import { safeRm } from '../../../src/__tests__/support/cleanup.js';
 import type { IUtilityService } from '../contracts/IUtilityService.js';
 import { UtilityToken } from '../descriptor/tokens.js';
 import { UtilityService } from '../orchestrator/UtilityService.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 const TS_CONTENT = [
   "import { helper } from './b';",
@@ -95,7 +96,7 @@ describe('brud.core.utils service', () => {
       initialPlugins: [plugin],
     });
 
-    await kernel.boot({ options: { workspaceRoot: root } });
+    await kernel.boot({ options: {...workspaceContextOptions(root)} });
   });
 
   after(async () => {
@@ -110,7 +111,7 @@ describe('brud.core.utils service', () => {
     const caller: ServiceContext = {
       callerId: 'test.utility-service',
       tier: 'core',
-      options: { workspaceRoot: root },
+      options: {...workspaceContextOptions(root)},
     };
     const utilities = kernel.requestAccess(caller, UtilityToken);
 

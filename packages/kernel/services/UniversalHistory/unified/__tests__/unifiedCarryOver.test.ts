@@ -25,6 +25,7 @@ import {
   isBinaryContent,
   normalizeTargetPath,
 } from '../service/index.js';
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 
@@ -36,11 +37,11 @@ async function workspace(context: TestContext): Promise<string> {
 
 async function boot(root: string, logger?: KernelLogger): Promise<BrudKernel> {
   const kernel = createStandardKernel();
-  await kernel.boot({ options: { workspaceRoot: root }, ...(logger === undefined ? {} : { logger }) });
+  await kernel.boot({ options: {...workspaceContextOptions(root)}, ...(logger === undefined ? {} : { logger }) });
   return kernel;
 }
 
-const caller = (root: string): ServiceContext => ({ callerId: 'test.history', tier: 'core', options: { workspaceRoot: root } });
+const caller = (root: string): ServiceContext => ({ callerId: 'test.history', tier: 'core', options: {...workspaceContextOptions(root)} });
 
 describe('unified history — carried-over behaviour', () => {
   it('round-trips an empty file through a session revert (baseline capture: empty files)', async (context) => {

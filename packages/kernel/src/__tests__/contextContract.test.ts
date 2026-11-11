@@ -118,6 +118,35 @@ describe('dynamic context contract', () => {
     );
   });
 
+  it('rejects a flat legacy key even when the namespaced field is present', async () => {
+    await assert.rejects(
+      bootWith([workspaceRootDeclaration()], {
+        'workspace.root': '/workspace/demo',
+        workspaceRoot: '/workspace/demo',
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ContextContractError);
+        assert.equal(error.field, 'workspaceRoot');
+        assert.match(error.message, /Un-namespaced string context option "workspaceRoot"/u);
+        return true;
+      },
+    );
+  });
+
+  it('rejects a bag that supplies only the flat legacy key', async () => {
+    await assert.rejects(
+      bootWith([workspaceRootDeclaration()], {
+        workspaceRoot: '/workspace/demo',
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof ContextContractError);
+        assert.equal(error.field, 'workspaceRoot');
+        assert.match(error.message, /workspaceRoot/u);
+        return true;
+      },
+    );
+  });
+
   it('accepts an absent optional field but rejects a present wrong type', async () => {
     const declaration: ContextScopeDeclaration = {
       scope: 'workspace',
@@ -210,12 +239,11 @@ describe('dynamic context contract', () => {
   it('rejects declarations made after the kernel reaches RUNNING', async () => {
     const kernel = await bootWith([workspaceRootDeclaration()], {
       'workspace.root': '/workspace/demo',
-      __contractTokenId: 'test.context.contract.late',
     });
 
     try {
       const token = createServiceToken<ContractProbe>(
-        'test.context.contract.late',
+        'test.context.contract',
         'Late declaration probe',
       );
       const service = kernel.requestAccess(context({ 'workspace.root': '/workspace/demo' }), token);

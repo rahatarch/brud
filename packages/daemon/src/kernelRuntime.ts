@@ -26,6 +26,25 @@ export interface KernelRuntimeOptions {
 }
 
 /**
+ * Builds the namespaced context bag for one workspace.
+ *
+ * Each migrated service reads its own field. No legacy flat alias is emitted.
+ */
+export function createWorkspaceContextOptions(
+  workspaceRoot: string,
+): Record<string, unknown> {
+  return {
+    'workspace.root': workspaceRoot,
+    'settings.root': workspaceRoot,
+    'filesystem.root': workspaceRoot,
+    'terminal.root': workspaceRoot,
+    'pluginManager.root': workspaceRoot,
+    'history.root': workspaceRoot,
+    'router.root': workspaceRoot,
+  };
+}
+
+/**
  * Boots one kernel from the daemon config.
  *
  * `initialPlugins` is a test/host override; when omitted the config's plugins
@@ -36,10 +55,7 @@ export async function createKernel(options: KernelRuntimeOptions): Promise<BrudK
 
   return kernelModule.bootKernel(DEFAULT_BRUD_CONFIG_PATH, {
     options: {
-      // Namespaced contract field plus the legacy flat alias consumed by
-      // services that have not migrated yet.
-      'workspace.root': options.workspaceRoot,
-      workspaceRoot: options.workspaceRoot,
+      ...createWorkspaceContextOptions(options.workspaceRoot),
       ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
       ...(options.initialPlugins === undefined ? {} : { plugins: options.initialPlugins }),
       ...(options.certifyInitialPlugins === undefined

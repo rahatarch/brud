@@ -38,6 +38,7 @@ import type {
   OracleSessionStatus,
   OracleWarning,
 } from './subject.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const HISTORY_DIR = join('.brud', 'history');
 const DATABASE_SUFFIXES = ['.db', '.db-wal', '.db-shm'];
@@ -106,9 +107,9 @@ export function createKernelSubject(): HistoryOracleSubjectFactory {
       },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: workspaceContextOptions(workspaceRoot) });
 
-    const caller: ServiceContext = { callerId: 'history.oracle', tier: 'core', options: { workspaceRoot } };
+    const caller: ServiceContext = { callerId: 'history.oracle', tier: 'core', options: workspaceContextOptions(workspaceRoot) };
     const fs = kernel.requestAccess(caller, FileSystemToken);
     const sessions: IUniversalHistoryService = kernel.requestAccess(caller, UniversalHistoryToken);
     const journal: IUniversalHistory = kernel.requestAccess(caller, HistoryToken);

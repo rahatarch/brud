@@ -21,13 +21,9 @@ export function createService(context: KernelServiceModuleContext) {
     }
   }
 
-  const tokenId = typeof context.options['__contractTokenId'] === 'string'
-    ? context.options['__contractTokenId']
-    : 'test.context.contract';
-
   return {
     token: {
-      id: tokenId,
+      id: 'test.context.contract',
       description: 'Dynamic context contract fixture',
       _brand: [] as unknown,
     },

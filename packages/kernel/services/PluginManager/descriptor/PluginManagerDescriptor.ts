@@ -15,7 +15,7 @@ import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
 import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';
 import { TerminalToken } from '../../TerminalService/descriptor/tokens.js';
-import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginManagerService } from '../contracts/IPluginManager.js';
 import {
@@ -24,6 +24,12 @@ import {
 } from '../contracts/branding.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
 import { PluginManagerService } from '../orchestrator/PluginManagerService.js';
+
+/** Namespace owned by the plugin manager in the context contract. */
+export const PLUGIN_MANAGER_CONTEXT_SCOPE = 'pluginManager';
+
+/** Namespaced context field holding the workspace root. */
+export const PLUGIN_MANAGER_ROOT_CONTEXT_FIELD = 'pluginManager.root';
 
 /** Tier assigned to the plugin manager descriptor. */
 export const PLUGIN_MANAGER_SERVICE_TIER: ServiceTier = 'core';
@@ -187,7 +193,11 @@ export function createPluginManagerDescriptor(
       }
 
       const manager = new PluginManagerService({
-        workspaceRoot: requireWorkspaceRoot(context.options, PluginManagerToken.id),
+        workspaceRoot: requireContextString(
+          context.options,
+          PLUGIN_MANAGER_ROOT_CONTEXT_FIELD,
+          PluginManagerToken.id,
+        ),
         apiRegistry,
         isOfficial: (candidate) => brandScope.verify(candidate),
       });

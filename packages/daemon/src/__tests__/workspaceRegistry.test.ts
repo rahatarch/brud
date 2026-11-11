@@ -65,20 +65,17 @@ class FakeKernel {
 
   public shutdownCount = 0;
 
-  public bootedAt: string | undefined;
-
   public bootedAtNamespaced: string | undefined;
+
+  public bootedKeys: readonly string[] = [];
 
   async boot(options: {
     readonly options?: {
-      readonly workspaceRoot?: unknown;
       readonly 'workspace.root'?: unknown;
     };
   }): Promise<void> {
     this.bootCount += 1;
-    this.bootedAt = typeof options.options?.workspaceRoot === 'string'
-      ? options.options.workspaceRoot
-      : undefined;
+    this.bootedKeys = Object.keys(options.options ?? {});
     this.bootedAtNamespaced = typeof options.options?.['workspace.root'] === 'string'
       ? options.options['workspace.root']
       : undefined;
@@ -130,8 +127,21 @@ describe('WorkspaceRegistry', () => {
       assert.equal(workspace.root, '/ws-a');
       assert.equal(workspace.kernel.lifecycleState, 'RUNNING');
       assert.equal(kernels.get('/ws-a')?.bootCount, 1);
-      assert.equal(kernels.get('/ws-a')?.bootedAt, '/ws-a');
       assert.equal(kernels.get('/ws-a')?.bootedAtNamespaced, '/ws-a');
+      assert.deepEqual(
+        [...(kernels.get('/ws-a')?.bootedKeys ?? [])].sort(),
+        [
+          'filesystem.root',
+          'history.root',
+          'pluginManager.root',
+          'plugins',
+          'router.root',
+          'settings.root',
+          'terminal.root',
+          'workspace.root',
+        ].sort(),
+      );
+      assert.equal(kernels.get('/ws-a')?.bootedKeys.includes('workspaceRoot'), false);
       assert.deepEqual(registry.list().map((entry) => entry.root), ['/ws-a']);
       assert.equal(registry.get('/ws-a'), workspace);
     } finally {

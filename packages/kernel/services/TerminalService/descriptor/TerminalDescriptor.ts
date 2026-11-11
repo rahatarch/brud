@@ -12,7 +12,7 @@ import type {
 } from '../../ValidationService/contracts/IValidationService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
-import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
 import type { ITerminalService } from '../contracts/ITerminalService.js';
 import {
   DEFAULT_TERMINAL_POLICY,
@@ -22,6 +22,12 @@ import { ProcessManager } from '../engine/ProcessManager.js';
 import { ShellAdapter } from '../engine/ShellAdapter.js';
 import { TerminalService, type TerminalValidatorPort } from '../orchestrator/TerminalService.js';
 import { TerminalToken } from './tokens.js';
+
+/** Namespace owned by the terminal service in the context contract. */
+export const TERMINAL_CONTEXT_SCOPE = 'terminal';
+
+/** Namespaced context field holding the workspace root. */
+export const TERMINAL_ROOT_CONTEXT_FIELD = 'terminal.root';
 
 /** Tier assigned to the terminal descriptor. */
 export const TERMINAL_SERVICE_TIER: ServiceTier = 'core';
@@ -164,7 +170,11 @@ export function createTerminalDescriptor(
         policy: options?.policy ?? DEFAULT_TERMINAL_POLICY,
         ...(options?.validator === undefined ? {} : { validator: options.validator }),
         workspaceRoot: options?.workspaceRoot
-          ?? requireWorkspaceRoot(context.options, TerminalToken.id),
+          ?? requireContextString(
+            context.options,
+            TERMINAL_ROOT_CONTEXT_FIELD,
+            TerminalToken.id,
+          ),
         processes: new ProcessManager(new ShellAdapter()),
         ...(context.logger === undefined ? {} : { logger: context.logger }),
       });

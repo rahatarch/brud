@@ -13,6 +13,7 @@ import type { FileMutationEvent } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../descriptor/tokens.js';
 import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 let root = '';
 
@@ -28,7 +29,7 @@ function caller(): ServiceContext {
   return {
     callerId: 'brud.host.desktop',
     tier: 'core',
-    options: { workspaceRoot: root },
+    options: { 'filesystem.root': root },
   };
 }
 
@@ -50,7 +51,7 @@ async function bootKernel(
     mutationJournal: journal,
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const workspace = kernel.requestAccess(caller(), WorkspaceToken);
   const fileSystem = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;

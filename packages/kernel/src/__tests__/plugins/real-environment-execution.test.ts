@@ -11,6 +11,7 @@ import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drive
 import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import { safeRm } from '../support/cleanup.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
@@ -119,12 +120,12 @@ describe('real environment execution invariant', () => {
 
     try {
       await seedWorkspace(root);
-      await kernel.boot({ options: { workspaceRoot: root } });
+      await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
       const caller: ServiceContext = {
         callerId: 'test.real-environment-execution',
         tier: 'core',
-        options: { workspaceRoot: root },
+        options: {...workspaceContextOptions(root)},
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken);
       const tools = kernel.requestAccess(caller, BrudToolsToken);

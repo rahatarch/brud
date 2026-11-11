@@ -34,6 +34,7 @@ import type {
   HistoryOracleSubjectOptions,
   OracleErrorKind,
 } from './historyOracle/subject.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const SUBJECT_NAME = 'unified';
 
@@ -499,7 +500,7 @@ const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
 const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
 const [root, id, count] = process.argv.slice(2);
 const kernel = createStandardKernel();
-await kernel.boot({ options: { workspaceRoot: root } });
+await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root } });
 const fs = kernel.requestAccess({ callerId: 'oracle.worker', tier: 'core', workspaceRoot: root }, FileSystemToken);
 for (let i = 0; i < Number(count); i += 1) await fs.writeAtomic(\`workers/\${id}-\${i}.txt\`, \`\${id}-\${i}\\n\`);
 await new Promise((resolve) => setTimeout(resolve, 200));
@@ -550,7 +551,7 @@ const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
 const [root, id, count] = process.argv.slice(2);
 const kernel = createStandardKernel();
-await kernel.boot({ options: { workspaceRoot: root } });
+await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root } });
 const db = new DatabaseSync(root + '/.brud/history/universal.db');
 db.exec('PRAGMA busy_timeout = 5000');
 const rows = db.prepare("SELECT session_id AS sessionId FROM sessions WHERE implicit = 1 AND status = 'active' AND prompt = 'automatic recording' ORDER BY session_id DESC LIMIT 1").all();

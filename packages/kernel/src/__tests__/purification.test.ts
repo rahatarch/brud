@@ -13,9 +13,10 @@ import type { IValidationService } from '../../services/ValidationService/contra
 import type { ValidationService } from '../../services/ValidationService/orchestrator/ValidationService.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'purification', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'purification', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function toolPlugin(

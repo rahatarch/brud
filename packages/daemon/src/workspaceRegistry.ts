@@ -4,7 +4,7 @@ import type {
   IMcpTransport,
   IStorageDriver,
 } from '@brud/kernel' with { 'resolution-mode': 'import' };
-import { createKernel } from './kernelRuntime.js';
+import { createKernel, createWorkspaceContextOptions } from './kernelRuntime.js';
 
 /** Default idle window after which a client-less workspace is disposed. */
 export const DEFAULT_WORKSPACE_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -349,7 +349,7 @@ export class WorkspaceRegistry {
   adopt(
     root: string,
     kernel: BrudKernel,
-    options: Readonly<Record<string, unknown>> = { 'workspace.root': root, workspaceRoot: root },
+    options: Readonly<Record<string, unknown>> = createWorkspaceContextOptions(root),
   ): KernelWorkspace {
     const existing = this.workspaces.get(root);
 
@@ -375,8 +375,7 @@ export class WorkspaceRegistry {
     initialPlugins: readonly IBrudPlugin[] | undefined,
   ): Promise<KernelWorkspace> {
     const options: Record<string, unknown> = {
-      'workspace.root': root,
-      workspaceRoot: root,
+      ...createWorkspaceContextOptions(root),
       ...(this.storageDriver === undefined ? {} : { storageDriver: this.storageDriver }),
       ...(initialPlugins === undefined ? {} : { plugins: initialPlugins }),
       ...(this.certifyInitialPlugins === undefined

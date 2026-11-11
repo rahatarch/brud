@@ -20,6 +20,7 @@ import {
 } from '../../services/Router/contracts/errors.js';
 import { RouterToken } from '../../services/Router/descriptor/tokens.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const PLUGIN_ID = 'acme.test.parser-router';
 
@@ -81,7 +82,7 @@ function routingPlugin(): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'kernel', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 describe('Parser and Router Level-1 services', () => {
@@ -193,7 +194,7 @@ describe('Parser and Router Level-1 services', () => {
     kernel.register(rogueDescriptor);
 
     await assert.rejects(
-      kernel.boot({ options: { workspaceRoot: root } }),
+      kernel.boot({ options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.ok(error instanceof RouterKindCollisionError);
         assert.equal(error.code, 'ROUTER_KIND_COLLISION');

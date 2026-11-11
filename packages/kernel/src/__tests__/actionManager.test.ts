@@ -19,12 +19,13 @@ import {
   createEchoActionPlugin,
 } from './fixtures/actionPlugin.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ACTION_MANAGER_ROOT = resolve(HERE, '../../services/ActionManager');
 
 function caller(root: string, callerId = 'kernel'): ServiceContext {
-  return { callerId, tier: 'core', options: { workspaceRoot: root } };
+  return { callerId, tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function actionManager(kernel: BrudKernel, root: string): IActionManager {

@@ -24,6 +24,7 @@ import type { ExposedApiRegistration } from '../../services/ExposedApiRegistry/c
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { PluginPermissionError } from '../../services/PluginManager/contracts/errors.js';
 import { PluginManagerService } from '../../services/PluginManager/orchestrator/PluginManagerService.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 interface ProbeService extends IServiceLifecycle {
   readonly marker: string;
@@ -35,7 +36,7 @@ interface ProbeFixture {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'kernel', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function createProbe(options: {
@@ -104,7 +105,7 @@ async function compose(
 ): Promise<{ kernel: BrudKernel; root: string; domains: readonly ProbeFixture[] }> {
   const prepared = await prepare(t, fixtures, initialPlugins);
 
-  await prepared.kernel.boot({ options: { workspaceRoot: prepared.root } });
+  await prepared.kernel.boot({ options: {...workspaceContextOptions(prepared.root)} });
 
   return prepared;
 }
@@ -176,7 +177,7 @@ describe('Exposed API Registry', () => {
     ]);
 
     await assert.rejects(
-      kernel.boot({ options: { workspaceRoot: root } }),
+      kernel.boot({ options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.ok(error instanceof ExposedApiNameCollisionError);
         assert.equal(error.code, 'EXPOSED_API_NAME_COLLISION');

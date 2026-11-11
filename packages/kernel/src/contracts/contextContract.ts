@@ -129,6 +129,42 @@ function matchesType(value: unknown, type: ContextFieldType): boolean {
   }
 }
 
+/**
+ * Reads a required non-empty string field from an options bag.
+ *
+ * The field name is supplied by the service; the core does not know any
+ * concrete field. This is the descriptor-level read used after contract
+ * validation, and it also protects standalone descriptor construction.
+ *
+ * @param options - Opaque options bag.
+ * @param field - Dotted field name owned by the calling service.
+ * @param service - Service id used in the error.
+ * @returns The string value.
+ * @throws {ContextContractError} When the value is absent or not a non-empty
+ * string.
+ */
+export function requireContextString(
+  options: Readonly<Record<string, unknown>>,
+  field: string,
+  service: string,
+): string {
+  const value = options[field];
+
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new ContextContractError(
+      `${service} requires the non-empty string context field "${field}" (options['${field}']).`,
+      {
+        field,
+        service,
+        expectedType: 'string',
+        actualType: value === undefined ? 'missing' : describeValueType(value),
+      },
+    );
+  }
+
+  return value;
+}
+
 function assertScope(scope: string): void {
   if (typeof scope !== 'string' || !SCOPE_PATTERN.test(scope)) {
     throw new ContextContractError(
@@ -303,6 +339,21 @@ export class ContextContract {
    * has the wrong type.
    */
   validate(options: Readonly<Record<string, unknown>>): void {
+    for (const [key, value] of Object.entries(options)) {
+      if (this.fields.has(key)) {
+        continue;
+      }
+
+      // String-valued options are contract fields. Every one must be a dotted
+      // namespace path; flat aliases have no service owner and cannot be read.
+      if (typeof value === 'string' && !key.includes('.')) {
+        throw new ContextContractError(
+          `Un-namespaced string context option "${key}" is forbidden; use a dotted service namespace.`,
+          { field: key, actualType: 'string' },
+        );
+      }
+    }
+
     for (const field of this.fields.values()) {
       const value = options[field.name];
 

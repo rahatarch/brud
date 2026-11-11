@@ -1,3 +1,4 @@
+import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -45,7 +46,7 @@ export async function bootHistoryHarness(): Promise<HistoryHarness> {
     initialPlugins: [createHistoryPlugin()],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const coreCaller = {
     callerId: 'test.history.plugin',

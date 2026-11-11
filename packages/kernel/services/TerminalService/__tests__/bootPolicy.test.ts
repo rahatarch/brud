@@ -24,6 +24,7 @@ import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { createTerminalDescriptor, pinTerminalPolicies } from '../descriptor/TerminalDescriptor.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { TerminalValidatorPort } from '../orchestrator/TerminalService.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 const allowAll: TerminalValidatorPort = { validateCommand: () => ({ ok: true as const }) };
 
@@ -82,10 +83,10 @@ async function runInStandardKernel(
     },
   });
 
-  await kernel.boot({ options: { workspaceRoot: workspace }, logger });
+  await kernel.boot({ options: {...workspaceContextOptions(workspace)}, logger });
 
   try {
-    const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', options: { workspaceRoot: workspace } };
+    const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', options: { 'terminal.root': workspace } };
     const terminal = kernel.requestAccess(caller, TerminalToken);
     const decision = await terminal.run({ command, ...(cwd === undefined ? {} : { cwd }) });
 
@@ -142,7 +143,7 @@ class GatedSettingsBroker implements IKernelAccessBroker {
 const bootContext = (workspace: string, logger?: KernelLogger): ServiceContext => ({
   callerId: 'kernel',
   tier: 'core',
-  options: { workspaceRoot: workspace },
+  options: { 'terminal.root': workspace },
   ...(logger === undefined ? {} : { logger }),
 });
 

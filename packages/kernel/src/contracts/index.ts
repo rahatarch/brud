@@ -41,6 +41,7 @@ export {
   CONTEXT_FIELD_TYPES,
   ContextContract,
   ContextContractError,
+  requireContextString,
 } from './contextContract.js';
 
 export type { OperationResult, OperationHandler, PromptDescriptor, PluginMetadata } from './handler.js';

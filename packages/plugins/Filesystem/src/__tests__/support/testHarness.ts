@@ -5,6 +5,7 @@
  * driver, and a fresh temporary workspace. Tests never construct a fake
  * filesystem unless they explicitly need to isolate memory behaviour.
  */
+import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -63,7 +64,7 @@ export async function bootTestKernel(
     ...(options.plugins === undefined ? {} : { initialPlugins: options.plugins }),
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const caller: ServiceContext = {
     callerId: 'test.filesystem',

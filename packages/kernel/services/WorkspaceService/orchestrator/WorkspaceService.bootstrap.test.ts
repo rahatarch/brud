@@ -11,6 +11,7 @@ import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import { createWorkspacePathBridge } from '../bridge/WorkspacePathBridge.js';
 import { WorkspaceToken } from '../descriptor/tokens.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 interface Fixture {
   readonly base: string;
@@ -39,7 +40,7 @@ function caller(workspaceRoot: string, overrides?: Partial<ServiceContext>): Ser
   return {
     callerId: 'brud.host.desktop',
     tier: 'core',
-    options: { workspaceRoot },
+    options: {...workspaceContextOptions(workspaceRoot)},
     ...overrides,
   };
 }
@@ -53,7 +54,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel: BrudKernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
+    await kernel.boot({ options: {...workspaceContextOptions(fixture.workspace)} });
 
     try {
       const ids = kernel.listServices().map((service) => service.id);
@@ -91,7 +92,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ options: { workspaceRoot: linkedRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(linkedRoot)} });
 
     try {
       const workspace = kernel.requestAccess(caller(linkedRoot), WorkspaceToken);
@@ -120,7 +121,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
+    await kernel.boot({ options: {...workspaceContextOptions(fixture.workspace)} });
 
     try {
       const workspace = kernel.requestAccess(caller(fixture.workspace), WorkspaceToken);
@@ -144,7 +145,7 @@ describe('WorkspaceService boot integration', () => {
 
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await kernel.boot({ options: { workspaceRoot: fixture.workspace } });
+    await kernel.boot({ options: {...workspaceContextOptions(fixture.workspace)} });
 
     try {
       const workspace = kernel.requestAccess(caller(fixture.workspace), WorkspaceToken);
@@ -166,7 +167,7 @@ describe('WorkspaceService boot integration', () => {
   it('rejects a filesystem-root workspace at boot', async () => {
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
-    await assert.rejects(kernel.boot({ options: { workspaceRoot: '/' } }));
+    await assert.rejects(kernel.boot({ options: {...workspaceContextOptions('/')} }));
     assert.equal(kernel.lifecycleState, 'DISPOSED');
   });
 });

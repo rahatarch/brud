@@ -33,7 +33,7 @@ function createCaller(overrides: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test-suite',
     tier: 'core',
-    options: { workspaceRoot },
+    options: { 'filesystem.root': workspaceRoot },
     ...overrides,
   };
 }
@@ -96,7 +96,7 @@ describe('FileSystemDescriptor', () => {
     });
 
     const built = descriptor.factory(
-      createCaller({ callerId: 'kernel', tier: 'core', options: { workspaceRoot: join(workspaceRoot, 'linked') } }),
+      createCaller({ callerId: 'kernel', tier: 'core', options: { 'filesystem.root': join(workspaceRoot, 'linked') } }),
       createBroker(),
     );
 

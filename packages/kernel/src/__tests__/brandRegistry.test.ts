@@ -10,11 +10,12 @@ import type { IBrandRegistry } from '../../services/BrandRegistry/contracts/IBra
 import { BrandRegistryToken } from '../../services/BrandRegistry/contracts/tokens.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { PLUGIN_MANAGER_SCOPE_NAME } from '../../services/PluginManager/serviceModule.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const REGISTRY_SLOT = 'brud.core.brandRegistry.instance';
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'brand.test', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'brand.test', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function serviceToken<T>(id: string): ServiceToken<T> {
@@ -136,7 +137,7 @@ describe('Brand Registry in a booted kernel', () => {
       }
     });
 
-    await kernel.boot({ options: { workspaceRoot: root, history: { inMemory: true } } });
+    await kernel.boot({ options: {...workspaceContextOptions(root), history: { inMemory: true } } });
 
     const registry = kernel.requestAccess<IBrandRegistry>(caller(root), BrandRegistryToken);
 
@@ -167,7 +168,7 @@ describe('Brand Registry in a booted kernel', () => {
     ]);
 
     await assert.rejects(
-      bootKernel(configPath, { options: { workspaceRoot: root } }),
+      bootKernel(configPath, { options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.equal((error as Error).name, 'DuplicateBrandScopeError');
         assert.match((error as Error).message, /acme\.shared\.scope/u);
@@ -195,7 +196,7 @@ describe('Brand Registry in a booted kernel', () => {
       first,
       second,
     ]);
-    const kernel = await bootKernel(configPath, { options: { workspaceRoot: root } });
+    const kernel = await bootKernel(configPath, { options: {...workspaceContextOptions(root)} });
 
     t.after(async () => {
       if (kernel.lifecycleState === 'RUNNING') {
@@ -248,7 +249,7 @@ describe('Brand Registry in a booted kernel', () => {
       }
     });
 
-    await kernel.boot({ options: { workspaceRoot: root, history: { inMemory: true } } });
+    await kernel.boot({ options: {...workspaceContextOptions(root), history: { inMemory: true } } });
 
     const registry = kernel.requestAccess<IBrandRegistry>(caller(root), BrandRegistryToken);
     const scope = registry.getScope(PLUGIN_MANAGER_SCOPE_NAME);

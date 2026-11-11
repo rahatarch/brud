@@ -4,6 +4,7 @@
  * Boots a real standard kernel with real leaf plugins, attaches the MCP bridge
  * through a recording `IMcpTransport`, and exposes the live tool registry.
  */
+import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -102,7 +103,7 @@ export async function bootBridgeHarness(
     initialPlugins: [...plugins, bridge],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const caller = { callerId: 'verification.mcp', tier: 'core' as const, workspaceRoot: root };
   const tools = kernel.requestAccess(caller, BrudToolsToken);

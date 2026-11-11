@@ -18,6 +18,7 @@ import type { IKernelAccessBroker } from '../contracts/accessBroker.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../contracts/serviceToken.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const SAMPLE_TOKEN = createToken<string>('sample.config');
 const CAP_TOKEN = createToken<string>('required.capability');
@@ -25,7 +26,7 @@ const CAP_TOKEN = createToken<string>('required.capability');
 function createMinimalContext(overrides?: Partial<ExecutionContext>): ExecutionContext {
   return {
     sessionId: 'test-session',
-    options: { workspaceRoot: '/tmp' },
+    options: {...workspaceContextOptions('/tmp')},
     callDepth: 0,
     resolve: <T>(_token: Token<T>) => { throw new Error('unresolved'); },
     invoke: async <T1, T2>(_kind: string, _input: T1) => ({ status: 'skipped' as const }),
@@ -345,11 +346,11 @@ describe('BrudKernel runtime options bag', () => {
     const handler: OperationHandler<void, string> = {
       kind: 'test_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.options['workspaceRoot'] as string };
+        return { status: 'success', data: ctx.options['workspace.root'] as string };
       },
     };
     kernel.operations.register(handler);
-    await kernel.boot({ options: { workspaceRoot: customRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(customRoot)} });
     const result = await kernel.execute<void, string>('test_workspace', undefined);
     assert.strictEqual(result.status, 'success');
     assert.strictEqual(result.data, customRoot);
@@ -360,7 +361,7 @@ describe('BrudKernel runtime options bag', () => {
     const inner: OperationHandler<void, string> = {
       kind: 'inner_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.options['workspaceRoot'] as string };
+        return { status: 'success', data: ctx.options['workspace.root'] as string };
       },
     };
     const outer: OperationHandler<void, string> = {
@@ -375,7 +376,7 @@ describe('BrudKernel runtime options bag', () => {
     };
     kernel.operations.register(inner);
     kernel.operations.register(outer);
-    await kernel.boot({ options: { workspaceRoot: customRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(customRoot)} });
     const result = await kernel.execute<void, string>('outer_workspace', undefined);
     assert.strictEqual(result.status, 'success');
     assert.strictEqual(result.data, customRoot);
@@ -483,7 +484,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
   const callerContext: ServiceContext = {
     callerId: 'test-suite',
     tier: 'userland',
-    options: { workspaceRoot },
+    options: {...workspaceContextOptions(workspaceRoot)},
   };
 
   it('boots services, resolves them, and shuts down cleanly', async () => {
@@ -496,7 +497,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       onFactory: (context) => {
         assert.strictEqual(context.callerId, 'kernel');
         assert.strictEqual(context.tier, 'core');
-        assert.strictEqual(context.options['workspaceRoot'], workspaceRoot);
+        assert.strictEqual(context.options['workspace.root'], workspaceRoot);
         events.push('factory:alpha');
       },
       onInitialize: () => events.push('init:alpha'),
@@ -509,7 +510,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.strictEqual(kernel.lifecycleState, 'RUNNING');
     assert.strictEqual(kernel.hasService(alpha), true);
@@ -558,7 +559,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       onInitialize: () => events.push('init:a'),
     }));
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.deepStrictEqual(events, [
       'factory:a',
@@ -581,7 +582,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     kernel.register(probeDescriptor({ token: b, dependencies: [a], onDispose: () => disposed.push('b') }));
     kernel.register(probeDescriptor({ token: c, dependencies: [b], onDispose: () => disposed.push('c') }));
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
     await kernel.shutdown();
 
     assert.deepStrictEqual(disposed, ['c', 'b', 'a']);
@@ -611,7 +612,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     }));
 
     await assert.rejects(
-      () => kernel.boot({ options: { workspaceRoot } }),
+      () => kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.match(error.message, /init failed: broken/);
@@ -635,7 +636,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     const kernel = new BrudKernel();
     kernel.register(probeDescriptor({ token: probeToken('first') }));
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.throws(
       () => kernel.register(probeDescriptor({ token: probeToken('second') })),
@@ -647,11 +648,11 @@ describe('BrudKernel lifecycle orchestrator', () => {
     const kernel = new BrudKernel();
     kernel.register(probeDescriptor({ token: probeToken('single') }));
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
     await kernel.shutdown();
 
     await assert.rejects(
-      () => kernel.boot({ options: { workspaceRoot } }),
+      () => kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} }),
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
   });
@@ -659,10 +660,10 @@ describe('BrudKernel lifecycle orchestrator', () => {
   it('rejects booting twice without shutting down first', async () => {
     const kernel = new BrudKernel();
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     await assert.rejects(
-      () => kernel.boot({ options: { workspaceRoot } }),
+      () => kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} }),
       isLifecycleError('INVALID_LIFECYCLE_STATE'),
     );
   });
@@ -684,7 +685,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
     }));
 
     await assert.rejects(
-      () => kernel.boot({ options: { workspaceRoot } }),
+      () => kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} }),
       (error: unknown) => {
         assert.ok(error instanceof MissingDependencyError);
         assert.strictEqual(error.missingTokenId, 'ghost');
@@ -699,7 +700,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
   it('throws ServiceNotFoundError for unknown services after boot', async () => {
     const kernel = new BrudKernel();
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.throws(
       () => kernel.requestAccess(callerContext, probeToken('absent')),
@@ -732,7 +733,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       }),
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     await assert.rejects(() => kernel.shutdown(), /dispose failed: b/);
 
@@ -775,7 +776,7 @@ function runningProbeDescriptor(options: RunningProbeOptions): ServiceDescriptor
 
 describe('BrudKernel onRunning hook', () => {
   const workspaceRoot = '/tmp/brud-kernel-running';
-  const hookCaller: ServiceContext = { callerId: 'hook', tier: 'core', options: { workspaceRoot } };
+  const hookCaller: ServiceContext = { callerId: 'hook', tier: 'core', options: {...workspaceContextOptions(workspaceRoot)} };
 
   it('runs once per service, in dependency order, after every initialize, while RUNNING with broker access', async () => {
     const kernel = new BrudKernel();
@@ -802,7 +803,7 @@ describe('BrudKernel onRunning hook', () => {
       },
     }));
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     assert.deepStrictEqual(events, ['init:a', 'init:b', 'running:a', 'running:b']);
     assert.deepStrictEqual(observedStates, ['RUNNING', 'RUNNING']);
@@ -835,7 +836,7 @@ describe('BrudKernel onRunning hook', () => {
     kernel.register(runningProbeDescriptor({ token: c, dependencies: [b], events }));
 
     await assert.rejects(
-      () => kernel.boot({ options: { workspaceRoot } }),
+      () => kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} }),
       (error: unknown) => {
         assert.ok(error instanceof Error);
         assert.strictEqual(error.message, 'running failed: b');
@@ -877,7 +878,7 @@ describe('BrudKernel onRunning hook', () => {
       },
     }));
 
-    const booting = kernel.boot({ options: { workspaceRoot } });
+    const booting = kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
     await entered;
 
     await assert.rejects(

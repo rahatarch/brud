@@ -13,6 +13,7 @@ import { WorkspaceService } from '../orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { WORKSPACE_SERVICE_TIER, createWorkspaceDescriptor } from './descriptor.js';
 import { WorkspaceToken } from './tokens.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 let WORKSPACE_ROOT = '';
 let clientRoot = '';
@@ -79,7 +80,7 @@ describe('createWorkspaceDescriptor', () => {
     });
 
     await kernel.boot({
-      options: { 'workspace.root': WORKSPACE_ROOT, workspaceRoot: WORKSPACE_ROOT },
+      options: {...workspaceContextOptions(WORKSPACE_ROOT)},
     });
 
     try {

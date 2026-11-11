@@ -13,6 +13,7 @@ import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBru
 import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import { WorkspaceViolationError } from '../../../services/WorkspaceService/contracts/errors.js';
 import { safeRm } from '../support/cleanup.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const PLUGINS_ROOT = resolve(HERE, '../../../../plugins');
@@ -84,12 +85,12 @@ describe('UserPrompts path isolation invariant', () => {
     });
 
     try {
-      await kernel.boot({ options: { workspaceRoot: root } });
+      await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
       const caller: ServiceContext = {
         callerId: 'test.userprompts-path-isolation',
         tier: 'core',
-        options: { workspaceRoot: root },
+        options: {...workspaceContextOptions(root)},
       };
       const manager = kernel.requestAccess(caller, PluginManagerToken);
       const fileSystem = kernel.requestAccess(caller, FileSystemToken);

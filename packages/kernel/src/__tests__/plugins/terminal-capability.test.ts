@@ -23,6 +23,7 @@ import { createTestPluginContext } from '../support/testApiRegistry.js';
 import type { IPluginLogger } from '../../../services/PluginManager/contracts/IPluginContext.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudToolsService } from '../../../services/BrudTools/contracts/index.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 interface CapturedPlugin {
   readonly plugin: IBrudPlugin;
@@ -159,9 +160,9 @@ before(async () => {
     initialPlugins: [without.plugin, first.plugin, second.plugin],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
   tools = kernel.requestAccess(
-    { callerId: 'verification.capability', tier: 'core', options: { workspaceRoot: root } },
+    { callerId: 'verification.capability', tier: 'core', options: {...workspaceContextOptions(root)} },
     BrudToolsToken,
   );
 });

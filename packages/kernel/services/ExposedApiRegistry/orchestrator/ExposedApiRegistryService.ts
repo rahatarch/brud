@@ -163,12 +163,12 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
       : {
           callerId: access.callerId,
           tier: access.tier,
-          options: { workspaceRoot: access.workspaceRoot },
+          options: { 'workspace.root': access.workspaceRoot },
           ...(access.partitionPrefix === undefined
             ? {}
             : { partitionPrefix: access.partitionPrefix }),
         };
-    const callerWorkspaceRoot = accessContext.options['workspaceRoot'];
+    const callerWorkspaceRoot = accessContext.options['workspace.root'];
 
     const caller: ExposedApiCaller = {
       capabilities,

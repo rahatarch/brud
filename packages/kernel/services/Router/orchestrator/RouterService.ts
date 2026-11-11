@@ -14,7 +14,8 @@ import {
   RouterRegistrationClosedError,
   RouterUnknownServiceError,
 } from '../contracts/errors.js';
-import { requireWorkspaceRoot } from '../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
+import { ROUTER_ROOT_CONTEXT_FIELD } from '../bootOptions.js';
 import type { IRouterService } from '../contracts/IRouterService.js';
 import type {
   BrudDispatchContext,
@@ -292,8 +293,9 @@ export class RouterService implements IRouterService, IServiceLifecycle {
 
   private buildDispatchContext(options: BrudRouteOptions): BrudDispatchContext {
     return {
-      workspaceRoot: options.workspaceRoot ?? requireWorkspaceRoot(
+      workspaceRoot: options.workspaceRoot ?? requireContextString(
         this.dependencies.callerContext.options,
+        ROUTER_ROOT_CONTEXT_FIELD,
         this.dependencies.callerContext.callerId,
       ),
       callerId: options.callerId ?? this.dependencies.callerContext.callerId,

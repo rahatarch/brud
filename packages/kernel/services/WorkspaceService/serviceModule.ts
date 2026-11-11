@@ -22,16 +22,6 @@ export function createService(context: KernelServiceModuleContext) {
     },
   ]);
 
-  // Legacy hosts still place the root under the flat key. Mirror it into the
-  // namespace so the declared contract and the runtime read agree.
-  if (context.options[WORKSPACE_ROOT_CONTEXT_FIELD] === undefined) {
-    const legacyRoot = context.options['workspaceRoot'];
-
-    if (typeof legacyRoot === 'string' && legacyRoot.length > 0) {
-      context.options[WORKSPACE_ROOT_CONTEXT_FIELD] = legacyRoot;
-    }
-  }
-
   const workspaceRoot = requireNamespacedWorkspaceRoot(
     context.options,
     'brud.core.workspace',

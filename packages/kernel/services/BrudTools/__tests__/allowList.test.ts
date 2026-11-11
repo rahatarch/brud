@@ -15,6 +15,7 @@ import type {
 } from '../contracts/IBrudToolsService.js';
 import { BrudToolsToken } from '../descriptor/tokens.js';
 import { BrudToolsService } from '../orchestrator/BrudToolsService.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 const CONTEXT: IPluginExecutionContext = { workspaceRoot: '/workspace', callerId: 'test' };
 
@@ -118,7 +119,7 @@ describe('BrudTools allow-list kernel wiring', () => {
     return {
       callerId: 'kernel',
       tier: 'kernel',
-      options: { workspaceRoot },
+      options: {...workspaceContextOptions(workspaceRoot)},
       ...overrides,
     };
   }
@@ -129,7 +130,7 @@ describe('BrudTools allow-list kernel wiring', () => {
       settings: { store: new InMemoryConfigStore() },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     try {
       let ran = 0;

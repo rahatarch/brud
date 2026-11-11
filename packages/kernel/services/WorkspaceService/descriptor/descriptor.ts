@@ -22,7 +22,7 @@ export const WORKSPACE_SERVICE_TIER: ServiceTier = 'core';
 export interface WorkspaceDescriptorOptions {
   /**
    * Declared roots, in routing order. Defaults to the single boot workspace
-   * root supplied to `kernel.boot({ options: { workspaceRoot } })` or by the
+   * root supplied to `kernel.boot({ options: { 'workspace.root': root } })` or by the
    * service module's `primaryRoot` option.
    */
   readonly roots?: readonly string[];

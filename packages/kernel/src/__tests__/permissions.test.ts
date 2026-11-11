@@ -9,6 +9,7 @@ import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import type { PluginPermission } from '../../services/PluginManager/contracts/permissions.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const SENTINEL = 'handler-ran.txt';
 const TOOL = 'acme.read_file';
@@ -63,7 +64,7 @@ function permissionPlugin(options: PermissionPluginOptions): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'permissions', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'permissions', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 async function readResult(path: string): Promise<OperationResult> {

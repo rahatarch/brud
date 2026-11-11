@@ -103,12 +103,12 @@ describe('A10 protected-path denylist (V-9)', () => {
     const coreCaller: ServiceContext = {
       callerId: 'some.core.service',
       tier: 'core',
-      options: { workspaceRoot: root },
+      options: { 'filesystem.root': root },
     };
     const historyCaller: ServiceContext = {
       callerId: 'brud.core.universalHistory',
       tier: 'core',
-      options: { workspaceRoot: root },
+      options: { 'filesystem.root': root },
     };
 
     assert.ok(descriptor.project);
@@ -158,12 +158,12 @@ describe('A10 protected-path denylist (V-9)', () => {
     const kernelProjection = descriptor.project(instance, {
       callerId: 'kernel.host',
       tier: 'kernel',
-      options: { workspaceRoot: root },
+      options: { 'filesystem.root': root },
     });
     const userlandProjection = descriptor.project(instance, {
       callerId: 'plugin.demo',
       tier: 'userland',
-      options: { workspaceRoot: root },
+      options: { 'filesystem.root': root },
     });
 
     assert.notEqual(kernelProjection, instance);

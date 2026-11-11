@@ -8,6 +8,7 @@ import { TerminalToken } from '../descriptor/tokens.js';
 import type { ITerminalService, TerminalChunkCallback } from '../contracts/ITerminalService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 let workspaceRoot = '';
 
@@ -20,7 +21,7 @@ after(async () => {
 });
 
 function caller(overrides?: Partial<ServiceContext>): ServiceContext {
-  return { callerId: 'test', tier: 'core', options: { workspaceRoot }, ...overrides };
+  return { callerId: 'test', tier: 'core', options: { 'terminal.root': workspaceRoot }, ...overrides };
 }
 
 describe('TerminalService bootstrap registration', () => {
@@ -29,7 +30,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const terminal = kernel.requestAccess(caller(), TerminalToken);
     const validation = kernel.requestAccess(caller(), ValidationToken);
@@ -46,7 +47,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const terminal = kernel.requestAccess<ITerminalService>(
       caller(),
@@ -74,7 +75,7 @@ describe('TerminalService bootstrap registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot } });
+    await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
 
     const terminal = kernel.requestAccess<ITerminalService>(
       caller(),

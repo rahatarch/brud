@@ -22,7 +22,8 @@ import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../../Exp
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
-import { requireWorkspaceRoot } from '../../../WorkspaceService/bootOptions.js';
+import { requireContextString } from '../../../../src/contracts/contextContract.js';
+import { HISTORY_ROOT_CONTEXT_FIELD } from '../../bootOptions.js';
 import { JournalAdapter } from '../adapters/JournalAdapter.js';
 import { PluginHistoryFacade, namespaceHistoryFor } from '../adapters/PluginHistoryFacade.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
@@ -63,8 +64,9 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
     tier: 'core',
     dependencies: [FileSystemToken],
     factory: (context: ServiceContext, broker: IKernelAccessBroker): PluginHistoryFacade => {
-      const workspaceRoot = requireWorkspaceRoot(
+      const workspaceRoot = requireContextString(
         context.options,
+        HISTORY_ROOT_CONTEXT_FIELD,
         UniversalHistoryToken.id,
       );
       const historyRoot = join(workspaceRoot, '.brud', 'history');

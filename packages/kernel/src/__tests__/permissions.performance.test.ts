@@ -6,6 +6,7 @@ import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrud
 import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
 import { bootRealKernel } from './support/realKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const NO_PERMISSIONS = 'perf.no_permissions';
 const WITH_PERMISSIONS = 'perf.with_permissions';
@@ -46,7 +47,7 @@ function plugin(): IBrudPlugin {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'performance', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'performance', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function median(values: readonly number[]): number {

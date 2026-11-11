@@ -19,6 +19,7 @@ import { createStandardKernel } from '../../../src/bootstrap/index.js';
 import { ValidationToken } from '../descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 const ROOT = '/workspace';
 
@@ -748,7 +749,7 @@ describe('ValidationService — standard kernel registration', () => {
       history: { inMemory: true },
     });
 
-    await kernel.boot({ options: { workspaceRoot: root } });
+    await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
     try {
       const ids = kernel.listServices().map((entry) => entry.id);
@@ -759,7 +760,7 @@ describe('ValidationService — standard kernel registration', () => {
       assert.ok(ids.indexOf('brud.core.validation') < ids.indexOf('brud.core.history'));
 
       const validation = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
+        { callerId: 'test.runner', tier: 'core', options: {...workspaceContextOptions(root)} },
         ValidationToken,
       );
 
@@ -768,11 +769,11 @@ describe('ValidationService — standard kernel registration', () => {
       assert.equal(Object.isFrozen(validation.getPolicy()), true);
 
       const workspace = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
+        { callerId: 'test.runner', tier: 'core', options: {...workspaceContextOptions(root)} },
         WorkspaceToken,
       );
       const settings = kernel.requestAccess(
-        { callerId: 'test.runner', tier: 'core', options: { workspaceRoot: root } },
+        { callerId: 'test.runner', tier: 'core', options: {...workspaceContextOptions(root)} },
         SettingsReaderToken,
       );
 

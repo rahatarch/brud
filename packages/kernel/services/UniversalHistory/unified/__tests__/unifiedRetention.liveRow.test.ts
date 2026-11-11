@@ -28,6 +28,7 @@ import { createStandardKernel } from '../../../../src/bootstrap/index.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
 
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 const DAY = 86_400_000;
 const LINE_TIMEOUT_MS = 120_000;
 
@@ -106,7 +107,7 @@ const [root, inbox, outbox] = process.argv.slice(2);
 const emit = (payload) => appendFileSync(outbox, JSON.stringify(payload) + String.fromCharCode(10));
 
 const kernel = createStandardKernel();
-await kernel.boot({ options: { workspaceRoot: root } });
+await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root } });
 const caller = { callerId: 'retention.liveRow.worker', tier: 'core', workspaceRoot: root };
 const journal = kernel.requestAccess(caller, HistoryToken);
 const fileSystem = kernel.requestAccess(caller, FileSystemToken);
@@ -321,9 +322,9 @@ interface Parent {
 
 async function bootParent(context: TestContext, workspaceRoot: string): Promise<Parent> {
   const kernel = createStandardKernel();
-  await kernel.boot({ options: { workspaceRoot } });
+  await kernel.boot({ options: {...workspaceContextOptions(workspaceRoot)} });
   context.after(async () => { await kernel.shutdown(); });
-  const caller: ServiceContext = { callerId: 'retention.liveRow.parent', tier: 'core', options: { workspaceRoot } };
+  const caller: ServiceContext = { callerId: 'retention.liveRow.parent', tier: 'core', options: {...workspaceContextOptions(workspaceRoot)} };
   return {
     kernel,
     caller,

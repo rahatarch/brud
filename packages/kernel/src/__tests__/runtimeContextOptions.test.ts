@@ -5,10 +5,7 @@ import { createServiceToken } from '../contracts/serviceToken.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import type { OperationHandler, OperationResult } from '../contracts/handler.js';
-import {
-  MissingWorkspaceRootError,
-  requireWorkspaceRoot,
-} from '../../services/WorkspaceService/bootOptions.js';
+import { ContextContractError, requireContextString } from '../contracts/contextContract.js';
 
 interface OptionProbe {
   workspaceRoot(): string;
@@ -26,7 +23,11 @@ function probeDescriptor(): ServiceDescriptor<OptionProbe> {
     tier: 'core',
     dependencies: [],
     factory: (context: ServiceContext): OptionProbe => {
-      const workspaceRoot = requireWorkspaceRoot(context.options, PROBE_TOKEN.id);
+      const workspaceRoot = requireContextString(
+        context.options,
+        'workspace.root',
+        PROBE_TOKEN.id,
+      );
 
       return {
         workspaceRoot: (): string => workspaceRoot,
@@ -37,17 +38,17 @@ function probeDescriptor(): ServiceDescriptor<OptionProbe> {
 }
 
 describe('runtime context options bag', () => {
-  it('lets a service read context.options.workspaceRoot at runtime', async () => {
+  it('lets a service read the namespaced workspace root at runtime', async () => {
     const kernel = new BrudKernel();
     kernel.register(probeDescriptor());
 
-    await kernel.boot({ options: { workspaceRoot: '/runtime/workspace' } });
+    await kernel.boot({ options: { 'workspace.root': '/runtime/workspace' } });
 
     try {
       const caller: ServiceContext = {
         callerId: 'test.runtime',
         tier: 'core',
-        options: { workspaceRoot: '/runtime/workspace' },
+        options: { 'workspace.root': '/runtime/workspace' },
       };
       const service = kernel.requestAccess(caller, PROBE_TOKEN);
 
@@ -66,7 +67,11 @@ describe('runtime context options bag', () => {
         factoryBag = context.options;
 
         return {
-          workspaceRoot: (): string => requireWorkspaceRoot(context.options, PROBE_TOKEN.id),
+          workspaceRoot: (): string => requireContextString(
+            context.options,
+            'workspace.root',
+            PROBE_TOKEN.id,
+          ),
           licenseKey: (): unknown => context.options['licenseKey'],
         };
       },
@@ -85,14 +90,14 @@ describe('runtime context options bag', () => {
     kernel.operations.register(handler);
 
     await kernel.boot({
-      options: { workspaceRoot: '/runtime/workspace', licenseKey: 'license-abc' },
+      options: { 'workspace.root': '/runtime/workspace', licenseKey: 'license-abc' },
     });
 
     try {
       const caller: ServiceContext = {
         callerId: 'test.runtime',
         tier: 'core',
-        options: { workspaceRoot: '/runtime/workspace', licenseKey: 'license-abc' },
+        options: { 'workspace.root': '/runtime/workspace', licenseKey: 'license-abc' },
       };
       const service = kernel.requestAccess(caller, PROBE_TOKEN);
       assert.equal(service.licenseKey(), 'license-abc');
@@ -112,11 +117,11 @@ describe('runtime context options bag', () => {
     await assert.rejects(
       kernel.boot({ options: {} }),
       (error: unknown) => {
-        assert.ok(error instanceof MissingWorkspaceRootError);
-        assert.equal(error.name, 'MissingWorkspaceRootError');
-        assert.equal(error.code, 'WORKSPACE_ROOT_MISSING');
-        assert.match(error.message, /test\.runtime\.options\.probe/u);
-        assert.match(error.message, /options\.workspaceRoot/u);
+        assert.ok(error instanceof ContextContractError);
+        assert.equal(error.name, 'ContextContractError');
+        assert.equal(error.field, 'workspace.root');
+        assert.equal(error.service, 'test.runtime.options.probe');
+        assert.match(error.message, /workspace\.root/u);
         return true;
       },
     );

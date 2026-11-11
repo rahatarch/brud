@@ -23,6 +23,7 @@ import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { UnifiedSessionNotRevertibleError } from '../engine/errors.js';
+import { workspaceContextOptions } from '../../../../src/__tests__/support/workspaceContext.js';
 
 const sha = (data: Uint8Array | string): string => createHash('sha256').update(data).digest('hex');
 const LARGE_BEFORE = 'a'.repeat(70 * 1024);
@@ -40,8 +41,8 @@ async function boot(root: string): Promise<Booted> {
   const warnings: { message: string; meta?: Record<string, unknown> }[] = [];
   const logger: KernelLogger = { warn: (message, meta) => warnings.push({ message, ...(meta === undefined ? {} : { meta }) }) };
   const kernel = createStandardKernel({ logger });
-  await kernel.boot({ options: { workspaceRoot: root } });
-  const caller: ServiceContext = { callerId: 'import.test', tier: 'core', options: { workspaceRoot: root } };
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
+  const caller: ServiceContext = { callerId: 'import.test', tier: 'core', options: {...workspaceContextOptions(root)} };
   return {
     kernel,
     fs: kernel.requestAccess(caller, FileSystemToken),

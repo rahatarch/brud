@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const [workspaceRoot, workerId, outbox] = process.argv.slice(2);
 
@@ -41,10 +42,10 @@ const kernel = createStandardKernel({
   initialPlugins: [plugin],
 });
 
-await kernel.boot({ options: { workspaceRoot } });
+await kernel.boot({ options: workspaceContextOptions(workspaceRoot) });
 
 const tools = kernel.requestAccess(
-  { callerId: `worker.${workerId}`, tier: 'core', options: { workspaceRoot } },
+  { callerId: `worker.${workerId}`, tier: 'core', options: workspaceContextOptions(workspaceRoot) },
   BrudToolsToken,
 );
 

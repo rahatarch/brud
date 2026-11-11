@@ -13,6 +13,7 @@ import { KernelRegistry } from '../engine/KernelRegistry.js';
 import { KernelAccessBroker } from '../engine/KernelAccessBroker.js';
 import { LifecycleStateError, ServiceNotFoundError } from '../engine/errors.js';
 import type { KernelLifecycleState } from '../engine/state.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 interface SensitiveService {
   read(): string;
@@ -25,7 +26,7 @@ function caller(callerId: string): ServiceContext {
   return {
     callerId,
     tier: 'userland',
-    options: { workspaceRoot: '/tmp/brud-policy-test' },
+    options: {...workspaceContextOptions('/tmp/brud-policy-test')},
   };
 }
 

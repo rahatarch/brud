@@ -13,6 +13,7 @@ import { InMemoryConfigStore } from '../../services/SettingsService/storage/InMe
 import { createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 let WORKSPACE_ROOT = '';
 
@@ -28,7 +29,7 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'kernel',
     tier: 'kernel',
-    options: { workspaceRoot: WORKSPACE_ROOT },
+    options: {...workspaceContextOptions(WORKSPACE_ROOT)},
     ...overrides,
   };
 }
@@ -48,7 +49,7 @@ describe('createStandardKernel settings boot', () => {
     });
     const kernel = createKernel(store);
 
-    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
+    await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -75,7 +76,7 @@ describe('createStandardKernel settings boot', () => {
     });
     const kernel = createKernel(store);
 
-    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
+    await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -95,7 +96,7 @@ describe('createStandardKernel settings boot', () => {
   it('exposes only the reader to userland through the standard kernel', async () => {
     const kernel = createKernel(new InMemoryConfigStore());
 
-    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
+    await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
 
     try {
       const reader = kernel.requestAccess(

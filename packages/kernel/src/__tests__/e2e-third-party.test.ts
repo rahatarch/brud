@@ -13,6 +13,7 @@ import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPl
 import type { PluginPermission } from '../../services/PluginManager/contracts/permissions.js';
 import { bootRealKernel } from './support/realKernel.js';
 import { ParserRouterHarness } from './support/parserRouterHarness.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const PLUGIN_ID = 'com.test.custom-plugin';
 const TOOL_NAME = 'deploy_lambda';
@@ -92,7 +93,7 @@ function customPlugin(
 }
 
 function serviceCaller(root: string): ServiceContext {
-  return { callerId: 'e2e.third-party', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'e2e.third-party', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function dispatchContext(root: string, plugin: IBrudPlugin): IPluginExecutionContext {

@@ -7,6 +7,7 @@ import type {
   IPluginExecutionContext,
 } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { bootRealKernel } from '../support/realKernel.js';
+import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 const STRICT_SCHEMA: Record<string, unknown> = {
   type: 'object',
@@ -26,7 +27,7 @@ describe('dynamic dispatch contract invariant', () => {
     });
 
     const tools = kernel.requestAccess<IBrudToolsService>(
-      { callerId: 'test.dispatch-contract', tier: 'core', options: { workspaceRoot: root } },
+      { callerId: 'test.dispatch-contract', tier: 'core', options: {...workspaceContextOptions(root)} },
       BrudToolsToken,
     );
     const context: IPluginExecutionContext = {

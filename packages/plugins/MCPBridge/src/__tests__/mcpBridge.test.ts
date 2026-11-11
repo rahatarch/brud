@@ -1,3 +1,4 @@
+import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
@@ -98,7 +99,7 @@ async function bootBridge(): Promise<Harness> {
     initialPlugins: [bridge, echoPlugin],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const transport = new FakeMcpTransport();
   await bridge.onTransportAttach?.(transport);

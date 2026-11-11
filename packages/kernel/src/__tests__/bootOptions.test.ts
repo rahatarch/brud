@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { createStandardKernel } from '../bootstrap/index.js';
 import { MissingWorkspaceRootError } from '../../services/WorkspaceService/bootOptions.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 describe('kernel boot options purity', () => {
   it('fails from the Workspace Service, not the Core, when booted with an empty bag', async () => {
@@ -13,7 +14,7 @@ describe('kernel boot options purity', () => {
         assert.ok(error instanceof MissingWorkspaceRootError);
         assert.equal(error.name, 'MissingWorkspaceRootError');
         assert.match(error.message, /brud\.core\.workspace/u);
-        assert.match(error.message, /options\.workspaceRoot/u);
+        assert.match(error.message, /options\['workspace\.root'\]/u);
         assert.doesNotMatch(error.name, /BrudKernel|LifecycleStateError/u);
         return true;
       },
@@ -24,7 +25,7 @@ describe('kernel boot options purity', () => {
     const kernel = createStandardKernel({ history: { inMemory: true } });
 
     await kernel.boot({
-      options: { workspaceRoot: process.cwd(), history: { inMemory: true } },
+      options: {...workspaceContextOptions(process.cwd()), history: { inMemory: true } },
     });
 
     try {

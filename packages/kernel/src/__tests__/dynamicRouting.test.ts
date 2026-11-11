@@ -26,6 +26,7 @@ import {
   type ITestQueryService,
   type TestQueryBinding,
 } from './support/testQueryService.js';
+import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const ROGUE_QUERY_TOKEN = createServiceToken<ITestQueryService>(
   'test.peer.query.rogue',
@@ -51,7 +52,7 @@ interface PreparedKernel {
 }
 
 function caller(root: string): ServiceContext {
-  return { callerId: 'kernel', tier: 'core', options: { workspaceRoot: root } };
+  return { callerId: 'kernel', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
 function brud(...blocks: readonly string[]): string {
@@ -107,7 +108,7 @@ async function compose(
 ): Promise<PreparedKernel> {
   const prepared = await prepare(t, options);
 
-  await prepared.kernel.boot({ options: { workspaceRoot: prepared.root } });
+  await prepared.kernel.boot({ options: {...workspaceContextOptions(prepared.root)} });
 
   return prepared;
 }
@@ -190,7 +191,7 @@ describe('Dynamic routing with a synthetic peer service and plugin', () => {
     const { kernel, root } = await prepare(t, { withService: true, rogue: true });
 
     await assert.rejects(
-      kernel.boot({ options: { workspaceRoot: root } }),
+      kernel.boot({ options: {...workspaceContextOptions(root)} }),
       (error: unknown) => {
         assert.ok(error instanceof RouterKindCollisionError);
         assert.equal(error.code, 'ROUTER_KIND_COLLISION');

@@ -5,6 +5,7 @@
  * with the real `brud.core.terminal` service and the real validation gate. It
  * imports only the plugin's public factory; no handler is stubbed.
  */
+import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,7 +61,7 @@ export async function bootTerminalHarness(
     initialPlugins: [createTerminalPlugin()],
   });
 
-  await kernel.boot({ options: { workspaceRoot: root } });
+  await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const caller: IPluginExecutionContext = {
     workspaceRoot: root,
