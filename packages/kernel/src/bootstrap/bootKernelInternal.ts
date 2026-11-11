@@ -3,6 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
+import {
+  ContextContract,
+  type ContextFieldDeclaration,
+  type ContextScopeDeclaration,
+} from '../contracts/contextContract.js';
 import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
@@ -106,8 +111,18 @@ export function createDeferredKernel(
 ): BrudKernel {
   let loadedServices: readonly LoadedService[] = [];
   let serviceContext: KernelServiceModuleContext | undefined;
+  let activeServiceOwner = 'brud.kernel.composition';
+  const contextContract = new ContextContract();
+
+  function declareContextFields(
+    scopeOrDeclaration: string | ContextScopeDeclaration,
+    fields?: readonly ContextFieldDeclaration[],
+  ): void {
+    contextContract.declare(activeServiceOwner, scopeOrDeclaration, fields);
+  }
 
   const kernel = new BrudKernel({
+    contextContract,
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       const context = serviceContext;
 
@@ -119,12 +134,18 @@ export function createDeferredKernel(
         const pin = pinBootPoliciesHook(loaded.module);
 
         if (pin !== undefined) {
+          activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
           await pin(context, instances);
         }
       }
 
       for (const loaded of loadedServices) {
-        registerBootRegistrantsHook(loaded.module)?.(context, instances);
+        const registrant = registerBootRegistrantsHook(loaded.module);
+
+        if (registrant !== undefined) {
+          activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
+          registrant(context, instances);
+        }
       }
     },
   });
@@ -147,12 +168,15 @@ export function createDeferredKernel(
         options: contextOptions,
         ...(contextLogger === undefined ? {} : { logger: contextLogger }),
         shared: {},
+        declareContextFields,
+        getContextSchema: () => contextContract.schema(),
       };
 
       loadedServices = services;
       serviceContext = context;
 
       for (const loaded of services) {
+        activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
         const descriptor = descriptorFromModule(
           loaded.module,
           loaded.entry,

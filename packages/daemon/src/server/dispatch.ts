@@ -112,6 +112,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Re-validates the workspace options bag before building a caller context.
+ *
+ * Boot already validated the bag; this keeps the boundary explicit for hosts
+ * that attach a context after the handshake.
+ */
+function assertContextOptions(workspace: KernelWorkspace): void {
+  workspace.kernel.validateContextOptions?.(workspace.options);
+}
+
 function asParams(value: unknown): Record<string, unknown> {
   if (value === undefined || value === null) {
     return {};
@@ -358,6 +368,7 @@ export class RequestDispatcher {
     }
 
     const workspace = this.workspaceEntry(session);
+    assertContextOptions(workspace);
     const caller: ServiceContext = {
       callerId: session.connectionId,
       tier: 'core',
@@ -386,6 +397,7 @@ export class RequestDispatcher {
     }
 
     const workspace = this.workspaceEntry(session);
+    assertContextOptions(workspace);
     const caller: ServiceContext = {
       callerId: ACTION_MANAGER_CALLER_ID,
       tier: 'core',

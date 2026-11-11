@@ -38,7 +38,7 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
   return {
     callerId: 'test.workspace',
     tier: 'core',
-    options: { workspaceRoot: WORKSPACE_ROOT },
+    options: { 'workspace.root': WORKSPACE_ROOT },
     ...overrides,
   };
 }
@@ -78,7 +78,9 @@ describe('createWorkspaceDescriptor', () => {
       workspace: { port: realPort() },
     });
 
-    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
+    await kernel.boot({
+      options: { 'workspace.root': WORKSPACE_ROOT, workspaceRoot: WORKSPACE_ROOT },
+    });
 
     try {
       const ids = kernel.listServices().map((service) => service.id);
@@ -96,7 +98,7 @@ describe('createWorkspaceDescriptor', () => {
   it('builds a service over the boot workspace root', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ options: { workspaceRoot: `${WORKSPACE_ROOT}/` } });
+    await kernel.boot({ options: { 'workspace.root': `${WORKSPACE_ROOT}/` } });
 
     try {
       const workspace = kernel.requestAccess(caller(), WorkspaceToken);
@@ -114,7 +116,7 @@ describe('createWorkspaceDescriptor', () => {
   it('is resolvable by userland callers without widening authority', async () => {
     const kernel = createKernel();
 
-    await kernel.boot({ options: { workspaceRoot: WORKSPACE_ROOT } });
+    await kernel.boot({ options: { 'workspace.root': WORKSPACE_ROOT } });
 
     try {
       const workspace = kernel.requestAccess(caller({ tier: 'userland', callerId: 'plugin.demo' }), WorkspaceToken);
@@ -135,10 +137,10 @@ describe('createWorkspaceDescriptor', () => {
       port: realPort(),
     }));
 
-    await kernel.boot({ options: { workspaceRoot: serverRoot } });
+    await kernel.boot({ options: { 'workspace.root': serverRoot } });
 
     try {
-      const workspace = kernel.requestAccess(caller({ options: { workspaceRoot: serverRoot } }), WorkspaceToken);
+      const workspace = kernel.requestAccess(caller({ options: { 'workspace.root': serverRoot } }), WorkspaceToken);
 
       assert.deepEqual(workspace.roots, [clientRoot, serverRoot]);
       assert.equal(workspace.primaryRoot, serverRoot);
@@ -157,7 +159,7 @@ describe('createWorkspaceDescriptor', () => {
       port: realPort(),
     }));
 
-    await assert.rejects(kernel.boot({ options: { workspaceRoot: 'relative/path' } }));
+    await assert.rejects(kernel.boot({ options: { 'workspace.root': 'relative/path' } }));
     assert.equal(kernel.lifecycleState, 'DISPOSED');
   });
 });

@@ -349,7 +349,7 @@ export class WorkspaceRegistry {
   adopt(
     root: string,
     kernel: BrudKernel,
-    options: Readonly<Record<string, unknown>> = { workspaceRoot: root },
+    options: Readonly<Record<string, unknown>> = { 'workspace.root': root, workspaceRoot: root },
   ): KernelWorkspace {
     const existing = this.workspaces.get(root);
 
@@ -375,6 +375,7 @@ export class WorkspaceRegistry {
     initialPlugins: readonly IBrudPlugin[] | undefined,
   ): Promise<KernelWorkspace> {
     const options: Record<string, unknown> = {
+      'workspace.root': root,
       workspaceRoot: root,
       ...(this.storageDriver === undefined ? {} : { storageDriver: this.storageDriver }),
       ...(initialPlugins === undefined ? {} : { plugins: initialPlugins }),

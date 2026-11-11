@@ -36,6 +36,9 @@ export async function createKernel(options: KernelRuntimeOptions): Promise<BrudK
 
   return kernelModule.bootKernel(DEFAULT_BRUD_CONFIG_PATH, {
     options: {
+      // Namespaced contract field plus the legacy flat alias consumed by
+      // services that have not migrated yet.
+      'workspace.root': options.workspaceRoot,
       workspaceRoot: options.workspaceRoot,
       ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
       ...(options.initialPlugins === undefined ? {} : { plugins: options.initialPlugins }),

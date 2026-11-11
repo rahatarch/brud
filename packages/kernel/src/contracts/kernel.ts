@@ -1,4 +1,5 @@
 import type { IKernelAccessBroker } from './accessBroker.js';
+import type { ContextSchema } from './contextContract.js';
 import type { KernelLogger } from './lifecycle.js';
 import type { ServiceDescriptor } from './serviceDescriptor.js';
 
@@ -34,4 +35,15 @@ export interface IBrudKernel extends IKernelAccessBroker {
 
   /** Disposes every initialized service in reverse dependency order. */
   shutdown(): Promise<void>;
+
+  /** Returns the dynamically built context schema. */
+  getContextSchema(): ContextSchema;
+
+  /**
+   * Validates an options bag against the locked context schema.
+   *
+   * Used by hosts that build a fresh context after boot, such as a daemon
+   * attaching a client session.
+   */
+  validateContextOptions(options: Readonly<Record<string, unknown>>): void;
 }

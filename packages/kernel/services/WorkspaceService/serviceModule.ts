@@ -4,16 +4,38 @@ import type { IKernelAccessBroker } from '../../src/contracts/accessBroker.js';
 import type { ServiceContext } from '../../src/contracts/lifecycle.js';
 import type { WorkspaceDescriptorOptions } from './descriptor/descriptor.js';
 import { createWorkspaceDescriptor } from './descriptor/descriptor.js';
-import { MissingWorkspaceRootError } from './bootOptions.js';
+import {
+  WORKSPACE_CONTEXT_SCOPE,
+  WORKSPACE_ROOT_CONTEXT_FIELD,
+  requireNamespacedWorkspaceRoot,
+} from './bootOptions.js';
 
 const WORKSPACE_SLOT = 'brud.core.workspace.instance';
 
 export function createService(context: KernelServiceModuleContext) {
-  const workspaceRoot = context.options['workspaceRoot'];
+  context.declareContextFields(WORKSPACE_CONTEXT_SCOPE, [
+    {
+      name: WORKSPACE_ROOT_CONTEXT_FIELD,
+      type: 'string',
+      required: true,
+      description: 'Absolute root of the workspace served by this kernel.',
+    },
+  ]);
 
-  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
-    throw new MissingWorkspaceRootError();
+  // Legacy hosts still place the root under the flat key. Mirror it into the
+  // namespace so the declared contract and the runtime read agree.
+  if (context.options[WORKSPACE_ROOT_CONTEXT_FIELD] === undefined) {
+    const legacyRoot = context.options['workspaceRoot'];
+
+    if (typeof legacyRoot === 'string' && legacyRoot.length > 0) {
+      context.options[WORKSPACE_ROOT_CONTEXT_FIELD] = legacyRoot;
+    }
   }
+
+  const workspaceRoot = requireNamespacedWorkspaceRoot(
+    context.options,
+    'brud.core.workspace',
+  );
 
   const options = context.options['workspace'] as WorkspaceDescriptorOptions | undefined;
   const driver = options?.driver

@@ -13,7 +13,7 @@ import type {
 import { WorkspaceService } from '../orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { WorkspaceToken } from './tokens.js';
-import { requireWorkspaceRoot } from '../bootOptions.js';
+import { requireNamespacedWorkspaceRoot } from '../bootOptions.js';
 
 /** Tier assigned to the workspace descriptor. */
 export const WORKSPACE_SERVICE_TIER: ServiceTier = 'core';
@@ -82,9 +82,9 @@ export function createWorkspaceDescriptor(
       new WorkspaceService({
         roots: options?.roots !== undefined && options.roots.length > 0
           ? options.roots
-          : [requireWorkspaceRoot(context.options, WorkspaceToken.id)],
+          : [requireNamespacedWorkspaceRoot(context.options, WorkspaceToken.id)],
         primaryRoot: options?.primaryRoot
-          ?? requireWorkspaceRoot(context.options, WorkspaceToken.id),
+          ?? requireNamespacedWorkspaceRoot(context.options, WorkspaceToken.id),
         port,
         ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
         ...(options?.allowFilesystemRoot === undefined

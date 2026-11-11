@@ -1,4 +1,5 @@
 import type { ExecutionContext } from '../contracts/context.js';
+import type { ContextContract, ContextSchema } from '../contracts/contextContract.js';
 import type { OperationResult, PromptDescriptor } from '../contracts/handler.js';
 import type { IExecutionPipeline } from '../contracts/pipeline.js';
 import type { IServiceContainer, Token } from '../contracts/container.js';
@@ -55,9 +56,15 @@ export class BrudKernel implements IBrudKernel {
    */
   private bootOptions: Readonly<Record<string, unknown>> = {};
   private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
+  private readonly contextContract: ContextContract | undefined;
 
-  constructor(options?: { maxCallDepth?: number; bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void> }) {
+  constructor(options?: {
+    maxCallDepth?: number;
+    bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void>;
+    contextContract?: ContextContract;
+  }) {
     this.bootPinner = options?.bootPinner;
+    this.contextContract = options?.contextContract;
     this.services = new ServiceContainer();
     this.operations = new OperationRegistry();
     this.pipeline = new ExecutionPipeline(this.services);
@@ -84,6 +91,10 @@ export class BrudKernel implements IBrudKernel {
     if (this.state !== 'UNINITIALIZED') {
       throw new LifecycleStateError('boot', this.state, 'UNINITIALIZED');
     }
+
+    // The host bag is validated before any service is constructed. Services
+    // declared their requirements during composition.
+    this.contextContract?.validate(options.options ?? {});
 
     this.state = 'BOOTING';
     this.registry.freeze();
@@ -123,7 +134,12 @@ export class BrudKernel implements IBrudKernel {
         });
       }
 
+      // The pin phase is the last point where a service may declare a field.
+      // Validate again so declarations made there are enforced too.
+      this.contextContract?.validate(this.bootOptions);
+
       this.state = 'RUNNING';
+      this.contextContract?.lock();
     } catch (error: unknown) {
       await this.rollbackInitialized();
       this.state = 'DISPOSED';
@@ -185,6 +201,18 @@ export class BrudKernel implements IBrudKernel {
     if (firstError !== undefined) {
       throw firstError;
     }
+  }
+
+  getContextSchema(): ContextSchema {
+    if (this.contextContract !== undefined) {
+      return this.contextContract.schema();
+    }
+
+    return { locked: false, fields: [] };
+  }
+
+  validateContextOptions(options: Readonly<Record<string, unknown>>): void {
+    this.contextContract?.validate(options);
   }
 
   requestAccess<TService>(caller: ServiceContext, token: ServiceToken<TService>): TService {

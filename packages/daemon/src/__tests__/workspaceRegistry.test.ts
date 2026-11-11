@@ -67,10 +67,20 @@ class FakeKernel {
 
   public bootedAt: string | undefined;
 
-  async boot(options: { readonly options?: { readonly workspaceRoot?: unknown } }): Promise<void> {
+  public bootedAtNamespaced: string | undefined;
+
+  async boot(options: {
+    readonly options?: {
+      readonly workspaceRoot?: unknown;
+      readonly 'workspace.root'?: unknown;
+    };
+  }): Promise<void> {
     this.bootCount += 1;
     this.bootedAt = typeof options.options?.workspaceRoot === 'string'
       ? options.options.workspaceRoot
+      : undefined;
+    this.bootedAtNamespaced = typeof options.options?.['workspace.root'] === 'string'
+      ? options.options['workspace.root']
       : undefined;
     this.lifecycleState = 'RUNNING';
   }
@@ -121,6 +131,7 @@ describe('WorkspaceRegistry', () => {
       assert.equal(workspace.kernel.lifecycleState, 'RUNNING');
       assert.equal(kernels.get('/ws-a')?.bootCount, 1);
       assert.equal(kernels.get('/ws-a')?.bootedAt, '/ws-a');
+      assert.equal(kernels.get('/ws-a')?.bootedAtNamespaced, '/ws-a');
       assert.deepEqual(registry.list().map((entry) => entry.root), ['/ws-a']);
       assert.equal(registry.get('/ws-a'), workspace);
     } finally {

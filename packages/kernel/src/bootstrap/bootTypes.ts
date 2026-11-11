@@ -1,3 +1,8 @@
+import type {
+  ContextFieldDeclaration,
+  ContextSchema,
+  ContextScopeDeclaration,
+} from '../contracts/contextContract.js';
 import type { IServiceLifecycle, KernelLogger } from '../contracts/lifecycle.js';
 
 /**
@@ -57,6 +62,27 @@ export interface KernelServiceModuleContext {
    * construction. The core treats it as opaque and never reads named slots.
    */
   readonly shared: Record<string, unknown>;
+
+  /**
+   * Declares the context fields this service requires from the options bag.
+   *
+   * A service may only declare fields inside its own dot-separated namespace.
+   * Declarations are accepted during `createService` and `pinBootPolicies`, and
+   * are rejected once the kernel reaches `RUNNING`.
+   *
+   * @param scope - Namespace owned by the declaring service.
+   * @param fields - Fields to require or accept inside that namespace.
+   */
+  declareContextFields(
+    scope: string,
+    fields: readonly ContextFieldDeclaration[],
+  ): void;
+
+  /** Declares fields through a single scope-declaration record. */
+  declareContextFields(declaration: ContextScopeDeclaration): void;
+
+  /** Returns the schema collected so far, including fields from other services. */
+  getContextSchema(): ContextSchema;
 }
 
 /**

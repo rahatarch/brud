@@ -29,6 +29,20 @@ export type { IServiceContainer } from './container.js';
 
 export type { ExecutionContext } from './context.js';
 
+export type {
+  ContextContractErrorCode,
+  ContextFieldDeclaration,
+  ContextFieldSchema,
+  ContextFieldType,
+  ContextSchema,
+  ContextScopeDeclaration,
+} from './contextContract.js';
+export {
+  CONTEXT_FIELD_TYPES,
+  ContextContract,
+  ContextContractError,
+} from './contextContract.js';
+
 export type { OperationResult, OperationHandler, PromptDescriptor, PluginMetadata } from './handler.js';
 
 export type { CapabilityToken } from './capability.js';

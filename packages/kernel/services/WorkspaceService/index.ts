@@ -1,5 +1,6 @@
 export * from './contracts/IWorkspaceService.js';
 export * from './contracts/errors.js';
+export * from './bootOptions.js';
 export * from './model/canonicalization.js';
 export * from './model/pathRules.js';
 export * from './ports/StorageDriverPathPort.js';

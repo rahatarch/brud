@@ -230,6 +230,48 @@ describe('kernel core purity', () => {
     );
   });
 
+  it('keeps the context contract schema generic and free of service knowledge', async () => {
+    const contractFile = join(SOURCE_ROOT, 'contracts', 'contextContract.ts');
+    const bootFile = join(SOURCE_ROOT, 'bootstrap', 'bootKernelInternal.ts');
+    const engineFile = join(SOURCE_ROOT, 'engine', 'BrudKernel.ts');
+    const contractSource = await readFile(contractFile, 'utf8');
+    const bootSource = await readFile(bootFile, 'utf8');
+    const engineSource = await readFile(engineFile, 'utf8');
+
+    for (const specifier of importSpecifiers(contractSource)) {
+      assert.equal(
+        forbiddenImport(contractFile, specifier),
+        undefined,
+        `Context contract schema-building code must not import a concrete service or plugin: ${specifier}`,
+      );
+    }
+
+    // The enforcement code may know dotted namespaces and primitive types, but
+    // never a concrete field or domain.
+    const forbiddenFieldVocabulary = [
+      'workspaceRoot',
+      'workspace.root',
+      'filesystem.driver',
+      'terminal.shellPath',
+      'photoshop',
+      'licenseKey',
+    ] as const;
+
+    for (const [label, source] of [
+      ['contextContract.ts', contractSource],
+      ['bootKernelInternal.ts', bootSource],
+      ['BrudKernel.ts', engineSource],
+    ] as const) {
+      for (const term of forbiddenFieldVocabulary) {
+        assert.equal(
+          source.includes(term),
+          false,
+          `Context contract enforcement names the concrete field or domain "${term}" in ${label}`,
+        );
+      }
+    }
+  });
+
   it('detects a relative service import (guard canary)', () => {
     const file = join(SOURCE_ROOT, 'Canary.ts');
 
