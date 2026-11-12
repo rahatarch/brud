@@ -10,13 +10,29 @@ export {
   lastProjectionWins,
   type CoreApiName,
 } from './coreApis.js';
+export {
+  EXPOSED_API_NAME_PATTERN,
+  EXPOSED_API_ORIGINS,
+  EXPOSED_API_SCOPES,
+  exposedApiScopeAllowsOrigin,
+  exposedApiScopeRank,
+  isExposedApiOrigin,
+  isExposedApiScope,
+  isExposedApiVersion,
+} from './types.js';
 export type {
   ExposedApiAccessContext,
   ExposedApiCaller,
   ExposedApiCombiner,
   ExposedApiEntry,
+  ExposedApiIdentity,
+  ExposedApiOrigin,
+  ExposedApiPolicy,
   ExposedApiProjection,
   ExposedApiRegistration,
+  ExposedApiResolved,
+  ExposedApiScope,
+  ExposedApiVersion,
 } from './types.js';
 export type { ExposedApiErrorCode } from './errors.js';
 export {
@@ -25,7 +41,14 @@ export {
   ExposedApiError,
   ExposedApiInvalidCapabilityError,
   ExposedApiInvalidNameError,
+  ExposedApiInvalidPolicyError,
+  ExposedApiInvalidScopeError,
+  ExposedApiInvalidVersionError,
   ExposedApiNameCollisionError,
   ExposedApiRegistrationClosedError,
+  ExposedApiScopeNarrowingError,
+  ExposedApiScopeRecordCorruptError,
+  ExposedApiScopeRecordPathError,
+  ExposedApiScopeRecordWriteError,
   ExposedApiUnknownServiceError,
 } from './errors.js';

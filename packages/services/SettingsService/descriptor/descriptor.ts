@@ -92,6 +92,7 @@ export function createSettingsDescriptor(
       return withExposedApis(service, (registry) => {
         registry.registerApi(CORE_API_NAME.settings, SettingsToken, {
           capability: 'settings:write',
+          scope: 'runtime',
         });
       });
     },
@@ -151,6 +152,7 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
       return withExposedApis(reader, (registry) => {
         registry.registerApi(CORE_API_NAME.settingsReader, SettingsReaderToken, {
           capability: 'settings:read',
+          scope: 'runtime',
         });
       });
     },

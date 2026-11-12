@@ -7,10 +7,34 @@ import { ExposedApiRegistryToken } from './tokens.js';
 /** Tier assigned to the Registry descriptor. */
 export const EXPOSED_API_REGISTRY_SERVICE_TIER: ServiceTier = 'core';
 
+/** Namespace owned by the registry in the context contract. */
+export const EXPOSED_API_REGISTRY_CONTEXT_SCOPE = 'exposedApi';
+
+/**
+ * Optional context field holding the absolute protected scope-record path.
+ *
+ * Hosts that need cross-boot scope persistence supply this path. When it is
+ * absent the registry keeps the scope record in memory for one boot.
+ */
+export const EXPOSED_API_SCOPE_RECORD_PATH_FIELD = 'exposedApi.scopeRecord.path';
+
 /** Configuration for {@link createExposedApiRegistryDescriptor}. */
 export interface ExposedApiRegistryDescriptorOptions {
+  /** Absolute scope-record path used instead of the context field. */
+  readonly scopeRecordPath?: string;
+
   /** Observation hook used by the standard composition. */
   readonly onConstruct?: (service: ExposedApiRegistryService) => void;
+}
+
+/** Reads an optional non-empty string from the context bag. */
+function optionalContextString(
+  options: Readonly<Record<string, unknown>>,
+  field: string,
+): string | undefined {
+  const value = options[field];
+
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
 }
 
 /**
@@ -20,7 +44,7 @@ export interface ExposedApiRegistryDescriptorOptions {
  * exposures during the standard kernel's boot pinner, while the broker gate is
  * suspended and before `RUNNING`.
  *
- * @param options - Construction observation hook.
+ * @param options - Construction observation hook and storage override.
  */
 export function createExposedApiRegistryDescriptor(
   options?: ExposedApiRegistryDescriptorOptions,
@@ -33,6 +57,8 @@ export function createExposedApiRegistryDescriptor(
       allowedCallers: ['kernel', 'PluginManager', 'brud.host.daemon'],
     },
     factory: (context, broker): ExposedApiRegistryService => {
+      const scopeRecordPath = options?.scopeRecordPath
+        ?? optionalContextString(context.options, EXPOSED_API_SCOPE_RECORD_PATH_FIELD);
       const service = new ExposedApiRegistryService({
         broker,
         callerContext: {
@@ -40,6 +66,7 @@ export function createExposedApiRegistryDescriptor(
           tier: 'core',
           options: context.options,
         },
+        ...(scopeRecordPath === undefined ? {} : { scopeRecordPath }),
       });
 
       options?.onConstruct?.(service);

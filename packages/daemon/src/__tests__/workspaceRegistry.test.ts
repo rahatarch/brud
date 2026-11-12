@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 
 const NAMESPACED_KEYS = [
+  'exposedApi.scopeRecord.path',
   'filesystem.root',
   'history.root',
   'identity.registry.path',

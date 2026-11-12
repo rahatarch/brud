@@ -187,19 +187,23 @@ function createContext(
     seed: (registry) => {
       registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
         capability: 'history:read',
+        scope: 'runtime',
         combine: lastProjectionWins,
       });
       registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
         capability: 'history:write',
+        scope: 'runtime',
         combine: lastProjectionWins,
       });
       registry.registerApi(CORE_API_NAME.namespaceHistory, NS_HISTORY_TOKEN, {
         capability: 'history:read',
+        scope: 'runtime',
         projection: () => UNUSED_NAMESPACE_HANDLE,
         combine: lastProjectionWins,
       });
       registry.registerApi(CORE_API_NAME.namespaceHistory, NS_HISTORY_TOKEN, {
         capability: 'history:write',
+        scope: 'runtime',
         projection: () => UNUSED_NAMESPACE_HANDLE,
         combine: lastProjectionWins,
       });

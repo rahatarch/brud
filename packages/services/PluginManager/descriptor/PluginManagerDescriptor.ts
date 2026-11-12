@@ -211,6 +211,7 @@ export function createPluginManagerDescriptor(
       return withExposedApis(manager, (registry) => {
         registry.registerApi(CORE_API_NAME.pluginManager, PluginManagerToken, {
           capability: 'plugins:manage',
+          scope: 'runtime',
         });
       });
     },

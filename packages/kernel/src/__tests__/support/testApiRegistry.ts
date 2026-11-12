@@ -102,11 +102,13 @@ export function createTestApiRegistry(options: {
   if (services.fileSystem !== undefined) {
     registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
       capability: 'fs:read',
+      scope: 'runtime',
       projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
       combine: lastProjectionWins,
     });
     registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
       capability: 'fs:write',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
   }
@@ -114,6 +116,7 @@ export function createTestApiRegistry(options: {
   if (services.universalHistory !== undefined) {
     registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
       capability: 'history:read',
+      scope: 'runtime',
       projection: (service, caller) => (
         caller.capabilities.has('history:write') && caller.official
           ? service
@@ -123,6 +126,7 @@ export function createTestApiRegistry(options: {
     });
     registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
       capability: 'history:write',
+      scope: 'runtime',
       projection: (service, caller) => (
         caller.official
           ? service
@@ -153,11 +157,13 @@ export function createTestApiRegistry(options: {
 
     registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
       capability: 'history:read',
+      scope: 'runtime',
       projection: namespaceProjection,
       combine: lastProjectionWins,
     });
     registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
       capability: 'history:write',
+      scope: 'runtime',
       projection: namespaceProjection,
       combine: lastProjectionWins,
     });
@@ -166,10 +172,12 @@ export function createTestApiRegistry(options: {
   if (services.brudTools !== undefined) {
     registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
       capability: 'tools:register',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
     registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
       capability: 'tools:execute',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
   }
@@ -177,18 +185,21 @@ export function createTestApiRegistry(options: {
   if (services.actionManager !== undefined) {
     registry.registerApi(CORE_API_NAME.actionManager, ActionManagerToken, {
       capability: 'actions:register',
+      scope: 'runtime',
     });
   }
 
   if (services.terminal !== undefined) {
     registry.registerApi(CORE_API_NAME.terminal, TerminalToken, {
       capability: 'terminal:execute',
+      scope: 'runtime',
     });
   }
 
   if (services.utilities !== undefined) {
     registry.registerApi(CORE_API_NAME.utilities, UtilityToken, {
       capability: PUBLIC_API_CAPABILITY,
+      scope: 'runtime',
     });
   }
 

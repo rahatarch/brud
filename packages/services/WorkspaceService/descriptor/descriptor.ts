@@ -95,6 +95,7 @@ export function createWorkspaceDescriptor(
       (registry) => {
         registry.registerApi(CORE_API_NAME.workspace, WorkspaceToken, {
           capability: 'workspace:read',
+          scope: 'runtime',
         });
       },
     ),

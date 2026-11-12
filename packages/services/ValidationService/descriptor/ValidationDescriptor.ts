@@ -147,6 +147,7 @@ export function createValidationDescriptor(
       return withExposedApis(service, (registry) => {
         registry.registerApi(CORE_API_NAME.validation, ValidationToken, {
           capability: 'validation:read',
+          scope: 'runtime',
         });
       });
     },

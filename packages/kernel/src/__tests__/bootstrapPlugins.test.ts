@@ -106,11 +106,13 @@ function createFileSystemApiRegistryDescriptor(): ServiceDescriptor<unknown, unk
   return createSeededApiRegistryDescriptor((registry) => {
     registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
       capability: 'fs:read',
+      scope: 'runtime',
       projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
       combine: lastProjectionWins,
     });
     registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
       capability: 'fs:write',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
   }) as unknown as ServiceDescriptor<unknown, unknown>;

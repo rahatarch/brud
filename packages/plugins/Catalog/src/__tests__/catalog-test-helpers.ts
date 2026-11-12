@@ -351,10 +351,12 @@ export function makePluginContext(
   if (brudTools !== undefined) {
     registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
       capability: 'tools:register',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
     registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
       capability: 'tools:execute',
+      scope: 'runtime',
       combine: lastProjectionWins,
     });
   }

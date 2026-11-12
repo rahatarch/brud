@@ -123,11 +123,13 @@ export function createFileSystemDescriptor(
       return withExposedApis(instance, (registry) => {
         registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
           capability: 'fs:read',
+          scope: 'runtime',
           projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
           combine: lastProjectionWins,
         });
         registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
           capability: 'fs:write',
+          scope: 'runtime',
           combine: lastProjectionWins,
         });
       });

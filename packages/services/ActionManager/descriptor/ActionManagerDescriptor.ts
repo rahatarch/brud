@@ -51,6 +51,7 @@ export function createActionManagerDescriptor(
       return withExposedApis(service, (registry) => {
         registry.registerApi(CORE_API_NAME.actionManager, ActionManagerToken, {
           capability: 'actions:register',
+          scope: 'runtime',
         });
       });
     },

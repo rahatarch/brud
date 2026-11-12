@@ -7,6 +7,9 @@ import { provisionIdentityRegistryStorage } from '../../../services/IdentityRegi
 /** Registry paths already provisioned in this process, keyed by workspace root. */
 const REGISTRY_PATHS = new Map<string, string>();
 
+/** Scope-record paths per workspace root, provisioned by the registry. */
+const SCOPE_RECORD_PATHS = new Map<string, string>();
+
 /**
  * Returns a real, provisioned identity registry file for one test workspace.
  *
@@ -60,6 +63,36 @@ export function createIsolatedIdentityRegistryContext(): Record<string, unknown>
 }
 
 /**
+ * Returns the protected scope-record path for one test workspace.
+ *
+ * The registry creates the file on its first successful boot, so this helper
+ * only reserves a per-workspace location outside the workspace.
+ */
+export function exposedApiScopeRecordContextOptions(
+  workspaceRoot: string,
+): Record<string, unknown> {
+  let recordPath = SCOPE_RECORD_PATHS.get(workspaceRoot);
+
+  if (recordPath === undefined) {
+    const digest = createHash('sha256')
+      .update(workspaceRoot)
+      .digest('hex')
+      .slice(0, 16);
+    const directory = join(
+      tmpdir(),
+      'brud-test-exposed-api-scopes',
+      `${String(process.pid)}-${digest}`,
+    );
+
+    mkdirSync(directory, { recursive: true });
+    recordPath = join(directory, 'scope-record.json');
+    SCOPE_RECORD_PATHS.set(workspaceRoot, recordPath);
+  }
+
+  return { 'exposedApi.scopeRecord.path': recordPath };
+}
+
+/**
  * Builds the strict namespaced context bag used by kernel tests.
  *
  * Every service owns one root field. Tests that boot more than one service can
@@ -77,5 +110,6 @@ export function workspaceContextOptions(
     'history.root': workspaceRoot,
     'router.root': workspaceRoot,
     ...identityRegistryContextOptions(workspaceRoot),
+    ...exposedApiScopeRecordContextOptions(workspaceRoot),
   };
 }

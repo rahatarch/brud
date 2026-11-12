@@ -4,6 +4,13 @@ export type ExposedApiErrorCode =
   | 'EXPOSED_API_NAME_COLLISION'
   | 'EXPOSED_API_INVALID_NAME'
   | 'EXPOSED_API_INVALID_CAPABILITY'
+  | 'EXPOSED_API_INVALID_VERSION'
+  | 'EXPOSED_API_INVALID_SCOPE'
+  | 'EXPOSED_API_INVALID_POLICY'
+  | 'EXPOSED_API_SCOPE_NARROWED'
+  | 'EXPOSED_API_SCOPE_RECORD_CORRUPT'
+  | 'EXPOSED_API_SCOPE_RECORD_PATH'
+  | 'EXPOSED_API_SCOPE_RECORD_WRITE'
   | 'EXPOSED_API_UNKNOWN_SERVICE'
   | 'EXPOSED_API_DUPLICATE_CAPABILITY'
   | 'EXPOSED_API_DISPOSED';
@@ -118,5 +125,130 @@ export class ExposedApiDisposedError extends ExposedApiError {
   constructor() {
     super('Exposed API Registry has been disposed');
     this.name = 'ExposedApiDisposedError';
+  }
+}
+
+/** Raised when a registration declares an invalid API version. */
+export class ExposedApiInvalidVersionError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_INVALID_VERSION' as const;
+
+  /** Rejected version. */
+  public readonly version: unknown;
+
+  constructor(version: unknown) {
+    super(`Invalid exposed API version "${String(version)}"`);
+    this.name = 'ExposedApiInvalidVersionError';
+    this.version = version;
+  }
+}
+
+/** Raised when a registration declares an unsupported scope. */
+export class ExposedApiInvalidScopeError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_INVALID_SCOPE' as const;
+
+  /** Rejected scope. */
+  public readonly scope: unknown;
+
+  constructor(scope: unknown) {
+    super(`Invalid exposed API scope "${String(scope)}"`);
+    this.name = 'ExposedApiInvalidScopeError';
+    this.scope = scope;
+  }
+}
+
+/** Raised when a registration declares a malformed policy. */
+export class ExposedApiInvalidPolicyError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_INVALID_POLICY' as const;
+
+  /** Human-readable reason. */
+  public readonly reason: string;
+
+  constructor(reason: string) {
+    super(`Invalid exposed API policy: ${reason}`);
+    this.name = 'ExposedApiInvalidPolicyError';
+    this.reason = reason;
+  }
+}
+
+/** Raised when a registration narrows a persisted scope within one version. */
+export class ExposedApiScopeNarrowingError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_SCOPE_NARROWED' as const;
+
+  /** API name. */
+  public readonly apiName: string;
+
+  /** API version. */
+  public readonly version: string;
+
+  /** Scope already recorded for the identity. */
+  public readonly persistedScope: string;
+
+  /** Scope the registration requested. */
+  public readonly requestedScope: string;
+
+  constructor(
+    apiName: string,
+    version: string,
+    persistedScope: string,
+    requestedScope: string,
+  ) {
+    super(
+      `Exposed API "${apiName}" version "${version}" cannot narrow its scope from "${persistedScope}" to "${requestedScope}"`,
+    );
+    this.name = 'ExposedApiScopeNarrowingError';
+    this.apiName = apiName;
+    this.version = version;
+    this.persistedScope = persistedScope;
+    this.requestedScope = requestedScope;
+  }
+}
+
+/** Raised when the protected scope record cannot be parsed or verified. */
+export class ExposedApiScopeRecordCorruptError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_SCOPE_RECORD_CORRUPT' as const;
+
+  /** Absolute storage path. */
+  public readonly storagePath: string;
+
+  /** Human-readable reason. */
+  public readonly reason: string;
+
+  constructor(storagePath: string, reason: string) {
+    super(`Exposed API scope record "${storagePath}" is corrupt: ${reason}`);
+    this.name = 'ExposedApiScopeRecordCorruptError';
+    this.storagePath = storagePath;
+    this.reason = reason;
+  }
+}
+
+/** Raised when a scope-record storage path is not an absolute file path. */
+export class ExposedApiScopeRecordPathError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_SCOPE_RECORD_PATH' as const;
+
+  /** Rejected path. */
+  public readonly storagePath: string;
+
+  constructor(storagePath: string) {
+    super(`Invalid exposed API scope record path "${storagePath}"`);
+    this.name = 'ExposedApiScopeRecordPathError';
+    this.storagePath = storagePath;
+  }
+}
+
+/** Raised when the protected scope record cannot be written. */
+export class ExposedApiScopeRecordWriteError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_SCOPE_RECORD_WRITE' as const;
+
+  /** Absolute storage path. */
+  public readonly storagePath: string;
+
+  /** Filesystem error code, when available. */
+  public readonly reason: string;
+
+  constructor(storagePath: string, reason: string) {
+    super(`Cannot write exposed API scope record "${storagePath}": ${reason}`);
+    this.name = 'ExposedApiScopeRecordWriteError';
+    this.storagePath = storagePath;
+    this.reason = reason;
   }
 }

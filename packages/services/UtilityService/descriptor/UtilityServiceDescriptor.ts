@@ -33,6 +33,7 @@ export function createUtilityDescriptor(): ServiceDescriptor<IUtilityService, Ut
       (registry) => {
         registry.registerApi(CORE_API_NAME.utilities, UtilityToken, {
           capability: PUBLIC_API_CAPABILITY,
+          scope: 'runtime',
         });
       },
     ),

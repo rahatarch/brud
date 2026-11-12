@@ -148,6 +148,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
       return withExposedApis(facade, (registry) => {
         registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
           capability: 'history:read',
+          scope: 'runtime',
           projection: (resolved, caller) => (
             caller.capabilities.has('history:write') && caller.official
               ? resolved
@@ -157,6 +158,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
         });
         registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
           capability: 'history:write',
+          scope: 'runtime',
           projection: (resolved, caller) => (
             caller.official
               ? resolved
@@ -189,11 +191,13 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
 
         registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
           capability: 'history:read',
+          scope: 'runtime',
           projection: namespaceProjection,
           combine: lastProjectionWins,
         });
         registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
           capability: 'history:write',
+          scope: 'runtime',
           projection: namespaceProjection,
           combine: lastProjectionWins,
         });

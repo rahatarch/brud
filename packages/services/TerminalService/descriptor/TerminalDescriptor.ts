@@ -220,6 +220,7 @@ export function createTerminalDescriptor(
       return withExposedApis(service, (registry) => {
         registry.registerApi(CORE_API_NAME.terminal, TerminalToken, {
           capability: 'terminal:execute',
+          scope: 'runtime',
         });
       });
     },

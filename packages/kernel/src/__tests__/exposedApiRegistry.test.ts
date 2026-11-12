@@ -314,9 +314,29 @@ describe('Exposed API Registry', () => {
           ? sentinel as T
           : null;
       },
+      resolveWithMetadata: <T = unknown>(
+        name: string,
+        capabilities: Iterable<string>,
+      ) => {
+        resolvedNames.push(name);
+
+        return name === CORE_API_NAME.fileSystem
+          && new Set(capabilities).has('fs:read')
+          ? {
+              name,
+              version: 1,
+              scope: 'runtime',
+              policy: Object.freeze({}),
+              policies: Object.freeze([Object.freeze({})]),
+              handle: sentinel as T,
+            }
+          : null;
+      },
+      scopeOf: (): null => null,
       closeRegistration: (): void => undefined,
       isRegistrationOpen: (): boolean => false,
       registeredApiNames: (): readonly string[] => [],
+      registeredApiIdentities: () => [],
     };
     let captured: unknown;
 

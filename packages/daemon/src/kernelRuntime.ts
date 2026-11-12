@@ -44,6 +44,26 @@ export function resolveIdentityRegistryPath(workspaceRoot: string): string {
 }
 
 /**
+ * Resolves the protected exposed API scope record for one workspace.
+ *
+ * The file sits beside the workspace, not inside it. A host may override the
+ * location with `BRUD_EXPOSED_API_SCOPE_RECORD_PATH`.
+ */
+export function resolveExposedApiScopeRecordPath(workspaceRoot: string): string {
+  const override = process.env.BRUD_EXPOSED_API_SCOPE_RECORD_PATH;
+
+  if (typeof override === 'string' && override.length > 0) {
+    return override;
+  }
+
+  return join(
+    dirname(workspaceRoot),
+    '.brud-exposed-api',
+    `${basename(workspaceRoot)}.json`,
+  );
+}
+
+/**
  * Builds the namespaced context bag for one workspace.
  *
  * Each migrated service reads its own field. No legacy flat alias is emitted.
@@ -60,6 +80,7 @@ export function createWorkspaceContextOptions(
     'history.root': workspaceRoot,
     'router.root': workspaceRoot,
     'identity.registry.path': resolveIdentityRegistryPath(workspaceRoot),
+    'exposedApi.scopeRecord.path': resolveExposedApiScopeRecordPath(workspaceRoot),
   };
 }
 
