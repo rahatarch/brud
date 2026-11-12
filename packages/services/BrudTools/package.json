@@ -1,0 +1,43 @@
+{
+  "name": "@brud/service-tools",
+  "version": "0.1.0",
+  "description": "Brud tool registry and dispatch service",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p ../../services/tsconfig.json",
+    "typecheck": "tsc -p ../../services/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*",
+    "@brud/service-exposed-api-registry": "*",
+    "@brud/service-plugin-manager": "*",
+    "@brud/service-router": "*",
+    "@brud/service-settings": "*",
+    "@brud/service-validation": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}

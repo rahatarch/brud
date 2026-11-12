@@ -1,16 +1,16 @@
-import type { OperationResult } from '../../../src/contracts/handler.js';
-import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
-import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
+import type { OperationResult } from '../../contracts/handler.js';
+import type { IServiceLifecycle, ServiceContext } from '../../contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../../contracts/serviceDescriptor.js';
 import {
   createServiceToken,
   type ServiceToken,
-} from '../../../src/contracts/serviceToken.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
-import type { IPluginContext } from '../../../services/PluginManager/contracts/IPluginContext.js';
-import type { IRouterRegistrant } from '../../../services/Router/contracts/registrant.js';
-import type { IRouterService } from '../../../services/Router/contracts/IRouterService.js';
-import { ROUTER_CALLER_ID } from '../../../services/Router/contracts/caller.js';
-import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
+} from '../../contracts/serviceToken.js';
+import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IPluginContext } from '../../../../services/PluginManager/contracts/IPluginContext.js';
+import type { IRouterRegistrant } from '../../../../services/Router/contracts/registrant.js';
+import type { IRouterService } from '../../../../services/Router/contracts/IRouterService.js';
+import { ROUTER_CALLER_ID } from '../../../../services/Router/contracts/caller.js';
+import { RouterToken } from '../../../../services/Router/descriptor/tokens.js';
 
 /** Kind claimed by the synthetic peer service. Clearly non-shipped. */
 export const TEST_QUERY_KIND = 'test_query' as const;

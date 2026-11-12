@@ -8,7 +8,7 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DurableNodeStorageDriver } from '../../../../kernel/services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import {
   absolute,
   acquireVerificationLock,
@@ -225,12 +225,20 @@ describe('Goal 2 — real filesystem mutations', () => {
     }
   });
 
-  it('declares @brud/kernel as its only runtime dependency', async () => {
+  it('declares only the kernel and service contract packages as dependencies', async () => {
     const manifest = JSON.parse(await readAbsolute(PACKAGE_JSON)) as {
       dependencies?: Record<string, string>;
     };
 
-    assert.deepEqual(Object.keys(manifest.dependencies ?? {}), ['@brud/kernel']);
+    const dependencies = Object.keys(manifest.dependencies ?? {});
+
+    assert.ok(
+      dependencies.every(
+        (dependency) =>
+          dependency === '@brud/kernel' || dependency.startsWith('@brud/service-'),
+      ),
+      `unexpected dependency in ${JSON.stringify(dependencies)}`,
+    );
   });
 
   it('uses the real DurableNodeStorageDriver', () => {

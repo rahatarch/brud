@@ -1,8 +1,6 @@
-import type {
-  IPluginExecutionContext,
-  IPluginHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IPluginExecutionContext } from '@brud/service-tools';
+import type { IPluginHistoryService } from '@brud/service-history';
 import {
   runListSessions,
   runRevertOperations,

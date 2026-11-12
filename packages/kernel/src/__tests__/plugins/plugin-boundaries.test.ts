@@ -232,6 +232,13 @@ describe('plugin boundaries invariant', () => {
             continue;
           }
 
+          if (specifier.startsWith('@brud/service-')) {
+            if (!typeOnly) {
+              violations.push(`${location} value-imports ${specifier}; only type imports are allowed`);
+            }
+            continue;
+          }
+
           if (specifier.startsWith('node:')) {
             continue;
           }

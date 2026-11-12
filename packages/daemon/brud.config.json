@@ -1,67 +1,71 @@
 {
   "services": [
     {
-      "path": "kernel:serviceModules/settings.js",
+      "path": "@brud/service-settings/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/settingsReader.js",
+      "path": "@brud/service-settings/settingsReader.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/utility.js",
+      "path": "@brud/service-utility/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/exposedApiRegistry.js",
+      "path": "@brud/service-exposed-api-registry/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/brandRegistry.js",
+      "path": "@brud/service-brand-registry/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/workspace.js",
+      "path": "kernel:serviceModules/identityRegistry.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/filesystem.js",
+      "path": "@brud/service-workspace/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/validation.js",
+      "path": "@brud/service-filesystem/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/terminal.js",
+      "path": "@brud/service-validation/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/parser.js",
+      "path": "@brud/service-terminal/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/router.js",
+      "path": "@brud/service-parser/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/tools.js",
+      "path": "@brud/service-router/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/actions.js",
+      "path": "@brud/service-tools/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/historySession.js",
+      "path": "@brud/service-actions/serviceModule.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/historyJournal.js",
+      "path": "@brud/service-history/historySession.js",
       "official": true
     },
     {
-      "path": "kernel:serviceModules/pluginManager.js",
+      "path": "@brud/service-history/historyJournal.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-plugin-manager/serviceModule.js",
       "official": true
     }
   ],

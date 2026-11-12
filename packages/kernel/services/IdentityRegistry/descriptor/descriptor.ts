@@ -14,6 +14,17 @@ export const IDENTITY_REGISTRY_PATH_CONTEXT_FIELD = 'identity.registry.path';
 /** Tier assigned to the identity registry descriptor. */
 export const IDENTITY_REGISTRY_SERVICE_TIER: ServiceTier = 'core';
 
+/** Contract version declared for the identity registry interface. */
+export const IDENTITY_REGISTRY_CONTRACT_VERSION = '1.0.0';
+
+/** Methods declared for the identity registry interface. */
+export const IDENTITY_REGISTRY_CONTRACT_METHODS = [
+  'issue',
+  'resolve',
+  'retire',
+  'revoke',
+] as const;
+
 /** Configuration for {@link createIdentityRegistryDescriptor}. */
 export interface IdentityRegistryDescriptorOptions {
   /**
@@ -44,6 +55,10 @@ export function createIdentityRegistryDescriptor(
     token: IdentityRegistryToken,
     tier: IDENTITY_REGISTRY_SERVICE_TIER,
     dependencies: [],
+    contract: {
+      version: IDENTITY_REGISTRY_CONTRACT_VERSION,
+      methods: IDENTITY_REGISTRY_CONTRACT_METHODS,
+    },
     factory: (context): IdentityRegistryService => {
       const storagePath = options?.storagePath ?? requireContextString(
         context.options,

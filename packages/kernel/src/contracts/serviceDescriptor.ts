@@ -4,6 +4,21 @@ import type { ServiceAccessPolicy } from './policy.js';
 import type { ServiceToken } from './serviceToken.js';
 
 /**
+ * Contract a service descriptor declares for its public interface.
+ *
+ * The declaration is descriptive: it names the version and the methods the
+ * service promises. The kernel only compares it against hardcore requirements;
+ * it does not interpret any method.
+ */
+export interface ServiceContractDeclaration {
+  /** Contract version the service implements. */
+  readonly version: string;
+
+  /** Method names the service implements for this contract. */
+  readonly methods: readonly string[];
+}
+
+/**
  * Self-describing registration record for a kernel service.
  *
  * The factory may build a richer internal shape `TInternal`, while `project`
@@ -24,6 +39,14 @@ export interface ServiceDescriptor<TService, TInternal extends TService = TServi
 
   /** Access control rules applied to every request. */
   readonly accessPolicy?: ServiceAccessPolicy;
+
+  /**
+   * Declared contract for the public service interface.
+   *
+   * Optional for ordinary services. The kernel's fixed hardcore list requires
+   * a declared contract on the services it names.
+   */
+  readonly contract?: ServiceContractDeclaration;
 
   /**
    * Builds the service instance.

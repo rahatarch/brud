@@ -16,6 +16,11 @@
     "@brud/plugin-mcp-bridge": "*",
     "@brud/plugin-terminal": "*",
     "@brud/protocol": "*",
+    "@brud/service-actions": "*",
+    "@brud/service-brand-registry": "*",
+    "@brud/service-filesystem": "*",
+    "@brud/service-plugin-manager": "*",
+    "@brud/service-tools": "*",
     "@cotal-ai/seat": "0.160.4"
   },
   "devDependencies": {

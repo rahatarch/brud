@@ -1,9 +1,7 @@
-import type {
-  IActionExecutionContext,
-  ITerminalHandle,
-  OperationResult,
-  TerminalRunMode,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IActionExecutionContext } from '@brud/service-actions';
+import type { ITerminalHandle } from '@brud/service-plugin-manager';
+import type { TerminalRunMode } from '@brud/service-terminal';
 
 /** Action name that terminates one plugin-owned terminal process. */
 export const TERMINAL_KILL_PROCESS_ACTION = 'terminal.kill_process';

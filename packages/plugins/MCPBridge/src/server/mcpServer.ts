@@ -1,5 +1,6 @@
 import { isAbsolute, relative } from 'node:path';
-import type { IPluginContext, OperationResult } from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IPluginContext } from '@brud/service-plugin-manager';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,

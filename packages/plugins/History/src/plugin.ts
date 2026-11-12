@@ -1,4 +1,5 @@
-import type { IBrudPlugin, IPluginContext, IPluginHistoryService } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext } from '@brud/service-plugin-manager';
+import type { IPluginHistoryService } from '@brud/service-history';
 import {
   HISTORY_DELETE_AUDIT_LOG_ACTION,
   HISTORY_DELETE_AUDIT_LOG_SCHEMA,

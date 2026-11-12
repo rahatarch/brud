@@ -111,12 +111,16 @@ async function createWorkspace(context: TestContext): Promise<IdentityWorkspace>
 }
 
 async function writeIdentityConfig(workspace: IdentityWorkspace): Promise<string> {
+  const services = [...await baseServices()];
+
+  if (!services.some((entry) => entry.path === 'kernel:serviceModules/identityRegistry.js')) {
+    services.push({ path: 'kernel:serviceModules/identityRegistry.js', official: true });
+  }
+
+  services.push({ path: BOOT_ISSUER_MODULE_PATH });
+
   const config: BrudConfig = {
-    services: [
-      ...await baseServices(),
-      { path: 'kernel:serviceModules/identityRegistry.js', official: true },
-      { path: BOOT_ISSUER_MODULE_PATH },
-    ],
+    services,
     plugins: [],
   };
 

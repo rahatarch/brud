@@ -1,1 +1,0 @@
-export * from '../services/BrandRegistry/serviceModule.js';

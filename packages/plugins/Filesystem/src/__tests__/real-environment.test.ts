@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { certifyOfficialPlugin } from '../../../../kernel/services/PluginManager/contracts/branding.js';
+import { certifyOfficialPlugin } from '../../../../services/PluginManager/contracts/branding.js';
 import { createSearchPlugin } from '../../../Search/src/index.js';
 import { bootTestKernel } from './support/testHarness.js';
 import type { TestKernel } from './support/testHarness.js';

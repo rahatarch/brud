@@ -1,10 +1,10 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OperationResult } from '../../src/contracts/handler.js';
+import type { OperationResult } from '../contracts/handler.js';
 import type {
   IPluginExecutionContext,
   ToolRegistrationOptions,
-} from '../../services/BrudTools/contracts/IBrudToolsService.js';
+} from '../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { ParserRouterHarness } from './support/parserRouterHarness.js';
 
 const CONTEXT: IPluginExecutionContext = {

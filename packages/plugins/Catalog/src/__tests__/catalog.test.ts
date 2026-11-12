@@ -4,12 +4,10 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { BrudToolsToken, createStandardKernel } from '@brud/kernel';
-import type {
-  BrudKernel,
-  IBrudToolsService,
-  ServiceContext,
-} from '@brud/kernel';
+import { createStandardKernel } from '@brud/kernel';
+import type { BrudKernel, ServiceContext } from '@brud/kernel';
+import { BrudToolsToken } from '@brud/service-tools';
+import type { IBrudToolsService } from '@brud/service-tools';
 import { catalogManifest, catalogPlugin } from '../plugin.js';
 
 const TEST_TOOL_NAME = 'test_tool';

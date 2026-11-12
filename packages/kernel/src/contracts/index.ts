@@ -17,7 +17,10 @@ export type {
 
 export type { ServiceInfo, IKernelAccessBroker } from './accessBroker.js';
 
-export type { ServiceDescriptor } from './serviceDescriptor.js';
+export type {
+  ServiceDescriptor,
+  ServiceContractDeclaration,
+} from './serviceDescriptor.js';
 
 export type { MutationJournalPort } from './mutationJournal.js';
 

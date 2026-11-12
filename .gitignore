@@ -10,3 +10,4 @@ temporary
 *.tsbuildinfo
 .internal_docs/
 TODO.md
+packages/services/standard.config.json

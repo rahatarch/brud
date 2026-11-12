@@ -1,10 +1,5 @@
-import type {
-  IBrudPlugin,
-  IPluginContext,
-  OperationResult,
-  PluginManifest,
-  PluginPermission,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext, PluginManifest, PluginPermission } from '@brud/service-plugin-manager';
 import { summarizeReadResult } from './envelope.js';
 import type { ReadResult } from './envelope.js';
 import { GovernorError } from './governor.js';

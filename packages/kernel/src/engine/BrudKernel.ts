@@ -56,14 +56,25 @@ export class BrudKernel implements IBrudKernel {
    */
   private bootOptions: Readonly<Record<string, unknown>> = {};
   private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
+  private readonly bootHardcore:
+    | ((instances: readonly {
+      readonly tokenId: string;
+      readonly instance: IServiceLifecycle;
+    }[]) => Promise<void> | void)
+    | undefined;
   private readonly contextContract: ContextContract | undefined;
 
   constructor(options?: {
     maxCallDepth?: number;
     bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void>;
+    bootHardcore?: (instances: readonly {
+      readonly tokenId: string;
+      readonly instance: IServiceLifecycle;
+    }[]) => Promise<void> | void;
     contextContract?: ContextContract;
   }) {
     this.bootPinner = options?.bootPinner;
+    this.bootHardcore = options?.bootHardcore;
     this.contextContract = options?.contextContract;
     this.services = new ServiceContainer();
     this.operations = new OperationRegistry();
@@ -132,6 +143,17 @@ export class BrudKernel implements IBrudKernel {
         await this.accessBroker.withLifecycleGateSuspended(async (): Promise<void> => {
           await pinner(this.initializedServices.map((entry) => entry.instance));
         });
+      }
+
+      // Hardcore boot calls run here, after every service is initialized and
+      // before the kernel enters RUNNING. A hardcore service is still mutable
+      // at this point; its own onRunning hook closes the window.
+      const hardcore = this.bootHardcore;
+      if (hardcore !== undefined) {
+        await hardcore(this.initializedServices.map((entry) => ({
+          tokenId: entry.tokenId,
+          instance: entry.instance,
+        })));
       }
 
       // The pin phase is the last point where a service may declare a field.

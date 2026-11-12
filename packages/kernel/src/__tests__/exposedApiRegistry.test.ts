@@ -3,27 +3,27 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStandardKernel } from '../../src/bootstrap/index.js';
+import { createStandardKernel } from '../bootstrap/index.js';
 import type {
   IServiceLifecycle,
   ServiceContext,
-} from '../../src/contracts/lifecycle.js';
-import type { ServiceDescriptor } from '../../src/contracts/serviceDescriptor.js';
-import { createServiceToken } from '../../src/contracts/serviceToken.js';
-import type { BrudKernel } from '../../src/engine/BrudKernel.js';
-import type { OperationResult } from '../../src/contracts/handler.js';
+} from '../contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
+import { createServiceToken } from '../contracts/serviceToken.js';
+import type { BrudKernel } from '../engine/BrudKernel.js';
+import type { OperationResult } from '../contracts/handler.js';
 import {
   ExposedApiNameCollisionError,
   ExposedApiRegistrationClosedError,
-} from '../../services/ExposedApiRegistry/contracts/errors.js';
-import { CORE_API_NAME } from '../../services/ExposedApiRegistry/contracts/coreApis.js';
-import type { IExposedApiRegistry } from '../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
-import { ExposedApiRegistryToken } from '../../services/ExposedApiRegistry/descriptor/tokens.js';
-import { withExposedApis } from '../../services/ExposedApiRegistry/contracts/registrant.js';
-import type { ExposedApiRegistration } from '../../services/ExposedApiRegistry/contracts/types.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import { PluginPermissionError } from '../../services/PluginManager/contracts/errors.js';
-import { PluginManagerService } from '../../services/PluginManager/orchestrator/PluginManagerService.js';
+} from '../../../services/ExposedApiRegistry/contracts/errors.js';
+import { CORE_API_NAME } from '../../../services/ExposedApiRegistry/contracts/coreApis.js';
+import type { IExposedApiRegistry } from '../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import { ExposedApiRegistryToken } from '../../../services/ExposedApiRegistry/descriptor/tokens.js';
+import { withExposedApis } from '../../../services/ExposedApiRegistry/contracts/registrant.js';
+import type { ExposedApiRegistration } from '../../../services/ExposedApiRegistry/contracts/types.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { PluginPermissionError } from '../../../services/PluginManager/contracts/errors.js';
+import { PluginManagerService } from '../../../services/PluginManager/orchestrator/PluginManagerService.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 interface ProbeService extends IServiceLifecycle {

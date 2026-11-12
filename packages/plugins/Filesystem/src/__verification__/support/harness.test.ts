@@ -10,21 +10,18 @@ import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, relative, sep } from 'node:path';
 import type {
-  IBrudFileSystem,
-  IBrudToolsService,
-  IStorageDriver,
-  IUniversalHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+  IBrudFileSystem, IStorageDriver, OperationResult } from '@brud/kernel';
+import type { IBrudToolsService } from '@brud/service-tools';
+import type { IUniversalHistoryService } from '@brud/service-history';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import type { ServiceContext } from '../../../../../kernel/src/contracts/lifecycle.js';
-import { DurableNodeStorageDriver } from '../../../../../kernel/services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
-import type { IFileMutationJournal } from '../../../../../kernel/services/BrudFileSystem/events/types.js';
-import { FileSystemToken } from '../../../../../kernel/services/BrudFileSystem/descriptor/tokens.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
-import { UniversalHistoryToken } from '../../../../../kernel/services/UniversalHistory/descriptor/tokens.js';
-import { certifyOfficialPlugin } from '../../../../../kernel/services/PluginManager/contracts/branding.js';
+import { DurableNodeStorageDriver } from '../../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import type { IFileMutationJournal } from '../../../../../services/BrudFileSystem/events/types.js';
+import { FileSystemToken } from '../../../../../services/BrudFileSystem/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
+import { UniversalHistoryToken } from '../../../../../services/UniversalHistory/descriptor/tokens.js';
+import { certifyOfficialPlugin } from '../../../../../services/PluginManager/contracts/branding.js';
 import { createSearchPlugin } from '../../../../Search/src/index.js';
 import { SHARED_MUTEX } from '../../coordinator/index.js';
 import { createFilesystemPlugin } from '../../index.js';

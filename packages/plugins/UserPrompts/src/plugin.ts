@@ -1,4 +1,4 @@
-import type { IBrudPlugin, IPluginContext, PluginManifest } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext, PluginManifest } from '@brud/service-plugin-manager';
 import type { PromptStore } from './types.js';
 import { createPromptVault } from './store.js';
 import { PROMPT_DIRECTORY } from './store.js';

@@ -7,11 +7,9 @@
  * performs an inline rollback: aborted sessions are discarded by the history
  * engine and the user can retry.
  */
-import type {
-  IBrudFileSystem,
-  IUniversalHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/service-filesystem';
+import type { IUniversalHistoryService } from '@brud/service-history';
 import {
   buildFailureEnvelope,
   buildPartialEnvelope,

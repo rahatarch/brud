@@ -5,10 +5,8 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IBrudPlugin,
-  IMcpTransport,
-  OperationResult,
-} from '@brud/kernel';
+  IBrudPlugin, OperationResult } from '@brud/kernel';
+import type { IMcpTransport } from '@brud/service-plugin-manager';
 import { createStandardKernel } from '../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../kernel/src/engine/BrudKernel.js';
 import { createMcpBridgePlugin } from '../plugin.js';

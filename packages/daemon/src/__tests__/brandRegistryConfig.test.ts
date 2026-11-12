@@ -9,11 +9,11 @@ describe('daemon kernel composition', () => {
   it('boots from brud.config.json with the Brand Registry service', async () => {
     const root = await mkdtemp(join(tmpdir(), 'brud-daemon-brand-'));
     const kernel = await createKernel({ workspaceRoot: root });
-    const kernelModule = await import('@brud/kernel');
+    const { BrandRegistryToken } = await import('@brud/service-brand-registry');
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
-      assert.equal(kernel.hasService(kernelModule.BrandRegistryToken), true);
+      assert.equal(kernel.hasService(BrandRegistryToken), true);
     } finally {
       await kernel.shutdown().catch(() => undefined);
       await rm(root, { recursive: true, force: true });

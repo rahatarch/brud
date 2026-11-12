@@ -19,6 +19,13 @@ import {
 } from './config/integrity.js';
 import { parseBrudConfig } from './config/parse.js';
 import {
+  HARDCORE_SERVICES,
+  buildHardcoreBootEntries,
+  verifyHardcoreServices,
+  type ComposedServiceDescriptor,
+  type HardcoreBootEntry,
+} from './hardcore.js';
+import {
   BrudConfigError,
   type BrudConfig,
   type BrudConfigEntry,
@@ -45,6 +52,7 @@ interface LoadedService {
   readonly index: number;
   readonly entry: BrudConfigEntry;
   readonly module: unknown;
+  readonly resolvedId: string;
 }
 
 interface LoadedPlugin {
@@ -117,6 +125,7 @@ export function createDeferredKernel(
 ): BrudKernel {
   let loadedServices: readonly LoadedService[] = [];
   let serviceContext: KernelServiceModuleContext | undefined;
+  let hardcoreBootEntries: readonly HardcoreBootEntry[] = [];
   let activeServiceOwner = 'brud.kernel.composition';
   const contextContract = new ContextContract();
 
@@ -129,6 +138,17 @@ export function createDeferredKernel(
 
   const kernel = new BrudKernel({
     contextContract,
+    bootHardcore: (instances): void => {
+      for (const hardcore of HARDCORE_SERVICES) {
+        const match = instances.find((entry) => entry.tokenId === hardcore.token);
+
+        if (match === undefined) {
+          continue;
+        }
+
+        hardcore.boot(match.instance, hardcoreBootEntries);
+      }
+    },
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       const context = serviceContext;
 
@@ -185,20 +205,36 @@ export function createDeferredKernel(
       loadedServices = services;
       serviceContext = context;
 
+      const composed: ComposedServiceDescriptor[] = [];
+
       for (const loaded of services) {
         activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
-        const descriptor = descriptorFromModule(
-          loaded.module,
-          loaded.entry,
-          loaded.index,
-          context,
-          configPath,
-          raw,
-        );
-        const official = loaded.entry.official === true;
-        const descriptorToRegister: ServiceDescriptor<unknown, unknown> = official
-          ? { ...descriptor, official: true }
-          : descriptor;
+        composed.push({
+          descriptor: descriptorFromModule(
+            loaded.module,
+            loaded.entry,
+            loaded.index,
+            context,
+            configPath,
+            raw,
+          ),
+          path: loaded.entry.path,
+          official: loaded.entry.official === true,
+          resolvedPath: loaded.resolvedId,
+        });
+      }
+
+      // The hardcore gate runs after descriptors exist and before any service
+      // is registered or initialized. A failure here never reaches the
+      // service initialization phase.
+      const packageHashes = verifyHardcoreServices(composed, configPath);
+      hardcoreBootEntries = buildHardcoreBootEntries(composed, packageHashes);
+
+      for (const service of composed) {
+        const descriptorToRegister: ServiceDescriptor<unknown, unknown> =
+          service.official
+            ? { ...service.descriptor, official: true }
+            : service.descriptor;
 
         kernel.register(descriptorToRegister);
       }
@@ -365,17 +401,22 @@ async function loadServiceModules(
   configPath: string,
   raw: string,
 ): Promise<readonly LoadedService[]> {
-  return Promise.all(entries.map(async (entry, index) => ({
-    index,
-    entry,
-    module: await importModule(
-      resolveModuleId(entry.path, configPath),
-      configPath,
-      entry.path,
-      `services[${String(index)}]`,
-      lineOf(raw, entry.path),
-    ),
-  })));
+  return Promise.all(entries.map(async (entry, index) => {
+    const resolvedId = resolveModuleId(entry.path, configPath);
+
+    return {
+      index,
+      entry,
+      resolvedId,
+      module: await importModule(
+        resolvedId,
+        configPath,
+        entry.path,
+        `services[${String(index)}]`,
+        lineOf(raw, entry.path),
+      ),
+    };
+  }));
 }
 
 async function loadPluginModules(

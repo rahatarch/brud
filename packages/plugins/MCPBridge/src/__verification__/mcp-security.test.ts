@@ -8,11 +8,12 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
-import type { IBrudPlugin, IPluginLogger, OperationResult } from '@brud/kernel';
-import { PluginContext } from '../../../../kernel/services/PluginManager/contracts/PluginContext.js';
-import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
-import { createRegistryCapabilityProviders } from '../../../../kernel/services/PluginManager/orchestrator/registryCapabilities.js';
-import type { InternalPluginRecord } from '../../../../kernel/services/PluginManager/orchestrator/types.js';
+import type { IBrudPlugin, OperationResult } from '@brud/kernel';
+import type { IPluginLogger } from '@brud/service-plugin-manager';
+import { PluginContext } from '../../../../services/PluginManager/contracts/PluginContext.js';
+import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { createRegistryCapabilityProviders } from '../../../../services/PluginManager/orchestrator/registryCapabilities.js';
+import type { InternalPluginRecord } from '../../../../services/PluginManager/orchestrator/types.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';
 import type { ServiceContext } from '../../../../kernel/src/contracts/lifecycle.js';
 import type { ServiceToken } from '../../../../kernel/src/contracts/serviceToken.js';

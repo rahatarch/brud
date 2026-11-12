@@ -7,12 +7,12 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
-import type { IBrudToolsService } from '../../../services/BrudTools/contracts/index.js';
-import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
-import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
-import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
-import type { PluginManagerService } from '../../../services/PluginManager/orchestrator/PluginManagerService.js';
+import type { IBrudToolsService } from '../../../../services/BrudTools/contracts/index.js';
+import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
+import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { PluginManagerToken } from '../../../../services/PluginManager/contracts/tokens.js';
+import type { PluginManagerService } from '../../../../services/PluginManager/orchestrator/PluginManagerService.js';
 import { safeRm } from '../support/cleanup.js';
 import { workspaceContextOptions } from '../support/workspaceContext.js';
 

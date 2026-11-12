@@ -1,13 +1,6 @@
-import type {
-  ITerminalHandle,
-  OperationResult,
-  TerminalCommandGroup,
-  TerminalExecutedCommand,
-  TerminalGroupOutcome,
-  TerminalResult,
-  TerminalRunOutcome,
-  TerminalRunRequest,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { ITerminalHandle } from '@brud/service-plugin-manager';
+import type { TerminalCommandGroup, TerminalExecutedCommand, TerminalGroupOutcome, TerminalResult, TerminalRunOutcome, TerminalRunRequest } from '@brud/service-terminal';
 
 /** Stable failure codes surfaced by the Terminal tools. */
 export type TerminalFailureCode =

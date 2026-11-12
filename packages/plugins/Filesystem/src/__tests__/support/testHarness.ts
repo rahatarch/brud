@@ -10,21 +10,17 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IBrudFileSystem,
-  IBrudPlugin,
-  IBrudToolsService,
-  IPluginManagerService,
-  IStorageDriver,
-  IUniversalHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+  IBrudFileSystem, IStorageDriver, OperationResult } from '@brud/kernel';
+import type { IBrudPlugin, IPluginManagerService } from '@brud/service-plugin-manager';
+import type { IBrudToolsService } from '@brud/service-tools';
+import type { IUniversalHistoryService } from '@brud/service-history';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import type { ServiceContext } from '../../../../../kernel/src/contracts/lifecycle.js';
-import { FileSystemToken } from '../../../../../kernel/services/BrudFileSystem/descriptor/tokens.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
-import { PluginManagerToken } from '../../../../../kernel/services/PluginManager/contracts/tokens.js';
-import { UniversalHistoryToken } from '../../../../../kernel/services/UniversalHistory/descriptor/tokens.js';
+import { FileSystemToken } from '../../../../../services/BrudFileSystem/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
+import { PluginManagerToken } from '../../../../../services/PluginManager/contracts/tokens.js';
+import { UniversalHistoryToken } from '../../../../../services/UniversalHistory/descriptor/tokens.js';
 import { SHARED_MUTEX } from '../../coordinator/index.js';
 import type { FilesystemRuntime } from '../../runtime.js';
 import type { ExecuteTool } from '../../search/index.js';

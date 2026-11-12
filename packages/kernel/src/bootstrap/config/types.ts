@@ -20,7 +20,8 @@ export type BrudConfigErrorCode =
   | 'CONFIG_SCHEMA'
   | 'CONFIG_INTEGRITY'
   | 'MODULE_RESOLVE'
-  | 'MODULE_CONTRACT';
+  | 'MODULE_CONTRACT'
+  | 'HARDCORE_VERIFICATION';
 
 /** Config or module-resolution failure with optional source line. */
 export class BrudConfigError extends Error {

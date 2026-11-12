@@ -14,11 +14,12 @@ import { fileURLToPath } from 'node:url';
 import { bootKernel } from '../bootstrap/index.js';
 import { ContextContractError } from '../contracts/contextContract.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
-import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
+import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
+import { identityRegistryContextOptions } from './support/workspaceContext.js';
 
 const KERNEL_CONFIG_PATH = fileURLToPath(
-  new URL('../../brud.config.json', import.meta.url),
+  new URL('../../../services/standard.config.json', import.meta.url),
 );
 const DAEMON_CONFIG_PATH = fileURLToPath(
   new URL('../../../daemon/brud.config.json', import.meta.url),
@@ -37,6 +38,7 @@ const REQUIRED_FIELDS: readonly RequiredField[] = [
   { field: 'pluginManager.root', service: 'pluginManager' },
   { field: 'history.root', service: 'history' },
   { field: 'router.root', service: 'router' },
+  { field: 'identity.registry.path', service: 'identity' },
 ];
 
 interface ProductionConfig {
@@ -81,6 +83,7 @@ function contextBag(workspace: string): Record<string, unknown> {
     'pluginManager.root': workspace,
     'history.root': workspace,
     'router.root': workspace,
+    ...identityRegistryContextOptions(workspace),
   };
 }
 

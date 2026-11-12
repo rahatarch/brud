@@ -6,16 +6,13 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type {
-  IBrudToolsService,
-  IPluginExecutionContext,
-  ITerminalHandle,
-  OperationResult,
-  TerminalResult,
-  TerminalRunRequest,
-} from '@brud/kernel';
+  IBrudToolsService, OperationResult } from '@brud/kernel';
+import type { IPluginExecutionContext } from '@brud/service-tools';
+import type { ITerminalHandle } from '@brud/service-plugin-manager';
+import type { TerminalResult, TerminalRunRequest } from '@brud/service-terminal';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
 import { createTerminalPlugin } from '../../plugin.js';
 import { terminalCommand } from './terminalCommand.js';
 

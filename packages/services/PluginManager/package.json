@@ -1,0 +1,46 @@
+{
+  "name": "@brud/service-plugin-manager",
+  "version": "0.1.0",
+  "description": "Brud plugin manager service",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p ../../services/tsconfig.json",
+    "typecheck": "tsc -p ../../services/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*",
+    "@brud/service-actions": "*",
+    "@brud/service-brand-registry": "*",
+    "@brud/service-filesystem": "*",
+    "@brud/service-tools": "*",
+    "@brud/service-exposed-api-registry": "*",
+    "@brud/service-terminal": "*",
+    "@brud/service-history": "*",
+    "@brud/service-utility": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}

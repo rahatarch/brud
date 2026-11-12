@@ -2,12 +2,9 @@ import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { createServer, Socket } from 'node:net';
 import type { Server } from 'node:net';
-import type {
-  BrudKernel,
-  IActionManager,
-  IBrudToolsService,
-  ServiceToken,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IActionManager } from '@brud/service-actions' with { 'resolution-mode': 'import' };
+import type { IBrudToolsService } from '@brud/service-tools' with { 'resolution-mode': 'import' };
+import type { BrudKernel, ServiceToken } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { DaemonCallerTier } from '@brud/protocol';
 import { Connection } from './Connection.js';
 import { RequestDispatcher } from './dispatch.js';
@@ -144,11 +141,15 @@ export class DaemonServer {
   private closedPromise: Promise<void> | undefined;
 
   static async create(config: DaemonServerConfig): Promise<DaemonServer> {
-    const kernelModule = await loadKernelModule();
+    const [{ BrudToolsToken }, { ActionManagerToken }] = await Promise.all([
+      import('@brud/service-tools'),
+      import('@brud/service-actions'),
+    ]);
+
     return new DaemonServer(
       config,
-      kernelModule.BrudToolsToken,
-      kernelModule.ActionManagerToken,
+      BrudToolsToken,
+      ActionManagerToken,
     );
   }
 

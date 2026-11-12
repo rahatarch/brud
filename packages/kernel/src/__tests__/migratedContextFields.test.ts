@@ -7,14 +7,15 @@ import { createStandardKernel } from '../bootstrap/index.js';
 import { ContextContractError } from '../contracts/contextContract.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import { createServiceToken } from '../contracts/serviceToken.js';
-import type { BrudOperation } from '../../services/Parser/contracts/index.js';
-import { FileSystemToken } from '../../services/BrudFileSystem/descriptor/tokens.js';
-import type { IBrudFileSystem } from '../../services/BrudFileSystem/contracts/index.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import { RouterService } from '../../services/Router/orchestrator/RouterService.js';
-import type { BrudRouteRegistration } from '../../services/Router/contracts/types.js';
-import { SettingsToken } from '../../services/SettingsService/descriptor/tokens.js';
-import type { ISettingsService } from '../../services/SettingsService/contracts/ISettingsService.js';
+import type { BrudOperation } from '../../../services/Parser/contracts/index.js';
+import { FileSystemToken } from '../../../services/BrudFileSystem/descriptor/tokens.js';
+import type { IBrudFileSystem } from '../../../services/BrudFileSystem/contracts/index.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { RouterService } from '../../../services/Router/orchestrator/RouterService.js';
+import type { BrudRouteRegistration } from '../../../services/Router/contracts/types.js';
+import { SettingsToken } from '../../../services/SettingsService/descriptor/tokens.js';
+import type { ISettingsService } from '../../../services/SettingsService/contracts/ISettingsService.js';
+import { identityRegistryContextOptions } from './support/workspaceContext.js';
 
 interface MigratedField {
   readonly field: string;
@@ -28,6 +29,7 @@ const MIGRATED_FIELDS: readonly MigratedField[] = [
   { field: 'pluginManager.root', service: 'pluginManager' },
   { field: 'history.root', service: 'history' },
   { field: 'router.root', service: 'router' },
+  { field: 'identity.registry.path', service: 'identity' },
 ];
 
 let root = '';
@@ -50,6 +52,7 @@ function contextBag(workspaceRoot: string): Record<string, unknown> {
     'pluginManager.root': workspaceRoot,
     'history.root': workspaceRoot,
     'router.root': workspaceRoot,
+    ...identityRegistryContextOptions(workspaceRoot),
   };
 }
 

@@ -1,8 +1,6 @@
-import type {
-  IActionExecutionContext,
-  IPluginHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IActionExecutionContext } from '@brud/service-actions';
+import type { IPluginHistoryService } from '@brud/service-history';
 import {
   WIPE_CONFIRMATION_PHRASE,
 } from '../shared/historyResult.js';

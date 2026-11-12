@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { IBrudToolsService } from '@brud/kernel';
+import type { IBrudToolsService } from '@brud/service-tools';
 import {
   CATALOG_MANDATE,
   LEGACY_MANDATE,

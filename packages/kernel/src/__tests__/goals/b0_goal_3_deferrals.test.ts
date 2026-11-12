@@ -2,8 +2,8 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { readRepoFile } from './_support.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
-import { WorkspaceService } from '../../../services/WorkspaceService/orchestrator/WorkspaceService.js';
-import { createStorageDriverPathPort } from '../../../services/WorkspaceService/ports/StorageDriverPathPort.js';
+import { WorkspaceService } from '../../../../services/WorkspaceService/orchestrator/WorkspaceService.js';
+import { createStorageDriverPathPort } from '../../../../services/WorkspaceService/ports/StorageDriverPathPort.js';
 
 const WINDOWS_ROOT = 'C:\\Users\\Dev\\Workspace';
 
@@ -19,7 +19,7 @@ const WINDOWS_CASES = [
 ] as const;
 
 const WORKSPACE_SERVICE_TEST =
-  'packages/kernel/services/WorkspaceService/orchestrator/WorkspaceService.test.ts';
+  'packages/services/WorkspaceService/orchestrator/WorkspaceService.test.ts';
 
 async function assertViolation(promise: Promise<unknown>, rule: string): Promise<void> {
   await assert.rejects(promise, (error: unknown) => {

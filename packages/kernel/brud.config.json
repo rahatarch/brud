@@ -1,67 +1,7 @@
 {
   "services": [
     {
-      "path": "kernel:serviceModules/settings.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/settingsReader.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/utility.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/exposedApiRegistry.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/brandRegistry.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/workspace.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/filesystem.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/validation.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/terminal.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/parser.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/router.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/tools.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/actions.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/historySession.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/historyJournal.js",
-      "official": true
-    },
-    {
-      "path": "kernel:serviceModules/pluginManager.js",
+      "path": "kernel:serviceModules/identityRegistry.js",
       "official": true
     }
   ],

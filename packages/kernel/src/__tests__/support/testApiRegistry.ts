@@ -2,36 +2,36 @@ import type { IKernelAccessBroker, ServiceInfo } from '../../contracts/accessBro
 import type { ServiceContext } from '../../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../contracts/serviceDescriptor.js';
 import type { ServiceToken } from '../../contracts/serviceToken.js';
-import type { IActionManager } from '../../../services/ActionManager/contracts/index.js';
-import type { IBrudToolsService } from '../../../services/BrudTools/contracts/index.js';
-import type { IBrudFileSystem } from '../../../services/BrudFileSystem/contracts/index.js';
-import { ReadOnlyFacade } from '../../../services/BrudFileSystem/projection/index.js';
-import { ExposedApiRegistryService } from '../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
-import type { IExposedApiRegistry } from '../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import type { IActionManager } from '../../../../services/ActionManager/contracts/index.js';
+import type { IBrudToolsService } from '../../../../services/BrudTools/contracts/index.js';
+import type { IBrudFileSystem } from '../../../../services/BrudFileSystem/contracts/index.js';
+import { ReadOnlyFacade } from '../../../../services/BrudFileSystem/projection/index.js';
+import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import type { IExposedApiRegistry } from '../../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
 import {
   CORE_API_NAME,
   lastProjectionWins,
-} from '../../../services/ExposedApiRegistry/contracts/coreApis.js';
-import { ExposedApiRegistryToken } from '../../../services/ExposedApiRegistry/descriptor/tokens.js';
-import type { IUniversalHistoryService } from '../../../services/UniversalHistory/contracts/index.js';
-import { ReadOnlyUniversalHistoryFacade } from '../../../services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
-import { UniversalHistoryToken } from '../../../services/UniversalHistory/descriptor/tokens.js';
-import { namespaceHistoryFor } from '../../../services/UniversalHistory/unified/adapters/PluginHistoryFacade.js';
-import { createReadOnlyNamespaceHandle } from '../../../services/UniversalHistory/unified/service/NamespaceHandle.js';
-import type { NamespaceHistoryHandle } from '../../../services/UniversalHistory/unified/service/types.js';
-import { FileSystemToken } from '../../../services/BrudFileSystem/descriptor/tokens.js';
-import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
-import { ActionManagerToken } from '../../../services/ActionManager/descriptor/tokens.js';
-import { PluginContext } from '../../../services/PluginManager/contracts/PluginContext.js';
-import type { IPluginLogger, IPluginSubscriptions } from '../../../services/PluginManager/contracts/IPluginContext.js';
-import type { PluginManifest } from '../../../services/PluginManager/contracts/manifest.js';
-import type { PluginPermission } from '../../../services/PluginManager/contracts/permissions.js';
-import type { InternalPluginRecord } from '../../../services/PluginManager/orchestrator/types.js';
-import { createRegistryCapabilityProviders } from '../../../services/PluginManager/orchestrator/registryCapabilities.js';
-import type { ITerminalService } from '../../../services/TerminalService/contracts/ITerminalService.js';
-import { TerminalToken } from '../../../services/TerminalService/descriptor/tokens.js';
-import type { IUtilityService } from '../../../services/UtilityService/contracts/IUtilityService.js';
-import { UtilityToken } from '../../../services/UtilityService/descriptor/tokens.js';
+} from '../../../../services/ExposedApiRegistry/contracts/coreApis.js';
+import { ExposedApiRegistryToken } from '../../../../services/ExposedApiRegistry/descriptor/tokens.js';
+import type { IUniversalHistoryService } from '../../../../services/UniversalHistory/contracts/index.js';
+import { ReadOnlyUniversalHistoryFacade } from '../../../../services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
+import { UniversalHistoryToken } from '../../../../services/UniversalHistory/descriptor/tokens.js';
+import { namespaceHistoryFor } from '../../../../services/UniversalHistory/unified/adapters/PluginHistoryFacade.js';
+import { createReadOnlyNamespaceHandle } from '../../../../services/UniversalHistory/unified/service/NamespaceHandle.js';
+import type { NamespaceHistoryHandle } from '../../../../services/UniversalHistory/unified/service/types.js';
+import { FileSystemToken } from '../../../../services/BrudFileSystem/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
+import { ActionManagerToken } from '../../../../services/ActionManager/descriptor/tokens.js';
+import { PluginContext } from '../../../../services/PluginManager/contracts/PluginContext.js';
+import type { IPluginLogger, IPluginSubscriptions } from '../../../../services/PluginManager/contracts/IPluginContext.js';
+import type { PluginManifest } from '../../../../services/PluginManager/contracts/manifest.js';
+import type { PluginPermission } from '../../../../services/PluginManager/contracts/permissions.js';
+import type { InternalPluginRecord } from '../../../../services/PluginManager/orchestrator/types.js';
+import { createRegistryCapabilityProviders } from '../../../../services/PluginManager/orchestrator/registryCapabilities.js';
+import type { ITerminalService } from '../../../../services/TerminalService/contracts/ITerminalService.js';
+import { TerminalToken } from '../../../../services/TerminalService/descriptor/tokens.js';
+import type { IUtilityService } from '../../../../services/UtilityService/contracts/IUtilityService.js';
+import { UtilityToken } from '../../../../services/UtilityService/descriptor/tokens.js';
 import { PUBLIC_API_CAPABILITY } from '../../contracts/capability.js';
 
 /** Minimal broker over an explicit token-id map. */

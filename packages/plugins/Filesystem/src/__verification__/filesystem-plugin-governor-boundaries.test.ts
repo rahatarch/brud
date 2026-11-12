@@ -8,11 +8,9 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
-  DirectoryEntry,
-  FileStats,
-  IFileMutationJournal,
-} from '@brud/kernel';
-import { DurableNodeStorageDriver } from '../../../../kernel/services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+  DirectoryEntry, FileStats } from '@brud/kernel';
+import type { IFileMutationJournal } from '@brud/service-filesystem';
+import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import {
   MAX_BYTES_PER_MUTATION,
   MAX_CONCURRENCY,

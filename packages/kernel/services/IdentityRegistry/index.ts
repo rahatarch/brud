@@ -22,6 +22,8 @@ export {
 export type { IdentityRegistryErrorCode } from './contracts/errors.js';
 export {
   IDENTITY_REGISTRY_CONTEXT_SCOPE,
+  IDENTITY_REGISTRY_CONTRACT_METHODS,
+  IDENTITY_REGISTRY_CONTRACT_VERSION,
   IDENTITY_REGISTRY_PATH_CONTEXT_FIELD,
   IDENTITY_REGISTRY_SERVICE_TIER,
   createIdentityRegistryDescriptor,

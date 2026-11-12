@@ -3,22 +3,22 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OperationResult } from '../../src/contracts/handler.js';
-import type { ServiceContext, IServiceLifecycle } from '../../src/contracts/lifecycle.js';
-import type { ServiceDescriptor } from '../../src/contracts/serviceDescriptor.js';
-import { createServiceToken } from '../../src/contracts/serviceToken.js';
-import { createStandardKernel } from '../../src/bootstrap/index.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
-import { ParserToken } from '../../services/Parser/descriptor/tokens.js';
-import type { IRouterService } from '../../services/Router/contracts/IRouterService.js';
-import { ROUTER_CALLER_ID } from '../../services/Router/contracts/caller.js';
+import type { OperationResult } from '../contracts/handler.js';
+import type { ServiceContext, IServiceLifecycle } from '../contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
+import { createServiceToken } from '../contracts/serviceToken.js';
+import { createStandardKernel } from '../bootstrap/index.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
+import { ParserToken } from '../../../services/Parser/descriptor/tokens.js';
+import type { IRouterService } from '../../../services/Router/contracts/IRouterService.js';
+import { ROUTER_CALLER_ID } from '../../../services/Router/contracts/caller.js';
 import {
   RouterKindCollisionError,
   RouterRegistrationClosedError,
-} from '../../services/Router/contracts/errors.js';
-import { RouterToken } from '../../services/Router/descriptor/tokens.js';
+} from '../../../services/Router/contracts/errors.js';
+import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
 import { bootRealKernel } from './support/realKernel.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 

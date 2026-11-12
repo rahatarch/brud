@@ -1,8 +1,5 @@
-import type {
-  IBrudPlugin,
-  IPluginContext,
-  OperationResult,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext } from '@brud/service-plugin-manager';
 import { SHARED_MUTEX } from './coordinator/index.js';
 import { filesystemManifest } from './manifest.js';
 import type { FilesystemRuntime } from './runtime.js';

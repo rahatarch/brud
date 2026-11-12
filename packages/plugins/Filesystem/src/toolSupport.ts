@@ -1,5 +1,6 @@
 /** Helpers shared by the twelve tool handlers. */
-import type { IBrudFileSystem, OperationResult } from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/service-filesystem';
 import { buildFailureResult } from './coordinator/index.js';
 import type { MutationResult } from './envelope/index.js';
 import { FilesystemError } from './errors/index.js';

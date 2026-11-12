@@ -1,4 +1,4 @@
-import type { IMcpTransport, IPluginLogger } from '@brud/kernel';
+import type { IMcpTransport, IPluginLogger } from '@brud/service-plugin-manager';
 import type { Transport, TransportSendOptions } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 

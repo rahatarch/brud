@@ -35,6 +35,7 @@ import type {
   OracleErrorKind,
 } from './historyOracle/subject.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
+import { provisionIdentityRegistryStorage } from '../../services/IdentityRegistry/storage/registryDocument.js';
 
 const SUBJECT_NAME = 'unified';
 
@@ -493,14 +494,14 @@ describe(`history parity oracle [${SUBJECT_NAME}] — recording, concurrency, de
     const h = await open(context);
     const workerPath = join(h.workspaceRoot, '..', `oracle-worker-${process.pid}-${Date.now()}.mjs`);
     const bootstrapUrl = new URL('../bootstrap/index.ts', import.meta.url).href;
-    const tokensUrl = new URL('../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
+    const tokensUrl = new URL('../../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
 
     await writeFile(workerPath, `
 const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
 const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
-const [root, id, count] = process.argv.slice(2);
+const [root, id, count, identityRegistryPath] = process.argv.slice(2);
 const kernel = createStandardKernel();
-await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root } });
+await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root, 'identity.registry.path': identityRegistryPath } });
 const fs = kernel.requestAccess({ callerId: 'oracle.worker', tier: 'core', workspaceRoot: root }, FileSystemToken);
 for (let i = 0; i < Number(count); i += 1) await fs.writeAtomic(\`workers/\${id}-\${i}.txt\`, \`\${id}-\${i}\\n\`);
 await new Promise((resolve) => setTimeout(resolve, 200));
@@ -510,7 +511,13 @@ await kernel.shutdown();
 
     const workers = ['alpha', 'beta', 'gamma'];
     const results = await Promise.all(workers.map(async (id) => {
-      const child = spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5'], {
+      const identityRegistryPath = join(
+        h.workspaceRoot,
+        '..',
+        `oracle-identity-${String(process.pid)}-${String(Date.now())}-${id}.json`,
+      );
+      provisionIdentityRegistryStorage(identityRegistryPath);
+      const child = spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5', identityRegistryPath], {
         cwd: process.cwd(),
         stdio: ['ignore', 'ignore', 'pipe'],
       });
@@ -543,15 +550,15 @@ await kernel.shutdown();
       const h = await open(context);
       const workerPath = join(h.workspaceRoot, '..', `oracle-worker-run-${process.pid}-${Date.now()}-${run}.mjs`);
       const bootstrapUrl = new URL('../bootstrap/index.ts', import.meta.url).href;
-      const tokensUrl = new URL('../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
+      const tokensUrl = new URL('../../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
 
       await writeFile(workerPath, `
 const { createStandardKernel } = await import(${JSON.stringify(bootstrapUrl)});
 const { FileSystemToken } = await import(${JSON.stringify(tokensUrl)});
 const { DatabaseSync } = process.getBuiltinModule('node:sqlite');
-const [root, id, count] = process.argv.slice(2);
+const [root, id, count, identityRegistryPath] = process.argv.slice(2);
 const kernel = createStandardKernel();
-await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root } });
+await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root, 'identity.registry.path': identityRegistryPath } });
 const db = new DatabaseSync(root + '/.brud/history/universal.db');
 db.exec('PRAGMA busy_timeout = 5000');
 const rows = db.prepare("SELECT session_id AS sessionId FROM sessions WHERE implicit = 1 AND status = 'active' AND prompt = 'automatic recording' ORDER BY session_id DESC LIMIT 1").all();
@@ -569,10 +576,18 @@ await kernel.shutdown();
       const bootRows = new Map<string, string>();
       const alive: ChildProcess[] = [];
       context.after(() => { for (const child of alive) { child.kill('SIGKILL'); } });
-      const children = workers.map((id) => spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5'], {
-        cwd: process.cwd(),
-        stdio: ['ignore', 'pipe', 'pipe'],
-      }));
+      const children = workers.map((id) => {
+        const identityRegistryPath = join(
+          h.workspaceRoot,
+          '..',
+          `oracle-run-identity-${String(process.pid)}-${String(Date.now())}-${String(run)}-${id}.json`,
+        );
+        provisionIdentityRegistryStorage(identityRegistryPath);
+        return spawn(process.execPath, ['--import', 'tsx', workerPath, h.workspaceRoot, id, '5', identityRegistryPath], {
+          cwd: process.cwd(),
+          stdio: ['ignore', 'pipe', 'pipe'],
+        });
+      });
       alive.push(...children);
       const streams = children.map((child) => {
         const state = { stdout: '', stderr: '' };

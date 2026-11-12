@@ -1,12 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { PluginPermissionError, ToolRegistrationError } from '@brud/kernel';
-import type {
-  IBrudToolsReader,
-  IBrudToolsService,
-  OperationResult,
-  ToolRegistrationOptions,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import { PluginPermissionError } from '@brud/service-plugin-manager';
+import { ToolRegistrationError } from '@brud/service-tools';
+import type { IBrudToolsReader, IBrudToolsService, ToolRegistrationOptions } from '@brud/service-tools';
 import {
   DEFAULT_SCHEMA,
   bootCatalogKernel,

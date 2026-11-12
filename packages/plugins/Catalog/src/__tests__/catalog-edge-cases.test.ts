@@ -1,7 +1,8 @@
 import { after, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { ToolRegistrationError } from '@brud/kernel';
-import type { IBrudToolsService, OperationResult } from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import { ToolRegistrationError } from '@brud/service-tools';
+import type { IBrudToolsService } from '@brud/service-tools';
 import {
   CATALOG_MANDATE,
   DEFAULT_SCHEMA,

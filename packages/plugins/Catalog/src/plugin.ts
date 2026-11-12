@@ -1,11 +1,6 @@
-import type {
-  IBrudPlugin,
-  IBrudToolsReader,
-  IPluginContext,
-  OperationResult,
-  PluginManifest,
-  RegisteredToolInfo,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext, PluginManifest } from '@brud/service-plugin-manager';
+import type { IBrudToolsReader, RegisteredToolInfo } from '@brud/service-tools';
 
 /** Declarative plugin metadata. */
 export const catalogManifest: PluginManifest = {

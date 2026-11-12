@@ -9,15 +9,17 @@ import { bootKernel, BrudConfigError } from '../bootstrap/index.js';
 import type { BrudConfig, BrudConfigEntry } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import type { IBrandScope } from '../../services/BrandRegistry/contracts/IBrandScope.js';
-import type { IBrandRegistry } from '../../services/BrandRegistry/contracts/IBrandRegistry.js';
-import { BrandRegistryToken } from '../../services/BrandRegistry/contracts/tokens.js';
-import { PLUGIN_MANAGER_SCOPE_NAME } from '../../services/PluginManager/serviceModule.js';
-import type { IPluginManagerService } from '../../services/PluginManager/contracts/IPluginManager.js';
-import { PluginManagerToken } from '../../services/PluginManager/contracts/tokens.js';
+import type { IBrandScope } from '../../../services/BrandRegistry/contracts/IBrandScope.js';
+import type { IBrandRegistry } from '../../../services/BrandRegistry/contracts/IBrandRegistry.js';
+import { BrandRegistryToken } from '../../../services/BrandRegistry/contracts/tokens.js';
+import { PLUGIN_MANAGER_SCOPE_NAME } from '../../../services/PluginManager/serviceModule.js';
+import type { IPluginManagerService } from '../../../services/PluginManager/contracts/IPluginManager.js';
+import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
-const KERNEL_CONFIG_PATH = fileURLToPath(new URL('../../brud.config.json', import.meta.url));
+const KERNEL_CONFIG_PATH = fileURLToPath(
+  new URL('../../../services/standard.config.json', import.meta.url),
+);
 
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
 

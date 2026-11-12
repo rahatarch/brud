@@ -2,9 +2,9 @@ import { access, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import type { OperationResult } from '../../src/contracts/handler.js';
-import type { IPluginExecutionContext } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { OperationResult } from '../contracts/handler.js';
+import type { IPluginExecutionContext } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { bootRealKernel } from './support/realKernel.js';
 import { ParserRouterHarness } from './support/parserRouterHarness.js';
 

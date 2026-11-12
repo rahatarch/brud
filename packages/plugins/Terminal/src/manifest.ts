@@ -1,4 +1,4 @@
-import type { PluginManifest } from '@brud/kernel';
+import type { PluginManifest } from '@brud/service-plugin-manager';
 
 /** Declarative metadata for the official Terminal plugin. */
 export const manifest: PluginManifest = {

@@ -3,19 +3,19 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStandardKernel } from '../../src/bootstrap/index.js';
-import type { ServiceContext } from '../../src/contracts/lifecycle.js';
-import { createServiceToken } from '../../src/contracts/serviceToken.js';
-import type { BrudKernel } from '../../src/engine/BrudKernel.js';
-import type { IActionManager } from '../../services/ActionManager/contracts/IActionManager.js';
-import { ActionManagerToken } from '../../services/ActionManager/descriptor/tokens.js';
-import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
-import type { IBrudParserService } from '../../services/Parser/contracts/IParserService.js';
-import { ParserToken } from '../../services/Parser/descriptor/tokens.js';
-import type { IRouterService } from '../../services/Router/contracts/IRouterService.js';
-import { RouterKindCollisionError, RouterRegistrationClosedError } from '../../services/Router/contracts/errors.js';
-import { RouterToken } from '../../services/Router/descriptor/tokens.js';
+import { createStandardKernel } from '../bootstrap/index.js';
+import type { ServiceContext } from '../contracts/lifecycle.js';
+import { createServiceToken } from '../contracts/serviceToken.js';
+import type { BrudKernel } from '../engine/BrudKernel.js';
+import type { IActionManager } from '../../../services/ActionManager/contracts/IActionManager.js';
+import { ActionManagerToken } from '../../../services/ActionManager/descriptor/tokens.js';
+import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
+import type { IBrudParserService } from '../../../services/Parser/contracts/IParserService.js';
+import { ParserToken } from '../../../services/Parser/descriptor/tokens.js';
+import type { IRouterService } from '../../../services/Router/contracts/IRouterService.js';
+import { RouterKindCollisionError, RouterRegistrationClosedError } from '../../../services/Router/contracts/errors.js';
+import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
 import {
   TEST_QUERY_KIND,
   TEST_QUERY_PLUGIN_ID,

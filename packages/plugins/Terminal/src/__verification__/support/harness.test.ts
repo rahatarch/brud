@@ -10,17 +10,15 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IBrudToolsService,
-  IPluginExecutionContext,
-  OperationResult,
-} from '@brud/kernel';
+  IBrudToolsService, OperationResult } from '@brud/kernel';
+import type { IPluginExecutionContext } from '@brud/service-tools';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
 import {
   DEFAULT_TERMINAL_POLICY,
   type TerminalPolicy,
-} from '../../../../../kernel/services/TerminalService/contracts/policies.js';
+} from '../../../../../services/TerminalService/contracts/policies.js';
 import { createTerminalPlugin } from '../../plugin.js';
 
 export interface TerminalHarness {

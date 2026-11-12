@@ -3,19 +3,16 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IActionExecutionContext,
-  IActionManager,
-  IBrudToolsService,
-  IPluginExecutionContext,
-  IPluginHistoryService,
-  OperationResult,
-} from '@brud/kernel';
+  IActionExecutionContext, OperationResult } from '@brud/kernel';
+import type { IActionManager } from '@brud/service-actions';
+import type { IBrudToolsService, IPluginExecutionContext } from '@brud/service-tools';
+import type { IPluginHistoryService } from '@brud/service-history';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
-import { ActionManagerToken } from '../../../../../kernel/services/ActionManager/descriptor/tokens.js';
-import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../kernel/services/ActionManager/contracts/IActionManager.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
-import { UniversalHistoryToken } from '../../../../../kernel/services/UniversalHistory/descriptor/tokens.js';
+import { ActionManagerToken } from '../../../../../services/ActionManager/descriptor/tokens.js';
+import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../services/ActionManager/contracts/IActionManager.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
+import { UniversalHistoryToken } from '../../../../../services/UniversalHistory/descriptor/tokens.js';
 import { createHistoryPlugin } from '../../plugin.js';
 
 export const HISTORY_PLUGIN_ID = 'akkhar-labs.plugin.history';

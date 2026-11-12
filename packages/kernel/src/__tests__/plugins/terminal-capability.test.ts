@@ -16,13 +16,13 @@ import type {
   IBrudPlugin,
   IPluginContext,
   PluginPermission,
-} from '../../../services/PluginManager/contracts/index.js';
+} from '../../../../services/PluginManager/contracts/index.js';
 import type { OperationResult } from '../../contracts/handler.js';
-import { PluginContext } from '../../../services/PluginManager/contracts/PluginContext.js';
+import { PluginContext } from '../../../../services/PluginManager/contracts/PluginContext.js';
 import { createTestPluginContext } from '../support/testApiRegistry.js';
-import type { IPluginLogger } from '../../../services/PluginManager/contracts/IPluginContext.js';
-import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
-import type { IBrudToolsService } from '../../../services/BrudTools/contracts/index.js';
+import type { IPluginLogger } from '../../../../services/PluginManager/contracts/IPluginContext.js';
+import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
+import type { IBrudToolsService } from '../../../../services/BrudTools/contracts/index.js';
 import { workspaceContextOptions } from '../support/workspaceContext.js';
 
 interface CapturedPlugin {

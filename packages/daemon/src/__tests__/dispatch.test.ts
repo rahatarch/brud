@@ -1,8 +1,10 @@
 import { after, before, describe, it } from 'node:test';
 import { strict as assert } from 'node:assert';
 import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import * as Protocol from '@brud/protocol';
 import type {
   DaemonConnectParams,
@@ -17,6 +19,17 @@ import { channelPrologue, SecureChannel } from '../security/channel.js';
 import { derivePsk } from '../security/noise.js';
 
 const TOKEN = 'test-daemon-token-0123456789abcdef';
+
+// The kernel package ships hardcore services only. This test composes the
+// standard external service packages through an on-disk host config.
+const repositoryRoot = resolve(__dirname, '../../../..');
+execFileSync(process.execPath, [join(repositoryRoot, 'scripts', 'standard-config.mjs')]);
+process.env.BRUD_STANDARD_CONFIG = join(
+  repositoryRoot,
+  'packages',
+  'services',
+  'standard.config.json',
+);
 const CALL_TIMEOUT_MS = 5_000;
 
 interface PendingCall {
@@ -200,6 +213,9 @@ describe('DaemonServer dispatch', () => {
 
     workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-dispatch-test-'));
     tempDirectory = await mkdtemp(join(tmpdir(), 'brud-daemon-test-'));
+    const identityRegistryPath = join(tempDirectory, 'identity-registry.json');
+    mkdirSync(tempDirectory, { recursive: true });
+    kernelModule.provisionIdentityRegistryStorage(identityRegistryPath);
 
     const createdKernel = kernelModule.createStandardKernel({
       storageDriver,
@@ -214,6 +230,7 @@ describe('DaemonServer dispatch', () => {
         'pluginManager.root': workspaceRoot,
         'history.root': workspaceRoot,
         'router.root': workspaceRoot,
+        'identity.registry.path': identityRegistryPath,
       },
     });
     kernel = createdKernel;

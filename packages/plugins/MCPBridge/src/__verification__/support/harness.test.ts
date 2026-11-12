@@ -9,16 +9,14 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IBrudPlugin,
-  IBrudToolsService,
-  IMcpTransport,
-  OperationResult,
-} from '@brud/kernel';
+  IBrudPlugin, OperationResult } from '@brud/kernel';
+import type { IBrudToolsService } from '@brud/service-tools';
+import type { IMcpTransport } from '@brud/service-plugin-manager';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
-import { PluginManagerToken } from '../../../../../kernel/services/PluginManager/contracts/tokens.js';
-import type { IPluginManagerService } from '../../../../../kernel/services/PluginManager/contracts/IPluginManager.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
+import { PluginManagerToken } from '../../../../../services/PluginManager/contracts/tokens.js';
+import type { IPluginManagerService } from '../../../../../services/PluginManager/contracts/IPluginManager.js';
 import { createSearchPlugin } from '../../../../Search/src/index.js';
 import { createStructurePlugin } from '../../../../Structure/src/index.js';
 import { createReaderPlugin } from '../../../../Reader/src/index.js';

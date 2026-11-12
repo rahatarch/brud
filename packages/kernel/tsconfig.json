@@ -15,5 +15,10 @@
     "drivers",
     "services",
     "serviceModules"
+  ],
+  "exclude": [
+    "dist",
+    "**/*.test.ts",
+    "**/__tests__/**"
   ]
 }

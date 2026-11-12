@@ -5,10 +5,8 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as Protocol from '@brud/protocol';
 import type { DaemonCallerTier, RpcRequest } from '@brud/protocol';
-import type {
-  IBrudToolsService,
-  ServiceToken,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { ServiceToken } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IBrudToolsService } from '@brud/service-tools' with { 'resolution-mode': 'import' };
 import type { DispatchSession, RequestDispatcher } from '../server/dispatch.js';
 import { RequestDispatcher as Dispatcher } from '../server/dispatch.js';
 import {
@@ -68,12 +66,12 @@ function connectRequest(
 before(async () => {
   baseRoot = await mkdtemp(join(tmpdir(), 'brud-connect-'));
   primaryRoot = await makeWorkspace('primary');
-  const kernelModule = await import('@brud/kernel');
+  const { BrudToolsToken } = await import('@brud/service-tools');
   registry = new WorkspaceRegistry();
 
   dispatcher = new Dispatcher({
     registry,
-    toolsToken: kernelModule.BrudToolsToken as ServiceToken<IBrudToolsService>,
+    toolsToken: BrudToolsToken as ServiceToken<IBrudToolsService>,
     workspaceRoot: primaryRoot,
   });
 });

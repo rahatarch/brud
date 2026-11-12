@@ -5,17 +5,14 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IActionExecutionContext,
-  IActionManager,
-  IBrudToolsService,
-  IPluginExecutionContext,
-  OperationResult,
-} from '@brud/kernel';
-import { ActionManagerToken } from '../../../../../kernel/services/ActionManager/descriptor/tokens.js';
-import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../kernel/services/ActionManager/contracts/IActionManager.js';
+  IActionExecutionContext, OperationResult } from '@brud/kernel';
+import type { IActionManager } from '@brud/service-actions';
+import type { IBrudToolsService, IPluginExecutionContext } from '@brud/service-tools';
+import { ActionManagerToken } from '../../../../../services/ActionManager/descriptor/tokens.js';
+import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../services/ActionManager/contracts/IActionManager.js';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
-import { BrudToolsToken } from '../../../../../kernel/services/BrudTools/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
 import { createTerminalPlugin } from '../../plugin.js';
 import {
   TERMINAL_KILL_PROCESS_ACTION,

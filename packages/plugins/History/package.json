@@ -20,7 +20,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@brud/kernel": "*"
+    "@brud/kernel": "*",
+    "@brud/service-actions": "*",
+    "@brud/service-history": "*",
+    "@brud/service-plugin-manager": "*",
+    "@brud/service-tools": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

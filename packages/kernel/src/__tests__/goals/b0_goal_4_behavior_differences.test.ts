@@ -3,17 +3,17 @@ import assert from 'node:assert/strict';
 import { chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { KERNEL_ROOT, stripComments } from './_support.js';
-import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { KERNEL_ROOT, REPO_ROOT, stripComments } from './_support.js';
+import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { NodeStorageDriver } from '../../../drivers/node/index.js';
-import { writeAtomic } from '../../../services/BrudFileSystem/operations/write_atomic/writeAtomic.js';
+import { writeAtomic } from '../../../../services/BrudFileSystem/operations/write_atomic/writeAtomic.js';
 import {
   STAGING_MAX_AGE_MS,
   createStagingPath,
   sweepStaleStagingFiles,
-} from '../../../services/BrudFileSystem/operations/shared/staging.js';
-import { WorkspaceService } from '../../../services/WorkspaceService/orchestrator/WorkspaceService.js';
-import { createStorageDriverPathPort } from '../../../services/WorkspaceService/ports/StorageDriverPathPort.js';
+} from '../../../../services/BrudFileSystem/operations/shared/staging.js';
+import { WorkspaceService } from '../../../../services/WorkspaceService/orchestrator/WorkspaceService.js';
+import { createStorageDriverPathPort } from '../../../../services/WorkspaceService/ports/StorageDriverPathPort.js';
 
 const UUID_A = '00000000-0000-4000-8000-000000000000';
 const UUID_B = '11111111-1111-4111-8111-111111111111';
@@ -58,11 +58,11 @@ describe('B0 Goal 4 — the seven recorded behaviour differences are real', () =
         'utf8',
       );
       const operationSource = await readFile(
-        join(KERNEL_ROOT, 'services/BrudFileSystem/operations/read_directory/readDirectory.ts'),
+        join(REPO_ROOT, 'packages/services/BrudFileSystem/operations/read_directory/readDirectory.ts'),
         'utf8',
       );
       const applicationTest = await readFile(
-        join(KERNEL_ROOT, 'services/BrudFileSystem/operations/read_directory/readDirectory.test.ts'),
+        join(REPO_ROOT, 'packages/services/BrudFileSystem/operations/read_directory/readDirectory.test.ts'),
         'utf8',
       );
 

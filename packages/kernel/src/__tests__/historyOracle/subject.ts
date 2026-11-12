@@ -7,7 +7,7 @@
  * shapes below. The same scenarios must pass on the previous engines
  * and on the unified engine (U-4/U-6) without being edited.
  */
-import type { IBrudFileSystem } from '../../../services/BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
+import type { IBrudFileSystem } from '../../../../services/BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
 
 export type OracleSessionStatus = 'active' | 'committed' | 'aborted' | 'reverted';
 

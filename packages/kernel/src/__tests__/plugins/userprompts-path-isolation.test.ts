@@ -7,11 +7,11 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
-import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
-import { FileSystemToken } from '../../../services/BrudFileSystem/descriptor/tokens.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
-import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
-import { WorkspaceViolationError } from '../../../services/WorkspaceService/contracts/errors.js';
+import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import { FileSystemToken } from '../../../../services/BrudFileSystem/descriptor/tokens.js';
+import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { PluginManagerToken } from '../../../../services/PluginManager/contracts/tokens.js';
+import { WorkspaceViolationError } from '../../../../services/WorkspaceService/contracts/errors.js';
 import { safeRm } from '../support/cleanup.js';
 import { workspaceContextOptions } from '../support/workspaceContext.js';
 

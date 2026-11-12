@@ -21,6 +21,8 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
+    "@brud/service-plugin-manager": "*",
+    "@brud/service-tools": "*",
     "@modelcontextprotocol/sdk": "^1.32.1"
   },
   "devDependencies": {

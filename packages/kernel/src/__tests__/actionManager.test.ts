@@ -5,13 +5,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { AllowlistViolationError } from '../contracts/policy.js';
-import { PluginPermissionError } from '../../services/PluginManager/contracts/errors.js';
-import { PluginManagerToken } from '../../services/PluginManager/contracts/tokens.js';
-import type { PluginManagerService } from '../../services/PluginManager/orchestrator/PluginManagerService.js';
-import { ActionManagerToken } from '../../services/ActionManager/descriptor/tokens.js';
-import type { IActionManager } from '../../services/ActionManager/contracts/index.js';
+import { PluginPermissionError } from '../../../services/PluginManager/contracts/errors.js';
+import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
+import type { PluginManagerService } from '../../../services/PluginManager/orchestrator/PluginManagerService.js';
+import { ActionManagerToken } from '../../../services/ActionManager/descriptor/tokens.js';
+import type { IActionManager } from '../../../services/ActionManager/contracts/index.js';
 import {
   ECHO_ACTION_NAME,
   ECHO_ACTION_PLUGIN_ID,
@@ -22,7 +22,7 @@ import { bootRealKernel } from './support/realKernel.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const ACTION_MANAGER_ROOT = resolve(HERE, '../../services/ActionManager');
+const ACTION_MANAGER_ROOT = resolve(HERE, '../../../services/ActionManager');
 
 function caller(root: string, callerId = 'kernel'): ServiceContext {
   return { callerId, tier: 'core', options: {...workspaceContextOptions(root)} };

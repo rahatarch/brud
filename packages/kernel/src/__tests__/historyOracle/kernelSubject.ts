@@ -15,21 +15,21 @@ import { DatabaseSync } from 'node:sqlite';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
-import { FileSystemToken } from '../../../services/BrudFileSystem/descriptor/tokens.js';
-import type { IUniversalHistory } from '../../../services/UniversalHistory/contracts/IUniversalHistory.js';
-import type { RollbackReport } from '../../../services/UniversalHistory/contracts/models.js';
-import type { IUniversalHistoryService } from '../../../services/UniversalHistory/contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import { HistoryToken, UniversalHistoryToken } from '../../../services/UniversalHistory/descriptor/tokens.js';
-import type { ReversalPlan } from '../../../services/UniversalHistory/contracts/IUniversalHistoryService/types.js';
+import { FileSystemToken } from '../../../../services/BrudFileSystem/descriptor/tokens.js';
+import type { IUniversalHistory } from '../../../../services/UniversalHistory/contracts/IUniversalHistory.js';
+import type { RollbackReport } from '../../../../services/UniversalHistory/contracts/models.js';
+import type { IUniversalHistoryService } from '../../../../services/UniversalHistory/contracts/IUniversalHistoryService/IUniversalHistoryService.js';
+import { HistoryToken, UniversalHistoryToken } from '../../../../services/UniversalHistory/descriptor/tokens.js';
+import type { ReversalPlan } from '../../../../services/UniversalHistory/contracts/IUniversalHistoryService/types.js';
 import {
   UnifiedReversalConflictError,
   UnifiedSessionNotRevertibleError,
-} from '../../../services/UniversalHistory/unified/engine/errors.js';
-import { UnifiedSessionStateError } from '../../../services/UniversalHistory/unified/service/errors.js';
+} from '../../../../services/UniversalHistory/unified/engine/errors.js';
+import { UnifiedSessionStateError } from '../../../../services/UniversalHistory/unified/service/errors.js';
 import {
   UnifiedHistoryDegradedError,
   UnifiedSessionNotFoundError,
-} from '../../../services/UniversalHistory/unified/store/errors.js';
+} from '../../../../services/UniversalHistory/unified/store/errors.js';
 import type {
   HistoryOracleSubject,
   HistoryOracleSubjectFactory,

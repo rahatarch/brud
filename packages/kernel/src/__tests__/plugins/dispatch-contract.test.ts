@@ -1,11 +1,11 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OperationResult } from '../../contracts/handler.js';
-import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
+import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
 import type {
   IBrudToolsService,
   IPluginExecutionContext,
-} from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+} from '../../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { bootRealKernel } from '../support/realKernel.js';
 import { workspaceContextOptions } from '../support/workspaceContext.js';
 

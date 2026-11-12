@@ -1,10 +1,6 @@
-import type {
-  IPluginExecutionContext,
-  ITerminalHandle,
-  TerminalGroupOutcome,
-  TerminalRunOutcome,
-  TerminalRunRequest,
-} from '@brud/kernel';
+import type { IPluginExecutionContext } from '@brud/service-tools';
+import type { ITerminalHandle } from '@brud/service-plugin-manager';
+import type { TerminalGroupOutcome, TerminalRunOutcome, TerminalRunRequest } from '@brud/service-terminal';
 import {
   failureCodeFor,
   failureDetailsFor,

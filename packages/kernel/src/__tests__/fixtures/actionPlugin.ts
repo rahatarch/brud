@@ -1,7 +1,7 @@
 import type { OperationResult } from '../../contracts/handler.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
-import type { IPluginContext } from '../../../services/PluginManager/contracts/IPluginContext.js';
-import type { PluginPermission } from '../../../services/PluginManager/contracts/permissions.js';
+import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IPluginContext } from '../../../../services/PluginManager/contracts/IPluginContext.js';
+import type { PluginPermission } from '../../../../services/PluginManager/contracts/permissions.js';
 
 /** Stable plugin id used by the end-to-end action pipeline test. */
 export const ECHO_ACTION_PLUGIN_ID = 'acme.test.echo-ui';

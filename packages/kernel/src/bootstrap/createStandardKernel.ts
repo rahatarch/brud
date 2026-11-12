@@ -62,6 +62,21 @@ export function createStandardKernel(
 }
 
 function defaultKernelConfigPath(): string {
+  // The host chooses the composition. Tests and embedders that ship their own
+  // standard set point this variable at their config; the kernel package only
+  // ships its hardcore-only default config.
+  const override = process.env.BRUD_STANDARD_CONFIG;
+
+  if (typeof override === 'string' && override.length > 0) {
+    if (!existsSync(override)) {
+      throw new Error(
+        `BRUD_STANDARD_CONFIG points at a missing config: ${override}`,
+      );
+    }
+
+    return override;
+  }
+
   const candidates = [
     fileURLToPath(new URL('../../brud.config.json', import.meta.url)),
     fileURLToPath(new URL('../../../brud.config.json', import.meta.url)),

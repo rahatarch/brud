@@ -5,34 +5,42 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import vm from 'node:vm';
 import v8 from 'node:v8';
+import { createStandardKernel } from '@brud/kernel';
+import type {
+  BrudKernel,
+  IKernelAccessBroker,
+  OperationResult,
+  ServiceContext,
+  ServiceInfo,
+  ServiceToken,
+} from '@brud/kernel';
 import {
   BrudToolsService,
   BrudToolsToken,
+} from '@brud/service-tools';
+import type {
+  IBrudToolsService,
+  RegisteredToolInfo,
+  ToolRegistrationOptions,
+} from '@brud/service-tools';
+import {
   CORE_API_NAME,
   ExposedApiRegistryService,
+  lastProjectionWins,
+} from '@brud/service-exposed-api-registry';
+import {
   PluginContext,
   PluginManagerService,
   PluginManagerToken,
   createRegistryCapabilityProviders,
-  createStandardKernel,
-  lastProjectionWins,
-} from '@brud/kernel';
+} from '@brud/service-plugin-manager';
 import type {
-  BrudKernel,
   IBrudPlugin,
-  IBrudToolsService,
-  IKernelAccessBroker,
   InternalPluginRecord,
   IPluginDisposable,
-  OperationResult,
   PluginManifest,
   PluginPermission,
-  RegisteredToolInfo,
-  ServiceContext,
-  ServiceInfo,
-  ServiceToken,
-  ToolRegistrationOptions,
-} from '@brud/kernel';
+} from '@brud/service-plugin-manager';
 import { CATALOG_MANDATE, catalogPlugin, sanitizeDescription } from '../plugin.js';
 
 export { CATALOG_MANDATE, sanitizeDescription };

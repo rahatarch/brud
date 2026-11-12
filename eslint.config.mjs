@@ -79,10 +79,7 @@ export default [
             ecmaVersion: 2022,
             sourceType: "module",
             parserOptions: {
-                projectService: {
-                    allowDefaultProject: ["packages/ui/vite.config.ts"],
-                    defaultProject: "./tsconfig.eslint.json",
-                },
+                project: ["./tsconfig.eslint.json"],
                 tsconfigRootDir: import.meta.dirname,
             },
         },

@@ -1,4 +1,4 @@
-import type { IBrudPlugin, IMcpTransport, IPluginContext } from '@brud/kernel';
+import type { IBrudPlugin, IMcpTransport, IPluginContext } from '@brud/service-plugin-manager';
 import { manifest } from './manifest.js';
 import { createMcpServer } from './server/mcpServer.js';
 import { ImcpTransportBridge } from './server/transportBridge.js';

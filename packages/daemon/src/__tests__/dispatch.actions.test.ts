@@ -72,13 +72,14 @@ function expectSuccess(response: RpcResponse): unknown {
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'brud-dispatch-actions-'));
-  const kernelModule = await import('@brud/kernel');
+  const { BrudToolsToken } = await import('@brud/service-tools');
+  const { ActionManagerToken } = await import('@brud/service-actions');
   registry = new WorkspaceRegistry();
 
   dispatcher = new RequestDispatcher({
     registry,
-    toolsToken: kernelModule.BrudToolsToken,
-    actionsToken: kernelModule.ActionManagerToken,
+    toolsToken: BrudToolsToken,
+    actionsToken: ActionManagerToken,
     workspaceRoot: await makeWorkspace('primary'),
   });
 });

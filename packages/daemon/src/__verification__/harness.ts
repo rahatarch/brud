@@ -15,7 +15,7 @@ import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { DurableNodeStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { DurableNodeStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
 import * as Protocol from '@brud/protocol';
 import {
   channelPrologue,
@@ -478,8 +478,8 @@ export async function createAttackWorkspace(
   prefix: string = 'brud-redteam-',
 ): Promise<AttackWorkspace> {
   const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
-  const kernelModule = await import('@brud/kernel');
-  const driver = new kernelModule.DurableNodeStorageDriver();
+  const { DurableNodeStorageDriver } = await import('@brud/service-filesystem');
+  const driver = new DurableNodeStorageDriver();
 
   await driver.mkdir(root, { recursive: true });
   await driver.writeFile(join(root, '.brudignore'), 'node_modules/\ndist/\n');

@@ -1,11 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
-  FileStats,
-  IBrudFileSystem,
-  IUniversalHistoryService,
-  SessionManifest,
-} from '@brud/kernel';
+  FileStats, SessionManifest } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/service-filesystem';
+import type { IUniversalHistoryService } from '@brud/service-history';
 import { KeyedMutex, executeMutation } from './index.js';
 import type { MutationContext } from './index.js';
 import { FilesystemError } from '../errors/index.js';

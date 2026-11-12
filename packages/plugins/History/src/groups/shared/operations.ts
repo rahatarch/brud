@@ -1,15 +1,5 @@
-import type {
-  DeleteHistoryAction,
-  DeleteHistoryQuery,
-  DeleteHistoryStatus,
-  IPluginHistoryService,
-  LedgerQueryFilter,
-  OperationResult,
-  SessionLifecycleOptions,
-  SessionStatus,
-  TrashSessionOptions,
-  WipeSessionsOptions,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { DeleteHistoryAction, DeleteHistoryQuery, DeleteHistoryStatus, IPluginHistoryService, LedgerQueryFilter, SessionLifecycleOptions, SessionStatus, TrashSessionOptions, WipeSessionsOptions } from '@brud/service-history';
 import {
   WIPE_CONFIRMATION_PHRASE,
   SESSION_ID_PATTERN,

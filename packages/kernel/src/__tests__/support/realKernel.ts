@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { createStandardKernel } from '../../bootstrap/index.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { workspaceContextOptions } from './workspaceContext.js';
 
 /** A booted kernel plus the real workspace and database it owns. */

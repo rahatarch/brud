@@ -8,6 +8,9 @@ const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const packagesRoot = resolve(scriptDirectory, '..', 'packages');
 const kernelRoot = join(packagesRoot, 'kernel');
 const pluginsRoot = join(packagesRoot, 'plugins');
+const servicesRoot = join(packagesRoot, 'services');
+const { writeStandardConfig } = await import('./standard-config.mjs');
+const standardConfig = writeStandardConfig();
 
 const TARGETS = [
   { directory: 'src/__tests__', recursive: false },
@@ -53,6 +56,32 @@ async function collectTestFiles(directory, recursive) {
   return files;
 }
 
+async function collectServiceTestFiles(root) {
+  let entries;
+
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return [];
+    }
+
+    throw error;
+  }
+
+  const files = [];
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+
+    files.push(...await collectTestFiles(join(root, entry.name), true));
+  }
+
+  return files;
+}
+
 async function collectPluginTestFiles(root) {
   let entries;
 
@@ -89,6 +118,7 @@ for (const target of TARGETS) {
   );
 }
 
+discovered.push(...await collectServiceTestFiles(servicesRoot));
 discovered.push(...await collectPluginTestFiles(pluginsRoot));
 
 const testFiles = [...new Set(discovered)].sort();
@@ -101,7 +131,11 @@ if (testFiles.length === 0) {
 const child = spawn(
   process.execPath,
   ['--import', 'tsx', '--test', '--test-force-exit', ...testFiles],
-  { cwd: kernelRoot, stdio: 'inherit' },
+  {
+    cwd: kernelRoot,
+    stdio: 'inherit',
+    env: { ...process.env, BRUD_STANDARD_CONFIG: standardConfig },
+  },
 );
 
 child.on('error', (error) => {

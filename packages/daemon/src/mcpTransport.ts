@@ -5,8 +5,7 @@ import { join } from 'node:path';
 import type {
   IMcpTransport,
   IPluginManagerService,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
-import { loadKernelModule } from './kernelRuntime.js';
+} from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
 import type { KernelWorkspace } from './workspaceRegistry.js';
 
 /** MCP endpoint file written under `.brud/` for HTTP transports. */
@@ -381,14 +380,14 @@ export async function attachMcpTransports(
   workspace: KernelWorkspace,
   options: AttachMcpTransportsOptions,
 ): Promise<readonly IMcpTransport[]> {
-  const kernelModule = await loadKernelModule();
+  const { PluginManagerToken } = await import('@brud/service-plugin-manager');
   const manager = workspace.kernel.requestAccess<IPluginManagerService>(
     {
       callerId: 'brud.daemon',
       tier: 'core',
       options: workspace.options,
     },
-    kernelModule.PluginManagerToken,
+    PluginManagerToken,
   );
   const attached: IMcpTransport[] = [];
   let stdioClaimed = false;

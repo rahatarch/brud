@@ -1,7 +1,8 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
-import type { IBrudFileSystem, IUniversalHistoryService } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/kernel';
+import type { IUniversalHistoryService } from '@brud/service-history';
 import { SHARED_MUTEX } from '../coordinator/index.js';
 import { createFile } from '../groups/file/createFile/index.js';
 import { appendFileMulti } from '../groups/multi/appendFileMulti/index.js';

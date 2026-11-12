@@ -9,6 +9,7 @@ import type { ContextFieldDeclaration, ContextScopeDeclaration } from '../contra
 import { ContextContractError } from '../contracts/contextContract.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import { createServiceToken } from '../contracts/serviceToken.js';
+import { identityRegistryContextOptions } from './support/workspaceContext.js';
 
 const FIXTURE_PATH = fileURLToPath(
   new URL('./fixtures/contextContractService.ts', import.meta.url),
@@ -35,13 +36,20 @@ async function bootWith(
   const configPath = join(root, 'brud.config.json');
   await writeFile(
     configPath,
-    JSON.stringify({ services: [{ path: FIXTURE_PATH }], plugins: [] }),
+    JSON.stringify({
+      services: [
+        { path: FIXTURE_PATH },
+        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+      ],
+      plugins: [],
+    }),
     'utf8',
   );
 
   return bootKernel(configPath, {
     options: {
       __contractDeclarations: declarations,
+      ...identityRegistryContextOptions(root),
       ...options,
     },
   });
@@ -79,6 +87,12 @@ describe('dynamic context contract', () => {
         required: true,
         description: 'Workspace root',
         service: 'workspace',
+      }, {
+        name: 'identity.registry.path',
+        type: 'string',
+        required: true,
+        description: 'Absolute path to the operator-provisioned identity registry file.',
+        service: 'identity',
       }]);
     } finally {
       await kernel.shutdown();
@@ -161,7 +175,7 @@ describe('dynamic context contract', () => {
     const kernel = await bootWith([declaration]);
 
     try {
-      assert.equal(kernel.getContextSchema().fields.length, 1);
+      assert.equal(kernel.getContextSchema().fields.length, 2);
     } finally {
       await kernel.shutdown();
     }
@@ -229,6 +243,7 @@ describe('dynamic context contract', () => {
 
       assert.deepEqual(schema.fields.map((field) => field.name), [
         'photoshop.licenseKey',
+        'identity.registry.path',
       ]);
       assert.equal(schema.fields[0]?.service, 'photoshop');
     } finally {
@@ -267,7 +282,7 @@ describe('dynamic context contract', () => {
 
       assert.deepEqual(
         kernel.getContextSchema().fields.map((field) => field.name),
-        ['workspace.root'],
+        ['workspace.root', 'identity.registry.path'],
       );
     } finally {
       await kernel.shutdown();

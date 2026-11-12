@@ -1,9 +1,5 @@
-import type {
-  IBrudPlugin,
-  IPluginContext,
-  OperationResult,
-  PluginManifest,
-} from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext, PluginManifest } from '@brud/service-plugin-manager';
 import type { SearchFileSystem } from './fsPort.js';
 import { searchFiles } from './fileSearch.js';
 

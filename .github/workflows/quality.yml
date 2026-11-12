@@ -23,6 +23,8 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
+      - name: Build workspace packages (protocol, kernel, services)
+        run: npm run build:protocol && npm run build:kernel && npm run build:services
       - name: Run lint (informational until pre-existing debt is cleared)
         continue-on-error: true
         run: npm run lint
@@ -36,8 +38,8 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
-      - name: Build workspace packages (protocol, kernel)
-        run: npm run build:protocol && npm run build:kernel
+      - name: Build workspace packages (protocol, kernel, services)
+        run: npm run build:protocol && npm run build:kernel && npm run build:services
       - name: Typecheck workspace packages
         run: npm run typecheck:ci
 

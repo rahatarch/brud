@@ -8,19 +8,21 @@ import { bootKernel, BrudConfigError } from '../bootstrap/index.js';
 import type { BrudConfig } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import type { IBrandRegistry } from '../../services/BrandRegistry/contracts/IBrandRegistry.js';
-import { BrandRegistryToken } from '../../services/BrandRegistry/contracts/tokens.js';
-import { PLUGIN_MANAGER_SCOPE_NAME } from '../../services/PluginManager/serviceModule.js';
-import type { IPluginManagerService } from '../../services/PluginManager/contracts/IPluginManager.js';
-import { PluginManagerToken } from '../../services/PluginManager/contracts/tokens.js';
-import type { IBrudToolsService } from '../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../services/BrudTools/descriptor/tokens.js';
-import type { IUtilityService } from '../../services/UtilityService/contracts/IUtilityService.js';
-import { UtilityToken } from '../../services/UtilityService/descriptor/tokens.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import type { IBrandRegistry } from '../../../services/BrandRegistry/contracts/IBrandRegistry.js';
+import { BrandRegistryToken } from '../../../services/BrandRegistry/contracts/tokens.js';
+import { PLUGIN_MANAGER_SCOPE_NAME } from '../../../services/PluginManager/serviceModule.js';
+import type { IPluginManagerService } from '../../../services/PluginManager/contracts/IPluginManager.js';
+import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
+import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
+import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
+import type { IUtilityService } from '../../../services/UtilityService/contracts/IUtilityService.js';
+import { UtilityToken } from '../../../services/UtilityService/descriptor/tokens.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
-const KERNEL_CONFIG_PATH = fileURLToPath(new URL('../../brud.config.json', import.meta.url));
+const KERNEL_CONFIG_PATH = fileURLToPath(
+  new URL('../../../services/standard.config.json', import.meta.url),
+);
 const DAEMON_CONFIG_PATH = fileURLToPath(
   new URL('../../../daemon/brud.config.json', import.meta.url),
 );
@@ -84,7 +86,10 @@ function writePluginModule(
 describe('bootKernel config composition', () => {
   it('boots a minimal config with one service and no plugins', async (t) => {
     const { kernel, root } = await boot(t, {
-      services: [{ path: 'kernel:serviceModules/utility.js', official: true }],
+      services: [
+        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+        { path: '@brud/service-utility/serviceModule.js', official: true },
+      ],
       plugins: [],
     });
 
@@ -227,7 +232,10 @@ describe('bootKernel config composition', () => {
   it('does not load a service omitted from the config and fails its dependents', async (t) => {
     const root = await workspace(t);
     const configPath = await writeConfig(root, {
-      services: [{ path: 'kernel:serviceModules/router.js' }],
+      services: [
+        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+        { path: '@brud/service-router/serviceModule.js' },
+      ],
       plugins: [],
     });
 

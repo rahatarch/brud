@@ -1,8 +1,7 @@
+import type { IActionManager } from '@brud/service-actions' with { 'resolution-mode': 'import' };
+import type { IBrudToolsService, IPluginExecutionContext } from '@brud/service-tools' with { 'resolution-mode': 'import' };
 import type {
   BrudKernel,
-  IActionManager,
-  IBrudToolsService,
-  IPluginExecutionContext,
   OperationResult,
   ServiceContext,
   ServiceToken,

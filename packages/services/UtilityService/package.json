@@ -1,0 +1,41 @@
+{
+  "name": "@brud/service-utility",
+  "version": "0.1.0",
+  "description": "Brud utility service",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*.js": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./dist/*.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p ../../services/tsconfig.json",
+    "typecheck": "tsc -p ../../services/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@brud/kernel": "*",
+    "@brud/service-filesystem": "*",
+    "@brud/service-exposed-api-registry": "*",
+    "@brud/service-plugin-manager": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
+}

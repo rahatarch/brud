@@ -8,6 +8,7 @@ import { WorkspaceRegistry } from '../workspaceRegistry.js';
 const NAMESPACED_KEYS = [
   'filesystem.root',
   'history.root',
+  'identity.registry.path',
   'pluginManager.root',
   'plugins',
   'router.root',

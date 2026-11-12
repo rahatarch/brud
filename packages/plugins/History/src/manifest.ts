@@ -1,4 +1,4 @@
-import type { PluginManifest } from '@brud/kernel';
+import type { PluginManifest } from '@brud/service-plugin-manager';
 
 export const manifest: PluginManifest = {
   id: 'akkhar-labs.plugin.history',

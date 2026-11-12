@@ -6,10 +6,10 @@ import assert from 'node:assert/strict';
 import { bootKernel, createStandardKernel } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceToken } from '../contracts/serviceToken.js';
-import type { IBrandRegistry } from '../../services/BrandRegistry/contracts/IBrandRegistry.js';
-import { BrandRegistryToken } from '../../services/BrandRegistry/contracts/tokens.js';
-import type { IBrudPlugin } from '../../services/PluginManager/contracts/IBrudPlugin.js';
-import { PLUGIN_MANAGER_SCOPE_NAME } from '../../services/PluginManager/serviceModule.js';
+import type { IBrandRegistry } from '../../../services/BrandRegistry/contracts/IBrandRegistry.js';
+import { BrandRegistryToken } from '../../../services/BrandRegistry/contracts/tokens.js';
+import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
+import { PLUGIN_MANAGER_SCOPE_NAME } from '../../../services/PluginManager/serviceModule.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const REGISTRY_SLOT = 'brud.core.brandRegistry.instance';
@@ -36,7 +36,10 @@ async function writeConfig(root: string, services: readonly string[]): Promise<s
   const configPath = join(root, 'brud.config.json');
 
   await writeFile(configPath, JSON.stringify({
-    services: services.map((path) => ({ path, official: true })),
+    services: [
+      { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+      ...services.map((path) => ({ path, official: true })),
+    ],
     plugins: [],
   }, null, 2));
 
@@ -162,7 +165,7 @@ describe('Brand Registry in a booted kernel', () => {
       scopeName: 'acme.shared.scope',
     });
     const configPath = await writeConfig(root, [
-      'kernel:serviceModules/brandRegistry.js',
+      '@brud/service-brand-registry/serviceModule.js',
       first,
       second,
     ]);
@@ -192,7 +195,7 @@ describe('Brand Registry in a booted kernel', () => {
       consumeItem: true,
     });
     const configPath = await writeConfig(root, [
-      'kernel:serviceModules/brandRegistry.js',
+      '@brud/service-brand-registry/serviceModule.js',
       first,
       second,
     ]);

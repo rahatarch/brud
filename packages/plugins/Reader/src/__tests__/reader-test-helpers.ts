@@ -13,22 +13,16 @@ import { dirname, isAbsolute, join, relative } from 'node:path';
 import v8 from 'node:v8';
 import vm from 'node:vm';
 import type { TestContext } from 'node:test';
-import {
-  BrudToolsToken,
-  FileSystemToken,
-  PluginManagerToken,
-  UtilityToken,
-  createStandardKernel,
-} from '@brud/kernel';
+import { createStandardKernel } from '@brud/kernel';
+import { BrudToolsToken } from '@brud/service-tools';
+import { FileSystemToken } from '@brud/service-filesystem';
+import { PluginManagerToken } from '@brud/service-plugin-manager';
+import { UtilityToken } from '@brud/service-utility';
 import type {
-  BrudKernel,
-  IBrudFileSystem,
-  IBrudPlugin,
-  IBrudToolsService,
-  OperationResult,
-  PluginManagerService,
-  ServiceContext,
-} from '@brud/kernel';
+  BrudKernel, OperationResult, PluginManagerService, ServiceContext } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/service-filesystem';
+import type { IBrudPlugin } from '@brud/service-plugin-manager';
+import type { IBrudToolsService } from '@brud/service-tools';
 import { searchPlugin } from '../../../Search/src/index.js';
 import { readerPlugin } from '../plugin.js';
 import type { ReadResult } from '../envelope.js';

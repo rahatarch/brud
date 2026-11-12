@@ -14,12 +14,13 @@
   "homepage": "https://github.com/rahatarch/brud#readme",
   "workspaces": [
     "packages/*",
-    "packages/plugins/*"
+    "packages/plugins/*",
+    "packages/services/*"
   ],
   "scripts": {
     "lint": "eslint packages",
-    "typecheck": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
-    "typecheck:ci": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
+    "typecheck": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/services/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
+    "typecheck:ci": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/services/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
     "test": "npm run test:kernel && npm run test:daemon",
     "test:kernel": "npm run test --workspace @brud/kernel",
     "check:boundaries": "node scripts/check-boundaries.mjs",
@@ -29,8 +30,9 @@
     "build:kernel": "npm run build --workspace @brud/kernel",
     "build:daemon": "npm run build --workspace @brud/daemon",
     "stage:daemon": "node scripts/stage-daemon.mjs",
-    "build:all": "npm run build:protocol && npm run build:kernel && npm run build:daemon && npm run build:ui",
-    "ci": "npm run build:all && npm run test:kernel && npm run check:boundaries && npm run lint"
+    "build:all": "npm run build:protocol && npm run build:kernel && npm run build:services && npm run build:daemon && npm run build:ui",
+    "ci": "npm run build:all && npm run test:kernel && npm run check:boundaries && npm run lint",
+    "build:services": "node scripts/build-services.mjs"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",

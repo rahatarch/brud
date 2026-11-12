@@ -1,4 +1,4 @@
-import type { IBrudPlugin, IPluginContext } from '@brud/kernel';
+import type { IBrudPlugin, IPluginContext } from '@brud/service-plugin-manager';
 import {
   TERMINAL_KILL_PROCESS_ACTION,
   TERMINAL_KILL_PROCESS_SCHEMA,

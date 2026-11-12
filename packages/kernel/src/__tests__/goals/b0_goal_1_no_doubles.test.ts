@@ -23,7 +23,7 @@ const DELETED_PATHS = [
   'packages/kernel/drivers/memory/InMemoryStorageDriver/InMemoryStorageDriver.ts',
   'packages/kernel/drivers/memory/InMemoryStorageDriver/InMemoryStorageDriver.test.ts',
   'packages/kernel/drivers/memory/index.ts',
-  'packages/kernel/services/WorkspaceService/testing/MapPathPort.ts',
+  'packages/services/WorkspaceService/testing/MapPathPort.ts',
 ] as const;
 
 const DEFERRED_DAEMON_SET = new Set(DEFERRED_DAEMON_TESTS);

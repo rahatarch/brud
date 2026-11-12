@@ -5,21 +5,19 @@ import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type {
-  IBrudPlugin,
-  IBrudToolsService,
-  IPluginLogger,
-  OperationResult,
-} from '@brud/kernel';
-import { PluginContext } from '@brud/kernel';
+  IBrudPlugin, OperationResult } from '@brud/kernel';
+import type { IBrudToolsService } from '@brud/service-tools';
+import type { IPluginLogger } from '@brud/service-plugin-manager';
+import { PluginContext } from '../../../../services/PluginManager/contracts/PluginContext.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.js';
 import { createStandardKernel } from '../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../kernel/src/engine/BrudKernel.js';
-import { BrudToolsToken } from '../../../../kernel/services/BrudTools/descriptor/tokens.js';
-import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
-import { CORE_API_NAME, lastProjectionWins } from '../../../../kernel/services/ExposedApiRegistry/contracts/index.js';
-import { createRegistryCapabilityProviders } from '../../../../kernel/services/PluginManager/orchestrator/registryCapabilities.js';
-import type { InternalPluginRecord } from '../../../../kernel/services/PluginManager/orchestrator/types.js';
+import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
+import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../../../services/ExposedApiRegistry/contracts/index.js';
+import { createRegistryCapabilityProviders } from '../../../../services/PluginManager/orchestrator/registryCapabilities.js';
+import type { InternalPluginRecord } from '../../../../services/PluginManager/orchestrator/types.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';
 import type { ServiceContext } from '../../../../kernel/src/contracts/lifecycle.js';
 import type { ServiceToken } from '../../../../kernel/src/contracts/serviceToken.js';

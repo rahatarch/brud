@@ -1,9 +1,8 @@
+import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type {
-  BrudKernel,
   IBrudPlugin,
   IMcpTransport,
-  IStorageDriver,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
+} from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
 import { createKernel, createWorkspaceContextOptions } from './kernelRuntime.js';
 
 /** Default idle window after which a client-less workspace is disposed. */
