@@ -9,3 +9,4 @@ temporary
 .env
 *.tsbuildinfo
 .internal_docs/
+TODO.md

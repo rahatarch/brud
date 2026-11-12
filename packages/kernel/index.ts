@@ -6,6 +6,7 @@ export * from './services/BrandRegistry/index.js';
 export * from './services/BrudFileSystem/index.js';
 export * from './services/BrudTools/index.js';
 export * from './services/ExposedApiRegistry/index.js';
+export * from './services/IdentityRegistry/index.js';
 export * from './services/Parser/index.js';
 export * from './services/Router/index.js';
 export * from './services/UniversalHistory/index.js';
