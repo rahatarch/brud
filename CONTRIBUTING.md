@@ -64,6 +64,7 @@ Refer to [ARCHITECTURE.md](./ARCHITECTURE.md) for a detailed breakdown of the ar
 - **Formatting** — Use the project's ESLint configuration. Run `npm run lint` before committing.
 - **Atomic Changes** — Each change must be minimal and context-aware. Changes should be designed to apply as a single transaction.
 - **Decoupled Engine** — Core patching logic in `packages/kernel/` and the official plugins must remain free of VS Code API dependencies. Platform-specific concerns belong in the host/daemon layer. The legacy engine is archived in `deprecated/` and is not a contribution target.
+- **Architectural Rules** — Every change must satisfy the binding rules in [ARCHITECTURE_RULES.md](./ARCHITECTURE_RULES.md). Read them before changing the codebase.
 
 ## Testing Requirements
 

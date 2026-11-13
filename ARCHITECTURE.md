@@ -4,6 +4,10 @@
 
 Brud Code is a monorepo with clear separation between the platform-agnostic core engine, the UI layer, and platform-specific adapters.
 
+## Architectural Rules
+
+The rules this architecture must never stop satisfying are in [ARCHITECTURE_RULES.md](ARCHITECTURE_RULES.md). They are binding on every contribution.
+
 ## Monorepo Structure
 
 ```
