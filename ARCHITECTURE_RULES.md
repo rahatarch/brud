@@ -4,6 +4,16 @@ This file is binding. It applies to every contribution, human or agent. It recor
 
 This file records business decisions and how they resolve. It contains no implementation status, no code, no file paths, no line numbers, no function or class names, no language-specific content, no ledger citations, and no statements about the current state of the code, the current work, or the current task. A change that would add any of these to this file does not belong here and must be rejected. This rule is part of the file and protects it against that mistake.
 
+## A primitive is universal only if any participant can use it with zero barrier and an identical result
+
+A primitive is universal if a third-party participant the Foundation has never seen can use it with zero barrier and receive an identical result to what a Foundation service receives. Universal primitives are published by the Foundation and are the only primitives that belong in the kernel. A primitive that hardcodes anything about today's participants, today's services, or today's composition is not universal.
+
+The test for universality has four questions, asked of each primitive in turn. First, can a third-party participant we have never seen use this primitive with zero barrier? Second, does the result that participant receives match the result a Foundation service receives? Third, is anything about the primitive shaped by a specific participant that exists today? Fourth, if the primitive were used by a participant that does not exist today, would it still work without change?
+
+If the barrier is zero, the result is identical, nothing is shaped by a specific participant, and a future participant would still work without change, the primitive is universal. If any of those fails, it is not universal, and it does not belong in the kernel.
+
+The rule applies to every primitive in the codebase, not only to what is in the kernel today. A primitive that is not universal may still exist, but it belongs to the participant that owns it, not to the Foundation.
+
 ## Composition is the unit
 
 Every rule in this file applies relative to a composition: one kernel, one config, one product owner, one boot. BrudOS is one composition. Every system built on BrudOS is another.
