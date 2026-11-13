@@ -18,7 +18,7 @@ import { SettingsReaderToken } from '../../../SettingsService/descriptor/tokens.
 import type { IFileMutationJournal } from '../../../BrudFileSystem/events/types.js';
 import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';

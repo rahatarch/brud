@@ -21,7 +21,6 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-exposed-api-registry": "*",
     "@brud/service-plugin-manager": "*",
     "@brud/service-tools": "*"
   },

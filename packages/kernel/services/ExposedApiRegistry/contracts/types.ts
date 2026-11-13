@@ -1,6 +1,6 @@
-import type { CapabilityToken } from '@brud/kernel';
-import type { ServiceTier } from '@brud/kernel';
-import type { ServiceToken } from '@brud/kernel';
+import type { CapabilityToken } from '../../../src/contracts/capability.js';
+import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 
 /** API names accept dotted, kebab, and snake segments. */
 export const EXPOSED_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/;

@@ -25,7 +25,7 @@ import type {
 } from './IPluginContext.js';
 import type { ITerminalHandle } from './ITerminalHandle.js';
 import type { ITerminalService } from '../../TerminalService/contracts/ITerminalService.js';
-import { CORE_API_NAME } from '../../ExposedApiRegistry/contracts/coreApis.js';
+import { CORE_API_NAME } from '@brud/kernel';
 import { CAPABILITY_PERMISSION_REQUIREMENTS } from './permissions.js';
 import type { PluginCapability, PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';

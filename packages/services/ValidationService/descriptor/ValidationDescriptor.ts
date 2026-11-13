@@ -1,5 +1,5 @@
 import type { ServiceContext, ServiceTier } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
 import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';

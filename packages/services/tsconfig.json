@@ -14,7 +14,6 @@
     "BrandRegistry",
     "BrudFileSystem",
     "BrudTools",
-    "ExposedApiRegistry",
     "Parser",
     "PluginManager",
     "Router",

@@ -32,7 +32,6 @@
   "dependencies": {
     "@brud/kernel": "*",
     "@brud/service-filesystem": "*",
-    "@brud/service-exposed-api-registry": "*",
     "@brud/service-settings": "*",
     "@brud/service-validation": "*"
   },

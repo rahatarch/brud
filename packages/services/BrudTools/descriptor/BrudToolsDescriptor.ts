@@ -1,6 +1,6 @@
 import type { ServiceContext, ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
 import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext.js';
 import type { ISettingsReader } from '../../SettingsService/contracts/ISettingsService.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';

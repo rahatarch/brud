@@ -6,9 +6,9 @@ import type {
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { ServiceToken } from '@brud/kernel';
 import type { IBrandScope } from '../../BrandRegistry/contracts/IBrandScope.js';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
-import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/IExposedApiRegistry.js';
-import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import type { IExposedApiRegistry } from '@brud/kernel';
+import { ExposedApiRegistryToken } from '@brud/kernel';
 import { ActionManagerToken } from '../../ActionManager/descriptor/tokens.js';
 import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';

@@ -6,13 +6,13 @@ import type { IActionManager } from '../../../../services/ActionManager/contract
 import type { IBrudToolsService } from '../../../../services/BrudTools/contracts/index.js';
 import type { IBrudFileSystem } from '../../../../services/BrudFileSystem/contracts/index.js';
 import { ReadOnlyFacade } from '../../../../services/BrudFileSystem/projection/index.js';
-import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
-import type { IExposedApiRegistry } from '../../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import { ExposedApiRegistryService } from '../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import type { IExposedApiRegistry } from '../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
 import {
   CORE_API_NAME,
   lastProjectionWins,
-} from '../../../../services/ExposedApiRegistry/contracts/coreApis.js';
-import { ExposedApiRegistryToken } from '../../../../services/ExposedApiRegistry/descriptor/tokens.js';
+} from '../../../services/ExposedApiRegistry/contracts/coreApis.js';
+import { ExposedApiRegistryToken } from '../../../services/ExposedApiRegistry/descriptor/tokens.js';
 import type { IUniversalHistoryService } from '../../../../services/UniversalHistory/contracts/index.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../../../services/UniversalHistory/descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { UniversalHistoryToken } from '../../../../services/UniversalHistory/descriptor/tokens.js';

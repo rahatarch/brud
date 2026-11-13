@@ -30,8 +30,7 @@
     "typecheck": "tsc -p ../../services/tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@brud/kernel": "*",
-    "@brud/service-exposed-api-registry": "*"
+    "@brud/kernel": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

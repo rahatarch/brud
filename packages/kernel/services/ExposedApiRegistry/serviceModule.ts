@@ -1,4 +1,4 @@
-import type { KernelServiceModuleContext } from '@brud/kernel';
+import type { KernelServiceModuleContext } from '../../src/bootstrap/bootTypes.js';
 import {
   EXPOSED_API_REGISTRY_CONTEXT_SCOPE,
   EXPOSED_API_SCOPE_RECORD_PATH_FIELD,

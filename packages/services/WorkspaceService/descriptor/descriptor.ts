@@ -2,7 +2,7 @@ import type { ServiceContext, ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { IStorageDriver } from '@brud/kernel';
 import { NodeStorageDriver } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type {
   IWorkspacePathPort,

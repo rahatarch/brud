@@ -1,7 +1,7 @@
 import { PUBLIC_API_CAPABILITY } from '@brud/kernel';
 import type { ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
 import type { IUtilityService } from '../contracts/IUtilityService.js';
 import { UtilityService } from '../orchestrator/UtilityService.js';
 import { UtilityToken } from './tokens.js';

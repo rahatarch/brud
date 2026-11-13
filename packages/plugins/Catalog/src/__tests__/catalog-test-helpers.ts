@@ -27,7 +27,7 @@ import {
   CORE_API_NAME,
   ExposedApiRegistryService,
   lastProjectionWins,
-} from '@brud/service-exposed-api-registry';
+} from '@brud/kernel';
 import {
   PluginContext,
   PluginManagerService,

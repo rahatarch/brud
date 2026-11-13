@@ -35,7 +35,6 @@
     "@brud/service-brand-registry": "*",
     "@brud/service-filesystem": "*",
     "@brud/service-tools": "*",
-    "@brud/service-exposed-api-registry": "*",
     "@brud/service-terminal": "*",
     "@brud/service-history": "*",
     "@brud/service-utility": "*"

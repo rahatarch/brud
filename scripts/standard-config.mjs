@@ -11,7 +11,7 @@ const ENTRIES = [
   'SettingsService/serviceModule.ts',
   'SettingsService/settingsReader.ts',
   'UtilityService/serviceModule.ts',
-  'ExposedApiRegistry/serviceModule.ts',
+  'kernel:serviceModules/exposedApiRegistry.js',
   'BrandRegistry/serviceModule.ts',
   'WorkspaceService/serviceModule.ts',
   'BrudFileSystem/serviceModule.ts',
@@ -37,7 +37,7 @@ export function writeStandardConfig() {
   const configPath = join(servicesRoot, 'standard.config.json');
   const services = [
     ...ENTRIES.map((entry) => ({
-      path: join(servicesRoot, entry),
+      path: entry.startsWith('kernel:') ? entry : join(servicesRoot, entry),
       official: true,
     })),
     { path: 'kernel:serviceModules/identityRegistry.js', official: true },

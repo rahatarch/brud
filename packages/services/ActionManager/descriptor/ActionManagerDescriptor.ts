@@ -1,7 +1,7 @@
 import type { ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { IActionManager } from '../contracts/IActionManager.js';
 import { ACTION_MANAGER_ALLOWED_CALLERS } from '../contracts/IActionManager.js';

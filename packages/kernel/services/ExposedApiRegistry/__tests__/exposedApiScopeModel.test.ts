@@ -2,7 +2,6 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { appendFile, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -13,7 +12,7 @@ import {
   type IServiceLifecycle,
   type ServiceContext,
   type ServiceDescriptor,
-} from '@brud/kernel';
+} from '../../../index.js';
 import {
   ExposedApiInvalidPolicyError,
   ExposedApiInvalidScopeError,
@@ -29,10 +28,6 @@ import type {
 } from '../contracts/types.js';
 import { withExposedApis } from '../contracts/registrant.js';
 import { ExposedApiRegistryToken } from '../descriptor/tokens.js';
-
-const REGISTRY_MODULE_PATH = fileURLToPath(
-  new URL('../serviceModule.ts', import.meta.url),
-);
 
 interface ProbeService extends IServiceLifecycle {
   readonly marker: string;
@@ -88,7 +83,7 @@ async function createWorkspace(): Promise<TestWorkspace> {
     configPath,
     JSON.stringify({
       services: [
-        { path: REGISTRY_MODULE_PATH, official: true },
+        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
       ],
       plugins: [],

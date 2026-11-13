@@ -14,8 +14,8 @@ import type { JSONRPCMessage, RequestId } from '@modelcontextprotocol/sdk/types.
 import { createStandardKernel } from '../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../kernel/src/engine/BrudKernel.js';
 import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
-import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
-import { CORE_API_NAME, lastProjectionWins } from '../../../../services/ExposedApiRegistry/contracts/index.js';
+import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../../../kernel/services/ExposedApiRegistry/contracts/index.js';
 import { createRegistryCapabilityProviders } from '../../../../services/PluginManager/orchestrator/registryCapabilities.js';
 import type { InternalPluginRecord } from '../../../../services/PluginManager/orchestrator/types.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';

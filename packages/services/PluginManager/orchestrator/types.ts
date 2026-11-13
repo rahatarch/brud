@@ -1,4 +1,4 @@
-import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import type { IExposedApiRegistry } from '@brud/kernel';
 import { PluginError, PluginDependencyError } from '../contracts/errors.js';
 import type { IBrudPlugin } from '../contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../contracts/IPluginContext.js';

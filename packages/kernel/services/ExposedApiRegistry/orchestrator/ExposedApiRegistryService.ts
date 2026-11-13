@@ -1,10 +1,10 @@
-import type { IKernelAccessBroker } from '@brud/kernel';
+import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
 import {
   isCapabilityToken,
   isPublicApiCapability,
-} from '@brud/kernel';
-import type { IServiceLifecycle, ServiceContext } from '@brud/kernel';
-import type { ServiceToken } from '@brud/kernel';
+} from '../../../src/contracts/capability.js';
+import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
+import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 import {
   ExposedApiDisposedError,
   ExposedApiDuplicateCapabilityError,

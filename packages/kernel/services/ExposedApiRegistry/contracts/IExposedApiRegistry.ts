@@ -1,5 +1,5 @@
-import type { CapabilityToken } from '@brud/kernel';
-import type { ServiceToken } from '@brud/kernel';
+import type { CapabilityToken } from '../../../src/contracts/capability.js';
+import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 import type {
   ExposedApiAccessContext,
   ExposedApiIdentity,

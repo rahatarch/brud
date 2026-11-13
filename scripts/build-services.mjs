@@ -14,7 +14,6 @@ const dirToPackage = {
   BrandRegistry: '@brud/service-brand-registry',
   BrudFileSystem: '@brud/service-filesystem',
   BrudTools: '@brud/service-tools',
-  ExposedApiRegistry: '@brud/service-exposed-api-registry',
   Parser: '@brud/service-parser',
   PluginManager: '@brud/service-plugin-manager',
   Router: '@brud/service-router',

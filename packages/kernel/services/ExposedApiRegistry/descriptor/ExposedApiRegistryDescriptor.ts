@@ -1,5 +1,5 @@
-import type { ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
+import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { IExposedApiRegistry } from '../contracts/IExposedApiRegistry.js';
 import { ExposedApiRegistryService } from '../orchestrator/index.js';
 import { ExposedApiRegistryToken } from './tokens.js';

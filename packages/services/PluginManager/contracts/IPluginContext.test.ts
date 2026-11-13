@@ -11,7 +11,7 @@ import type { PluginPermission } from './permissions.js';
 import { PluginSubscriptions } from './PluginSubscriptions.js';
 import { createServiceToken } from '@brud/kernel';
 import { createTestPluginContext } from '../../../kernel/src/__tests__/support/testApiRegistry.js';
-import { CORE_API_NAME, lastProjectionWins } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, lastProjectionWins } from '@brud/kernel';
 import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { UniversalHistoryToken } from '../../UniversalHistory/descriptor/tokens.js';
 import { UtilityToken } from '../../UtilityService/descriptor/tokens.js';

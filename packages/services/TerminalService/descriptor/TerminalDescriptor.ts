@@ -1,6 +1,6 @@
 import type { KernelLogger, ServiceContext, ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
 import type {
   ISettingsReader,
   SettingsSnapshot,

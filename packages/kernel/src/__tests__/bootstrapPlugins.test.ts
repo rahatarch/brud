@@ -27,7 +27,7 @@ import { createFileMutationJournal } from '../../../services/BrudFileSystem/even
 import { createUnifiedHistoryDescriptors } from '../../../services/UniversalHistory/unified/descriptor/unifiedHistoryDescriptors.js';
 import { UniversalHistoryToken } from '../../../services/UniversalHistory/descriptor/tokens.js';
 import type { NamespaceHistoryHandle } from '../../../services/UniversalHistory/unified/service/types.js';
-import { CORE_API_NAME, lastProjectionWins } from '../../../services/ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, lastProjectionWins } from '../../services/ExposedApiRegistry/contracts/index.js';
 import { ReadOnlyFacade } from '../../../services/BrudFileSystem/projection/index.js';
 import { createStandardKernel } from '../bootstrap/index.js';
 import { createSeededApiRegistryDescriptor, createTestApiRegistry, MapServiceBroker } from './support/testApiRegistry.js';

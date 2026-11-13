@@ -30,7 +30,7 @@ import type { PluginManifest } from '../contracts/manifest.js';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
 import { PluginManagerService } from '../orchestrator/PluginManagerService.js';
-import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
+import { ExposedApiRegistryToken } from '@brud/kernel';
 import { createTestApiRegistry } from '../../../kernel/src/__tests__/support/testApiRegistry.js';
 import {
   PLUGIN_MANAGER_SERVICE_TIER,

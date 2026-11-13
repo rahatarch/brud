@@ -1,7 +1,7 @@
 import type { IStorageDriver } from '@brud/kernel';
 import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '../../ExposedApiRegistry/contracts/index.js';
+import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type { WorkspacePathFlavor } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';

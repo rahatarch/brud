@@ -11,7 +11,7 @@ import { writeFile } from 'node:fs/promises';
 import type { IBrudPlugin, OperationResult } from '@brud/kernel';
 import type { IPluginLogger } from '@brud/service-plugin-manager';
 import { PluginContext } from '../../../../services/PluginManager/contracts/PluginContext.js';
-import { ExposedApiRegistryService } from '../../../../services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
+import { ExposedApiRegistryService } from '../../../../kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.js';
 import { createRegistryCapabilityProviders } from '../../../../services/PluginManager/orchestrator/registryCapabilities.js';
 import type { InternalPluginRecord } from '../../../../services/PluginManager/orchestrator/types.js';
 import type { IKernelAccessBroker, ServiceInfo } from '../../../../kernel/src/contracts/accessBroker.js';

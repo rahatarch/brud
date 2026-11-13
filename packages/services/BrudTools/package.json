@@ -31,7 +31,6 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-exposed-api-registry": "*",
     "@brud/service-plugin-manager": "*",
     "@brud/service-router": "*",
     "@brud/service-settings": "*",

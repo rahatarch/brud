@@ -1,4 +1,4 @@
-import { createServiceToken } from '@brud/kernel';
+import { createServiceToken } from '../../../src/contracts/serviceToken.js';
 import type { IExposedApiRegistry } from '../contracts/IExposedApiRegistry.js';
 
 /**

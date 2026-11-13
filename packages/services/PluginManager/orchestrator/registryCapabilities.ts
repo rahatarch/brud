@@ -1,4 +1,4 @@
-import type { IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/index.js';
+import type { IExposedApiRegistry } from '@brud/kernel';
 import type { PluginPermission } from '../contracts/permissions.js';
 import { PluginManagerToken } from '../contracts/tokens.js';
 import type { PluginCapabilityProviders } from '../contracts/PluginContext.js';

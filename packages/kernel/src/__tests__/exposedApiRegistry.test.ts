@@ -15,12 +15,12 @@ import type { OperationResult } from '../contracts/handler.js';
 import {
   ExposedApiNameCollisionError,
   ExposedApiRegistrationClosedError,
-} from '../../../services/ExposedApiRegistry/contracts/errors.js';
-import { CORE_API_NAME } from '../../../services/ExposedApiRegistry/contracts/coreApis.js';
-import type { IExposedApiRegistry } from '../../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
-import { ExposedApiRegistryToken } from '../../../services/ExposedApiRegistry/descriptor/tokens.js';
-import { withExposedApis } from '../../../services/ExposedApiRegistry/contracts/registrant.js';
-import type { ExposedApiRegistration } from '../../../services/ExposedApiRegistry/contracts/types.js';
+} from '../../services/ExposedApiRegistry/contracts/errors.js';
+import { CORE_API_NAME } from '../../services/ExposedApiRegistry/contracts/coreApis.js';
+import type { IExposedApiRegistry } from '../../services/ExposedApiRegistry/contracts/IExposedApiRegistry.js';
+import { ExposedApiRegistryToken } from '../../services/ExposedApiRegistry/descriptor/tokens.js';
+import { withExposedApis } from '../../services/ExposedApiRegistry/contracts/registrant.js';
+import type { ExposedApiRegistration } from '../../services/ExposedApiRegistry/contracts/types.js';
 import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { PluginPermissionError } from '../../../services/PluginManager/contracts/errors.js';
 import { PluginManagerService } from '../../../services/PluginManager/orchestrator/PluginManagerService.js';

@@ -58,15 +58,18 @@ afterEach(async () => {
 });
 
 describe('non-hardcore service packages through the production boot path', () => {
-  it('references every non-hardcore service by its package and only identity by kernel shim', () => {
+  it('references every other service by its package and only kernel-directory services by kernel shim', () => {
     const config = readConfig(DEFAULT_BRUD_CONFIG_PATH);
     const kernelEntries = config.services.filter((entry) =>
       entry.path.startsWith('kernel:'));
 
     assert.deepEqual(
       kernelEntries.map((entry) => entry.path),
-      ['kernel:serviceModules/identityRegistry.js'],
-      'only the hardcore identity registry may use a kernel-internal path',
+      [
+        'kernel:serviceModules/exposedApiRegistry.js',
+        'kernel:serviceModules/identityRegistry.js',
+      ],
+      'only the services in the kernel service directory may use a kernel-internal path',
     );
 
     const packages = config.services
@@ -77,7 +80,6 @@ describe('non-hardcore service packages through the production boot path', () =>
       '@brud/service-settings',
       '@brud/service-settings',
       '@brud/service-utility',
-      '@brud/service-exposed-api-registry',
       '@brud/service-brand-registry',
       '@brud/service-workspace',
       '@brud/service-filesystem',

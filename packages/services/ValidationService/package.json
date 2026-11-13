@@ -31,7 +31,6 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-exposed-api-registry": "*",
     "@brud/service-settings": "*",
     "@brud/service-workspace": "*"
   },
