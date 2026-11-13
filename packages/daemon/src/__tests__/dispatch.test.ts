@@ -209,7 +209,8 @@ async function openHandshakenClient(): Promise<TestClient> {
 describe('DaemonServer dispatch', () => {
   before(async () => {
     const kernelModule = await import('@brud/kernel');
-    const storageDriver = new kernelModule.NodeStorageDriver();
+    const { NodeStorageDriver } = await import('@brud/service-filesystem');
+    const storageDriver = new NodeStorageDriver();
 
     workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-dispatch-test-'));
     tempDirectory = await mkdtemp(join(tmpdir(), 'brud-daemon-test-'));

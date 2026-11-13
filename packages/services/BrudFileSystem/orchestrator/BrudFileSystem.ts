@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { DirectoryEntry, FileStats, IStorageDriver } from '@brud/kernel';
+import type { DirectoryEntry, FileStats, IStorageDriver } from '../contracts/index.js';
 import type { IServiceLifecycle } from '@brud/kernel';
 import type {
   IValidationService,

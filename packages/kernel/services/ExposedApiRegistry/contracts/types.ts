@@ -139,9 +139,6 @@ export interface ExposedApiAccessContext {
   /** Identity of the capability consumer. Defaults to {@link callerId}. */
   readonly subjectId?: string;
 
-  /** Optional partition prefix forwarded to scoped services. */
-  readonly partitionPrefix?: string;
-
   /**
    * Root origin of the call chain.
    *

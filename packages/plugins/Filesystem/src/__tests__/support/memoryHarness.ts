@@ -5,7 +5,8 @@
  * fast. Real-kernel behaviour is covered by `real-environment.test.ts`,
  * `security.test.ts`, and `legacy-parity.test.ts`.
  */
-import type { DirectoryEntry, FileStats, OperationResult, SessionManifest } from '@brud/kernel';
+import type { OperationResult, SessionManifest } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '@brud/service-filesystem';
 import type { IBrudFileSystem } from '@brud/service-filesystem';
 import type { IUniversalHistoryService } from '@brud/service-history';
 import { SHARED_MUTEX } from '../../coordinator/index.js';

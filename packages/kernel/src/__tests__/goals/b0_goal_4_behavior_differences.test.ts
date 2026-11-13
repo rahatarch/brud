@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { KERNEL_ROOT, REPO_ROOT, stripComments } from './_support.js';
 import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
-import { NodeStorageDriver } from '../../../drivers/node/index.js';
+import { NodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/index.js';
 import { writeAtomic } from '../../../../services/BrudFileSystem/operations/write_atomic/writeAtomic.js';
 import {
   STAGING_MAX_AGE_MS,
@@ -54,7 +54,7 @@ describe('B0 Goal 4 — the seven recorded behaviour differences are real', () =
       );
 
       const driverSource = await readFile(
-        join(KERNEL_ROOT, 'drivers/node/NodeStorageDriver/NodeStorageDriver.ts'),
+        join(REPO_ROOT, 'packages/services/BrudFileSystem/drivers/NodeStorageDriver.ts'),
         'utf8',
       );
       const operationSource = await readFile(

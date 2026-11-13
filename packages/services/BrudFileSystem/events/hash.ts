@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../contracts/index.js';
 import type { FileMutationState } from './types.js';
 
 const textEncoder = new TextEncoder();

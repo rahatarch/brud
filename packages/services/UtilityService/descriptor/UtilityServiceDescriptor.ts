@@ -1,4 +1,3 @@
-import { PUBLIC_API_CAPABILITY } from '@brud/kernel';
 import type { ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
@@ -8,6 +7,15 @@ import { UtilityToken } from './tokens.js';
 
 /** Tier assigned to the Utility service descriptor. */
 export const UTILITY_SERVICE_TIER: ServiceTier = 'core';
+
+/**
+ * Public-exposure preset declared by this giver.
+ *
+ * The kernel provides the capability mechanism but ships no public preset.
+ * This service decides that its utility API is genuinely public and
+ * zero-authority, so it owns the marker.
+ */
+export const UTILITY_PUBLIC_API_CAPABILITY = '*';
 
 /**
  * Builds the `brud.core.utils` service descriptor.
@@ -32,7 +40,7 @@ export function createUtilityDescriptor(): ServiceDescriptor<IUtilityService, Ut
       new UtilityService(),
       (registry) => {
         registry.registerApi(CORE_API_NAME.utilities, UtilityToken, {
-          capability: PUBLIC_API_CAPABILITY,
+          capability: UTILITY_PUBLIC_API_CAPABILITY,
           scope: 'runtime',
         });
       },

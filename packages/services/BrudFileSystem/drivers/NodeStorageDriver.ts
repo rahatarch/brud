@@ -20,12 +20,18 @@ import type {
   FileStats,
   IStorageDriver,
   PathEntryStats,
-} from '../../contracts/index.js';
+} from '../contracts/index.js';
 
 function isErrnoException(error: unknown, code: string): boolean {
   return error instanceof Error && 'code' in error && error.code === code;
 }
 
+/**
+ * Node storage driver owned by the filesystem service.
+ *
+ * The kernel carries no storage abstraction; this implementation ships with
+ * the storage service that owns the driver contract.
+ */
 export class NodeStorageDriver implements IStorageDriver {
   async readFile(absolutePath: string): Promise<Uint8Array> {
     return readFile(absolutePath);

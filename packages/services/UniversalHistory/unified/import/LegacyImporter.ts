@@ -12,7 +12,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
 import { compileJsonSchema } from '../../../ValidationService/engine/jsonSchema/index.js';
 import type { CompiledJsonSchema } from '../../../ValidationService/engine/jsonSchema/index.js';
 import { sha256Hex } from '../store/cas.js';

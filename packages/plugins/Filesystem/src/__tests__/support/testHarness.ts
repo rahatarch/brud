@@ -9,8 +9,8 @@ import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/sup
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type {
-  IBrudFileSystem, IStorageDriver, OperationResult } from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudFileSystem, IStorageDriver } from '@brud/service-filesystem';
 import type { IBrudPlugin, IPluginManagerService } from '@brud/service-plugin-manager';
 import type { IBrudToolsService } from '@brud/service-tools';
 import type { IUniversalHistoryService } from '@brud/service-history';

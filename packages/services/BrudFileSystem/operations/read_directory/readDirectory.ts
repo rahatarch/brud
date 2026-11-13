@@ -1,4 +1,4 @@
-import type { DirectoryEntry, IStorageDriver } from '@brud/kernel';
+import type { DirectoryEntry, IStorageDriver } from '../../contracts/index.js';
 
 export async function readDirectory(
   driver: IStorageDriver,

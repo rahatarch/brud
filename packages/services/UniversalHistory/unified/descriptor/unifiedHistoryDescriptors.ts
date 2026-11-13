@@ -8,7 +8,7 @@
  * Registered by `createStandardKernel()`; the only history engine since D-15 U-7.
  */
 import { join } from 'node:path';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
 import type { IKernelAccessBroker } from '@brud/kernel';
 import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';

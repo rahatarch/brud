@@ -43,7 +43,7 @@ export interface IExposedApiRegistry {
    *
    * @param name - API name.
    * @param callerCapabilities - Capabilities the caller declared.
-   * @param access - Broker identity, official/partition context, and root
+   * @param access - Broker identity, official context, and root
    * origin.
    * @param version - API version; defaults to major version 1.
    * @returns The projection, a combined projection, or `null` when the origin
@@ -61,7 +61,7 @@ export interface IExposedApiRegistry {
    *
    * @param name - API name.
    * @param callerCapabilities - Capabilities the caller declared.
-   * @param access - Broker identity, official/partition context, and root
+   * @param access - Broker identity, official context, and root
    * origin.
    * @param version - API version; defaults to major version 1.
    * @returns The resolved handle, scope, and policy, or `null`.

@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../contracts/index.js';
 
 export async function readFile(
   driver: IStorageDriver,

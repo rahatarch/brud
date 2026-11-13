@@ -31,6 +31,30 @@ export const PLUGIN_MANAGER_CONTEXT_SCOPE = 'pluginManager';
 /** Namespaced context field holding the workspace root. */
 export const PLUGIN_MANAGER_ROOT_CONTEXT_FIELD = 'pluginManager.root';
 
+/**
+ * Optional namespaced field naming the composition document to load plugins
+ * from.
+ *
+ * Plugin loading is the manager's own concern. The host supplies the document
+ * path under the manager's namespace; the kernel never reads the plugin
+ * section.
+ */
+export const PLUGIN_MANAGER_CONFIG_PATH_CONTEXT_FIELD = 'pluginManager.configPath';
+
+/**
+ * Optional namespaced field carrying host-supplied plugin instances.
+ *
+ * The value is an object with an `entries` array. It overrides config-based
+ * loading exactly as a host override did before.
+ */
+export const PLUGIN_MANAGER_PLUGINS_CONTEXT_FIELD = 'pluginManager.plugins';
+
+/**
+ * Optional namespaced field declaring whether host-supplied plugins are
+ * official in this composition.
+ */
+export const PLUGIN_MANAGER_CERTIFY_CONTEXT_FIELD = 'pluginManager.certifyPlugins';
+
 /** Tier assigned to the plugin manager descriptor. */
 export const PLUGIN_MANAGER_SERVICE_TIER: ServiceTier = 'core';
 

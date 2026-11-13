@@ -1,4 +1,4 @@
-import type { FileStats, IStorageDriver } from '@brud/kernel';
+import type { FileStats, IStorageDriver } from '../../contracts/index.js';
 
 export async function statPath(
   driver: IStorageDriver,

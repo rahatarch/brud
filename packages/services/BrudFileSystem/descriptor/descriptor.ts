@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../contracts/index.js';
 import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
@@ -20,6 +20,15 @@ export const FILESYSTEM_CONTEXT_SCOPE = 'filesystem';
 
 /** Namespaced context field holding the workspace root. */
 export const FILESYSTEM_ROOT_CONTEXT_FIELD = 'filesystem.root';
+
+/**
+ * Namespaced context field carrying this service's own partition scope.
+ *
+ * Partitions are the storage service's design. The kernel carries no partition
+ * field; a caller that wants a scoped view supplies this key in its own
+ * context options.
+ */
+export const FILESYSTEM_PARTITION_CONTEXT_FIELD = 'filesystem.partitionPrefix';
 
 /** Configuration for {@link createFileSystemDescriptor}. */
 export interface FileSystemDescriptorOptions {
@@ -140,15 +149,17 @@ export function createFileSystemDescriptor(
         ? instance.createAuthorizedProjection(authorizedScopes)
         : instance;
 
-      if (caller.partitionPrefix !== undefined && caller.partitionPrefix.length > 0) {
-        projection = new ScopedPartitionFacade(projection, caller.partitionPrefix);
+      const partitionPrefix = caller.options?.[FILESYSTEM_PARTITION_CONTEXT_FIELD];
+
+      if (typeof partitionPrefix === 'string' && partitionPrefix.length > 0) {
+        projection = new ScopedPartitionFacade(projection, partitionPrefix);
       }
 
       if (caller.tier === 'userland') {
         projection = new ReadOnlyFacade(projection);
       }
 
-      if (caller.tier === 'kernel' && (caller.partitionPrefix === undefined || caller.partitionPrefix.length === 0)) {
+      if (caller.tier === 'kernel' && (typeof partitionPrefix !== 'string' || partitionPrefix.length === 0)) {
         // Raw writable handles are reserved for `tier: 'core'`. Kernel-tier
         // callers without an explicit partition receive read-only access.
         projection = new ReadOnlyFacade(projection);

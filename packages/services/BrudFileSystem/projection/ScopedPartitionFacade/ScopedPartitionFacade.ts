@@ -1,4 +1,4 @@
-import type { DirectoryEntry, FileStats } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '../../contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
 // Path rules come from the canonical validation engine. The facade keeps the
 // external `PathRuleViolationError` at its boundary, which callers narrow on.

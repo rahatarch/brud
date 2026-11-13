@@ -35,9 +35,6 @@ export interface ServiceContext {
    */
   readonly options: Readonly<Record<string, unknown>>;
 
-  /** Optional partition namespace isolating service state. */
-  readonly partitionPrefix?: string;
-
   /** Kernel diagnostic sink. Absent in standalone construction. */
   readonly logger?: KernelLogger;
 }

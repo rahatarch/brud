@@ -1,8 +1,8 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { IBrudFileSystem } from '@brud/kernel';
+import type { IBrudFileSystem } from '@brud/service-filesystem';
 import type { IUniversalHistoryService } from '@brud/service-history';
-import { NodeStorageDriver } from '../../../../kernel/drivers/node/index.js';
+import { NodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/index.js';
 import { SHARED_MUTEX } from '../coordinator/index.js';
 import { createFile } from '../groups/file/createFile/index.js';
 import { searchReplaceMulti } from '../groups/multi/searchReplaceMulti/index.js';

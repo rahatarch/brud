@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
-  FileStats, SessionManifest } from '@brud/kernel';
+import type { SessionManifest } from '@brud/kernel';
+import type { FileStats } from '@brud/service-filesystem';
 import type { IBrudFileSystem } from '@brud/service-filesystem';
 import type { IUniversalHistoryService } from '@brud/service-history';
 import { KeyedMutex, executeMutation } from './index.js';

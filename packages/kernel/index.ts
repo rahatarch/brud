@@ -1,6 +1,5 @@
 export * from './src/contracts/index.js';
 export * from './src/bootstrap/index.js';
-export * from './drivers/index.js';
 
 // Hardcore services shipped inside the kernel package.
 export * from './services/IdentityRegistry/index.js';

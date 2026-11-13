@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { IStorageDriver } from '../../drivers/contracts/index.js';
+import type { IStorageDriver } from '../../../services/BrudFileSystem/contracts/index.js';
 import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import type { IBrudFileSystem } from '../../../services/BrudFileSystem/contracts/index.js';
 import { BrudFileSystem } from '../../../services/BrudFileSystem/orchestrator/BrudFileSystem.js';

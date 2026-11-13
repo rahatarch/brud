@@ -9,8 +9,8 @@ import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/sup
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, relative, sep } from 'node:path';
-import type {
-  IBrudFileSystem, IStorageDriver, OperationResult } from '@brud/kernel';
+import type { OperationResult } from '@brud/kernel';
+import type { IBrudFileSystem, IStorageDriver } from '@brud/service-filesystem';
 import type { IBrudToolsService } from '@brud/service-tools';
 import type { IUniversalHistoryService } from '@brud/service-history';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';

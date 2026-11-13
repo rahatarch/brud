@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, symlink, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import { CanonicalizationCache, canonicalizeNearestExisting } from './canonicalization.js';
 

@@ -1,7 +1,8 @@
 import { existsSync, mkdirSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import type * as KernelApi from '@brud/kernel' with { 'resolution-mode': 'import' };
-import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
 import type { IBrudPlugin } from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
 
 type KernelModule = typeof KernelApi;
@@ -110,11 +111,14 @@ export async function createKernel(options: KernelRuntimeOptions): Promise<BrudK
   return kernelModule.bootKernel(DEFAULT_BRUD_CONFIG_PATH, {
     options: {
       ...workspaceOptions,
+      'pluginManager.configPath': DEFAULT_BRUD_CONFIG_PATH,
       ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
-      ...(options.initialPlugins === undefined ? {} : { plugins: options.initialPlugins }),
+      ...(options.initialPlugins === undefined
+        ? {}
+        : { 'pluginManager.plugins': { entries: options.initialPlugins } }),
       ...(options.certifyInitialPlugins === undefined
         ? {}
-        : { certifyPlugins: options.certifyInitialPlugins }),
+        : { 'pluginManager.certifyPlugins': options.certifyInitialPlugins }),
     },
   });
 }

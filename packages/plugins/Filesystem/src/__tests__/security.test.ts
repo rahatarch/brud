@@ -4,7 +4,7 @@ import { mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { OperationResult } from '@brud/kernel';
-import { NodeStorageDriver } from '../../../../kernel/drivers/node/index.js';
+import { NodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/index.js';
 import { appendFile } from '../groups/file/appendFile/index.js';
 import { copyFile } from '../groups/file/copyFile/index.js';
 import { createFile } from '../groups/file/createFile/index.js';

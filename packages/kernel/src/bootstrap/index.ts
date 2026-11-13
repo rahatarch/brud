@@ -31,7 +31,6 @@ export {
 export type {
   BootKernelOptions,
   ComposeKernelOptions,
-  KernelPlugin,
   KernelServiceModuleContext,
   ServiceModule,
 } from './bootTypes.js';

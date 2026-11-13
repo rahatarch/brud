@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import type { IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
 import { LockContentionError } from '../lifecycle/lock.js';
 import { createDaemon } from '../server/createDaemon.js';
 
@@ -41,8 +41,8 @@ after(async () => {
 
 describe('daemon lifecycle', () => {
   it('boots, enforces single-instance locking, and tears down cleanly', async (t) => {
-    const kernelModule = await import('@brud/kernel');
-    const storageDriver: IStorageDriver = new kernelModule.NodeStorageDriver();
+    const { NodeStorageDriver } = await import('@brud/service-filesystem');
+    const storageDriver: IStorageDriver = new NodeStorageDriver();
     const daemon = await createDaemon({ workspaceRoot: workspace, storageDriver });
 
     t.after(async () => {

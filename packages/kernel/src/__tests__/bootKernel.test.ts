@@ -57,6 +57,7 @@ async function boot(
   const configPath = await writeConfig(root, config);
   const kernel = await bootKernel(configPath, {
     options: {...workspaceContextOptions(root),
+      'pluginManager.configPath': configPath,
       history: { inMemory: true },
     },
   });
@@ -142,6 +143,7 @@ describe('bootKernel config composition', () => {
     const root = await workspace(t);
     const kernel = await bootKernel(DAEMON_CONFIG_PATH, {
       options: {...workspaceContextOptions(root),
+        'pluginManager.configPath': DAEMON_CONFIG_PATH,
         history: { inMemory: true },
       },
     });
@@ -176,6 +178,7 @@ describe('bootKernel config composition', () => {
     });
     const kernel = await bootKernel(configPath, {
       options: {...workspaceContextOptions(root),
+        'pluginManager.configPath': configPath,
         history: { inMemory: true },
       },
     });
@@ -208,6 +211,7 @@ describe('bootKernel config composition', () => {
     });
     const kernel = await bootKernel(configPath, {
       options: {...workspaceContextOptions(root),
+        'pluginManager.configPath': configPath,
         history: { inMemory: true },
       },
     });

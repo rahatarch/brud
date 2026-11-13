@@ -7,8 +7,7 @@
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
-  DirectoryEntry, FileStats } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '@brud/service-filesystem';
 import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import {
   MAX_BYTES_PER_MUTATION,

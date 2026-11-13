@@ -1,9 +1,10 @@
-import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
 import type {
   IBrudPlugin,
   IMcpTransport,
 } from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
-import { createKernel, createWorkspaceContextOptions } from './kernelRuntime.js';
+import { DEFAULT_BRUD_CONFIG_PATH, createKernel, createWorkspaceContextOptions } from './kernelRuntime.js';
 
 /** Default idle window after which a client-less workspace is disposed. */
 export const DEFAULT_WORKSPACE_IDLE_TIMEOUT_MS = 30 * 60 * 1000;
@@ -375,11 +376,14 @@ export class WorkspaceRegistry {
   ): Promise<KernelWorkspace> {
     const options: Record<string, unknown> = {
       ...createWorkspaceContextOptions(root),
+      'pluginManager.configPath': DEFAULT_BRUD_CONFIG_PATH,
       ...(this.storageDriver === undefined ? {} : { storageDriver: this.storageDriver }),
-      ...(initialPlugins === undefined ? {} : { plugins: initialPlugins }),
+      ...(initialPlugins === undefined
+        ? {}
+        : { 'pluginManager.plugins': { entries: initialPlugins } }),
       ...(this.certifyInitialPlugins === undefined
         ? {}
-        : { certifyPlugins: this.certifyInitialPlugins }),
+        : { 'pluginManager.certifyPlugins': this.certifyInitialPlugins }),
     };
     const kernel = await this.kernelFactory({
       workspaceRoot: root,

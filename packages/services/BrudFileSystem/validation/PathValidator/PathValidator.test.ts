@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../../drivers/index.js';
 import { PathRuleViolationError, PathValidator } from './PathValidator.js';
 import type { ExternalPathRule } from './PathValidator.js';
 

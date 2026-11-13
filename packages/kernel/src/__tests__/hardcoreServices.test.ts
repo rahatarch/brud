@@ -118,7 +118,7 @@ async function writeConfig(
   services: readonly BrudConfigEntry[],
   plugins: readonly BrudConfigEntry[] = [],
 ): Promise<void> {
-  const config: BrudConfig = { services, plugins };
+  const config = { services, plugins };
 
   await writeFile(workspace.configPath, JSON.stringify(config, null, 2), 'utf8');
 }

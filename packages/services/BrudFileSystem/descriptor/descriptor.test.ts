@@ -121,7 +121,7 @@ describe('FileSystemDescriptor', () => {
 
     const projection = project(
       instance,
-      createCaller({ tier: 'core', partitionPrefix: '.brud/work' }),
+      createCaller({ tier: 'core', options: { 'filesystem.root': workspaceRoot, 'filesystem.partitionPrefix': '.brud/work' } }),
     );
 
     assert.ok(projection instanceof ScopedPartitionFacade);
@@ -152,7 +152,7 @@ describe('FileSystemDescriptor', () => {
 
     const projection = project(
       instance,
-      createCaller({ tier: 'userland', partitionPrefix: '.brud/work' }),
+      createCaller({ tier: 'userland', options: { 'filesystem.root': workspaceRoot, 'filesystem.partitionPrefix': '.brud/work' } }),
     );
 
     assert.ok(projection instanceof ReadOnlyFacade);

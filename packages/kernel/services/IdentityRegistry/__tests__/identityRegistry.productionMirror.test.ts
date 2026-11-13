@@ -119,7 +119,7 @@ async function writeIdentityConfig(workspace: IdentityWorkspace): Promise<string
 
   services.push({ path: BOOT_ISSUER_MODULE_PATH });
 
-  const config: BrudConfig = {
+  const config = {
     services,
     plugins: [],
   };

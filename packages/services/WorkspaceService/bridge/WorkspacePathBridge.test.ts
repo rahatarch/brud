@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
 import { WorkspaceService } from '../orchestrator/WorkspaceService.js';
 import { createStorageDriverPathPort } from '../ports/StorageDriverPathPort.js';
 import {

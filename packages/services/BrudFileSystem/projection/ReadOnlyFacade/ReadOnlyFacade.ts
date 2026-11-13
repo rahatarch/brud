@@ -1,4 +1,4 @@
-import type { DirectoryEntry, FileStats } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '../../contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
 
 export class ReadOnlyViolationError extends Error {

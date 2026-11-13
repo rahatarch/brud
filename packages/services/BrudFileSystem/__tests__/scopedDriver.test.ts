@@ -4,7 +4,7 @@ import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../drivers/index.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 
 let root = '';

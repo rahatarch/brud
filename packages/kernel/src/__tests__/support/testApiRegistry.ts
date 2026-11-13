@@ -32,7 +32,9 @@ import type { ITerminalService } from '../../../../services/TerminalService/cont
 import { TerminalToken } from '../../../../services/TerminalService/descriptor/tokens.js';
 import type { IUtilityService } from '../../../../services/UtilityService/contracts/IUtilityService.js';
 import { UtilityToken } from '../../../../services/UtilityService/descriptor/tokens.js';
-import { PUBLIC_API_CAPABILITY } from '../../contracts/capability.js';
+
+/** Public-exposure marker in this test composition. */
+const PUBLIC_API_CAPABILITY = '*';
 
 /** Minimal broker over an explicit token-id map. */
 export class MapServiceBroker implements IKernelAccessBroker {

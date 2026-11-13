@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { unlink, writeFile } from 'node:fs/promises';
-import type { BrudKernel, IStorageDriver } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
 import * as Protocol from '@brud/protocol';
 import { IdleMonitor } from '../lifecycle/idle.js';
 import { acquireDaemonLock } from '../lifecycle/lock.js';

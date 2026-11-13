@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
 import type { ServiceContext } from '@brud/kernel';
 import { BrudKernel } from '@brud/kernel';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';

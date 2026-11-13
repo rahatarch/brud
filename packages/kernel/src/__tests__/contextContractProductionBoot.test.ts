@@ -164,7 +164,9 @@ describe('production boot context contract', () => {
     const probePath = join(workspaceRoot, 'production-mirror.txt');
     await writeFile(probePath, 'production mirror tool payload', 'utf8');
 
-    const kernel = await bootKernel(configPath, { options: bag });
+    const kernel = await bootKernel(configPath, {
+      options: { ...bag, 'pluginManager.configPath': configPath },
+    });
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');

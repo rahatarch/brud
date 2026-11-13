@@ -1,5 +1,5 @@
 import { basename, dirname, join } from 'node:path';
-import type { DirectoryEntry, IStorageDriver } from '@brud/kernel';
+import type { DirectoryEntry, IStorageDriver } from '../../contracts/index.js';
 
 /** Private staging files never end in this suffix alone. */
 export const ATOMIC_TEMP_SUFFIX = '.tmp';

@@ -8,7 +8,7 @@
  */
 import { createHash, randomUUID } from 'node:crypto';
 import { join, resolve, sep } from 'node:path';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
 import {
   UnifiedBlobIntegrityError,
   UnifiedBlobMissingError,

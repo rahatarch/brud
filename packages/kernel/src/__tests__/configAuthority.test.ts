@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { bootKernel, BrudConfigError } from '../bootstrap/index.js';
+import { BrudConfigError as BuiltBrudConfigError } from '@brud/kernel';
 import type { BrudConfig, BrudConfigEntry } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
@@ -123,6 +124,7 @@ async function bootAt(
 ): Promise<{ readonly kernel: BrudKernel; readonly options: Record<string, unknown> }> {
   const options: Record<string, unknown> = {
     ...workspaceContextOptions(root),
+    'pluginManager.configPath': configPath,
     history: { inMemory: true },
   };
   const kernel = await bootKernel(configPath, { options });
@@ -350,7 +352,11 @@ export function createService() {
 
     await assert.rejects(
       bootKernel(configPath, {
-        options: { ...workspaceContextOptions(root), history: { inMemory: true } },
+        options: {
+          ...workspaceContextOptions(root),
+          'pluginManager.configPath': configPath,
+          history: { inMemory: true },
+        },
       }),
       (error: unknown) => {
         assert.ok(error instanceof BrudConfigError);
@@ -376,10 +382,20 @@ export function createService() {
 
     await assert.rejects(
       bootKernel(written.path, {
-        options: { ...workspaceContextOptions(root), history: { inMemory: true } },
+        options: {
+          ...workspaceContextOptions(root),
+          'pluginManager.configPath': written.path,
+          history: { inMemory: true },
+        },
       }),
       (error: unknown) => {
-        assert.ok(error instanceof BrudConfigError);
+        // Plugin config validation now belongs to the plugin manager, which
+        // imports the public kernel contract through the package. Accept the
+        // same contract class from either module instance.
+        assert.ok(
+          error instanceof BrudConfigError || error instanceof BuiltBrudConfigError,
+          'plugin config errors must carry the kernel BrudConfigError contract',
+        );
         assert.equal(error.code, 'CONFIG_SCHEMA');
         assert.match(error.message, /unknown key "hash"/u);
         return true;
@@ -400,10 +416,17 @@ export function createService() {
 
     await assert.rejects(
       bootKernel(written.path, {
-        options: { ...workspaceContextOptions(root), history: { inMemory: true } },
+        options: {
+          ...workspaceContextOptions(root),
+          'pluginManager.configPath': written.path,
+          history: { inMemory: true },
+        },
       }),
       (error: unknown) => {
-        assert.ok(error instanceof BrudConfigError);
+        assert.ok(
+          error instanceof BrudConfigError || error instanceof BuiltBrudConfigError,
+          'plugin module errors must carry the kernel BrudConfigError contract',
+        );
         assert.equal(error.code, 'MODULE_RESOLVE');
         assert.match(error.message, /official-helper/u);
         return true;
@@ -564,7 +587,11 @@ export function createService() {
 
     await assert.rejects(
       bootKernel(written.path, {
-        options: { ...workspaceContextOptions(root), history: { inMemory: true } },
+        options: {
+          ...workspaceContextOptions(root),
+          'pluginManager.configPath': written.path,
+          history: { inMemory: true },
+        },
       }),
       (error: unknown) => {
         const candidate = error as { readonly code?: unknown; readonly reason?: unknown };

@@ -14,7 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { sha256Hex } from '../store/cas.js';
 import { UnifiedHistoryDegradedError, UnifiedSessionNotFoundError } from '../store/errors.js';
 import type { UnifiedHistoryStore } from '../store/UnifiedHistoryStore.js';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
 import { LegacyImporter } from '../import/LegacyImporter.js';
 import type { LegacyImportReport } from '../import/LegacyImporter.js';
 import type {

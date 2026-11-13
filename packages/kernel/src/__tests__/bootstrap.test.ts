@@ -106,7 +106,7 @@ describe('createStandardKernel', () => {
 
     try {
       const scopedFs = kernel.requestAccess(
-        createCaller({ partitionPrefix: '.brud/work' }),
+        createCaller({ options: { ...workspaceContextOptions(workspaceRoot), 'filesystem.partitionPrefix': '.brud/work' } }),
         FileSystemToken,
       );
 

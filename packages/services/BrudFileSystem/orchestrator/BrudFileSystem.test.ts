@@ -5,7 +5,7 @@ import { mkdir, mkdtemp, rm, stat, symlink, writeFile, realpath } from 'node:fs/
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../drivers/index.js';
 import { FileAlreadyExistsError } from '../operations/shared/errors.js';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import { BrudFileSystem } from './BrudFileSystem.js';

@@ -1,9 +1,9 @@
 import type {
   IKernelAccessBroker,
-  IStorageDriver,
   KernelServiceModuleContext,
   ServiceContext,
 } from '@brud/kernel';
+import type { IStorageDriver } from '../BrudFileSystem/contracts/index.js';
 import { FileMutationJournalToken } from '../BrudFileSystem/descriptor/journalTokens.js';
 import type {
   FileMutationEvent,

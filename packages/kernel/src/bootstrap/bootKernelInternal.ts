@@ -28,13 +28,11 @@ import {
 import { HARDCORE_SERVICES } from './hardcoreServices.js';
 import {
   BrudConfigError,
-  type BrudConfig,
   type BrudConfigEntry,
 } from './config/types.js';
 import type {
   BootKernelOptions,
   ComposeKernelOptions,
-  KernelPlugin,
   KernelServiceModuleContext,
   ServiceModule,
 } from './bootTypes.js';
@@ -54,17 +52,6 @@ interface LoadedService {
   readonly entry: BrudConfigEntry;
   readonly module: unknown;
   readonly resolvedId: string;
-}
-
-interface LoadedPlugin {
-  readonly index: number;
-  readonly entry: BrudConfigEntry;
-  readonly module: unknown;
-}
-
-interface ResolvedPlugins {
-  readonly plugins: readonly KernelPlugin[] | undefined;
-  readonly officialPlugins: readonly KernelPlugin[];
 }
 
 /** Returns the boot-policy hook exported by a module, if any. */
@@ -187,12 +174,10 @@ export function createDeferredKernel(
       protectedThisKernel = true;
       const config = parseBrudConfig(raw, configPath);
       const services = await loadServiceModules(config.services, configPath, raw);
-      const mergedOptions: Record<string, unknown> = {
+      const contextOptions: Record<string, unknown> = {
         ...(options.options ?? {}),
         ...(bootOptions.options ?? {}),
       };
-      const resolvedPlugins = await resolvePlugins(configPath, raw, mergedOptions);
-      const contextOptions = withResolvedPlugins(mergedOptions, resolvedPlugins);
       const contextLogger = bootOptions.logger ?? options.logger;
       const context: KernelServiceModuleContext = {
         options: contextOptions,
@@ -210,7 +195,7 @@ export function createDeferredKernel(
       for (const loaded of services) {
         activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
 
-        for (const descriptor of descriptorsFromModule(
+        for (const descriptor of await descriptorsFromModule(
           loaded.module,
           loaded.entry,
           loaded.index,
@@ -252,9 +237,9 @@ export function createDeferredKernel(
     try {
       await compose(bootOptions);
 
-      // Store the bag the composition built: the host's options plus the
-      // kernel's own plugin handoff keys. Service modules publish no objects
-      // into it; a service-to-service handoff goes through an exposed API.
+      // Store the bag the composition built: the host's options. Service
+      // modules publish no objects into it; a service-to-service handoff goes
+      // through an exposed API.
       const bootBag = serviceContext?.options ?? {
         ...(options.options ?? {}),
         ...(bootOptions.options ?? {}),
@@ -265,8 +250,8 @@ export function createDeferredKernel(
         logger: bootOptions.logger ?? options.logger ?? DEFAULT_KERNEL_LOGGER,
       });
 
-      // Plugins activate during boot. Re-read the document the kernel actually
-      // used and refuse to hand back a kernel if it changed underneath us.
+      // The config document is reread after boot. Refuse to hand back a kernel
+      // if it changed underneath us.
       await verifyConfigIntegrity(configPath);
     } catch (error: unknown) {
       if (kernel.lifecycleState === 'RUNNING') {
@@ -295,65 +280,6 @@ export function createDeferredKernel(
   return kernel;
 }
 
-function withResolvedPlugins(
-  options: Record<string, unknown>,
-  resolved: ResolvedPlugins,
-): Record<string, unknown> {
-  return {
-    ...options,
-    ...(resolved.plugins === undefined ? {} : { plugins: resolved.plugins }),
-    officialPlugins: resolved.officialPlugins,
-  };
-}
-
-async function resolvePlugins(
-  configPath: string,
-  raw: string,
-  options: Record<string, unknown>,
-): Promise<ResolvedPlugins> {
-  const override = options['plugins'];
-
-  if (override !== undefined) {
-    const plugins = Array.isArray(override) ? override as readonly KernelPlugin[] : [];
-
-    return {
-      plugins,
-      officialPlugins: options['certifyPlugins'] === true ? plugins : [],
-    };
-  }
-
-  const config = parseBrudConfig(raw, configPath);
-  const loaded = await loadPluginModules(config.plugins, configPath, raw);
-
-  if (loaded.length === 0) {
-    return { plugins: undefined, officialPlugins: [] };
-  }
-
-  const plugins: KernelPlugin[] = [];
-  const officialPlugins: KernelPlugin[] = [];
-
-  for (const entry of loaded) {
-    const plugin = extractPlugin(entry.module);
-
-    if (plugin === undefined) {
-      throw new BrudConfigError(
-        'MODULE_CONTRACT',
-        `Plugin module "${entry.entry.path}" (plugins[${String(entry.index)}]) must export a plugin`,
-        configPath,
-        lineOf(raw, entry.entry.path),
-      );
-    }
-
-    plugins.push(plugin);
-
-    if (entry.entry.official === true) {
-      officialPlugins.push(plugin);
-    }
-  }
-
-  return { plugins, officialPlugins };
-}
-
 function descriptorsFromModule(
   moduleValue: unknown,
   entry: BrudConfigEntry,
@@ -361,7 +287,18 @@ function descriptorsFromModule(
   context: KernelServiceModuleContext,
   configPath: string,
   raw: string,
-): readonly ServiceDescriptor<unknown, unknown>[] {
+): Promise<readonly ServiceDescriptor<unknown, unknown>[]> {
+  return descriptorsFromModuleAsync(moduleValue, entry, index, context, configPath, raw);
+}
+
+async function descriptorsFromModuleAsync(
+  moduleValue: unknown,
+  entry: BrudConfigEntry,
+  index: number,
+  context: KernelServiceModuleContext,
+  configPath: string,
+  raw: string,
+): Promise<readonly ServiceDescriptor<unknown, unknown>[]> {
   if (!isRecord(moduleValue) || typeof moduleValue.createService !== 'function') {
     throw new BrudConfigError(
       'MODULE_CONTRACT',
@@ -373,8 +310,8 @@ function descriptorsFromModule(
 
   const createService = moduleValue.createService as (
     serviceContext: KernelServiceModuleContext,
-  ) => unknown;
-  const declared: unknown = createService(context);
+  ) => unknown | Promise<unknown>;
+  const declared: unknown = await createService(context);
   const candidates = Array.isArray(declared) ? declared : [declared];
 
   if (candidates.length === 0) {
@@ -433,24 +370,6 @@ async function loadServiceModules(
       ),
     };
   }));
-}
-
-async function loadPluginModules(
-  entries: readonly BrudConfigEntry[],
-  configPath: string,
-  raw: string,
-): Promise<readonly LoadedPlugin[]> {
-  return Promise.all(entries.map(async (entry, index) => ({
-    index,
-    entry,
-    module: await importModule(
-      resolveModuleId(entry.path, configPath),
-      configPath,
-      entry.path,
-      `plugins[${String(index)}]`,
-      lineOf(raw, entry.path),
-    ),
-  })));
 }
 
 async function importModule(
@@ -518,28 +437,6 @@ function resolveExisting(candidate: string): string {
   }
 
   return candidate;
-}
-
-function extractPlugin(moduleValue: unknown): KernelPlugin | undefined {
-  if (!isRecord(moduleValue)) {
-    return undefined;
-  }
-
-  if (isPlugin(moduleValue.default)) {
-    return moduleValue.default;
-  }
-
-  if (isPlugin(moduleValue.plugin)) {
-    return moduleValue.plugin;
-  }
-
-  const candidates = Object.values(moduleValue).filter(isPlugin);
-
-  return candidates.length === 1 ? candidates[0] : undefined;
-}
-
-function isPlugin(value: unknown): value is KernelPlugin {
-  return isRecord(value) && isRecord(value.manifest) && typeof value.activate === 'function';
 }
 
 function isServiceDescriptor(value: unknown): value is ServiceDescriptor<unknown, unknown> {

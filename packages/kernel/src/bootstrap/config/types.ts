@@ -1,4 +1,4 @@
-/** One service or plugin declaration. */
+/** One service declaration. */
 export interface BrudConfigEntry {
   /** Module path, package name, `kernel:` module, or relative path. */
   readonly path: string;
@@ -7,10 +7,14 @@ export interface BrudConfigEntry {
   readonly official?: boolean;
 }
 
-/** Declarative kernel composition. */
+/**
+ * Declarative kernel composition.
+ *
+ * The kernel owns the `services` section. Other top-level sections belong to
+ * the participants that own them and are carried by the document unchanged.
+ */
 export interface BrudConfig {
   readonly services: readonly BrudConfigEntry[];
-  readonly plugins: readonly BrudConfigEntry[];
 }
 
 /** Stable config failure codes. */

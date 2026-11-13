@@ -4,11 +4,15 @@ import {
   type BrudConfigEntry,
 } from './types.js';
 
-const ROOT_KEYS = new Set(['services', 'plugins']);
 const ENTRY_KEYS = new Set(['path', 'official']);
 
 /**
- * Parses and validates a `brud.config.json` document.
+ * Parses and validates the kernel-owned section of a `brud.config.json`
+ * document.
+ *
+ * The kernel owns `services`. Other top-level sections belong to the
+ * participants that own them; the kernel carries them untouched and never
+ * interprets them.
  *
  * @param raw - File contents.
  * @param configPath - Config path used in diagnostics.
@@ -30,26 +34,14 @@ export function parseBrudConfig(raw: string, configPath: string): BrudConfig {
     throw new BrudConfigError('CONFIG_SCHEMA', 'Config root must be an object', configPath);
   }
 
-  for (const key of Object.keys(document)) {
-    if (!ROOT_KEYS.has(key)) {
-      throw new BrudConfigError(
-        'CONFIG_SCHEMA',
-        `Config contains unknown key "${key}"`,
-        configPath,
-        lineOf(raw, key),
-      );
-    }
-  }
-
   const services = parseEntries(document.services, 'services', raw, configPath);
-  const plugins = parseEntries(document.plugins, 'plugins', raw, configPath);
 
-  return { services, plugins };
+  return { services };
 }
 
 function parseEntries(
   value: unknown,
-  key: 'services' | 'plugins',
+  key: 'services',
   raw: string,
   configPath: string,
 ): readonly BrudConfigEntry[] {

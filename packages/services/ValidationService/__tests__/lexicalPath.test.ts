@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
 import { isA10ProtectedPath } from '../model/policy.js';
 import { PathViolationError } from '../contracts/errors.js';
 import { LexicalPathEngine } from '../engine/LexicalPathEngine.js';

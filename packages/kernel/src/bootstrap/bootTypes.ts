@@ -6,21 +6,11 @@ import type {
 import type { IServiceLifecycle, KernelLogger } from '../contracts/lifecycle.js';
 
 /**
- * Opaque plugin value supplied by a host or loaded from a config entry.
- *
- * The core never inspects a plugin beyond the structural manifest/activate
- * check it needs to accept the value. The plugin manager owns the real
- * contract.
- */
-export type KernelPlugin = object;
-
-/**
  * Generic options accepted by {@link bootKernel}.
  *
  * The core names exactly two fields: an open options bag and a logger. Every
- * service-specific option (workspace root, storage driver, history, settings,
- * plugins, ...) lives inside {@link BootKernelOptions.options} and is
- * interpreted by the service module that owns it. The core never sees those
+ * service-specific option lives inside {@link BootKernelOptions.options} and
+ * is interpreted by the service module that owns it. The core never sees those
  * names or types.
  */
 export interface BootKernelOptions {
@@ -96,6 +86,9 @@ export interface KernelServiceModuleContext {
  * typed as `unknown` at this boundary because descriptors are invariant in
  * their service type; the loader validates the runtime shape and narrows it.
  *
+ * A module that must resolve host values before it can declare its descriptor
+ * may return a promise; the loader awaits every module before registration.
+ *
  * The optional hooks are generic coordination points available to every
  * participant. The loader invokes them without knowing which service
  * implements them:
@@ -104,7 +97,7 @@ export interface KernelServiceModuleContext {
  */
 export interface ServiceModule {
   /** Builds and returns this service's descriptor or descriptors. */
-  createService(context: KernelServiceModuleContext): unknown;
+  createService(context: KernelServiceModuleContext): unknown | Promise<unknown>;
 
   /** Ingests frozen boot policy after construction. */
   pinBootPolicies?(

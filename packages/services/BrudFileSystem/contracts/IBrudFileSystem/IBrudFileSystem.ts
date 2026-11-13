@@ -1,4 +1,4 @@
-import type { DirectoryEntry, FileStats } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '../IStorageDriver/types.js';
 
 export interface IBrudFileSystem {
   readFile(relativePath: string): Promise<Uint8Array>;

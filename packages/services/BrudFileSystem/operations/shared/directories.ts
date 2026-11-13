@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../contracts/index.js';
 
 export async function ensureParentDirectory(
   driver: IStorageDriver,

@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../contracts/index.js';
 
 /**
  * Mutation kinds a history-capable filesystem must be able to describe.

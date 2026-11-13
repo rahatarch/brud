@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from './contracts/index.js';
 import type { KernelServiceModuleContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { IValidationService } from '../ValidationService/contracts/IValidationService.js';

@@ -12,7 +12,6 @@
   "include": [
     "index.ts",
     "src",
-    "drivers",
     "services",
     "serviceModules"
   ],

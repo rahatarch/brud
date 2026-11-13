@@ -1,5 +1,5 @@
 import { open } from 'node:fs/promises';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from './NodeStorageDriver.js';
 
 function isUnsupportedDirectorySync(error: unknown): boolean {
   if (typeof error !== 'object' || error === null || !('code' in error)) {

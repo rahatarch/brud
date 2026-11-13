@@ -6,7 +6,7 @@ import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { bootKernel } from '../bootstrap/index.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import { NodeStorageDriver } from '../../drivers/index.js';
+import { NodeStorageDriver } from '../../../services/BrudFileSystem/drivers/index.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');

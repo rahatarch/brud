@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../contracts/index.js';
 
 /**
  * Optional durability capability a scoped storage driver may expose.

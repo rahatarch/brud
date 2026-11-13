@@ -1,5 +1,5 @@
 import type { PlatformPath } from 'node:path';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../BrudFileSystem/contracts/index.js';
 import type { PathRule } from '../contracts/rules.js';
 import type { ValidationFlavor } from '../contracts/IValidationService.js';
 import { PathViolationError } from '../contracts/errors.js';

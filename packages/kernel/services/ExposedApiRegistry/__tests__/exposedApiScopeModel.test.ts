@@ -675,4 +675,45 @@ describe('universal exposed API scope model', () => {
       );
     }
   });
+
+  it('default-denies an exposure that declares no public policy and honours a giver-declared public marker', async (t) => {
+    const kernel = await boot([
+      createProbe('test.policy.private', [{
+        apiName: 'test.policy.private',
+        registration: {
+          capability: 'test:read',
+          scope: 'runtime',
+          projection: () => 'private-handle',
+        },
+      }]),
+      createProbe('test.policy.public', [{
+        apiName: 'test.policy.public',
+        registration: {
+          // The giver declares its own public policy. The kernel ships no preset.
+          capability: '*',
+          scope: 'runtime',
+          projection: () => 'public-handle',
+        },
+      }]),
+    ]);
+    t.after(() => shutdown(kernel));
+
+    const registry = registryOf(kernel);
+
+    assert.equal(
+      registry.resolve('test.policy.private', [], access('runtime')),
+      null,
+      'an exposure with no declared public policy must default-deny an uncapable caller',
+    );
+    assert.equal(
+      registry.resolve('test.policy.private', ['test:read'], access('runtime')),
+      'private-handle',
+      'a caller holding the declared capability resolves the private exposure',
+    );
+    assert.equal(
+      registry.resolve('test.policy.public', [], access('runtime')),
+      'public-handle',
+      'a giver-declared public marker matches every caller',
+    );
+  });
 });

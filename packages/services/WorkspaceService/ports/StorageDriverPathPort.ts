@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../BrudFileSystem/contracts/index.js';
 import type { IWorkspacePathPort } from '../contracts/IWorkspaceService.js';
 
 /**

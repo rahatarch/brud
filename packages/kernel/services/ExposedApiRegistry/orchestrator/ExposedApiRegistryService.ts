@@ -1,7 +1,6 @@
 import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
 import {
   isCapabilityToken,
-  isPublicApiCapability,
 } from '../../../src/contracts/capability.js';
 import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
@@ -254,7 +253,7 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
     }
 
     if (
-      !isPublicApiCapability(registration.capability)
+      registration.capability !== '*'
       && !isCapabilityToken(registration.capability)
     ) {
       throw new ExposedApiInvalidCapabilityError(registration.capability);
@@ -403,9 +402,6 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
           callerId: access.callerId,
           tier: access.tier,
           options: { 'workspace.root': access.workspaceRoot },
-          ...(access.partitionPrefix === undefined
-            ? {}
-            : { partitionPrefix: access.partitionPrefix }),
         };
     const callerWorkspaceRoot = accessContext.options['workspace.root'];
 

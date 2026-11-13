@@ -1,5 +1,5 @@
 import { dirname } from 'node:path';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../contracts/index.js';
 import { ensureParentDirectory } from '../shared/directories.js';
 import { flushDirectory, flushFile } from '../shared/durability.js';
 import {

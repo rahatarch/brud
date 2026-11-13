@@ -21,15 +21,15 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '4f5b6b4c828b832ddd516840847b42d208b8dcf07d12caef973f89713f8359d0';
+  'a0b19b177faed122b6b0432244361bc2322f424d9d790d5223b0991ab33adcd4';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'f25f215d3dc02cf608ed636a66f294e9affe72eb33a73768c9e881f4731e5724';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '32b3b0378fe9180a307d8f426eea9873405a3b9ac21d83dc467fd19357a468cc';
+  'ca2ade7e5f0ccbb59ec4c7e334a113cd96fc1ae5d3e7cbcb028eef468f47da54';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
-  '2cd40a34ded8be54902b3124be2b202c8a110e16707dfbba7ec027af9c55abfc';
+  '98c207452b3f562b2bfcf9368701d5de0961d3874bb458b8d775766e8b554814';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {

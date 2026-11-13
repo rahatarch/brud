@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, relative, resolve as resolvePath, sep } from 'node:path';
+import { dirname, extname, join, resolve as resolvePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -55,7 +55,6 @@ import {
 const KERNEL_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MECHANISM_PATH = join(KERNEL_ROOT, 'src', 'bootstrap', 'hardcore.ts');
 const KERNEL_CONFIG_PATH = join(KERNEL_ROOT, 'brud.config.json');
-const DRIVERS_ROOT = join(KERNEL_ROOT, 'drivers');
 
 const IDENTITY_SHIM = join(KERNEL_ROOT, 'serviceModules', 'identityRegistry.ts');
 const EXPOSED_API_SHIM = join(KERNEL_ROOT, 'serviceModules', 'exposedApiRegistry.ts');
@@ -204,8 +203,6 @@ function persistenceReachViolations(graph: PackageGraph): readonly string[] {
   for (const file of graph.files) {
     if (!isInside(file, KERNEL_ROOT)) {
       violations.push(`outside the kernel folder: ${file}`);
-    } else if (isInside(file, DRIVERS_ROOT)) {
-      violations.push(`reaches the storage-driver abstraction: ${relative(KERNEL_ROOT, file)}`);
     }
   }
 
@@ -451,7 +448,7 @@ export function createService() {
 }
 
 describe('hardcore persistence independence (BC-6)', () => {
-  it('keeps both hardcore package graphs inside the kernel, on platform builtins, without the driver abstraction', () => {
+  it('keeps both hardcore package graphs inside the kernel, on platform builtins, without a storage-driver reach', () => {
     for (const shim of [IDENTITY_SHIM, EXPOSED_API_SHIM]) {
       const graph = packageGraph(shim);
 
@@ -464,13 +461,13 @@ describe('hardcore persistence independence (BC-6)', () => {
     assert.deepEqual(
       persistenceReachViolations({
         files: [
-          join(KERNEL_ROOT, 'drivers', 'contracts', 'IStorageDriver', 'IStorageDriver.ts'),
+          resolvePath(KERNEL_ROOT, '..', 'services', 'BrudFileSystem', 'contracts', 'IStorageDriver', 'IStorageDriver.ts'),
           resolvePath(KERNEL_ROOT, '..', 'services', 'BrudFileSystem', 'serviceModule.ts'),
         ],
         bareSpecifiers: ['@brud/service-filesystem', 'node:fs'],
       }),
       [
-        'reaches the storage-driver abstraction: drivers/contracts/IStorageDriver/IStorageDriver.ts',
+        `outside the kernel folder: ${resolvePath(KERNEL_ROOT, '..', 'services', 'BrudFileSystem', 'contracts', 'IStorageDriver', 'IStorageDriver.ts')}`,
         `outside the kernel folder: ${resolvePath(KERNEL_ROOT, '..', 'services', 'BrudFileSystem', 'serviceModule.ts')}`,
         'non-platform package: @brud/service-filesystem',
       ],

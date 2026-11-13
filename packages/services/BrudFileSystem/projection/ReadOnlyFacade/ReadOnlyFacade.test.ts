@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import type { DirectoryEntry, FileStats } from '@brud/kernel';
+import type { DirectoryEntry, FileStats } from '../../contracts/index.js';
 import type { IBrudFileSystem } from '../../contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { ReadOnlyFacade, ReadOnlyViolationError } from './ReadOnlyFacade.js';
 

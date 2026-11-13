@@ -175,6 +175,7 @@ const FORBIDDEN_CORE_PROPERTIES = [
   'plugins',
   'initialPlugins',
   'certifyPlugins',
+  'partitionPrefix',
 ] as const;
 
 /** Recursively collects production `.ts` files under the core source root. */
@@ -355,8 +356,8 @@ describe('kernel core purity', () => {
 
     assert.deepEqual(
       [...interfacePropertyNames(lifecycle, 'ServiceContext')].sort(),
-      ['callerId', 'logger', 'options', 'partitionPrefix', 'tier'],
-      'ServiceContext must carry only caller identity, a logger, a partition, and the generic options bag',
+      ['callerId', 'logger', 'options', 'tier'],
+      'ServiceContext must carry only caller identity, a logger, and the generic options bag',
     );
     assert.deepEqual(
       [...interfacePropertyNames(context, 'ExecutionContext')].sort(),

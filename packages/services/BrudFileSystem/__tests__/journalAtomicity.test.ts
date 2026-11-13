@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { access, mkdtemp, rm, utimes, writeFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NodeStorageDriver } from '@brud/kernel';
+import { NodeStorageDriver } from '../drivers/index.js';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import { createFileMutationJournal } from '../events/FileMutationJournal.js';
 import type { FileMutationEvent } from '../events/types.js';

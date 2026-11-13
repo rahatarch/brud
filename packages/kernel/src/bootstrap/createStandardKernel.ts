@@ -13,16 +13,17 @@ import { createDeferredKernel } from './bootKernelInternal.js';
  * import `createStandardKernel` from `@brud/kernel`.
  *
  * The generic options bag can be supplied either flat (legacy embedders) or
- * under `options` (the canonical shape). Plugin overrides are translated into
- * the bag before the kernel sees them.
+ * under `options` (the canonical shape). Legacy host option names are mapped
+ * into the namespace owned by the service that interprets them; the kernel
+ * itself carries no plugin concept.
  */
 export interface CreateStandardKernelOptions extends ComposeKernelOptions {
   /**
    * Legacy flat service options; merged into the generic bag.
    *
    * The wrapper recognizes the compatibility keys `initialPlugins` and
-   * `certifyInitialPlugins` and translates them into the bag. They are not
-   * named properties of a core boot boundary.
+   * `certifyInitialPlugins` and maps them into the plugin manager's own
+   * namespace. They are not named properties of a core boot boundary.
    */
   readonly [option: string]: unknown;
 }
@@ -48,14 +49,20 @@ export function createStandardKernel(
   };
 
   if (initialPlugins !== undefined) {
-    bag['plugins'] = initialPlugins;
+    bag['pluginManager.plugins'] = { entries: initialPlugins };
   }
 
   if (certifyInitialPlugins !== undefined) {
-    bag['certifyPlugins'] = certifyInitialPlugins;
+    bag['pluginManager.certifyPlugins'] = certifyInitialPlugins;
   }
 
-  return createDeferredKernel(defaultKernelConfigPath(), {
+  const configPath = defaultKernelConfigPath();
+
+  if (bag['pluginManager.configPath'] === undefined) {
+    bag['pluginManager.configPath'] = configPath;
+  }
+
+  return createDeferredKernel(configPath, {
     options: bag,
     ...(logger === undefined ? {} : { logger: logger as KernelLogger }),
   });

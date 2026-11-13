@@ -167,7 +167,9 @@ before(async () => {
     ],
   });
 
-  kernel = await bootKernel(configPath, { options: workspaceContextOptions(workspaceRoot) });
+  kernel = await bootKernel(configPath, {
+    options: { ...workspaceContextOptions(workspaceRoot), 'pluginManager.configPath': configPath },
+  });
 });
 
 after(async () => {
@@ -271,7 +273,7 @@ describe('terminal plugin capability', () => {
     const bootOptions = { ...workspaceContextOptions(workspaceRoot), ...isolatedIdentity };
 
     const terminalFreeKernel = await bootKernel(configPath, {
-      options: bootOptions,
+      options: { ...bootOptions, 'pluginManager.configPath': configPath },
     });
 
     try {

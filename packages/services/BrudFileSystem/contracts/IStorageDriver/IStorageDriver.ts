@@ -1,5 +1,12 @@
 import type { DirectoryEntry, FileStats, PathEntryStats } from './types.js';
 
+/**
+ * Storage driver contract owned by the filesystem service.
+ *
+ * The kernel carries no storage abstraction. Services that need to persist
+ * through the platform use Node directly, or accept this contract from the
+ * storage service that owns it.
+ */
 export interface IStorageDriver {
   readFile(absolutePath: string): Promise<Uint8Array>;
   readText(absolutePath: string, encoding?: BufferEncoding): Promise<string>;

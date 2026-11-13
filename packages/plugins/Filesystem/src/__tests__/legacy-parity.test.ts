@@ -18,7 +18,7 @@
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { OperationResult } from '@brud/kernel';
-import { NodeStorageDriver } from '../../../../kernel/drivers/node/index.js';
+import { NodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/index.js';
 import fixture from './fixtures/legacy-outputs.json' with { type: 'json' };
 import { appendFile } from '../groups/file/appendFile/index.js';
 import { copyFile } from '../groups/file/copyFile/index.js';

@@ -12,7 +12,7 @@ import { DatabaseSync } from 'node:sqlite';
 import type { SQLInputValue } from 'node:sqlite';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
 import { assertDigest, blobRef, readBlob, sha256Hex, sweepCas, writeBlob } from './cas.js';
 import type { CasSweepReport } from './cas.js';
 import { isReadOnlyStorageError } from './classify.js';

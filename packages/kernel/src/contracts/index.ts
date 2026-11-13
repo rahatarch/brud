@@ -50,9 +50,7 @@ export type { OperationResult, OperationHandler, PromptDescriptor, PluginMetadat
 export type { CapabilityToken } from './capability.js';
 export {
   CAPABILITY_TOKEN_PATTERN,
-  PUBLIC_API_CAPABILITY,
   isCapabilityToken,
-  isPublicApiCapability,
 } from './capability.js';
 
 export type { BrudBuiltInKind, BrudOperationKind } from './brudOperation.js';

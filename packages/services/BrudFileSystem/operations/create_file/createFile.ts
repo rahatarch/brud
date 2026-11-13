@@ -1,4 +1,4 @@
-import type { IStorageDriver } from '@brud/kernel';
+import type { IStorageDriver } from '../../contracts/index.js';
 import { FileAlreadyExistsError } from '../shared/errors.js';
 import { writeAtomic } from '../write_atomic/writeAtomic.js';
 
