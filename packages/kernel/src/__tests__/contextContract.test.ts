@@ -40,6 +40,7 @@ async function bootWith(
       services: [
         { path: FIXTURE_PATH },
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
       ],
       plugins: [],
     }),
@@ -93,6 +94,12 @@ describe('dynamic context contract', () => {
         required: true,
         description: 'Absolute path to the operator-provisioned identity registry file.',
         service: 'identity',
+      }, {
+        name: 'exposedApi.scopeRecord.path',
+        type: 'string',
+        required: false,
+        description: 'Absolute path to the protected exposed API scope record.',
+        service: 'exposedApi',
       }]);
     } finally {
       await kernel.shutdown();
@@ -175,7 +182,10 @@ describe('dynamic context contract', () => {
     const kernel = await bootWith([declaration]);
 
     try {
-      assert.equal(kernel.getContextSchema().fields.length, 2);
+      assert.deepEqual(
+        kernel.getContextSchema().fields.map((field) => field.name),
+        ['workspace.label', 'identity.registry.path', 'exposedApi.scopeRecord.path'],
+      );
     } finally {
       await kernel.shutdown();
     }
@@ -244,6 +254,7 @@ describe('dynamic context contract', () => {
       assert.deepEqual(schema.fields.map((field) => field.name), [
         'photoshop.licenseKey',
         'identity.registry.path',
+        'exposedApi.scopeRecord.path',
       ]);
       assert.equal(schema.fields[0]?.service, 'photoshop');
     } finally {
@@ -282,7 +293,7 @@ describe('dynamic context contract', () => {
 
       assert.deepEqual(
         kernel.getContextSchema().fields.map((field) => field.name),
-        ['workspace.root', 'identity.registry.path'],
+        ['workspace.root', 'identity.registry.path', 'exposedApi.scopeRecord.path'],
       );
     } finally {
       await kernel.shutdown();

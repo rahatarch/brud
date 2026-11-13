@@ -32,6 +32,25 @@ const DAEMON_CONFIG_PATH = fileURLToPath(
 
 const REGISTRY_MODULE_PATH = 'kernel:serviceModules/identityRegistry.js';
 
+const EXPOSED_API_MODULE_PATH = 'kernel:serviceModules/exposedApiRegistry.js';
+
+const IDENTITY_TOKEN = 'brud.core.identityRegistry';
+
+const EXPOSED_API_TOKEN = 'brud.core.exposedApiRegistry';
+
+const IDENTITY_METHODS = ['issue', 'resolve', 'retire', 'revoke'] as const;
+
+const EXPOSED_API_METHODS = [
+  'registerApi',
+  'resolve',
+  'resolveWithMetadata',
+  'scopeOf',
+  'closeRegistration',
+  'isRegistrationOpen',
+  'registeredApiNames',
+  'registeredApiIdentities',
+] as const;
+
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
 
 function baseServices(): Promise<readonly BrudConfigEntry[]> {
@@ -133,8 +152,16 @@ function substitutesIdentityRegistry(
   services: readonly BrudConfigEntry[],
   substitutePath: string,
 ): readonly BrudConfigEntry[] {
+  return substitutesModule(services, REGISTRY_MODULE_PATH, substitutePath);
+}
+
+function substitutesModule(
+  services: readonly BrudConfigEntry[],
+  modulePath: string,
+  substitutePath: string,
+): readonly BrudConfigEntry[] {
   return services.map((service) =>
-    service.path === REGISTRY_MODULE_PATH
+    service.path === modulePath
       ? { path: substitutePath, official: true }
       : service);
 }
@@ -144,14 +171,18 @@ async function writeSubstituteModule(
   name: string,
   contractVersion: string,
   methods: readonly string[],
+  tokenId: string = IDENTITY_TOKEN,
 ): Promise<string> {
   const modulePath = join(root, `${name}.mjs`);
+  const instanceMethods = [...new Set([...IDENTITY_METHODS, ...EXPOSED_API_METHODS])]
+    .map((method) => `      ${method}() { throw new Error('substitute ${method}'); },`)
+    .join('\n');
 
   await writeFile(modulePath, `export function createService() {
   return {
     token: {
-      id: 'brud.core.identityRegistry',
-      description: 'substituted identity registry',
+      id: ${JSON.stringify(tokenId)},
+      description: 'substituted hardcore service',
       _brand: [],
     },
     tier: 'core',
@@ -161,10 +192,7 @@ async function writeSubstituteModule(
       methods: ${JSON.stringify(methods)},
     },
     factory: () => ({
-      issue() { throw new Error('substitute issue'); },
-      resolve() { return null; },
-      retire() { throw new Error('substitute retire'); },
-      revoke() { throw new Error('substitute revoke'); },
+${instanceMethods}
     }),
   };
 }
@@ -283,9 +311,17 @@ export function registerBootRegistrants(_context, instances) {
     && typeof instance.resolve === 'function'
     && typeof instance.retire === 'function'
     && typeof instance.revoke === 'function');
+  const exposedApiIndex = instances.findIndex((instance) =>
+    instance !== null
+    && typeof instance === 'object'
+    && typeof instance.registerApi === 'function'
+    && typeof instance.resolveWithMetadata === 'function'
+    && typeof instance.scopeOf === 'function'
+    && typeof instance.closeRegistration === 'function');
 
   record('pin:count:' + instances.length);
   record('pin:identityIndex:' + identityIndex);
+  record('pin:exposedApiIndex:' + exposedApiIndex);
 }
 `, 'utf8');
 
@@ -382,6 +418,8 @@ describe('hardcore service enforcement production mirror', () => {
     const services = (await baseServices()).filter(
       (service) => service.path !== REGISTRY_MODULE_PATH,
     );
+
+    assert.ok(services.some((service) => service.path === EXPOSED_API_MODULE_PATH));
 
     await writeConfig(workspace, services);
 
@@ -501,7 +539,7 @@ describe('hardcore service enforcement production mirror', () => {
     await assert.rejects(readFile(plugin.markerPath, 'utf8'));
   });
 
-  it('initializes the hardcore service before every composed service in the full daemon composition', async (t) => {
+  it('initializes both hardcore services before every composed service in the full daemon composition', async (t) => {
     const workspace = await createWorkspace(t);
     const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
     const composed = await daemonServices();
@@ -514,13 +552,150 @@ describe('hardcore service enforcement production mirror', () => {
     assert.equal(kernel.lifecycleState, 'RUNNING');
     assert.ok(composed.length > 1, 'the daemon config must compose real services');
 
+    const exposedApiConfigIndex = services.findIndex(
+      (service) => service.path === EXPOSED_API_MODULE_PATH,
+    );
+    const identityConfigIndex = services.findIndex(
+      (service) => service.path === REGISTRY_MODULE_PATH,
+    );
+
+    assert.ok(exposedApiConfigIndex > 0 && identityConfigIndex > 0);
+    assert.ok(
+      exposedApiConfigIndex < identityConfigIndex,
+      'the daemon config lists the exposed API registry before the identity registry',
+    );
+
     const observed = (await readFile(observer.logPath, 'utf8')).trim().split('\n');
 
+    // The composed observer is listed first in the config, yet both hardcore
+    // services occupy the first two initialization positions, in config order
+    // inside the hardcore partition.
     assert.deepEqual(observed, [
       'init:protected',
       `pin:count:${String(services.length)}`,
-      'pin:identityIndex:0',
+      'pin:identityIndex:1',
+      'pin:exposedApiIndex:0',
     ]);
+  });
+
+  it('refuses boot when the exposed API registry is absent', async (t) => {
+    const workspace = await createWorkspace(t);
+    const marker = await writeInitializeMarkerModule(workspace.root);
+    const services = [
+      ...(await baseServices()).filter(
+        (service) => service.path !== EXPOSED_API_MODULE_PATH,
+      ),
+      { path: marker.modulePath },
+    ];
+
+    assert.ok(services.some((service) => service.path === REGISTRY_MODULE_PATH));
+
+    await writeConfig(workspace, services);
+
+    await assert.rejects(
+      bootKernel(workspace.configPath, { options: optionsFor(workspace) }),
+      (error: unknown) => {
+        assert.ok(error instanceof HardcoreServiceError);
+        assert.equal(error.code, 'HARDCORE_VERIFICATION');
+        assert.equal(error.service, EXPOSED_API_TOKEN);
+        assert.equal(error.check, 'presence');
+        assert.match(error.message, /brud\.core\.exposedApiRegistry/u);
+        assert.match(error.message, /no matching config entry/u, error.message);
+        return true;
+      },
+    );
+
+    await assert.rejects(readFile(marker.constructedMarkerPath, 'utf8'));
+    await assert.rejects(readFile(marker.initializedMarkerPath, 'utf8'));
+  });
+
+  it('refuses a substituted exposed API registry package by content hash', async (t) => {
+    const workspace = await createWorkspace(t);
+    const substitutePath = await writeSubstituteModule(
+      workspace.root,
+      'substitute-exposed-api-registry',
+      '1.0.0',
+      EXPOSED_API_METHODS,
+      EXPOSED_API_TOKEN,
+    );
+
+    await writeConfig(
+      workspace,
+      substitutesModule(await baseServices(), EXPOSED_API_MODULE_PATH, substitutePath),
+    );
+
+    await assert.rejects(
+      bootKernel(workspace.configPath, { options: optionsFor(workspace) }),
+      (error: unknown) => {
+        assert.ok(error instanceof HardcoreServiceError);
+        assert.equal(error.service, EXPOSED_API_TOKEN);
+        assert.equal(error.check, 'content-hash');
+        assert.match(error.message, /substitute-exposed-api-registry\.mjs/u, error.message);
+        assert.notEqual(error.expected, error.found);
+        return true;
+      },
+    );
+  });
+
+  it('refuses an exposed API registry that does not satisfy its declared contract', async (t) => {
+    const workspace = await createWorkspace(t);
+    const wrongVersion = await writeSubstituteModule(
+      workspace.root,
+      'wrong-version-exposed-api-registry',
+      '0.0.0',
+      EXPOSED_API_METHODS,
+      EXPOSED_API_TOKEN,
+    );
+
+    await writeConfig(
+      workspace,
+      substitutesModule(await baseServices(), EXPOSED_API_MODULE_PATH, wrongVersion),
+    );
+
+    await assert.rejects(
+      bootKernel(workspace.configPath, { options: optionsFor(workspace) }),
+      (error: unknown) => {
+        assert.ok(error instanceof HardcoreServiceError);
+        assert.equal(error.service, EXPOSED_API_TOKEN);
+        assert.equal(error.check, 'contract');
+        assert.equal(error.expected, 'contract version "1.0.0"');
+        assert.equal(error.found, 'contract version "0.0.0"');
+        return true;
+      },
+    );
+
+    // The identity registry's interface does not satisfy the exposed API
+    // registry's entry: each entry is checked against its own declaration.
+    // A fresh workspace keeps this boot's config separate from the first one,
+    // which the kernel has already recorded.
+    const second = await createWorkspace(t);
+    const identityShaped = await writeSubstituteModule(
+      second.root,
+      'identity-shaped-exposed-api-registry',
+      '1.0.0',
+      IDENTITY_METHODS,
+      EXPOSED_API_TOKEN,
+    );
+
+    await writeConfig(
+      second,
+      substitutesModule(await baseServices(), EXPOSED_API_MODULE_PATH, identityShaped),
+    );
+
+    await assert.rejects(
+      bootKernel(second.configPath, { options: optionsFor(second) }),
+      (error: unknown) => {
+        assert.ok(error instanceof HardcoreServiceError);
+        assert.equal(error.service, EXPOSED_API_TOKEN);
+        assert.equal(error.check, 'contract');
+        assert.match(
+          error.found,
+          /missing registerApi, resolveWithMetadata, scopeOf, closeRegistration, isRegistrationOpen, registeredApiNames, registeredApiIdentities/u,
+          error.found,
+        );
+        return true;
+      },
+    );
   });
 
   it('rolls back composed services before the hardcore service when initialization fails', async (t) => {

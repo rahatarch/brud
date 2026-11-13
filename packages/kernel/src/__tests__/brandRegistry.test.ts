@@ -38,6 +38,7 @@ async function writeConfig(root: string, services: readonly string[]): Promise<s
   await writeFile(configPath, JSON.stringify({
     services: [
       { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+      { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
       ...services.map((path) => ({ path, official: true })),
     ],
     plugins: [],

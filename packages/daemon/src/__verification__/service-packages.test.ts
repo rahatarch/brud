@@ -250,4 +250,123 @@ export function createService() {
       },
     );
   });
+
+  it('refuses to boot without the hardcore exposed API registry', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'brud-service-packages-'));
+    roots.push(root);
+
+    const config = readConfig(DEFAULT_BRUD_CONFIG_PATH);
+    const withoutExposedApi = {
+      ...config,
+      services: config.services.filter((entry) =>
+        entry.path !== 'kernel:serviceModules/exposedApiRegistry.js'),
+    };
+    const configPath = join(root, 'brud.config.json');
+    writeFileSync(configPath, JSON.stringify(withoutExposedApi, null, 2));
+
+    const kernelModule = await loadKernelModule();
+
+    await assert.rejects(
+      kernelModule.bootKernel(configPath, {
+        options: createWorkspaceContextOptions(root),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, 'HardcoreServiceError', error.message);
+        assert.match(error.message, /exposedApiRegistry.*presence/iu);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a substituted exposed API registry package', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'brud-service-packages-'));
+    roots.push(root);
+
+    const kernelRoot = resolve(__dirname, '../../../kernel/dist');
+    const copyRoot = join(root, 'kernel-copy');
+    cpSync(kernelRoot, copyRoot, { recursive: true });
+    appendFileSync(
+      join(copyRoot, 'services', 'ExposedApiRegistry', 'serviceModule.js'),
+      '\n// substituted package\n',
+    );
+
+    const config = readConfig(DEFAULT_BRUD_CONFIG_PATH);
+    const substituted = {
+      ...config,
+      services: config.services.map((entry) =>
+        entry.path === 'kernel:serviceModules/exposedApiRegistry.js'
+          ? { ...entry, path: join(copyRoot, 'serviceModules', 'exposedApiRegistry.js') }
+          : entry),
+    };
+    const configPath = join(root, 'brud.config.json');
+    writeFileSync(configPath, JSON.stringify(substituted, null, 2));
+
+    const kernelModule = await loadKernelModule();
+
+    await assert.rejects(
+      kernelModule.bootKernel(configPath, {
+        options: createWorkspaceContextOptions(root),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, 'HardcoreServiceError', error.message);
+        assert.match(error.message, /exposedApiRegistry.*content-hash/iu);
+        return true;
+      },
+    );
+  });
+
+  it('refuses an exposed API registry with the wrong contract', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'brud-service-packages-'));
+    roots.push(root);
+
+    const wrongContract = join(root, 'wrongExposedApi.mjs');
+    writeFileSync(
+      wrongContract,
+      `const token = { id: 'brud.core.exposedApiRegistry', description: 'wrong contract', _brand: [] };
+
+export function createService() {
+  return {
+    token,
+    tier: 'core',
+    dependencies: [],
+    contract: {
+      version: '0.0.0',
+      methods: ['registerApi', 'resolve', 'resolveWithMetadata', 'scopeOf', 'closeRegistration', 'isRegistrationOpen', 'registeredApiNames', 'registeredApiIdentities'],
+    },
+    factory: () => ({
+      initialize() {},
+      dispose() {},
+    }),
+  };
+}
+`,
+    );
+
+    const config = readConfig(DEFAULT_BRUD_CONFIG_PATH);
+    const wrong = {
+      ...config,
+      services: config.services.map((entry) =>
+        entry.path === 'kernel:serviceModules/exposedApiRegistry.js'
+          ? { ...entry, path: wrongContract }
+          : entry),
+    };
+    const configPath = join(root, 'brud.config.json');
+    writeFileSync(configPath, JSON.stringify(wrong, null, 2));
+
+    const kernelModule = await loadKernelModule();
+
+    await assert.rejects(
+      kernelModule.bootKernel(configPath, {
+        options: createWorkspaceContextOptions(root),
+      }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.equal(error.name, 'HardcoreServiceError', error.message);
+        assert.match(error.message, /exposedApiRegistry.*contract/iu);
+        return true;
+      },
+    );
+  });
 });

@@ -88,6 +88,7 @@ describe('bootKernel config composition', () => {
     const { kernel, root } = await boot(t, {
       services: [
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
         { path: '@brud/service-utility/serviceModule.js', official: true },
       ],
       plugins: [],
@@ -234,6 +235,7 @@ describe('bootKernel config composition', () => {
     const configPath = await writeConfig(root, {
       services: [
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
         { path: '@brud/service-router/serviceModule.js' },
       ],
       plugins: [],

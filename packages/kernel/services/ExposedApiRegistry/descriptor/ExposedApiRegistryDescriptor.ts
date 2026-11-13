@@ -10,6 +10,21 @@ export const EXPOSED_API_REGISTRY_SERVICE_TIER: ServiceTier = 'core';
 /** Namespace owned by the registry in the context contract. */
 export const EXPOSED_API_REGISTRY_CONTEXT_SCOPE = 'exposedApi';
 
+/** Contract version declared for the Registry interface. */
+export const EXPOSED_API_REGISTRY_CONTRACT_VERSION = '1.0.0';
+
+/** Methods declared for the Registry interface. */
+export const EXPOSED_API_REGISTRY_CONTRACT_METHODS = [
+  'registerApi',
+  'resolve',
+  'resolveWithMetadata',
+  'scopeOf',
+  'closeRegistration',
+  'isRegistrationOpen',
+  'registeredApiNames',
+  'registeredApiIdentities',
+] as const;
+
 /**
  * Optional context field holding the absolute protected scope-record path.
  *
@@ -55,6 +70,10 @@ export function createExposedApiRegistryDescriptor(
     dependencies: [],
     accessPolicy: {
       allowedCallers: ['kernel', 'PluginManager', 'brud.host.daemon'],
+    },
+    contract: {
+      version: EXPOSED_API_REGISTRY_CONTRACT_VERSION,
+      methods: EXPOSED_API_REGISTRY_CONTRACT_METHODS,
     },
     factory: (context, broker): ExposedApiRegistryService => {
       const scopeRecordPath = options?.scopeRecordPath

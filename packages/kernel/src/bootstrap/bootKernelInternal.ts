@@ -19,12 +19,13 @@ import {
 } from './config/integrity.js';
 import { parseBrudConfig } from './config/parse.js';
 import {
-  HARDCORE_SERVICES,
   buildHardcoreBootEntries,
+  invokeHardcoreBootHooks,
   verifyHardcoreServices,
   type ComposedServiceDescriptor,
   type HardcoreBootEntry,
 } from './hardcore.js';
+import { HARDCORE_SERVICES } from './hardcoreServices.js';
 import {
   BrudConfigError,
   type BrudConfig,
@@ -126,6 +127,7 @@ export function createDeferredKernel(
   let loadedServices: readonly LoadedService[] = [];
   let serviceContext: KernelServiceModuleContext | undefined;
   let hardcoreBootEntries: readonly HardcoreBootEntry[] = [];
+  let hardcorePackageHashes: ReadonlyMap<string, string> = new Map();
   let activeServiceOwner = 'brud.kernel.composition';
   const contextContract = new ContextContract();
 
@@ -140,15 +142,12 @@ export function createDeferredKernel(
     contextContract,
     hardcoreTokens: HARDCORE_SERVICES.map((service) => service.token),
     bootHardcore: (instances): void => {
-      for (const hardcore of HARDCORE_SERVICES) {
-        const match = instances.find((entry) => entry.tokenId === hardcore.token);
-
-        if (match === undefined) {
-          continue;
-        }
-
-        hardcore.boot(match.instance, hardcoreBootEntries);
-      }
+      invokeHardcoreBootHooks(
+        HARDCORE_SERVICES,
+        instances,
+        hardcorePackageHashes,
+        hardcoreBootEntries,
+      );
     },
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       const context = serviceContext;
@@ -228,7 +227,8 @@ export function createDeferredKernel(
       // The hardcore gate runs after descriptors exist and before any service
       // is registered or initialized. A failure here never reaches the
       // service initialization phase.
-      const packageHashes = verifyHardcoreServices(composed, configPath);
+      const packageHashes = verifyHardcoreServices(HARDCORE_SERVICES, composed, configPath);
+      hardcorePackageHashes = packageHashes;
       hardcoreBootEntries = buildHardcoreBootEntries(composed, packageHashes);
 
       for (const service of composed) {

@@ -1,23 +1,24 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { dirname, extname, relative, resolve } from 'node:path';
+import { dirname, extname, relative, resolve as resolvePath } from 'node:path';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import { BrudConfigError } from './config/types.js';
 
 /**
- * The kernel's fixed hardcore service set.
+ * The generic hardcore mechanism.
  *
- * This list is compiled into the kernel. It is not read from config and cannot
- * be edited at runtime. Each entry knows only the service token, the expected
- * package content digest, the contract version, the required contract
- * interface, and the boot-time call. It knows nothing about what the service
- * does.
+ * This module knows how to verify and boot any compiled hardcore entry. It
+ * does not hold the compiled list and knows nothing about what any listed
+ * service does: it never names a service, a token, or a method. Every entry
+ * carries its own contract version, its own contract interface, and its own
+ * boot hook. The mechanism compares each entry against its own declaration and
+ * calls each entry's hook with one uniform signature.
  */
 
 /** Check that refused a hardcore service. */
 export type HardcoreCheck = 'presence' | 'contract' | 'content-hash';
 
-/** One composed service that passed the hardcore gate. */
+/** One composed participant, as recorded by the loader for hardcore hooks. */
 export interface HardcoreBootEntry {
   /** Service token id declared by the descriptor. */
   readonly token: string;
@@ -32,7 +33,33 @@ export interface HardcoreBootEntry {
   readonly contentHash: string;
 }
 
-/** Contract a hardcore service must declare on its descriptor. */
+/**
+ * What the mechanism hands one hardcore entry's boot hook.
+ *
+ * Every hook receives the same shape: the entry's own token and verified
+ * package digest, and the composition the loader assembled.
+ */
+export interface HardcoreBootContext {
+  /** Token id of the entry whose hook is running. */
+  readonly token: string;
+
+  /** Verified package content digest of the entry whose hook is running. */
+  readonly contentHash: string;
+
+  /** Every composed participant, in config order. */
+  readonly composition: readonly HardcoreBootEntry[];
+}
+
+/**
+ * Uniform boot hook signature for every hardcore entry.
+ *
+ * The hook narrows `instance` structurally to whatever its own entry declares.
+ * The kernel calls it once, after every service has initialized and before the
+ * kernel enters `RUNNING`, while the hardcore service is still mutable.
+ */
+export type HardcoreBootHook = (instance: unknown, context: HardcoreBootContext) => void;
+
+/** Contract a hardcore entry declares for its own service. */
 export interface HardcoreContract {
   /** Contract version the kernel was compiled to expect. */
   readonly contractVersion: string;
@@ -40,11 +67,11 @@ export interface HardcoreContract {
   /** Methods the descriptor must declare. */
   readonly contractInterface: readonly string[];
 
-  /** Boot-time call the kernel makes while the service is still mutable. */
-  readonly boot: (instance: unknown, entries: readonly HardcoreBootEntry[]) => void;
+  /** Boot hook the kernel calls while the service is still mutable. */
+  readonly boot: HardcoreBootHook;
 }
 
-/** One fixed hardcore service compiled into the kernel. */
+/** One fixed hardcore entry compiled into the kernel. */
 export interface HardcoreService extends HardcoreContract {
   /** Service token id. */
   readonly token: string;
@@ -134,7 +161,7 @@ function importSpecifiers(contents: string): readonly string[] {
 
 /** Resolves a relative module specifier to a real file, if one exists. */
 function resolveRelativeFile(fromFile: string, specifier: string): string | undefined {
-  const candidate = resolve(dirname(fromFile), specifier);
+  const candidate = resolvePath(dirname(fromFile), specifier);
 
   if (isFile(candidate)) {
     return candidate;
@@ -175,12 +202,12 @@ function isFile(candidate: string): boolean {
 
 /** Returns the transitive relative-import graph rooted at one file. */
 function collectPackageGraph(entryPath: string): ReadonlyMap<string, string> {
-  const root = dirname(resolve(entryPath));
+  const root = dirname(resolvePath(entryPath));
   const visited = new Set<string>();
   const files = new Map<string, string>();
 
   const visit = (file: string): void => {
-    const absolute = resolve(file);
+    const absolute = resolvePath(file);
 
     if (visited.has(absolute)) {
       return;
@@ -245,16 +272,20 @@ function expectedHashFor(entryPath: string, hardcore: HardcoreService): string {
 }
 
 /**
- * Verifies every hardcore service against the composed service descriptors.
+ * Verifies every compiled hardcore entry against the composed descriptors.
  *
- * Checks run in this order: presence, declared contract, package content.
- * All checks run before any service is initialized.
+ * Each entry is checked against its own declaration: its own token, its own
+ * contract version, its own contract interface, and its own pins. Checks run in
+ * this order for each entry: presence, declared contract, package content. All
+ * checks run before any service is initialized.
  *
+ * @param list - The compiled hardcore list.
  * @param composed - Descriptors returned by the composed service modules.
  * @param configPath - Config path used in diagnostics.
  * @returns Package digests for the hardcore services that passed.
  */
 export function verifyHardcoreServices(
+  list: readonly HardcoreService[],
   composed: readonly ComposedServiceDescriptor[],
   configPath: string,
 ): ReadonlyMap<string, string> {
@@ -269,7 +300,7 @@ export function verifyHardcoreServices(
 
   const packageHashes = new Map<string, string>();
 
-  for (const hardcore of HARDCORE_SERVICES) {
+  for (const hardcore of list) {
     const matches = byToken.get(hardcore.token) ?? [];
 
     if (matches.length === 0) {
@@ -383,7 +414,7 @@ export function buildHardcoreBootEntries(
   }));
 }
 
-/** Digests a resolved file, or a bare package specifier, for provisional issuance. */
+/** Digests a resolved file, or a bare package specifier, as a provisional binding. */
 function contentHashForEntry(resolvedPath: string): string {
   try {
     return hashPackageFile(resolvedPath);
@@ -394,56 +425,47 @@ function contentHashForEntry(resolvedPath: string): string {
   }
 }
 
-/** Structural surface the boot call needs from the identity registry. */
-interface BootIdentityRegistry {
-  issue(binding: {
-    readonly publisher: string;
-    readonly contentHash: string;
-    readonly metadata: Readonly<Record<string, unknown>>;
-  }): unknown;
+/** One initialized service, as the engine reports it to the boot loader. */
+export interface HardcoreInitializedInstance {
+  /** Token id of the initialized service. */
+  readonly tokenId: string;
+
+  /** The initialized instance. */
+  readonly instance: unknown;
 }
 
 /**
- * Expected digests of the identity registry package.
+ * Calls every compiled entry's boot hook with the uniform signature.
  *
- * Two representations ship from one source tree: the TypeScript sources the
- * kernel tests load, and the compiled JavaScript the built package loads.
- * Both digests are pinned here. Updating either package requires a kernel
- * rebuild with new pinned digests.
+ * Hooks run in list order. Each hook receives its own initialized instance,
+ * its own token, its own verified package digest, and the composition. An
+ * entry with no initialized instance is skipped; the presence check refuses
+ * that composition before any service is constructed.
+ *
+ * @param list - The compiled hardcore list.
+ * @param instances - Every initialized service, in initialization order.
+ * @param packageHashes - Verified hardcore package digests from verification.
+ * @param composition - Every composed participant, in config order.
  */
-const IDENTITY_REGISTRY_SOURCE_HASH =
-  '287905447577363625b8b46c2b3443ee199196b2001a9ce77036a938fbb98c27';
-const IDENTITY_REGISTRY_BUILT_HASH =
-  'f25f215d3dc02cf608ed636a66f294e9affe72eb33a73768c9e881f4731e5724';
+export function invokeHardcoreBootHooks(
+  list: readonly HardcoreService[],
+  instances: readonly HardcoreInitializedInstance[],
+  packageHashes: ReadonlyMap<string, string>,
+  composition: readonly HardcoreBootEntry[],
+): void {
+  for (const hardcore of list) {
+    const match = instances.find((entry) => entry.tokenId === hardcore.token);
 
-/** The fixed hardcore list compiled into the kernel. */
-export const HARDCORE_SERVICES: readonly HardcoreService[] = [
-  {
-    token: 'brud.core.identityRegistry',
-    expectedContentHash: IDENTITY_REGISTRY_SOURCE_HASH,
-    expectedBuiltContentHash: IDENTITY_REGISTRY_BUILT_HASH,
-    contractVersion: '1.0.0',
-    contractInterface: ['issue', 'resolve', 'retire', 'revoke'],
-    boot: (instance, entries): void => {
-      const registry = instance as BootIdentityRegistry;
+    if (match === undefined) {
+      continue;
+    }
 
-      for (const entry of entries) {
-        registry.issue({
-          publisher: entry.token,
-          contentHash: entry.contentHash,
-          metadata: Object.freeze({
-            source: 'kernel.composition',
-            path: entry.path,
-            official: entry.official,
-            provisional: true,
-          }),
-        });
-      }
-    },
-  },
-];
+    const context: HardcoreBootContext = Object.freeze({
+      token: hardcore.token,
+      contentHash: packageHashes.get(hardcore.token) ?? '',
+      composition,
+    });
 
-/** Type guard used by the loader's initialized-instance list. */
-export function isHardcoreToken(token: string): boolean {
-  return HARDCORE_SERVICES.some((hardcore) => hardcore.token === token);
+    hardcore.boot(match.instance, context);
+  }
 }

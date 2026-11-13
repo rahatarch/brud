@@ -3,6 +3,10 @@
     {
       "path": "kernel:serviceModules/identityRegistry.js",
       "official": true
+    },
+    {
+      "path": "kernel:serviceModules/exposedApiRegistry.js",
+      "official": true
     }
   ],
   "plugins": []
