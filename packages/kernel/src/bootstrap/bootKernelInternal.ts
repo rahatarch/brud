@@ -138,6 +138,7 @@ export function createDeferredKernel(
 
   const kernel = new BrudKernel({
     contextContract,
+    hardcoreTokens: HARDCORE_SERVICES.map((service) => service.token),
     bootHardcore: (instances): void => {
       for (const hardcore of HARDCORE_SERVICES) {
         const match = instances.find((entry) => entry.tokenId === hardcore.token);

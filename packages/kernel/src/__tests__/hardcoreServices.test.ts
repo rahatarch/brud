@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { utimesSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,6 +7,7 @@ import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   bootKernel,
+  createDeferredKernel,
   HardcoreServiceError,
   type BrudConfig,
   type BrudConfigEntry,
@@ -24,6 +26,10 @@ const KERNEL_CONFIG_PATH = fileURLToPath(
   new URL('../../brud.config.json', import.meta.url),
 );
 
+const DAEMON_CONFIG_PATH = fileURLToPath(
+  new URL('../../../daemon/brud.config.json', import.meta.url),
+);
+
 const REGISTRY_MODULE_PATH = 'kernel:serviceModules/identityRegistry.js';
 
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
@@ -34,6 +40,16 @@ function baseServices(): Promise<readonly BrudConfigEntry[]> {
   );
 
   return baseServicesCache;
+}
+
+let daemonServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
+
+function daemonServices(): Promise<readonly BrudConfigEntry[]> {
+  daemonServicesCache ??= readFile(DAEMON_CONFIG_PATH, 'utf8').then(
+    (raw) => (JSON.parse(raw) as BrudConfig).services,
+  );
+
+  return daemonServicesCache;
 }
 
 interface HardcoreWorkspace {
@@ -159,8 +175,13 @@ async function writeSubstituteModule(
 
 async function writeInitializeMarkerModule(
   root: string,
-): Promise<{ readonly modulePath: string; readonly markerPath: string }> {
-  const markerPath = join(root, 'initialized.marker');
+): Promise<{
+  readonly modulePath: string;
+  readonly constructedMarkerPath: string;
+  readonly initializedMarkerPath: string;
+}> {
+  const constructedMarkerPath = join(root, 'constructed.marker');
+  const initializedMarkerPath = join(root, 'initialized.marker');
   const modulePath = join(root, 'initialize-marker.mjs');
 
   await writeFile(modulePath, `import { writeFileSync } from 'node:fs';
@@ -169,21 +190,130 @@ export function createService() {
   return {
     token: {
       id: 'test.hardcore.initializeMarker',
-      description: 'Writes a marker when initialized',
+      description: 'Writes markers when constructed and initialized',
+      _brand: [],
+    },
+    tier: 'userland',
+    dependencies: [],
+    factory: () => {
+      writeFileSync(${JSON.stringify(constructedMarkerPath)}, 'constructed', 'utf8');
+
+      return {
+        initialize() {
+          writeFileSync(${JSON.stringify(initializedMarkerPath)}, 'initialized', 'utf8');
+        },
+      };
+    },
+  };
+}
+`, 'utf8');
+
+  return { modulePath, constructedMarkerPath, initializedMarkerPath };
+}
+
+interface OrderObserverModule {
+  readonly modulePath: string;
+  readonly logPath: string;
+}
+
+/**
+ * Writes a composed fixture service that observes real hardcore boot state.
+ *
+ * At `initialize` and `dispose` it attempts a guarded `utimesSync` against the
+ * real identity registry file. The registry claims that path in `initialize`
+ * and releases it in `dispose`, so a refused mutation means the hardcore
+ * service is initialized and still alive. Its `registerBootRegistrants` hook
+ * records what the real boot pinner sees.
+ */
+async function writeOrderObserverModule(
+  root: string,
+  registryPath: string,
+): Promise<OrderObserverModule> {
+  const logPath = join(root, 'order.log');
+  const modulePath = join(root, 'order-observer.mjs');
+
+  await writeFile(modulePath, `import { appendFileSync, utimesSync } from 'node:fs';
+
+const REGISTRY_PATH = ${JSON.stringify(registryPath)};
+const LOG_PATH = ${JSON.stringify(logPath)};
+const PROBE_TIME = 0;
+
+function record(line) {
+  appendFileSync(LOG_PATH, line + '\\n', 'utf8');
+}
+
+function hardcoreState() {
+  try {
+    utimesSync(REGISTRY_PATH, PROBE_TIME, PROBE_TIME);
+    return 'unprotected';
+  } catch (error) {
+    return error !== null
+      && typeof error === 'object'
+      && error.code === 'CONFIG_INTEGRITY'
+      ? 'protected'
+      : 'probe-error';
+  }
+}
+
+export function createService() {
+  return {
+    token: {
+      id: 'test.hardcore.orderObserver',
+      description: 'Records hardcore-first boot observations',
       _brand: [],
     },
     tier: 'userland',
     dependencies: [],
     factory: () => ({
       initialize() {
-        writeFileSync(${JSON.stringify(markerPath)}, 'initialized', 'utf8');
+        record('init:' + hardcoreState());
+      },
+      dispose() {
+        record('dispose:' + hardcoreState());
+      },
+    }),
+  };
+}
+
+export function registerBootRegistrants(_context, instances) {
+  const identityIndex = instances.findIndex((instance) =>
+    instance !== null
+    && typeof instance === 'object'
+    && typeof instance.issue === 'function'
+    && typeof instance.resolve === 'function'
+    && typeof instance.retire === 'function'
+    && typeof instance.revoke === 'function');
+
+  record('pin:count:' + instances.length);
+  record('pin:identityIndex:' + identityIndex);
+}
+`, 'utf8');
+
+  return { modulePath, logPath };
+}
+
+async function writeFailingModule(root: string): Promise<string> {
+  const modulePath = join(root, 'failing-composed.mjs');
+
+  await writeFile(modulePath, `export function createService() {
+  return {
+    token: {
+      id: 'test.hardcore.failingComposed',
+      description: 'Fails during initialization',
+      _brand: [],
+    },
+    tier: 'userland',
+    dependencies: [],
+    factory: () => ({
+      initialize() {
+        throw new Error('composed service failed during initialize');
       },
     }),
   };
 }
 `, 'utf8');
 
-  return { modulePath, markerPath };
+  return modulePath;
 }
 
 async function writeActivationMarkerPlugin(
@@ -346,7 +476,8 @@ describe('hardcore service enforcement production mirror', () => {
       },
     );
 
-    await assert.rejects(readFile(marker.markerPath, 'utf8'));
+    await assert.rejects(readFile(marker.constructedMarkerPath, 'utf8'));
+    await assert.rejects(readFile(marker.initializedMarkerPath, 'utf8'));
   });
 
   it('refuses before any plugin is activated', async (t) => {
@@ -368,5 +499,64 @@ describe('hardcore service enforcement production mirror', () => {
     );
 
     await assert.rejects(readFile(plugin.markerPath, 'utf8'));
+  });
+
+  it('initializes the hardcore service before every composed service in the full daemon composition', async (t) => {
+    const workspace = await createWorkspace(t);
+    const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
+    const composed = await daemonServices();
+    const services = [{ path: observer.modulePath }, ...composed];
+
+    await writeConfig(workspace, services);
+
+    const kernel = await boot(t, workspace);
+
+    assert.equal(kernel.lifecycleState, 'RUNNING');
+    assert.ok(composed.length > 1, 'the daemon config must compose real services');
+
+    const observed = (await readFile(observer.logPath, 'utf8')).trim().split('\n');
+
+    assert.deepEqual(observed, [
+      'init:protected',
+      `pin:count:${String(services.length)}`,
+      'pin:identityIndex:0',
+    ]);
+  });
+
+  it('rolls back composed services before the hardcore service when initialization fails', async (t) => {
+    const workspace = await createWorkspace(t);
+    const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
+    const failingPath = await writeFailingModule(workspace.root);
+    const services = [
+      { path: observer.modulePath },
+      ...(await baseServices()),
+      { path: failingPath },
+    ];
+
+    await writeConfig(workspace, services);
+
+    const kernel = createDeferredKernel(workspace.configPath, {
+      options: optionsFor(workspace),
+    });
+
+    await assert.rejects(
+      kernel.boot({ options: optionsFor(workspace) }),
+      (error: unknown) => {
+        assert.ok(error instanceof Error);
+        assert.match(error.message, /composed service failed during initialize/u);
+        return true;
+      },
+    );
+
+    assert.equal(kernel.lifecycleState, 'DISPOSED');
+
+    const observed = (await readFile(observer.logPath, 'utf8')).trim().split('\n');
+
+    assert.deepEqual(observed, ['init:protected', 'dispose:protected']);
+
+    // The composed observer disposed while the hardcore service still held its
+    // storage claim. A successful guarded mutation now proves the hardcore
+    // service was also disposed, last.
+    assert.doesNotThrow(() => utimesSync(workspace.registryPath, new Date(), new Date()));
   });
 });

@@ -38,6 +38,30 @@ interface InitializedService {
   readonly instance: IServiceLifecycle;
 }
 
+/**
+ * Raised when a hardcore service declares a dependency on a composed service.
+ *
+ * Hardcore services initialize before composed services, so a hardcore service
+ * can never be satisfied by a composed prerequisite. The compiled hardcore list
+ * must therefore be self-contained.
+ */
+class HardcoreDependencyError extends Error {
+  public readonly code = 'HARDCORE_DEPENDENCY' as const;
+
+  public readonly service: string;
+
+  public readonly dependency: string;
+
+  constructor(service: string, dependency: string) {
+    super(
+      `Hardcore service "${service}" depends on composed service "${dependency}"`,
+    );
+    this.name = 'HardcoreDependencyError';
+    this.service = service;
+    this.dependency = dependency;
+  }
+}
+
 export class BrudKernel implements IBrudKernel {
   readonly services: IServiceContainer;
   readonly operations: IOperationRegistry;
@@ -63,6 +87,13 @@ export class BrudKernel implements IBrudKernel {
     }[]) => Promise<void> | void)
     | undefined;
   private readonly contextContract: ContextContract | undefined;
+  /**
+   * Tokens the compiled hardcore list supplies to the boot loader.
+   *
+   * The engine uses this only to partition the initialization order. It never
+   * infers hardcoredness from a descriptor's token, tier, or official flag.
+   */
+  private readonly hardcoreTokens: ReadonlySet<string>;
 
   constructor(options?: {
     maxCallDepth?: number;
@@ -72,10 +103,12 @@ export class BrudKernel implements IBrudKernel {
       readonly instance: IServiceLifecycle;
     }[]) => Promise<void> | void;
     contextContract?: ContextContract;
+    hardcoreTokens?: readonly string[];
   }) {
     this.bootPinner = options?.bootPinner;
     this.bootHardcore = options?.bootHardcore;
     this.contextContract = options?.contextContract;
+    this.hardcoreTokens = new Set(options?.hardcoreTokens ?? []);
     this.services = new ServiceContainer();
     this.operations = new OperationRegistry();
     this.pipeline = new ExecutionPipeline(this.services);
@@ -112,10 +145,34 @@ export class BrudKernel implements IBrudKernel {
 
     try {
       const ordered = topologicalSort(this.descriptorMap());
+
+      // One boot, two ordered partitions. The hardcore set comes only from the
+      // boot loader's compiled hardcore list. Filtering the topological order
+      // preserves dependency order inside each partition and establishes every
+      // hardcore service before any composed service is constructed. A hardcore
+      // service may never depend on a composed one, because that prerequisite
+      // could not exist yet.
+      const hardcoreOrder = ordered.filter((descriptor) =>
+        this.hardcoreTokens.has(descriptor.token.id),
+      );
+      const composedOrder = ordered.filter((descriptor) =>
+        !this.hardcoreTokens.has(descriptor.token.id),
+      );
+
+      for (const descriptor of hardcoreOrder) {
+        for (const dependency of descriptor.dependencies) {
+          if (!this.hardcoreTokens.has(dependency.id)) {
+            throw new HardcoreDependencyError(descriptor.token.id, dependency.id);
+          }
+        }
+      }
+
+      const initOrder = [...hardcoreOrder, ...composedOrder];
+
       this.initializedServices.length = 0;
       this.bootOptions = options.options ?? {};
 
-      for (const descriptor of ordered) {
+      for (const descriptor of initOrder) {
         const context: ServiceContext = {
           callerId: 'kernel',
           tier: descriptor.tier,
