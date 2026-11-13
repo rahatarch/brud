@@ -46,7 +46,7 @@ export interface ComposeKernelOptions {
  * The module owns its descriptor; the loader owns ordering and official flags.
  * The context deliberately contains no concrete service instances and no
  * service option types: services read their own keys from the generic options
- * bag and coordinate through the untyped shared bag.
+ * bag and coordinate through owner-namespaced entries in the shared bag.
  */
 export interface KernelServiceModuleContext {
   /** Generic options bag from the host. */
@@ -56,10 +56,12 @@ export interface KernelServiceModuleContext {
   readonly logger?: KernelLogger;
 
   /**
-   * Per-kernel untyped coordination bag.
+   * Per-kernel owner-namespaced coordination bag.
    *
-   * Service modules use it to publish instances one another needs during
-   * construction. The core treats it as opaque and never reads named slots.
+   * A module may publish an instance under a key inside its own namespace; the
+   * core treats the bag as opaque and never reads named slots. A service that
+   * needs another participant's API resolves it through the broker or the
+   * exposed-API registry, never through another owner's slot.
    */
   readonly shared: Record<string, unknown>;
 
@@ -88,17 +90,20 @@ export interface KernelServiceModuleContext {
 /**
  * Shape a config-selected service module exports.
  *
- * `createService` must return a `ServiceDescriptor`. It is typed as `unknown`
- * at this boundary because descriptors are invariant in their service type;
- * the loader validates the runtime shape and narrows it.
+ * `createService` returns one descriptor, or an ordered list of descriptors
+ * when the module exposes more than one API. Each descriptor is registered as
+ * its own service; the descriptor shape itself does not change. The return is
+ * typed as `unknown` at this boundary because descriptors are invariant in
+ * their service type; the loader validates the runtime shape and narrows it.
  *
- * The optional hooks are generic coordination points. The loader invokes them
- * without knowing which service implements them:
- * - `pinBootPolicies` ingests boot-time policy while the broker gate is open.
+ * The optional hooks are generic coordination points available to every
+ * participant. The loader invokes them without knowing which service
+ * implements them:
+ * - `pinBootPolicies` ingests a boot snapshot while the broker gate is open.
  * - `registerBootRegistrants` claims kinds and exposes APIs before `RUNNING`.
  */
 export interface ServiceModule {
-  /** Builds and returns this service's descriptor. */
+  /** Builds and returns this service's descriptor or descriptors. */
   createService(context: KernelServiceModuleContext): unknown;
 
   /** Ingests frozen boot policy after construction. */

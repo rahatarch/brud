@@ -90,11 +90,15 @@ function digest(path: string, state: TargetBaseline): TargetDigest {
 }
 
 export class PluginHistoryFacade implements IPluginHistoryService {
+  private readonly deferStart: boolean;
+
   constructor(
     private readonly service: UnifiedHistoryService,
     private readonly engine: ReversalEngine,
     private readonly afterBoot?: () => Promise<void>,
+    deferStart = false,
   ) {
+    this.deferStart = deferStart;
     UNIFIED_SERVICES.set(this, service);
   }
 
@@ -304,6 +308,19 @@ export class PluginHistoryFacade implements IPluginHistoryService {
 
   /** Lifecycle hooks used by the unified descriptor. */
   async initialize(): Promise<void> {
+    if (!this.deferStart) {
+      await this.service.start();
+    }
+  }
+
+  /**
+   * Starts the engine from the kernel's boot-snapshot window.
+   *
+   * The standard composition defers here because the journal API is resolved
+   * through the broker while the lifecycle gate is suspended. The store and
+   * the journal are available by the time this runs.
+   */
+  async start(): Promise<void> {
     await this.service.start();
   }
 

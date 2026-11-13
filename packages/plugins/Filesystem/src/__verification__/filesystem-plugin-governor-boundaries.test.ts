@@ -9,7 +9,6 @@ import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type {
   DirectoryEntry, FileStats } from '@brud/kernel';
-import type { IFileMutationJournal } from '@brud/service-filesystem';
 import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import {
   MAX_BYTES_PER_MUTATION,
@@ -45,12 +44,6 @@ import type { VerificationKernel } from './support/harness.test.js';
 
 const MIB = 1024 * 1024;
 const BYTE_CAP = 16 * MIB;
-
-const DISABLED_JOURNAL: IFileMutationJournal = Object.freeze({
-  enabled: false,
-  publish: () => undefined,
-  subscribe: () => () => undefined,
-});
 
 class CountingDriver extends DurableNodeStorageDriver {
   public active = 0;
@@ -133,7 +126,7 @@ before(async () => {
   await acquireVerificationLock();
   kernel = await bootVerificationKernel({
     prefix: 'brud-fs-verify-governor-',
-    mutationJournal: DISABLED_JOURNAL,
+    withoutMutationRecording: true,
   });
 });
 
@@ -455,7 +448,7 @@ describe('Goal 3 — concurrency boundary through the real driver', () => {
     const countingKernel = await bootVerificationKernel({
       prefix: 'brud-fs-verify-concurrency-',
       storageDriver: driver,
-      mutationJournal: DISABLED_JOURNAL,
+      withoutMutationRecording: true,
     });
 
     try {

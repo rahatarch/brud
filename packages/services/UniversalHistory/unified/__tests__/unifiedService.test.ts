@@ -12,6 +12,7 @@ import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSys
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
+import { FileMutationJournalToken } from '../../../BrudFileSystem/descriptor/journalTokens.js';
 import { UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import {
@@ -107,11 +108,7 @@ async function workspace(_context: TestContext): Promise<Workspace> {
 async function boot(ws: Workspace): Promise<KernelHandle> {
   const codes: string[] = [];
   const warnings: string[] = [];
-  // One real journal shared by the filesystem and the history service, exactly
-  // as `createStandardKernel()` wires its own default.
-  const journal = createFileMutationJournal();
   const kernel = createStandardKernel({
-    mutationJournal: journal,
     logger: {
       warn: (message, meta) => {
         warnings.push(message);
@@ -128,17 +125,23 @@ async function boot(ws: Workspace): Promise<KernelHandle> {
   await kernel.boot({ options: bootOptions });
   const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', options: bootOptions };
   const fs = kernel.requestAccess(caller, FileSystemToken);
+  // The filesystem owns the journal. The second service resolves it through
+  // the same exposed API the history service uses, not through a boot key.
+  const mutation = kernel.requestAccess(
+    { callerId: UniversalHistoryToken.id, tier: 'core', options: bootOptions },
+    FileMutationJournalToken,
+  );
 
   const historyRoot = join(ws.root, '.brud', 'history');
   const store = new UnifiedHistoryStore({
     dbPath: join(historyRoot, 'universal.db'),
     historyRoot,
-    driver: new DurableNodeStorageDriver(),
+    driver: mutation.driver,
   });
   const service = new UnifiedHistoryService({
     store,
     fileSystem: () => fs,
-    journal,
+    journal: mutation.journal,
     onError: (_error, details) => {
       // Mirror the descriptor's classification (unifiedHistoryDescriptors.ts:89-102)
       // so an assertion can name the exact code the kernel would have logged.

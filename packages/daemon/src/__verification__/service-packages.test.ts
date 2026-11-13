@@ -34,6 +34,7 @@ const SERVICE_IDS = [
   'brud.core.brandRegistry',
   'brud.core.workspace',
   'brud.core.filesystem',
+  'brud.core.filesystem.mutationJournal',
   'brud.core.validation',
   'brud.core.terminal',
   'brud.core.parser',

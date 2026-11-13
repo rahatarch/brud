@@ -162,7 +162,10 @@ describe('unified history — carried-over behaviour', () => {
     });
     assert.equal(descriptors.session.token, UniversalHistoryToken);
     assert.equal(descriptors.session.tier, 'core');
-    assert.deepEqual(descriptors.session.dependencies.map((token) => token.id), [FileSystemToken.id]);
+    assert.deepEqual(
+      descriptors.session.dependencies.map((token) => token.id),
+      [FileSystemToken.id],
+    );
     assert.equal(descriptors.journal.token, HistoryToken);
     assert.equal(descriptors.journal.tier, 'core');
     assert.deepEqual(descriptors.journal.dependencies.map((token) => token.id), [UniversalHistoryToken.id]);

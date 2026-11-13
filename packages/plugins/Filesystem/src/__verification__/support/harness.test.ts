@@ -17,7 +17,6 @@ import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import type { ServiceContext } from '../../../../../kernel/src/contracts/lifecycle.js';
 import { DurableNodeStorageDriver } from '../../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
-import type { IFileMutationJournal } from '../../../../../services/BrudFileSystem/events/types.js';
 import { FileSystemToken } from '../../../../../services/BrudFileSystem/descriptor/tokens.js';
 import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
 import { UniversalHistoryToken } from '../../../../../services/UniversalHistory/descriptor/tokens.js';
@@ -133,8 +132,14 @@ export interface BootOptions {
   readonly withSearch?: boolean;
   readonly certifyFilesystem?: boolean;
   readonly filesystemPlugin?: ReturnType<typeof createFilesystemPlugin>;
-  /** Journal override; governor probes use a disabled journal to isolate I/O. */
-  readonly mutationJournal?: IFileMutationJournal;
+  /**
+   * Starts the real history service session-only.
+   *
+   * No journal listener is installed, so the filesystem journal reports
+   * `enabled: false` and skips mutation capture. Governor probes use this to
+   * measure plugin I/O without a recording subscriber.
+   */
+  readonly withoutMutationRecording?: boolean;
 }
 
 /** Boots a standard kernel with the certified Filesystem plugin. */
@@ -152,13 +157,13 @@ export async function bootVerificationKernel(
   ];
   const kernel = createStandardKernel({
     storageDriver: driver,
-    history: options.onDiskHistory === true
-      ? { dbPath: join(root, '.brud', 'history', 'universal.db') }
-      : { inMemory: true },
+    history: {
+      ...(options.onDiskHistory === true
+        ? { dbPath: join(root, '.brud', 'history', 'universal.db') }
+        : { inMemory: true }),
+      ...(options.withoutMutationRecording === true ? { recordMutations: false } : {}),
+    },
     initialPlugins: plugins,
-    ...(options.mutationJournal === undefined
-      ? {}
-      : { mutationJournal: options.mutationJournal }),
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

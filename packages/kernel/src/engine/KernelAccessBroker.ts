@@ -25,13 +25,14 @@ export class KernelAccessBroker implements IKernelAccessBroker {
   }
 
   /**
-   * Suspends the lifecycle gate for a bounded internal operation.
+   * Suspends the lifecycle gate for a bounded boot-window operation.
    *
-   * The kernel composition uses this exactly once, at the end of boot, to let
-   * a service ingest its frozen boot snapshot before the kernel announces
-   * RUNNING. Access policies, denial lists and allowlists still apply, so a
-   * pause cannot widen anyone's authority; it only removes the
-   * "broker is idle" guard.
+   * The kernel composition uses this around the boot pinner so any service
+   * module's `pinBootPolicies` hook can ingest its boot snapshot before the
+   * kernel announces RUNNING. The rule is general: it is available to every
+   * participant on the same terms. Access policies, denial lists, and
+   * allowlists still apply, so a pause cannot widen anyone's authority; it
+   * only removes the "broker is idle" guard.
    *
    * @param operation - Work performed while the gate is suspended.
    */

@@ -209,19 +209,22 @@ export function createDeferredKernel(
 
       for (const loaded of services) {
         activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
-        composed.push({
-          descriptor: descriptorFromModule(
-            loaded.module,
-            loaded.entry,
-            loaded.index,
-            context,
-            configPath,
-            raw,
-          ),
-          path: loaded.entry.path,
-          official: loaded.entry.official === true,
-          resolvedPath: loaded.resolvedId,
-        });
+
+        for (const descriptor of descriptorsFromModule(
+          loaded.module,
+          loaded.entry,
+          loaded.index,
+          context,
+          configPath,
+          raw,
+        )) {
+          composed.push({
+            descriptor,
+            path: loaded.entry.path,
+            official: loaded.entry.official === true,
+            resolvedPath: loaded.resolvedId,
+          });
+        }
       }
 
       // The hardcore gate runs after descriptors exist and before any service
@@ -249,9 +252,9 @@ export function createDeferredKernel(
     try {
       await compose(bootOptions);
 
-      // Compose enriched the bag during service construction (the filesystem
-      // module publishes its driver and journal there). Store that exact bag so
-      // runtime contexts see the same object the service modules saw.
+      // Store the bag the composition built: the host's options plus the
+      // kernel's own plugin handoff keys. Service modules publish no objects
+      // into it; a service-to-service handoff goes through an exposed API.
       const bootBag = serviceContext?.options ?? {
         ...(options.options ?? {}),
         ...(bootOptions.options ?? {}),
@@ -351,14 +354,14 @@ async function resolvePlugins(
   return { plugins, officialPlugins };
 }
 
-function descriptorFromModule(
+function descriptorsFromModule(
   moduleValue: unknown,
   entry: BrudConfigEntry,
   index: number,
   context: KernelServiceModuleContext,
   configPath: string,
   raw: string,
-): ServiceDescriptor<unknown, unknown> {
+): readonly ServiceDescriptor<unknown, unknown>[] {
   if (!isRecord(moduleValue) || typeof moduleValue.createService !== 'function') {
     throw new BrudConfigError(
       'MODULE_CONTRACT',
@@ -371,18 +374,30 @@ function descriptorFromModule(
   const createService = moduleValue.createService as (
     serviceContext: KernelServiceModuleContext,
   ) => unknown;
-  const descriptor: unknown = createService(context);
+  const declared: unknown = createService(context);
+  const candidates = Array.isArray(declared) ? declared : [declared];
 
-  if (!isServiceDescriptor(descriptor)) {
+  if (candidates.length === 0) {
     throw new BrudConfigError(
       'MODULE_CONTRACT',
-      `Service module "${entry.path}" (services[${String(index)}]) did not return a service descriptor`,
+      `Service module "${entry.path}" (services[${String(index)}]) exposed no service descriptor`,
       configPath,
       lineOf(raw, entry.path),
     );
   }
 
-  return descriptor;
+  for (const candidate of candidates) {
+    if (!isServiceDescriptor(candidate)) {
+      throw new BrudConfigError(
+        'MODULE_CONTRACT',
+        `Service module "${entry.path}" (services[${String(index)}]) did not return a service descriptor`,
+        configPath,
+        lineOf(raw, entry.path),
+      );
+    }
+  }
+
+  return candidates as readonly ServiceDescriptor<unknown, unknown>[];
 }
 
 async function readConfig(configPath: string): Promise<string> {

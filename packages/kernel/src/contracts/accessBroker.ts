@@ -46,11 +46,14 @@ export interface IKernelAccessBroker {
   listServices(): readonly ServiceInfo[];
 
   /**
-   * Suspends the lifecycle gate for a bounded internal boot operation.
+   * Suspends the lifecycle gate for a bounded boot-window operation.
    *
-   * Optional: only the kernel composition implements it, and it is used once
-   * at the end of boot so a service can ingest its boot snapshot before the
-   * kernel reports `RUNNING`. Access policies still apply while suspended.
+   * This is a general rule available to every participant on the same terms,
+   * not a service-specific exception. It removes only the "broker is idle"
+   * state check while the operation runs; every access policy, denial list,
+   * and allowlist still applies, so a suspended gate never widens authority.
+   * The kernel uses it around the boot pinner, where any module's
+   * `pinBootPolicies` hook may ingest its boot snapshot before `RUNNING`.
    *
    * @param operation - Work performed while the gate is suspended.
    */

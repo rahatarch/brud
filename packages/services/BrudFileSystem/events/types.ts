@@ -1,3 +1,5 @@
+import type { IStorageDriver } from '@brud/kernel';
+
 /**
  * Mutation kinds a history-capable filesystem must be able to describe.
  *
@@ -121,4 +123,21 @@ export interface IFileMutationJournal {
    * @returns An unsubscribe function.
    */
   subscribe(listener: FileMutationListener): () => void;
+}
+
+/**
+ * Filesystem-owned mutation source exposed under the filesystem service's
+ * grant policy.
+ *
+ * The journal and the storage driver a history sink needs are the
+ * filesystem's own objects. They are reached through this API by the broker,
+ * never through a shared boot bag. The service that computes mutations decides
+ * which callers may receive them.
+ */
+export interface IFileMutationJournalApi {
+  /** Journal the filesystem publishes pre/post descriptors to. */
+  readonly journal: IFileMutationJournal;
+
+  /** Storage driver the filesystem writes through. */
+  readonly driver: IStorageDriver;
 }

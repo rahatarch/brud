@@ -21,4 +21,5 @@ export type {
   FileMutationPhase,
   FileMutationState,
   IFileMutationJournal,
+  IFileMutationJournalApi,
 } from './types.js';

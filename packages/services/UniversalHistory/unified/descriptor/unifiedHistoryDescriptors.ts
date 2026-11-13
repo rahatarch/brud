@@ -36,7 +36,13 @@ export const UNIFIED_HISTORY_DB_RELATIVE_PATH = '.brud/history/universal.db';
 
 export interface UnifiedHistoryDescriptorOptions {
   readonly driver: IStorageDriver;
-  readonly journal: IFileMutationJournal;
+  /**
+   * Mutation source to record.
+   *
+   * Omitted for a session-only history service: the store still starts and
+   * serves explicit sessions, but no journal listener is installed.
+   */
+  readonly journal?: IFileMutationJournal;
   /** Keep the database in memory (tests); blobs still go through `driver`. */
   readonly inMemory?: boolean;
   /** Absolute database path override. */
@@ -46,6 +52,15 @@ export interface UnifiedHistoryDescriptorOptions {
   readonly retentionBudget?: number;
   /** Observer for each boot's retention report (tests, diagnostics). */
   readonly onRetention?: (report: HistoryRetentionReport) => void;
+  /**
+   * Defers `start()` to the kernel's boot-snapshot window.
+   *
+   * The standard composition sets this because the journal API is resolved
+   * through the broker while the lifecycle gate is suspended. Direct callers
+   * that supply a concrete journal keep the default and start in
+   * `initialize()`.
+   */
+  readonly deferStart?: boolean;
 }
 
 interface Runtime {
@@ -143,7 +158,12 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
           });
         }
       };
-      const facade = new PluginHistoryFacade(service, engine, retain);
+      const facade = new PluginHistoryFacade(
+        service,
+        engine,
+        retain,
+        options.deferStart === true,
+      );
 
       return withExposedApis(facade, (registry) => {
         registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {

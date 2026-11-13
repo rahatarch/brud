@@ -8,8 +8,7 @@ import type { ServiceContext } from '@brud/kernel';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import type { IWorkspaceService } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
-import { createFileMutationJournal } from '../events/FileMutationJournal.js';
-import type { FileMutationEvent } from '../events/types.js';
+import type { IFileMutationJournal } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../descriptor/tokens.js';
 import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
@@ -33,22 +32,14 @@ function caller(): ServiceContext {
   };
 }
 
-async function bootKernel(
-  options?: { onEvent?: (event: FileMutationEvent) => void },
-): Promise<{
+async function bootKernel(): Promise<{
   kernel: ReturnType<typeof createStandardKernel>;
   fileSystem: BrudFileSystem;
   workspace: IWorkspaceService;
+  mutationJournal: IFileMutationJournal;
 }> {
-  const journal = createFileMutationJournal();
-
-  if (options?.onEvent !== undefined) {
-    journal.subscribe(options.onEvent);
-  }
-
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    mutationJournal: journal,
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });
@@ -56,7 +47,12 @@ async function bootKernel(
   const workspace = kernel.requestAccess(caller(), WorkspaceToken);
   const fileSystem = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;
 
-  return { kernel, fileSystem, workspace };
+  return {
+    kernel,
+    fileSystem,
+    workspace,
+    mutationJournal: fileSystem.mutationJournal,
+  };
 }
 
 describe('BrudFileSystem descriptor and kernel bootstrap', () => {
@@ -113,15 +109,15 @@ describe('BrudFileSystem descriptor and kernel bootstrap', () => {
   });
 
   it('publishes boot-wired mutation descriptors for Phase 4 history binding', async () => {
-    const events: FileMutationEvent[] = [];
-    const { kernel, fileSystem } = await bootKernel({
-      onEvent: (event) => {
-        events.push(event);
-      },
+    const events: import('../events/types.js').FileMutationEvent[] = [];
+    const { kernel, fileSystem, mutationJournal } = await bootKernel();
+
+    mutationJournal.subscribe((event) => {
+      events.push(event);
     });
 
     try {
-      assert.equal(fileSystem.mutationJournal.enabled, true);
+      assert.equal(mutationJournal.enabled, true);
 
       await fileSystem.writeAtomic('src/history.ts', 'export const value = 2;\n');
       await new Promise<void>((resolve) => {

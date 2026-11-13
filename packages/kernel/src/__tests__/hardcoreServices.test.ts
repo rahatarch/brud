@@ -572,7 +572,7 @@ describe('hardcore service enforcement production mirror', () => {
     // inside the hardcore partition.
     assert.deepEqual(observed, [
       'init:protected',
-      `pin:count:${String(services.length)}`,
+      `pin:count:${String(kernel.listServices().length)}`,
       'pin:identityIndex:1',
       'pin:exposedApiIndex:0',
     ]);

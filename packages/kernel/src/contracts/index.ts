@@ -22,8 +22,6 @@ export type {
   ServiceContractDeclaration,
 } from './serviceDescriptor.js';
 
-export type { MutationJournalPort } from './mutationJournal.js';
-
 export type { KernelBootOptions, IBrudKernel } from './kernel.js';
 
 export type { Token } from './container.js';
