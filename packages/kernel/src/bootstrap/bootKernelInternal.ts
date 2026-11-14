@@ -5,9 +5,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import {
   ContextContract,
+  ContextContractError,
   type ContextFieldDeclaration,
   type ContextScopeDeclaration,
 } from '../contracts/contextContract.js';
+import type { KernelCaller } from '../contracts/callChain.js';
+import { admitParticipantManifest } from '../contracts/manifest.js';
+import type { ChainParticipant } from '../engine/callChain.js';
 import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
@@ -28,6 +32,7 @@ import {
 import { HARDCORE_SERVICES } from './hardcoreServices.js';
 import {
   BrudConfigError,
+  type BrudConfig,
   type BrudConfigEntry,
 } from './config/types.js';
 import type {
@@ -103,9 +108,10 @@ export async function bootKernel(
 /**
  * Builds a kernel whose config is composed lazily on the first `boot()`.
  *
- * The public `createStandardKernel` wrapper is synchronous; deferring module
- * imports until boot keeps module instances in the ESM cache instead of
- * loading a second copy through `require`.
+ * The host supplies the config path explicitly; the kernel never chooses or
+ * discovers a config. Deferring module imports until boot keeps module
+ * instances in the ESM cache instead of loading a second copy through
+ * `require`.
  */
 export function createDeferredKernel(
   configPath: string,
@@ -115,6 +121,7 @@ export function createDeferredKernel(
   let serviceContext: KernelServiceModuleContext | undefined;
   let hardcoreBootEntries: readonly HardcoreBootEntry[] = [];
   let hardcorePackageHashes: ReadonlyMap<string, string> = new Map();
+  let composedConfig: BrudConfig = { services: [] };
   let activeServiceOwner = 'brud.kernel.composition';
   const contextContract = new ContextContract();
 
@@ -128,13 +135,29 @@ export function createDeferredKernel(
   const kernel = new BrudKernel({
     contextContract,
     hardcoreTokens: HARDCORE_SERVICES.map((service) => service.token),
-    bootHardcore: (instances): void => {
-      invokeHardcoreBootHooks(
+    bootHardcore: (instances, authority): readonly ChainParticipant[] => {
+      const identities = invokeHardcoreBootHooks(
         HARDCORE_SERVICES,
         instances,
         hardcorePackageHashes,
         hardcoreBootEntries,
+        composedConfig,
+        authority,
       );
+
+      // Each participant's caller is assigned here, by the kernel: its issued
+      // identity, its official status from the identity-to-official mapping,
+      // and the capabilities its manifest requests.
+      return hardcoreBootEntries.map((entry): ChainParticipant => {
+        const caller: KernelCaller = Object.freeze({
+          callerClass: 'participant',
+          identity: identities.get(entry.token) ?? null,
+          official: entry.official,
+          capabilities: Object.freeze(new Set(entry.manifest.capabilities)),
+        });
+
+        return { tokenId: entry.token, caller };
+      });
     },
     bootPinner: async (instances: readonly IServiceLifecycle[]): Promise<void> => {
       const context = serviceContext;
@@ -173,6 +196,7 @@ export function createDeferredKernel(
       protectConfigFile(configPath);
       protectedThisKernel = true;
       const config = parseBrudConfig(raw, configPath);
+      composedConfig = config;
       const services = await loadServiceModules(config.services, configPath, raw);
       const contextOptions: Record<string, unknown> = {
         ...(options.options ?? {}),
@@ -190,7 +214,7 @@ export function createDeferredKernel(
       loadedServices = services;
       serviceContext = context;
 
-      const composed: ComposedServiceDescriptor[] = [];
+      const owned: { readonly ownerId: string; readonly service: ComposedServiceDescriptor }[] = [];
 
       for (const loaded of services) {
         activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
@@ -203,14 +227,35 @@ export function createDeferredKernel(
           configPath,
           raw,
         )) {
-          composed.push({
-            descriptor,
-            path: loaded.entry.path,
-            official: loaded.entry.official === true,
-            resolvedPath: loaded.resolvedId,
+          owned.push({
+            ownerId: activeServiceOwner,
+            service: {
+              descriptor,
+              path: loaded.entry.path,
+              ...(loaded.entry.official === undefined ? {} : { official: loaded.entry.official }),
+              resolvedPath: loaded.resolvedId,
+              // The manifest is admitted from declared data only; the
+              // participant's factory is not invoked.
+              manifest: admitParticipantManifest(descriptor.token.id, descriptor.manifest),
+            },
           });
         }
       }
+
+      const composed = pruneForMissingContext(
+        owned,
+        contextContract,
+        contextOptions,
+        (participants, path, fields) => {
+          const detail = { participants, path, missingFields: fields };
+
+          (contextLogger ?? DEFAULT_KERNEL_LOGGER).warn(
+            `Participant pruned before boot: required context field(s) ${fields.join(', ')} missing and nothing depends on it`,
+            detail,
+          );
+          kernel.recordObservation('kernel.admission', 'participant-pruned', detail);
+        },
+      );
 
       // The hardcore gate runs after descriptors exist and before any service
       // is registered or initialized. A failure here never reaches the
@@ -273,6 +318,71 @@ export function createDeferredKernel(
   };
 
   return kernel;
+}
+
+/**
+ * Applies the missing-required-field rules before boot.
+ *
+ * A participant whose required context fields are missing is pruned with a
+ * clear reason when it is optional: it is not hardcore and nothing else in the
+ * composition depends on it. A hardcore participant, or one another
+ * participant depends on, refuses boot instead.
+ *
+ * @returns The composed descriptors that remain.
+ */
+function pruneForMissingContext(
+  owned: readonly { readonly ownerId: string; readonly service: ComposedServiceDescriptor }[],
+  contextContract: ContextContract,
+  options: Readonly<Record<string, unknown>>,
+  onPruned: (participants: readonly string[], path: string, fields: readonly string[]) => void,
+): readonly ComposedServiceDescriptor[] {
+  const missing = contextContract.missingRequiredByOwner(options);
+
+  if (missing.size === 0) {
+    return owned.map((entry) => entry.service);
+  }
+
+  const hardcoreTokens = new Set(HARDCORE_SERVICES.map((service) => service.token));
+  const pruned = new Set<string>();
+
+  for (const [ownerId, fields] of missing) {
+    const services = owned.filter((entry) => entry.ownerId === ownerId);
+    const tokens = new Set(services.map((entry) => entry.service.descriptor.token.id));
+    const isHardcore = [...tokens].some((token) => hardcoreTokens.has(token));
+    const dependedOn = owned.some((entry) =>
+      entry.ownerId !== ownerId
+      && entry.service.descriptor.dependencies.some((dependency) => tokens.has(dependency.id)));
+
+    if (services.length === 0 || isHardcore || dependedOn) {
+      const reason = isHardcore
+        ? 'it is hardcore'
+        : dependedOn
+          ? 'another participant depends on it'
+          : 'it declared no participant';
+
+      throw new ContextContractError(
+        `Required context field(s) ${fields.join(', ')} declared by "${ownerId}" are missing and ${reason}; boot refused.`,
+        { field: fields[0], service: ownerId, actualType: 'missing' },
+      );
+    }
+
+    pruned.add(ownerId);
+  }
+
+  for (const ownerId of pruned) {
+    const services = owned.filter((entry) => entry.ownerId === ownerId);
+
+    contextContract.withdraw(ownerId);
+    onPruned(
+      services.map((entry) => entry.service.descriptor.token.id),
+      services[0]?.service.path ?? ownerId,
+      missing.get(ownerId) ?? [],
+    );
+  }
+
+  return owned
+    .filter((entry) => !pruned.has(entry.ownerId))
+    .map((entry) => entry.service);
 }
 
 function descriptorsFromModule(

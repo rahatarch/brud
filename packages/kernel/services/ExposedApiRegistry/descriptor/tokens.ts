@@ -2,13 +2,12 @@ import { createServiceToken } from '../../../src/contracts/serviceToken.js';
 import type { IExposedApiRegistry } from '../contracts/IExposedApiRegistry.js';
 
 /**
- * Kernel service token for `brud.core.exposedApiRegistry`.
+ * Kernel service token of the resolution primitive.
  *
- * Resolution grants read access to declared projections. Registration is a
- * boot-only capability and is unavailable through this token after the window
- * closes.
+ * Every participant reaches `resolve` through this token. Registration is the
+ * kernel's own, during admission, and is never reachable through it.
  */
 export const ExposedApiRegistryToken = createServiceToken<IExposedApiRegistry>(
   'brud.core.exposedApiRegistry',
-  'Boot-registered store of service-declared exposed APIs and projections',
+  'Resolution primitive for manifest-declared exposures',
 );

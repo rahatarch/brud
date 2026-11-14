@@ -493,7 +493,7 @@ describe(`history parity oracle [${SUBJECT_NAME}] — recording, concurrency, de
   it('R2 separate processes writing one workspace are all recorded without lock errors', async (context) => {
     const h = await open(context);
     const workerPath = join(h.workspaceRoot, '..', `oracle-worker-${process.pid}-${Date.now()}.mjs`);
-    const bootstrapUrl = new URL('../bootstrap/index.ts', import.meta.url).href;
+    const bootstrapUrl = new URL('./support/standardKernel.ts', import.meta.url).href;
     const tokensUrl = new URL('../../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
 
     await writeFile(workerPath, `
@@ -549,7 +549,7 @@ await kernel.shutdown();
       context.diagnostic(`R2 determinism run ${run}/${attempts}`);
       const h = await open(context);
       const workerPath = join(h.workspaceRoot, '..', `oracle-worker-run-${process.pid}-${Date.now()}-${run}.mjs`);
-      const bootstrapUrl = new URL('../bootstrap/index.ts', import.meta.url).href;
+      const bootstrapUrl = new URL('./support/standardKernel.ts', import.meta.url).href;
       const tokensUrl = new URL('../../../services/BrudFileSystem/descriptor/tokens.ts', import.meta.url).href;
 
       await writeFile(workerPath, `

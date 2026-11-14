@@ -10,7 +10,7 @@ import {
 import { DEFAULT_SETTINGS } from '../../../services/SettingsService/model/defaults.js';
 import { ConfigStore } from '../../../services/SettingsService/storage/ConfigStore.js';
 import { InMemoryConfigStore } from '../../../services/SettingsService/storage/InMemoryConfigStore.js';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';

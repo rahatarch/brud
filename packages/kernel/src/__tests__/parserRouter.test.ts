@@ -7,7 +7,7 @@ import type { OperationResult } from '../contracts/handler.js';
 import type { ServiceContext, IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import { createServiceToken } from '../contracts/serviceToken.js';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
 import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';

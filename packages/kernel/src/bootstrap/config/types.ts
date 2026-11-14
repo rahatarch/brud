@@ -3,18 +3,35 @@ export interface BrudConfigEntry {
   /** Module path, package name, `kernel:` module, or relative path. */
   readonly path: string;
 
-  /** Marks the entry as first-party for the future Brand Registry. */
+  /**
+   * The composition owner's official declaration for this participant.
+   *
+   * At boot the kernel builds its identity-to-official mapping from this
+   * declaration: the participant's kernel identity maps to `true` when the
+   * owner declares it official, and to `false` otherwise. The mapping is a
+   * Layer 1 policy input. Hardcore trust is not the owner's to change: a
+   * hardcore entry that declares `official: false` fails boot.
+   */
   readonly official?: boolean;
 }
 
 /**
  * Declarative kernel composition.
  *
- * The kernel owns the `services` section. Other top-level sections belong to
- * the participants that own them and are carried by the document unchanged.
+ * The kernel owns the `services` and `exposureOwners` sections. Other
+ * top-level sections belong to the participants that own them and are carried
+ * by the document unchanged.
  */
 export interface BrudConfig {
   readonly services: readonly BrudConfigEntry[];
+
+  /**
+   * Exposure names pinned to an owner identity.
+   *
+   * Maps an exposure name to the kernel identity token that alone may register
+   * it in this composition.
+   */
+  readonly exposureOwners?: Readonly<Record<string, string>>;
 }
 
 /** Stable config failure codes. */

@@ -12,7 +12,7 @@ import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/pro
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from '../support/standardKernel.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
 import { FileSystemToken } from '../../../../services/BrudFileSystem/descriptor/tokens.js';

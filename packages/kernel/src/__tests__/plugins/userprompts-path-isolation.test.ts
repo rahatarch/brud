@@ -5,7 +5,7 @@ import { mkdtemp, readdir, readFile, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from '../support/standardKernel.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
 import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { FileSystemToken } from '../../../../services/BrudFileSystem/descriptor/tokens.js';

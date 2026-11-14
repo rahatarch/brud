@@ -1,8 +1,10 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { dirname, extname, relative, resolve as resolvePath } from 'node:path';
+import type { KernelCallAuthority } from '../contracts/callChain.js';
+import type { AdmittedManifest } from '../contracts/manifest.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
-import { BrudConfigError } from './config/types.js';
+import { BrudConfigError, type BrudConfig } from './config/types.js';
 
 /**
  * The generic hardcore mechanism.
@@ -16,7 +18,7 @@ import { BrudConfigError } from './config/types.js';
  */
 
 /** Check that refused a hardcore service. */
-export type HardcoreCheck = 'presence' | 'contract' | 'content-hash';
+export type HardcoreCheck = 'presence' | 'contract' | 'content-hash' | 'trust';
 
 /** One composed participant, as recorded by the loader for hardcore hooks. */
 export interface HardcoreBootEntry {
@@ -27,22 +29,27 @@ export interface HardcoreBootEntry {
   readonly path: string;
 
   /**
-   * Whether the composition's config declared the service first-party.
+   * The participant's official status in this composition.
    *
-   * Planned: recorded for the composition's officialness mapping; no current
-   * reader consumes the boot-time record.
+   * The kernel's identity-to-official mapping is built from this value: the
+   * composition owner's declaration for an ordinary participant, and always
+   * `true` for a hardcore participant, whose trust the owner cannot change.
    */
   readonly official: boolean;
 
   /** Package content digest used as the provisional content binding. */
   readonly contentHash: string;
+
+  /** The participant's validated, frozen manifest. */
+  readonly manifest: AdmittedManifest;
 }
 
 /**
  * What the mechanism hands one hardcore entry's boot hook.
  *
  * Every hook receives the same shape: the entry's own token and verified
- * package digest, and the composition the loader assembled.
+ * package digest, the composition the loader assembled, the frozen config, the
+ * kernel's call authority, and the kernel's record of participant identities.
  */
 export interface HardcoreBootContext {
   /** Token id of the entry whose hook is running. */
@@ -53,6 +60,23 @@ export interface HardcoreBootContext {
 
   /** Every composed participant, in config order. */
   readonly composition: readonly HardcoreBootEntry[];
+
+  /** The composition's frozen config. */
+  readonly config: BrudConfig;
+
+  /** The kernel's call authority, handed only to root primitives. */
+  readonly authority: KernelCallAuthority;
+
+  /**
+   * Records the kernel identity token issued for one participant.
+   *
+   * A participant's identity can be recorded once. Hooks that run later in
+   * list order read it through {@link HardcoreBootContext.identityOf}.
+   */
+  recordIdentity(participantToken: string, identity: string): void;
+
+  /** The identity recorded for one participant, if any. */
+  identityOf(participantToken: string): string | undefined;
 }
 
 /**
@@ -96,11 +120,18 @@ export interface ComposedServiceDescriptor {
   /** Config path used to compose the service. */
   readonly path: string;
 
-  /** Whether the config declared the service first-party. */
-  readonly official: boolean;
+  /**
+   * The composition owner's official declaration, exactly as written.
+   *
+   * `undefined` when the entry carries no declaration.
+   */
+  readonly official?: boolean;
 
-  /** Absolute file the config path resolved to. */
+  /** Absolute file the config path pointed to. */
   readonly resolvedPath: string;
+
+  /** The participant's validated, frozen manifest. */
+  readonly manifest: AdmittedManifest;
 }
 
 /** Raised when a compiled-in hardcore service fails verification. */
@@ -329,6 +360,19 @@ export function verifyHardcoreServices(
     }
 
     const service = matches[0] as ComposedServiceDescriptor;
+
+    // Hardcore trust is compiled into the kernel release. The composition owner
+    // may declare official status, but not to lower a hardcore entry's trust.
+    if (service.official === false) {
+      throw new HardcoreServiceError(
+        hardcore.token,
+        'trust',
+        'no official declaration, or official: true; hardcore trust is fixed by the kernel release',
+        'official: false',
+        configPath,
+      );
+    }
+
     const contract = service.descriptor.contract;
 
     if (contract === undefined) {
@@ -410,12 +454,13 @@ export function buildHardcoreBootEntries(
   composed: readonly ComposedServiceDescriptor[],
   packageHashes: ReadonlyMap<string, string>,
 ): readonly HardcoreBootEntry[] {
-  return composed.map((service) => ({
+  return composed.map((service) => Object.freeze({
     token: service.descriptor.token.id,
     path: service.path,
-    official: service.official,
+    official: packageHashes.has(service.descriptor.token.id) || service.official === true,
     contentHash: packageHashes.get(service.descriptor.token.id)
       ?? contentHashForEntry(service.resolvedPath),
+    manifest: service.manifest,
   }));
 }
 
@@ -439,25 +484,65 @@ export interface HardcoreInitializedInstance {
   readonly instance: unknown;
 }
 
+/** Raised when a participant's kernel identity is recorded twice. */
+export class HardcoreIdentityError extends Error {
+  public readonly code = 'HARDCORE_IDENTITY' as const;
+
+  /** Token id of the participant. */
+  public readonly participant: string;
+
+  constructor(participant: string, reason: string) {
+    super(`Identity of participant "${participant}" ${reason}`);
+    this.name = 'HardcoreIdentityError';
+    this.participant = participant;
+  }
+}
+
 /**
  * Calls every compiled entry's boot hook with the uniform signature.
  *
  * Hooks run in list order. Each hook receives its own initialized instance,
- * its own token, its own verified package digest, and the composition. An
- * entry with no initialized instance is skipped; the presence check refuses
- * that composition before any service is constructed.
+ * its own token, its own verified package digest, the composition, the frozen
+ * config, and the kernel's call authority. Identities a hook records are
+ * visible to every hook that runs after it. An entry with no initialized
+ * instance is skipped; the presence check refuses that composition before any
+ * service is constructed.
  *
  * @param list - The compiled hardcore list.
- * @param instances - Every initialized service, in initialization order.
+ * @param instances - Every initialized hardcore service.
  * @param packageHashes - Verified hardcore package digests from verification.
  * @param composition - Every composed participant, in config order.
+ * @param config - The composition's frozen config.
+ * @param authority - The kernel's call authority.
+ * @returns The identity recorded for each participant token.
  */
 export function invokeHardcoreBootHooks(
   list: readonly HardcoreService[],
   instances: readonly HardcoreInitializedInstance[],
   packageHashes: ReadonlyMap<string, string>,
   composition: readonly HardcoreBootEntry[],
-): void {
+  config: BrudConfig,
+  authority: KernelCallAuthority,
+): ReadonlyMap<string, string> {
+  const identities = new Map<string, string>();
+  const participants = new Set(composition.map((entry) => entry.token));
+
+  const recordIdentity = (participantToken: string, identity: string): void => {
+    if (!participants.has(participantToken)) {
+      throw new HardcoreIdentityError(participantToken, 'is not part of the composition');
+    }
+
+    if (typeof identity !== 'string' || identity.length === 0) {
+      throw new HardcoreIdentityError(participantToken, 'must be a non-empty token');
+    }
+
+    if (identities.has(participantToken)) {
+      throw new HardcoreIdentityError(participantToken, 'is already recorded');
+    }
+
+    identities.set(participantToken, identity);
+  };
+
   for (const hardcore of list) {
     const match = instances.find((entry) => entry.tokenId === hardcore.token);
 
@@ -469,8 +554,15 @@ export function invokeHardcoreBootHooks(
       token: hardcore.token,
       contentHash: packageHashes.get(hardcore.token) ?? '',
       composition,
+      config,
+      authority,
+      recordIdentity,
+      identityOf: (participantToken: string): string | undefined =>
+        identities.get(participantToken),
     });
 
     hardcore.boot(match.instance, context);
   }
+
+  return identities;
 }

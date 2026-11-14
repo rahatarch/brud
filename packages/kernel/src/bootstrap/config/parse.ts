@@ -7,12 +7,12 @@ import {
 const ENTRY_KEYS = new Set(['path', 'official']);
 
 /**
- * Parses and validates the kernel-owned section of a `brud.config.json`
+ * Parses and validates the kernel-owned sections of a `brud.config.json`
  * document.
  *
- * The kernel owns `services`. Other top-level sections belong to the
- * participants that own them; the kernel carries them untouched and never
- * interprets them.
+ * The kernel owns `services` and `exposureOwners`. Other top-level sections
+ * belong to the participants that own them; the kernel carries them untouched
+ * and never interprets them.
  *
  * @param raw - File contents.
  * @param configPath - Config path used in diagnostics.
@@ -35,8 +35,48 @@ export function parseBrudConfig(raw: string, configPath: string): BrudConfig {
   }
 
   const services = parseEntries(document.services, 'services', raw, configPath);
+  const exposureOwners = parseExposureOwners(document.exposureOwners, raw, configPath);
 
-  return { services };
+  return Object.freeze(exposureOwners === undefined
+    ? { services }
+    : { services, exposureOwners });
+}
+
+/** Parses the composition's exposure-owner pins, failing closed. */
+function parseExposureOwners(
+  value: unknown,
+  raw: string,
+  configPath: string,
+): Readonly<Record<string, string>> | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!isRecord(value)) {
+    throw new BrudConfigError(
+      'CONFIG_SCHEMA',
+      'Config "exposureOwners" must be an object mapping exposure names to owner identities',
+      configPath,
+      lineOf(raw, 'exposureOwners'),
+    );
+  }
+
+  const pins: Record<string, string> = {};
+
+  for (const [name, owner] of Object.entries(value)) {
+    if (name.length === 0 || typeof owner !== 'string' || owner.length === 0) {
+      throw new BrudConfigError(
+        'CONFIG_SCHEMA',
+        `Config exposureOwners["${name}"] must map a non-empty name to a non-empty owner identity`,
+        configPath,
+        lineOf(raw, name),
+      );
+    }
+
+    pins[name] = owner;
+  }
+
+  return Object.freeze(pins);
 }
 
 function parseEntries(

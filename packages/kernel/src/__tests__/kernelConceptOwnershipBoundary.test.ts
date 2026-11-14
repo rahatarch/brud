@@ -1,9 +1,25 @@
-import { readdir, readFile } from 'node:fs/promises';
-import { dirname, join, relative, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, it } from 'node:test';
+import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import * as ts from 'typescript';
+import {
+  EXPOSED_API_REGISTRY_CONTEXT_SCOPE,
+  EXPOSED_API_REGISTRY_CONTRACT_METHODS,
+  EXPOSED_API_SCOPE_RECORD_FORMAT,
+  EXPOSED_API_SCOPE_RECORD_PATH_FIELD,
+  ExposedApiRegistryToken,
+  HARDCORE_SERVICES,
+  IDENTITY_REGISTRY_CONTEXT_SCOPE,
+  bootKernel,
+  createExposedApiRegistryDescriptor,
+  provisionIdentityRegistryStorage,
+  type BrudKernel,
+  type IExposedApiRegistry,
+} from '../../index.js';
 
 /**
  * Boundary checks for the ownership moves of cleanup Step 3.
@@ -22,7 +38,6 @@ import * as ts from 'typescript';
 const KERNEL_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const BOOT_TYPES = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootTypes.ts');
 const KERNEL_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'kernel.ts');
-const STANDARD_KERNEL = join(KERNEL_ROOT, 'src', 'bootstrap', 'createStandardKernel.ts');
 const BOOT_LOADER = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootKernelInternal.ts');
 const SERVICE_DESCRIPTOR = join(KERNEL_ROOT, 'src', 'contracts', 'serviceDescriptor.ts');
 const CORE_APIS = join(
@@ -830,7 +845,6 @@ const KERNEL_OWNED_BOOT_FIELDS: ReadonlyMap<string, readonly string[]> = new Map
   ['BootKernelOptions', ['logger', 'options']],
   ['ComposeKernelOptions', ['logger', 'options']],
   ['KernelBootOptions', ['logger', 'options']],
-  ['CreateStandardKernelOptions', []],
 ]);
 
 /**
@@ -935,7 +949,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
   it('declares only the generic fields on every boot boundary', async () => {
     const bootTypes = await readFile(BOOT_TYPES, 'utf8');
     const kernelContract = await readFile(KERNEL_CONTRACT, 'utf8');
-    const standardKernel = await readFile(STANDARD_KERNEL, 'utf8');
 
     assert.deepEqual(serviceOptionMembers([
       {
@@ -947,11 +960,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
         label: 'kernel.ts',
         source: kernelContract,
         interfaces: ['KernelBootOptions'],
-      },
-      {
-        label: 'createStandardKernel.ts',
-        source: standardKernel,
-        interfaces: ['CreateStandardKernelOptions'],
       },
     ]), []);
 
@@ -970,10 +978,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
     assert.deepEqual(
       [...interfaceMemberNames(kernelContract, 'KernelBootOptions')].sort(),
       ['logger', 'options'],
-    );
-    assert.deepEqual(
-      [...interfaceMemberNames(standardKernel, 'CreateStandardKernelOptions')].sort(),
-      [],
     );
   });
 
@@ -1029,15 +1033,15 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
         {
           label: 'canary.ts',
           source: `
-            interface CreateStandardKernelOptions {
+            interface ComposeKernelOptions {
               [option: string]: unknown;
               searchIndexPath?: string;
             }
           `,
-          interfaces: ['CreateStandardKernelOptions'],
+          interfaces: ['ComposeKernelOptions'],
         },
       ]),
-      ['canary.ts:CreateStandardKernelOptions.searchIndexPath'],
+      ['canary.ts:ComposeKernelOptions.searchIndexPath'],
     );
 
     assert.deepEqual(
@@ -1060,22 +1064,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
 const KNOWN_EXPORT_PARTICIPANT_FINDINGS = new Set<string>([
   // Filled from the first real run; each entry is a contract the decision
   // record has not yet ruled on. They are recorded for their own cleanup steps.
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:actions',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:filesystem',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:history',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:pluginManager',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:settings',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:settingsReader',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:terminal',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:tools',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:universalHistory',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:utilities',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:validation',
-  'services/ExposedApiRegistry/contracts/coreApis.ts:CORE_API_NAME: value:workspace',
-  'services/ExposedApiRegistry/contracts/types.ts:ExposedApiAccessContext.official: comment',
-  'services/ExposedApiRegistry/contracts/types.ts:ExposedApiCaller.subjectId: comment',
-  'services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.ts:deriveExposedApiOrigin: comment',
-  'src/bootstrap/config/types.ts:BrudConfigEntry.official: comment',
   'src/contracts/handler.ts:PluginMetadata: name',
 ]);
 
@@ -1202,6 +1190,7 @@ describe('BC-8: no officialness on a descriptor and no removed dormant declarati
         'contract',
         'dependencies',
         'factory',
+        'manifest',
         'project',
         'tier',
         'token',
@@ -1213,7 +1202,7 @@ describe('BC-8: no officialness on a descriptor and no removed dormant declarati
     const sources = [
       {
         file: 'services/ExposedApiRegistry/contracts/coreApis.ts',
-        source: await readFile(CORE_APIS, 'utf8'),
+        source: await readOptional(CORE_APIS),
       },
       {
         file: 'services/IdentityRegistry/orchestrator/IdentityRegistryService.ts',
@@ -1345,6 +1334,727 @@ describe('BC-9: the kernel kind vocabulary is the mechanism, not the officials\'
         'comment:/** Kind claimed by `acme.widgets`. */',
         'export:ACME_WIDGET_KIND',
         'value:ACME_WIDGET_KIND=widget',
+      ],
+    );
+  });
+});
+
+/** Reads a file, or returns an empty source when the file does not exist. */
+async function readOptional(path: string): Promise<string> {
+  return existsSync(path) ? readFile(path, 'utf8') : '';
+}
+
+/** Every non-test kernel source file, with its path relative to the kernel root. */
+async function kernelSources(): Promise<readonly { readonly file: string; readonly absolute: string; readonly source: string }[]> {
+  const files = [
+    ...await kernelSourceFiles(join(KERNEL_ROOT, 'src')),
+    ...await kernelSourceFiles(join(KERNEL_ROOT, 'services')),
+    ...await kernelSourceFiles(join(KERNEL_ROOT, 'serviceModules')),
+    join(KERNEL_ROOT, 'index.ts'),
+  ];
+  const sources = [];
+
+  for (const absolute of files) {
+    sources.push({
+      file: relative(KERNEL_ROOT, absolute),
+      absolute,
+      source: await readFile(absolute, 'utf8'),
+    });
+  }
+
+  return sources;
+}
+
+function parseSource(file: string, source: string): ts.SourceFile {
+  return ts.createSourceFile(file, source, ts.ScriptTarget.ES2022, true, ts.ScriptKind.TS);
+}
+
+function isExported(statement: ts.Statement): boolean {
+  return (ts.canHaveModifiers(statement) ? ts.getModifiers(statement) : undefined)
+    ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+}
+
+/** Strips `as const`, `satisfies`, parentheses, and `Object.freeze(...)`. */
+function unwrapInitializer(node: ts.Expression): ts.Expression {
+  let current = node;
+
+  for (;;) {
+    if (ts.isAsExpression(current) || ts.isSatisfiesExpression(current) || ts.isParenthesizedExpression(current)) {
+      current = current.expression;
+      continue;
+    }
+
+    if (
+      ts.isCallExpression(current)
+      && current.expression.getText() === 'Object.freeze'
+      && current.arguments.length === 1
+    ) {
+      current = current.arguments[0] as ts.Expression;
+      continue;
+    }
+
+    return current;
+  }
+}
+
+/**
+ * Ruling 1: returns every exported table of names, and every type derived
+ * from one.
+ *
+ * Structural: an exported object literal whose every member maps a key to a
+ * fixed string is a table of names, whatever the names are. A type alias that
+ * queries such a table (`typeof TABLE`) is derived from it.
+ */
+export function nameTableViolations(file: string, source: string): readonly string[] {
+  const sourceFile = parseSource(file, source);
+  const tables = new Set<string>();
+  const violations: string[] = [];
+
+  for (const statement of sourceFile.statements) {
+    if (!isExported(statement) || !ts.isVariableStatement(statement)) {
+      continue;
+    }
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (declaration.initializer === undefined || !ts.isIdentifier(declaration.name)) {
+        continue;
+      }
+
+      const initializer = unwrapInitializer(declaration.initializer);
+
+      if (
+        ts.isObjectLiteralExpression(initializer)
+        && initializer.properties.length > 0
+        && initializer.properties.every((property) =>
+          ts.isPropertyAssignment(property)
+          && ts.isStringLiteralLike(unwrapInitializer(property.initializer)))
+      ) {
+        tables.add(declaration.name.text);
+        violations.push(`${file}:${declaration.name.text}: name table`);
+      }
+    }
+  }
+
+  const queriesTable = (node: ts.Node): string | undefined => {
+    if (ts.isTypeQueryNode(node) && tables.has(node.exprName.getText())) {
+      return node.exprName.getText();
+    }
+
+    return ts.forEachChild(node, queriesTable);
+  };
+
+  for (const statement of sourceFile.statements) {
+    if (isExported(statement) && ts.isTypeAliasDeclaration(statement)) {
+      const table = queriesTable(statement.type);
+
+      if (table !== undefined) {
+        violations.push(`${file}:${statement.name.text}: derived from ${table}`);
+      }
+    }
+  }
+
+  return violations.sort();
+}
+
+/** Identifiers the resolution primitive must never carry (Rulings 2, 4, 5). */
+const REGISTRY_CALLER_IDENTIFIERS: readonly string[] = [
+  'callerId',
+  'subjectId',
+  'allowedCallers',
+  'deniedCallers',
+  'accessPolicy',
+  'workspaceRoot',
+  'deriveExposedApiOrigin',
+];
+
+/** A dotted service token, caller identifier, or context field. */
+const DOTTED_LITERAL = /^[A-Za-z][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_-]+)+$/u;
+
+/**
+ * Ruling 2: returns every participant name, participant token, caller
+ * identifier, or caller list in one resolution-primitive source file.
+ *
+ * Structural: a caller-identity identifier is a finding; a dotted literal that
+ * is not one of the primitive's own self-names is a finding; a string that
+ * names a participant is a finding. The self-names are read from the real
+ * exports, not listed by hand.
+ */
+export function registryParticipantViolations(
+  file: string,
+  source: string,
+  selfNames: ReadonlySet<string>,
+): readonly string[] {
+  const sourceFile = parseSource(file, source);
+  const violations = new Set<string>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && REGISTRY_CALLER_IDENTIFIERS.includes(node.text)) {
+      violations.add(`${file}: identifier ${node.text}`);
+    }
+
+    if (ts.isStringLiteralLike(node)) {
+      if (DOTTED_LITERAL.test(node.text) && !selfNames.has(node.text)) {
+        violations.add(`${file}: literal ${node.text}`);
+      }
+
+      if (participantShapingText(node.text)) {
+        violations.add(`${file}: participant name ${node.text}`);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return [...violations].sort();
+}
+
+/**
+ * Ruling 3: returns every context field a kernel file names outside the
+ * namespaces the kernel folder's own participants declare.
+ *
+ * A field is named when a dotted literal indexes an options bag, keys an
+ * object literal placed in an `options` member, or initializes a `*_FIELD`
+ * constant.
+ */
+export function contextFieldViolations(
+  file: string,
+  source: string,
+  ownScopes: ReadonlySet<string>,
+): readonly string[] {
+  const sourceFile = parseSource(file, source);
+  const violations = new Set<string>();
+
+  const check = (field: string): void => {
+    if (DOTTED_LITERAL.test(field) && !ownScopes.has(field.split('.')[0] as string)) {
+      violations.add(`${file}: context field ${field}`);
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isElementAccessExpression(node)
+      && /options$/u.test(node.expression.getText())
+      && ts.isStringLiteralLike(node.argumentExpression)
+    ) {
+      check(node.argumentExpression.text);
+    }
+
+    if (
+      ts.isPropertyAssignment(node)
+      && node.name.getText() === 'options'
+      && ts.isObjectLiteralExpression(node.initializer)
+    ) {
+      for (const property of node.initializer.properties) {
+        if (property.name !== undefined && ts.isStringLiteralLike(property.name)) {
+          check(property.name.text);
+        }
+      }
+    }
+
+    if (
+      ts.isVariableDeclaration(node)
+      && ts.isIdentifier(node.name)
+      && /_FIELD$/u.test(node.name.text)
+      && node.initializer !== undefined
+      && ts.isStringLiteralLike(node.initializer)
+    ) {
+      check(node.initializer.text);
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return [...violations].sort();
+}
+
+/** Whether a path is equal to or inside the kernel folder. */
+function insideKernel(candidate: string): boolean {
+  const root = resolve(KERNEL_ROOT);
+  const normalized = resolve(candidate);
+
+  return normalized === root || normalized.startsWith(`${root}${sep}`);
+}
+
+/**
+ * Ruling 7: returns every config-discovery reach in one kernel source file.
+ *
+ * Reading any environment variable is a finding, because the kernel receives
+ * its config only from the host. A literal naming a config document is a
+ * finding. A module-relative URL that leaves the kernel folder is a finding.
+ */
+export function configDiscoveryViolations(
+  file: string,
+  absolute: string,
+  source: string,
+): readonly string[] {
+  const sourceFile = parseSource(file, source);
+  const violations = new Set<string>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isPropertyAccessExpression(node) && node.getText() === 'process.env') {
+      violations.add(`${file}: environment read`);
+    }
+
+    if (ts.isStringLiteralLike(node) && /config\.json$/u.test(node.text)) {
+      violations.add(`${file}: config document ${node.text}`);
+    }
+
+    if (
+      ts.isNewExpression(node)
+      && node.expression.getText() === 'URL'
+      && node.arguments !== undefined
+      && node.arguments.length === 2
+      && ts.isStringLiteralLike(node.arguments[0] as ts.Expression)
+      && (node.arguments[1] as ts.Expression).getText() === 'import.meta.url'
+    ) {
+      const target = resolve(dirname(absolute), (node.arguments[0] as ts.StringLiteral).text);
+
+      if (!insideKernel(target)) {
+        violations.add(`${file}: path outside the kernel folder ${(node.arguments[0] as ts.StringLiteral).text}`);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return [...violations].sort();
+}
+
+describe('BC-10: the kernel exports no table of API names (Ruling 1)', () => {
+  it('exports no name table and no type derived from one anywhere in kernel source', async () => {
+    const violations: string[] = [];
+
+    for (const { file, source } of await kernelSources()) {
+      violations.push(...nameTableViolations(file, source));
+    }
+
+    assert.deepEqual(violations, []);
+  });
+
+  it('exports neither the removed table nor its type from the real package root', async () => {
+    const kernelModule = await import('../../index.js') as Record<string, unknown>;
+    const rootNames = await kernelRootExportNames();
+
+    for (const name of ['CORE_API_NAME', 'CoreApiName']) {
+      assert.equal(Object.prototype.hasOwnProperty.call(kernelModule, name), false, name);
+      assert.equal(rootNames.has(name), false, name);
+    }
+  });
+
+  it('detects a name table, its derived type, and a never-seen table (guard canary)', () => {
+    assert.deepEqual(
+      nameTableViolations('canary.ts', [
+        "export const CORE_API_NAME = Object.freeze({ fileSystem: 'filesystem', tools: 'tools' } as const);",
+        'export type CoreApiName = (typeof CORE_API_NAME)[keyof typeof CORE_API_NAME];',
+        "export const ACME_NAMES = { widget: 'acme.widget' };",
+        'export const LIMITS = Object.freeze({ max: 1 });',
+      ].join('\n')),
+      [
+        'canary.ts:ACME_NAMES: name table',
+        'canary.ts:CORE_API_NAME: name table',
+        'canary.ts:CoreApiName: derived from CORE_API_NAME',
+      ],
+    );
+  });
+});
+
+/** The resolution primitive's own self-names, read from the real exports. */
+const REGISTRY_SELF_NAMES: ReadonlySet<string> = new Set([
+  ExposedApiRegistryToken.id,
+  EXPOSED_API_SCOPE_RECORD_FORMAT,
+  EXPOSED_API_SCOPE_RECORD_PATH_FIELD,
+]);
+
+describe('BC-11: the resolution primitive carries no participant, caller id, or caller list (Rulings 2, 4, 5)', () => {
+  it('names no participant, token, caller identifier, or caller list in any registry source file', async () => {
+    const violations: string[] = [];
+
+    for (const { file, source } of await kernelSources()) {
+      if (file.startsWith(join('services', 'ExposedApiRegistry'))) {
+        violations.push(...registryParticipantViolations(file, source, REGISTRY_SELF_NAMES));
+      }
+    }
+
+    assert.deepEqual(violations, []);
+  });
+
+  it('declares exactly register and resolve, has no access policy, and projects only resolve', () => {
+    const descriptor = createExposedApiRegistryDescriptor();
+    const entry = HARDCORE_SERVICES.find((service) => service.token === ExposedApiRegistryToken.id);
+    const context = { callerId: 'canary', tier: 'core' as const, options: {} };
+    const instance = descriptor.factory(context, undefined as never);
+    const view = descriptor.project?.(instance, context);
+
+    assert.deepEqual([...EXPOSED_API_REGISTRY_CONTRACT_METHODS].sort(), ['register', 'resolve']);
+    assert.deepEqual([...(entry?.contractInterface ?? [])].sort(), ['register', 'resolve']);
+    assert.equal(descriptor.accessPolicy, undefined);
+    assert.ok(view !== undefined);
+    assert.deepEqual(Object.keys(view), ['resolve']);
+    assert.equal('register' in view, false);
+  });
+
+  it('detects a caller list, a caller-id comparison, and a participant name (guard canary)', () => {
+    assert.deepEqual(
+      registryParticipantViolations('canary.ts', [
+        "const policy = { allowedCallers: ['kernel', 'PluginManager', 'brud.host.daemon'] };",
+        "const host = (access) => access.callerId === 'brud.daemon';",
+        "const own = 'brud.core.exposedApiRegistry';",
+      ].join('\n'), REGISTRY_SELF_NAMES),
+      [
+        'canary.ts: identifier allowedCallers',
+        'canary.ts: identifier callerId',
+        'canary.ts: literal brud.daemon',
+        'canary.ts: literal brud.host.daemon',
+        'canary.ts: participant name PluginManager',
+      ],
+    );
+  });
+});
+
+/** One fixture participant for the production-mirror resolution tests. */
+interface FixtureParticipant {
+  readonly token: string;
+  readonly official?: boolean;
+  readonly capabilities?: readonly string[];
+  readonly exposures?: readonly Readonly<Record<string, unknown>>[];
+  /** JavaScript object literal mapping `name@major` to a binding. */
+  readonly bindings?: string;
+  /** JavaScript run in `onRunning` with `registry` and `report` in scope. */
+  readonly onRunning?: string;
+}
+
+/** Writes one real participant module: plain data plus real lifecycle code. */
+function fixtureModule(participant: FixtureParticipant): string {
+  const manifest = {
+    requests: { capabilities: [...(participant.capabilities ?? [])] },
+    exposures: [...(participant.exposures ?? [])],
+  };
+
+  return `const token = { id: ${JSON.stringify(participant.token)}, description: 'resolution fixture', _brand: undefined };
+const REGISTRY = { id: ${JSON.stringify(ExposedApiRegistryToken.id)}, description: 'resolution primitive', _brand: undefined };
+const report = (globalThis.__resolutionFixture ??= {})[token.id] ??= {};
+const bindings = ${participant.bindings ?? '{}'};
+
+export function createService() {
+  return {
+    token,
+    tier: 'userland',
+    dependencies: [],
+    manifest: ${JSON.stringify(manifest)},
+    factory: () => {
+      const instance = {
+        async onRunning(broker) {
+          const registry = broker.requestAccess({ callerId: token.id, tier: 'userland', options: {} }, REGISTRY);
+          ${participant.onRunning ?? ''}
+        },
+      };
+      Object.defineProperty(instance, 'provideExposure', {
+        value: (name, major) => bindings[name + '@' + String(major)],
+        enumerable: false,
+      });
+      return instance;
+    },
+  };
+}
+`;
+}
+
+interface FixtureComposition {
+  readonly configPath: string;
+  readonly options: Readonly<Record<string, unknown>>;
+  /** Kernels booted from this composition; shut down before its files go. */
+  readonly kernels: BrudKernel[];
+}
+
+/** Writes a real composition: the two hardcore services plus the fixtures. */
+async function writeComposition(
+  t: TestContext,
+  participants: readonly FixtureParticipant[],
+): Promise<FixtureComposition> {
+  const root = await mkdtemp(join(tmpdir(), 'brud-resolution-boundary-'));
+  const kernels: BrudKernel[] = [];
+
+  // One cleanup per composition: every kernel shuts down, releasing its
+  // protected files, before the composition's directory is removed.
+  t.after(async () => {
+    for (const kernel of kernels.splice(0)) {
+      if (kernel.lifecycleState === 'RUNNING') {
+        await kernel.shutdown();
+      }
+    }
+
+    await rm(root, { recursive: true, force: true });
+  });
+
+  const identityPath = join(root, 'identity-registry.json');
+  provisionIdentityRegistryStorage(identityPath);
+
+  const services: { path: string; official?: boolean }[] = [
+    { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+    { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+  ];
+
+  for (const [index, participant] of participants.entries()) {
+    const modulePath = join(root, `participant-${String(index)}.mjs`);
+
+    await writeFile(modulePath, fixtureModule(participant), 'utf8');
+    services.push(participant.official === undefined
+      ? { path: modulePath }
+      : { path: modulePath, official: participant.official });
+  }
+
+  const configPath = join(root, 'brud.config.json');
+  await writeFile(configPath, JSON.stringify({ services }, null, 2), 'utf8');
+
+  return { configPath, options: { 'identity.registry.path': identityPath }, kernels };
+}
+
+/** Boots a real kernel from a real composition; its cleanup shuts it down. */
+async function bootComposition(composition: FixtureComposition): Promise<BrudKernel> {
+  const kernel = await bootKernel(composition.configPath, { options: composition.options });
+
+  composition.kernels.push(kernel);
+
+  return kernel;
+}
+
+function fixtureReports(): Record<string, Record<string, unknown>> {
+  return (globalThis as { __resolutionFixture?: Record<string, Record<string, unknown>> })
+    .__resolutionFixture ?? {};
+}
+
+function resetFixtureReports(): void {
+  delete (globalThis as { __resolutionFixture?: unknown }).__resolutionFixture;
+}
+
+const PING_BINDINGS = `new Proxy({}, { get: (_, key) => ({ projection: () => ({ ping: () => String(key) }) }) })`;
+
+describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ruling 2)', () => {
+  it('impostor: a participant calling itself PluginManager or brud.host.daemon gets nothing special', async (t) => {
+    resetFixtureReports();
+
+    const probe = `
+      for (const name of ['impostor.kernelOnly', 'impostor.officialOnly', 'impostor.hostOnly', 'impostor.open', 'impostor.absent']) {
+        report[name] = registry.resolve(name) === null ? 'refused' : 'granted';
+      }`;
+    const kernel = await bootComposition(await writeComposition(t, [
+      {
+        token: 'impostor.giver',
+        exposures: [
+          { name: 'impostor.kernelOnly', scope: 'kernel' },
+          { name: 'impostor.officialOnly', scope: 'any', policy: { policyVersion: 1, official: true } },
+          { name: 'impostor.hostOnly', scope: 'host' },
+          { name: 'impostor.open', scope: 'runtime' },
+        ],
+        bindings: PING_BINDINGS,
+      },
+      { token: 'PluginManager', onRunning: probe },
+      { token: 'brud.host.daemon', onRunning: probe },
+      { token: 'impostor.official', official: true, onRunning: probe },
+    ]));
+    const reports = fixtureReports();
+    const nothingSpecial = {
+      'impostor.kernelOnly': 'refused',
+      'impostor.officialOnly': 'refused',
+      'impostor.hostOnly': 'refused',
+      'impostor.open': 'granted',
+      'impostor.absent': 'refused',
+    };
+
+    assert.equal(kernel.lifecycleState, 'RUNNING');
+    assert.deepEqual(reports['PluginManager'], nothingSpecial);
+    assert.deepEqual(reports['brud.host.daemon'], nothingSpecial);
+    // The composition's own official declaration, not a name, is what grants.
+    assert.equal(reports['impostor.official']?.['impostor.officialOnly'], 'granted');
+  });
+
+  it('name hijack: a second identity registering an owned name is refused, at any major version', async (t) => {
+    for (const version of [1, 2]) {
+      const composition = await writeComposition(t, [
+        { token: 'hijack.owner', exposures: [{ name: 'hijack.contested', version: 1, scope: 'runtime' }] },
+        { token: 'hijack.thief', exposures: [{ name: 'hijack.contested', version, scope: 'runtime' }] },
+      ]);
+
+      await assert.rejects(
+        bootKernel(composition.configPath, { options: composition.options }),
+        (error: unknown) => (error as { readonly code?: unknown }).code === 'EXPOSED_API_NAME_COLLISION',
+        `version ${String(version)}`,
+      );
+    }
+  });
+
+  it('origin: a runtime-originated chain never reaches a host-only exposure, even with a host-obtained handle', async (t) => {
+    resetFixtureReports();
+
+    const kernel = await bootComposition(await writeComposition(t, [
+      {
+        token: 'origin.giver',
+        exposures: [{ name: 'origin.hostOnly', scope: 'host' }],
+        bindings: PING_BINDINGS,
+      },
+      {
+        token: 'origin.runtime',
+        onRunning: `
+          report.direct = registry.resolve('origin.hostOnly') === null ? 'refused' : 'granted';
+          const work = new Promise((give) => { report.give = give; });
+          report.done = work.then((job) => job(registry));`,
+      },
+    ]));
+    const reports = fixtureReports()['origin.runtime'] as {
+      readonly direct: string;
+      readonly give: (job: (registry: IExposedApiRegistry) => unknown) => void;
+      readonly done: Promise<unknown>;
+    };
+    const registry = kernel.requestAccess<IExposedApiRegistry>(
+      { callerId: 'host', tier: 'core', options: {} },
+      ExposedApiRegistryToken,
+    );
+    const handle = kernel.runHostCall({}, () =>
+      registry.resolve<{ readonly ping: () => string }>('origin.hostOnly'));
+
+    assert.equal(reports.direct, 'refused');
+    assert.ok(handle !== null, 'the host-origin chain resolves the host-only exposure');
+    assert.equal(kernel.runHostCall({}, () => handle.ping()), 'origin.hostOnly@1');
+
+    // The same handle, used from a runtime-originated chain, is refused.
+    reports.give((runtimeRegistry) => {
+      const second = runtimeRegistry.resolve('origin.hostOnly');
+
+      try {
+        handle.ping();
+
+        return { second, used: 'granted' };
+      } catch (error: unknown) {
+        return { second, used: (error as { readonly code?: unknown }).code };
+      }
+    });
+
+    assert.deepEqual(await reports.done, { second: null, used: 'EXPOSED_API_UNAVAILABLE' });
+
+    // Outside any kernel call chain the handle is refused too.
+    assert.throws(() => handle.ping(), { name: 'ExposedApiUnavailableError' });
+  });
+
+  it('leak: a caller Layer 1 does not permit receives exactly the refusal of a non-existent exposure', async (t) => {
+    resetFixtureReports();
+
+    const kernel = await bootComposition(await writeComposition(t, [
+      {
+        token: 'leak.giver',
+        exposures: [{
+          name: 'leak.guarded',
+          scope: 'any',
+          policy: { policyVersion: 1, capabilities: ['leak:secret'] },
+        }],
+        bindings: PING_BINDINGS,
+      },
+      {
+        token: 'leak.nosy',
+        onRunning: `
+          report.guarded = registry.resolve('leak.guarded');
+          report.absent = registry.resolve('leak.absent');`,
+      },
+      {
+        token: 'leak.entitled',
+        capabilities: ['leak:secret'],
+        onRunning: `report.guarded = registry.resolve('leak.guarded') === null ? 'refused' : 'granted';`,
+      },
+    ]));
+    const reports = fixtureReports();
+    const nosy = reports['leak.nosy'] as { readonly guarded: unknown; readonly absent: unknown };
+
+    assert.ok(Object.prototype.hasOwnProperty.call(nosy, 'guarded'));
+    assert.ok(Object.prototype.hasOwnProperty.call(nosy, 'absent'));
+    assert.equal(nosy.guarded, null);
+    assert.equal(nosy.absent, null);
+    assert.ok(Object.is(nosy.guarded, nosy.absent), 'the two refusals are the same value');
+    assert.equal(reports['leak.entitled']?.['guarded'], 'granted');
+
+    // The detailed reasons exist only on the kernel's observation stream.
+    const refusals = kernel.readObservations()
+      .filter((record) => record.event === 'resolve-refused')
+      .map((record) => ({ name: record.detail['name'], reason: record.detail['reason'] }));
+
+    assert.ok(refusals.some((refusal) =>
+      refusal.name === 'leak.guarded' && String(refusal.reason).includes('lacks capabilities')));
+    assert.ok(refusals.some((refusal) =>
+      refusal.name === 'leak.absent' && refusal.reason === 'no such exposure'));
+  });
+});
+
+describe('BC-13: no kernel file names a specific participant\'s context field (Ruling 3)', () => {
+  const ownScopes: ReadonlySet<string> = new Set([
+    IDENTITY_REGISTRY_CONTEXT_SCOPE,
+    EXPOSED_API_REGISTRY_CONTEXT_SCOPE,
+  ]);
+
+  it('names only fields inside the kernel folder\'s own declared namespaces', async () => {
+    const violations: string[] = [];
+
+    for (const { file, source } of await kernelSources()) {
+      violations.push(...contextFieldViolations(file, source, ownScopes));
+    }
+
+    assert.deepEqual(violations, []);
+  });
+
+  it('detects an indexed, synthesized, or constant participant field (guard canary)', () => {
+    assert.deepEqual(
+      contextFieldViolations('canary.ts', [
+        "const root = context.options['workspace.root'];",
+        "const synthesized = { callerId: 'x', options: { 'workspace.root': root } };",
+        "export const WORKSPACE_ROOT_FIELD = 'workspace.root';",
+        "const own = context.options['identity.registry.path'];",
+      ].join('\n'), ownScopes),
+      ['canary.ts: context field workspace.root'],
+    );
+    assert.deepEqual(
+      contextFieldViolations('canary.ts', "const root = options['acme.widget.root'];", ownScopes),
+      ['canary.ts: context field acme.widget.root'],
+    );
+  });
+});
+
+describe('BC-14: the kernel reads no config-selecting environment variable and discovers no config (Ruling 7)', () => {
+  it('reads no environment variable and resolves no default config path in kernel source', async () => {
+    const violations: string[] = [];
+
+    for (const { file, absolute, source } of await kernelSources()) {
+      violations.push(...configDiscoveryViolations(file, absolute, source));
+    }
+
+    assert.deepEqual(violations, []);
+  });
+
+  it('ships no config-discovering wrapper from the real package root', async () => {
+    const kernelModule = await import('../../index.js') as Record<string, unknown>;
+    const rootNames = await kernelRootExportNames();
+
+    for (const name of ['createStandardKernel', 'CreateStandardKernelOptions']) {
+      assert.equal(Object.prototype.hasOwnProperty.call(kernelModule, name), false, name);
+      assert.equal(rootNames.has(name), false, name);
+    }
+  });
+
+  it('detects an environment read, a default config path, and an escaping URL (guard canary)', () => {
+    const absolute = join(KERNEL_ROOT, 'src', 'bootstrap', 'canary.ts');
+
+    assert.deepEqual(
+      configDiscoveryViolations('canary.ts', absolute, [
+        'const override = process.env.BRUD_STANDARD_CONFIG;',
+        "const candidate = fileURLToPath(new URL('../../../brud.config.json', import.meta.url));",
+        "const inside = new URL('../../', import.meta.url);",
+      ].join('\n')),
+      [
+        'canary.ts: config document ../../../brud.config.json',
+        'canary.ts: environment read',
+        'canary.ts: path outside the kernel folder ../../../brud.config.json',
       ],
     );
   });

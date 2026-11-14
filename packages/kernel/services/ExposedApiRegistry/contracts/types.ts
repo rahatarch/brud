@@ -1,6 +1,8 @@
-import type { CapabilityToken } from '../../../src/contracts/capability.js';
-import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
-import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
+import {
+  CALL_ORIGINS,
+  type CallOrigin,
+  type CallerClass,
+} from '../../../src/contracts/callChain.js';
 
 /** API names accept dotted, kebab, and snake segments. */
 export const EXPOSED_API_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/;
@@ -11,11 +13,11 @@ export const EXPOSED_API_SCOPES = ['kernel', 'runtime', 'host', 'any'] as const;
 /** Reachability scope declared by an exposed API identity. */
 export type ExposedApiScope = (typeof EXPOSED_API_SCOPES)[number];
 
-/** The three root origins a call chain can carry. */
-export const EXPOSED_API_ORIGINS = ['kernel', 'runtime', 'host'] as const;
+/** The three root origins a call chain can carry. Assigned by the kernel. */
+export const EXPOSED_API_ORIGINS = CALL_ORIGINS;
 
 /** Root origin of a call chain. */
-export type ExposedApiOrigin = (typeof EXPOSED_API_ORIGINS)[number];
+export type ExposedApiOrigin = CallOrigin;
 
 /**
  * API version.
@@ -23,9 +25,6 @@ export type ExposedApiOrigin = (typeof EXPOSED_API_ORIGINS)[number];
  * A positive integer is a major version. A string must be a semantic version.
  */
 export type ExposedApiVersion = number | string;
-
-/** Opaque policy declaration owned by the declaring participant. */
-export type ExposedApiPolicy = Readonly<Record<string, unknown>>;
 
 /** Identity of one exposed API. */
 export interface ExposedApiIdentity {
@@ -100,120 +99,78 @@ export function exposedApiScopeAllowsOrigin(
   }
 }
 
-/** Caller view handed to a projection function. */
+/**
+ * Caller view handed to a giver's projection.
+ *
+ * Every field is assigned by the kernel and read from the kernel-provided
+ * execution context. Namespace-scoped projections bind to {@link identity}.
+ */
 export interface ExposedApiCaller {
-  /** Capabilities the caller declared. */
-  readonly capabilities: ReadonlySet<CapabilityToken>;
+  /**
+   * The caller's kernel-issued identity token.
+   *
+   * `null` for the kernel itself and for a host session, which carry no
+   * participant identity and are distinguished by {@link callerClass}.
+   */
+  readonly identity: string | null;
 
-  /** Whether the caller carries the kernel-derived official brand. */
+  /** The caller's identity class. */
+  readonly callerClass: CallerClass;
+
+  /**
+   * The caller's official status in this composition.
+   *
+   * Kernel-derived from the identity-to-official mapping the kernel builds at
+   * boot from the composition's frozen config. Never supplied by the caller.
+   * A Layer 1 policy input.
+   */
   readonly official: boolean;
 
-  /** Caller identity used for the broker request. */
-  readonly callerId: string;
+  /** Capabilities the caller declared it wants. */
+  readonly capabilities: ReadonlySet<string>;
 
-  /**
-   * Identity of the capability consumer, when different from the broker
-   * caller. Plugin contexts use the plugin id so namespace-scoped projections
-   * stay bound to the plugin.
-   */
-  readonly subjectId: string;
-
-  /** Absolute workspace root of the caller. */
-  readonly workspaceRoot: string;
-}
-
-/** Broker access context a consumer supplies when resolving. */
-export interface ExposedApiAccessContext {
-  /** Caller identity used by the access broker. */
-  readonly callerId: string;
-
-  /** Caller tier used by service projections. */
-  readonly tier: ServiceTier;
-
-  /** Absolute workspace root. */
-  readonly workspaceRoot: string;
-
-  /** Whether the caller is a certified official plugin. */
-  readonly official?: boolean;
-
-  /** Identity of the capability consumer. Defaults to {@link callerId}. */
-  readonly subjectId?: string;
-
-  /**
-   * Root origin of the call chain.
-   *
-   * Set at the entry point and preserved across nested calls. When omitted, the
-   * registry derives a conservative origin from the legacy access shape.
-   */
-  readonly origin?: ExposedApiOrigin;
+  /** Root origin of the call chain. */
+  readonly origin: ExposedApiOrigin;
 }
 
 /**
- * Projects a service instance into the view a caller may receive.
+ * Projects a giver's instance into the view one caller receives.
  *
- * The Registry never interprets the result; the declaring service owns all
- * capability semantics.
+ * This is Layer 2: optional narrowing by the giver. It runs only after the
+ * kernel has enforced Layer 1, and it can never widen what Layer 1 decided,
+ * because Layer 1 is evaluated again on every use of the handle.
  */
 export type ExposedApiProjection = (
   service: unknown,
   caller: ExposedApiCaller,
 ) => unknown;
 
-/**
- * Combines multiple matching projections for one API name.
- *
- * Called only when a caller matches more than one capability entry.
- */
-export type ExposedApiCombiner = (
-  projections: readonly unknown[],
-  caller: ExposedApiCaller,
-) => unknown;
+/** How a giver's code binds one declared exposure. */
+export interface ExposedApiBinding {
+  /** Layer 2 projection. Defaults to the giver's instance itself. */
+  readonly projection?: ExposedApiProjection;
+}
 
-/** One capability entry for an exposed API. */
-export interface ExposedApiRegistration {
-  /** Capability that unlocks this projection. */
-  readonly capability: CapabilityToken;
-
-  /** API version. Defaults to major version 1. */
+/** Options for one resolve. */
+export interface ExposedApiResolveOptions {
+  /** API version: a major version or a semantic version. Defaults to 1. */
   readonly version?: ExposedApiVersion;
 
-  /** Reachability scope. Defaults to `kernel`. */
-  readonly scope?: ExposedApiScope;
-
-  /** Policy declaration. Defaults to an empty declaration. */
-  readonly policy?: ExposedApiPolicy;
-
-  /** Projection; defaults to identity. */
-  readonly projection?: ExposedApiProjection;
-
-  /** Combiner used when multiple entries match; defaults to a safe merge. */
-  readonly combine?: ExposedApiCombiner;
+  /**
+   * Identity token the caller expects to own the exposure.
+   *
+   * The resolve fails when the registered owner differs.
+   */
+  readonly expectedOwner?: string;
 }
 
-/** Stored registration entry. */
-export interface ExposedApiEntry {
-  readonly name: string;
-  readonly version: ExposedApiVersion;
-  readonly scope: ExposedApiScope;
-  readonly policy: ExposedApiPolicy;
-  readonly token: ServiceToken<unknown>;
-  readonly tokenId: string;
-  readonly capability: CapabilityToken;
-  readonly projection: ExposedApiProjection;
-  readonly combine?: ExposedApiCombiner;
-}
-
-/** Resolved handle plus the declaration that authorized it. */
-export interface ExposedApiResolved<T> extends ExposedApiIdentity {
-  /** Scope recorded for the identity at resolution time. */
-  readonly scope: ExposedApiScope;
-
-  /** Policy of the first matching capability entry. */
-  readonly policy: ExposedApiPolicy;
-
-  /** Policies of every matching capability entry, in registration order. */
-  readonly policies: readonly ExposedApiPolicy[];
-
-  /** The resolved projection. */
-  readonly handle: T;
+/**
+ * Returns the major version of a valid API version.
+ *
+ * @param version - A valid API version.
+ */
+export function exposedApiMajor(version: ExposedApiVersion): number {
+  return typeof version === 'number'
+    ? version
+    : Number.parseInt(version.split('.')[0] ?? '', 10);
 }

@@ -3,7 +3,10 @@ export type ExposedApiErrorCode =
   | 'EXPOSED_API_REGISTRATION_CLOSED'
   | 'EXPOSED_API_NAME_COLLISION'
   | 'EXPOSED_API_INVALID_NAME'
-  | 'EXPOSED_API_INVALID_CAPABILITY'
+  | 'EXPOSED_API_OWNER_PIN'
+  | 'EXPOSED_API_DUPLICATE_EXPOSURE'
+  | 'EXPOSED_API_NOT_ATTACHED'
+  | 'EXPOSED_API_UNAVAILABLE'
   | 'EXPOSED_API_INVALID_VERSION'
   | 'EXPOSED_API_INVALID_SCOPE'
   | 'EXPOSED_API_INVALID_POLICY'
@@ -11,8 +14,6 @@ export type ExposedApiErrorCode =
   | 'EXPOSED_API_SCOPE_RECORD_CORRUPT'
   | 'EXPOSED_API_SCOPE_RECORD_PATH'
   | 'EXPOSED_API_SCOPE_RECORD_WRITE'
-  | 'EXPOSED_API_UNKNOWN_SERVICE'
-  | 'EXPOSED_API_DUPLICATE_CAPABILITY'
   | 'EXPOSED_API_DISPOSED';
 
 /** Base class for every Registry domain failure. */
@@ -40,21 +41,84 @@ export class ExposedApiRegistrationClosedError extends ExposedApiError {
   }
 }
 
-/** Raised when two services claim the same API name. */
+/**
+ * Raised when a second identity registers a name another identity owns.
+ *
+ * A name is owned by the identity that first registered it, across every major
+ * version: a version upgrade keeps ownership.
+ */
 export class ExposedApiNameCollisionError extends ExposedApiError {
   public readonly code = 'EXPOSED_API_NAME_COLLISION' as const;
 
   /** Contested API name. */
   public readonly apiName: string;
 
-  /** Token id that already owns the name. */
-  public readonly existingTokenId: string;
+  /** Identity token that owns the name. */
+  public readonly owner: string;
 
-  constructor(apiName: string, existingTokenId: string) {
-    super(`Exposed API "${apiName}" is already owned by service "${existingTokenId}"`);
+  constructor(apiName: string, owner: string) {
+    super(`Exposed API "${apiName}" is already owned by another identity`);
     this.name = 'ExposedApiNameCollisionError';
     this.apiName = apiName;
-    this.existingTokenId = existingTokenId;
+    this.owner = owner;
+  }
+}
+
+/** Raised when a registration contradicts the composition's owner pin. */
+export class ExposedApiOwnerPinError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_OWNER_PIN' as const;
+
+  /** Pinned API name. */
+  public readonly apiName: string;
+
+  constructor(apiName: string) {
+    super(`Exposed API "${apiName}" is pinned to a different owner identity by the composition`);
+    this.name = 'ExposedApiOwnerPinError';
+    this.apiName = apiName;
+  }
+}
+
+/** Raised when one identity declares the same name and major version twice. */
+export class ExposedApiDuplicateExposureError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_DUPLICATE_EXPOSURE' as const;
+
+  /** API name. */
+  public readonly apiName: string;
+
+  /** Duplicated major version. */
+  public readonly major: number;
+
+  constructor(apiName: string, major: number) {
+    super(`Exposed API "${apiName}" major version ${String(major)} is declared twice`);
+    this.name = 'ExposedApiDuplicateExposureError';
+    this.apiName = apiName;
+    this.major = major;
+  }
+}
+
+/** Raised when admission runs before the kernel attached its call authority. */
+export class ExposedApiNotAttachedError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_NOT_ATTACHED' as const;
+
+  constructor() {
+    super('Exposed API Registry has no kernel call authority attached');
+    this.name = 'ExposedApiNotAttachedError';
+  }
+}
+
+/**
+ * Raised when an exposure handle is used by a caller the exposure's policy
+ * does not permit at the time of use.
+ *
+ * Carries no reason. The detailed reason is on the kernel's observation
+ * stream, so a refused caller learns nothing about why.
+ */
+export class ExposedApiUnavailableError extends ExposedApiError {
+  public readonly code = 'EXPOSED_API_UNAVAILABLE' as const;
+
+  constructor() {
+    super('Exposed API is unavailable');
+    this.name = 'ExposedApiUnavailableError';
   }
 }
 
@@ -69,52 +133,6 @@ export class ExposedApiInvalidNameError extends ExposedApiError {
     super(`Invalid exposed API name "${apiName}"`);
     this.name = 'ExposedApiInvalidNameError';
     this.apiName = apiName;
-  }
-}
-
-/** Raised when a registration capability is malformed. */
-export class ExposedApiInvalidCapabilityError extends ExposedApiError {
-  public readonly code = 'EXPOSED_API_INVALID_CAPABILITY' as const;
-
-  /** Rejected capability. */
-  public readonly capability: string;
-
-  constructor(capability: string) {
-    super(`Invalid exposure capability "${capability}"`);
-    this.name = 'ExposedApiInvalidCapabilityError';
-    this.capability = capability;
-  }
-}
-
-/** Raised when a registration names a service the kernel does not own. */
-export class ExposedApiUnknownServiceError extends ExposedApiError {
-  public readonly code = 'EXPOSED_API_UNKNOWN_SERVICE' as const;
-
-  /** Token id that could not be resolved. */
-  public readonly tokenId: string;
-
-  constructor(tokenId: string) {
-    super(`Cannot expose an API for unregistered service "${tokenId}"`);
-    this.name = 'ExposedApiUnknownServiceError';
-    this.tokenId = tokenId;
-  }
-}
-
-/** Raised when one service registers the same name/capability twice. */
-export class ExposedApiDuplicateCapabilityError extends ExposedApiError {
-  public readonly code = 'EXPOSED_API_DUPLICATE_CAPABILITY' as const;
-
-  /** API name. */
-  public readonly apiName: string;
-
-  /** Duplicate capability. */
-  public readonly capability: string;
-
-  constructor(apiName: string, capability: string) {
-    super(`Exposed API "${apiName}" already has an entry for capability "${capability}"`);
-    this.name = 'ExposedApiDuplicateCapabilityError';
-    this.apiName = apiName;
-    this.capability = capability;
   }
 }
 

@@ -1,17 +1,22 @@
-export type { IExposedApiRegistry } from './IExposedApiRegistry.js';
-export type { IExposedApiRegistrant } from './registrant.js';
+export type { IExposedApiAdmission, IExposedApiRegistry } from './IExposedApiRegistry.js';
+export type { IExposureProvider } from './registrant.js';
 export {
-  isExposedApiRegistrant,
-  withExposedApis,
+  exposureBindingKey,
+  isExposureProvider,
+  withExposureBindings,
 } from './registrant.js';
 export {
-  CORE_API_NAME,
-  lastProjectionWins,
-} from './coreApis.js';
+  EXPOSED_API_MAX_POLICY_BYTES,
+  EXPOSED_API_POLICY_VERSION,
+  evaluateExposedApiPolicy,
+  parseExposedApiPolicy,
+} from './policy.js';
+export type { ExposedApiPolicy, ExposedApiPolicyDecision } from './policy.js';
 export {
   EXPOSED_API_NAME_PATTERN,
   EXPOSED_API_ORIGINS,
   EXPOSED_API_SCOPES,
+  exposedApiMajor,
   exposedApiScopeAllowsOrigin,
   exposedApiScopeRank,
   isExposedApiOrigin,
@@ -19,34 +24,31 @@ export {
   isExposedApiVersion,
 } from './types.js';
 export type {
-  ExposedApiAccessContext,
+  ExposedApiBinding,
   ExposedApiCaller,
-  ExposedApiCombiner,
-  ExposedApiEntry,
   ExposedApiIdentity,
   ExposedApiOrigin,
-  ExposedApiPolicy,
   ExposedApiProjection,
-  ExposedApiRegistration,
-  ExposedApiResolved,
+  ExposedApiResolveOptions,
   ExposedApiScope,
   ExposedApiVersion,
 } from './types.js';
 export type { ExposedApiErrorCode } from './errors.js';
 export {
   ExposedApiDisposedError,
-  ExposedApiDuplicateCapabilityError,
+  ExposedApiDuplicateExposureError,
   ExposedApiError,
-  ExposedApiInvalidCapabilityError,
   ExposedApiInvalidNameError,
   ExposedApiInvalidPolicyError,
   ExposedApiInvalidScopeError,
   ExposedApiInvalidVersionError,
   ExposedApiNameCollisionError,
+  ExposedApiNotAttachedError,
+  ExposedApiOwnerPinError,
   ExposedApiRegistrationClosedError,
   ExposedApiScopeNarrowingError,
   ExposedApiScopeRecordCorruptError,
   ExposedApiScopeRecordPathError,
   ExposedApiScopeRecordWriteError,
-  ExposedApiUnknownServiceError,
+  ExposedApiUnavailableError,
 } from './errors.js';

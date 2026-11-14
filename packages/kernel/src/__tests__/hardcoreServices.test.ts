@@ -40,16 +40,7 @@ const EXPOSED_API_TOKEN = 'brud.core.exposedApiRegistry';
 
 const IDENTITY_METHODS = ['issue', 'resolve', 'retire', 'revoke'] as const;
 
-const EXPOSED_API_METHODS = [
-  'registerApi',
-  'resolve',
-  'resolveWithMetadata',
-  'scopeOf',
-  'closeRegistration',
-  'isRegistrationOpen',
-  'registeredApiNames',
-  'registeredApiIdentities',
-] as const;
+const EXPOSED_API_METHODS = ['register', 'resolve'] as const;
 
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
 
@@ -314,10 +305,10 @@ export function registerBootRegistrants(_context, instances) {
   const exposedApiIndex = instances.findIndex((instance) =>
     instance !== null
     && typeof instance === 'object'
-    && typeof instance.registerApi === 'function'
-    && typeof instance.resolveWithMetadata === 'function'
-    && typeof instance.scopeOf === 'function'
-    && typeof instance.closeRegistration === 'function');
+    && typeof instance.register === 'function'
+    && typeof instance.resolve === 'function'
+    && typeof instance.attachKernel === 'function'
+    && typeof instance.seal === 'function');
 
   record('pin:count:' + instances.length);
   record('pin:identityIndex:' + identityIndex);
@@ -690,7 +681,7 @@ describe('hardcore service enforcement production mirror', () => {
         assert.equal(error.check, 'contract');
         assert.match(
           error.found,
-          /missing registerApi, resolveWithMetadata, scopeOf, closeRegistration, isRegistrationOpen, registeredApiNames, registeredApiIdentities/u,
+          /\(missing register\)/u,
           error.found,
         );
         return true;

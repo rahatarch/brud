@@ -1,62 +1,86 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { appendFile, mkdir, mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createDeferredKernel,
-  createServiceToken,
+  bootKernel,
+  loadIdentityRegistryStorage,
   provisionIdentityRegistryStorage,
   type BrudKernel,
-  type IServiceLifecycle,
-  type ServiceContext,
-  type ServiceDescriptor,
 } from '../../../index.js';
 import {
-  ExposedApiInvalidPolicyError,
-  ExposedApiInvalidScopeError,
-  ExposedApiInvalidVersionError,
   ExposedApiScopeNarrowingError,
   ExposedApiScopeRecordCorruptError,
 } from '../contracts/errors.js';
 import type { IExposedApiRegistry } from '../contracts/IExposedApiRegistry.js';
-import type {
-  ExposedApiRegistration,
-  ExposedApiScope,
-  ExposedApiVersion,
+import {
+  EXPOSED_API_ORIGINS,
+  EXPOSED_API_SCOPES,
+  exposedApiScopeAllowsOrigin,
+  type ExposedApiScope,
+  type ExposedApiVersion,
 } from '../contracts/types.js';
-import { withExposedApis } from '../contracts/registrant.js';
 import { ExposedApiRegistryToken } from '../descriptor/tokens.js';
 
-interface ProbeService extends IServiceLifecycle {
-  readonly marker: string;
+/**
+ * Production-mirror model of the resolution primitive.
+ *
+ * Every case boots the real kernel from a real config, with the two real
+ * hardcore services and real participant modules whose manifests declare their
+ * exposures as data. Calls run in real kernel call chains: runtime chains the
+ * kernel starts for participants, and host chains started through the
+ * kernel's host entry point.
+ */
+
+/** One fixture participant. */
+interface Participant {
+  readonly token: string;
+  readonly official?: boolean;
+  readonly capabilities?: readonly string[];
+  readonly exposures?: readonly Readonly<Record<string, unknown>>[];
+  /** JavaScript object literal mapping `name@major` to a binding. */
+  readonly bindings?: string;
+  /** JavaScript run in `onRunning` with `registry` and `report` in scope. */
+  readonly onRunning?: string;
 }
 
-interface ProbeRegistration {
-  readonly apiName: string;
-  readonly registration: ExposedApiRegistration;
-}
-
-interface ProbeFixture {
-  readonly descriptor: ServiceDescriptor<ProbeService, ProbeService>;
-  readonly tokenId: string;
-}
-
-interface TestWorkspace {
+interface Workspace {
   readonly root: string;
-  readonly workspaceRoot: string;
+  readonly operatorRoot: string;
   readonly identityRegistryPath: string;
   readonly scopeRecordPath: string;
-  readonly configPath: string;
   readonly options: Readonly<Record<string, unknown>>;
 }
 
-let workspace: TestWorkspace;
+let workspace: Workspace;
 const bootedKernels: BrudKernel[] = [];
 
+/** Every binding key returns a projection exposing `ping()` → `name@major`. */
+const PING_BINDINGS = 'new Proxy({}, { get: (_, key) => ({ projection: () => ({ ping: () => String(key) }) }) })';
+
 beforeEach(async () => {
-  workspace = await createWorkspace();
+  const root = await mkdtemp(join(tmpdir(), 'brud-exposed-api-model-'));
+  const operatorRoot = join(root, 'operator');
+  await mkdir(operatorRoot, { recursive: true });
+
+  const identityRegistryPath = join(operatorRoot, 'identity-registry.json');
+  const scopeRecordPath = join(operatorRoot, 'scope-record.json');
+  provisionIdentityRegistryStorage(identityRegistryPath);
+
+  workspace = {
+    root,
+    operatorRoot,
+    identityRegistryPath,
+    scopeRecordPath,
+    options: {
+      'identity.registry.path': identityRegistryPath,
+      'exposedApi.scopeRecord.path': scopeRecordPath,
+    },
+  };
+
+  delete (globalThis as { __scopeModel?: unknown }).__scopeModel;
 });
 
 afterEach(async () => {
@@ -67,145 +91,137 @@ afterEach(async () => {
   await rm(workspace.root, { recursive: true, force: true });
 });
 
-async function createWorkspace(): Promise<TestWorkspace> {
-  const root = await mkdtemp(join(tmpdir(), 'brud-exposed-api-model-'));
-  const workspaceRoot = join(root, 'workspace');
-  const operatorRoot = join(root, 'operator');
-  await mkdir(workspaceRoot, { recursive: true });
-  await mkdir(operatorRoot, { recursive: true });
+function participantModule(participant: Participant): string {
+  const manifest = {
+    requests: { capabilities: [...(participant.capabilities ?? [])] },
+    exposures: [...(participant.exposures ?? [])],
+  };
 
-  const identityRegistryPath = join(operatorRoot, 'identity-registry.json');
-  const scopeRecordPath = join(operatorRoot, 'scope-record.json');
-  provisionIdentityRegistryStorage(identityRegistryPath);
+  return `const token = { id: ${JSON.stringify(participant.token)}, description: 'scope model participant', _brand: undefined };
+const REGISTRY = { id: ${JSON.stringify(ExposedApiRegistryToken.id)}, description: 'resolution primitive', _brand: undefined };
+const report = (globalThis.__scopeModel ??= {})[token.id] ??= {};
+const bindings = ${participant.bindings ?? '{}'};
 
-  const configPath = join(operatorRoot, 'brud.config.json');
-  await writeFile(
-    configPath,
-    JSON.stringify({
-      services: [
-        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
-        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
-      ],
-      plugins: [],
-    }, null, 2),
-    'utf8',
-  );
-
+export function createService() {
   return {
-    root,
-    workspaceRoot,
-    identityRegistryPath,
-    scopeRecordPath,
-    configPath,
-    options: {
-      'workspace.root': workspaceRoot,
-      'identity.registry.path': identityRegistryPath,
-      'exposedApi.scopeRecord.path': scopeRecordPath,
+    token,
+    tier: 'userland',
+    dependencies: [],
+    manifest: ${JSON.stringify(manifest)},
+    factory: () => {
+      const instance = {
+        async onRunning(broker) {
+          const registry = broker.requestAccess({ callerId: token.id, tier: 'userland', options: {} }, REGISTRY);
+          ${participant.onRunning ?? ''}
+        },
+      };
+      Object.defineProperty(instance, 'provideExposure', {
+        value: (name, major) => bindings[name + '@' + String(major)],
+        enumerable: false,
+      });
+      return instance;
     },
   };
 }
+`;
+}
 
-function createProbe(
-  tokenId: string,
-  registrations: readonly ProbeRegistration[],
-): ProbeFixture {
-  const token = createServiceToken<ProbeService>(
-    tokenId,
-    `Exposed API model probe ${tokenId}`,
-  );
+/** Distinguishes module files across compositions; ESM caches by URL. */
+let compositionCount = 0;
 
-  const descriptor: ServiceDescriptor<ProbeService, ProbeService> = {
-    token,
-    tier: 'core',
-    dependencies: [],
-    factory: (): ProbeService => withExposedApis(
-      {
-        marker: tokenId,
-        initialize: async (): Promise<void> => undefined,
-        dispose: async (): Promise<void> => undefined,
-      },
-      (registry) => {
-        for (const entry of registrations) {
-          registry.registerApi(entry.apiName, token, entry.registration);
-        }
-      },
-    ),
-  };
+/**
+ * Writes the composition and returns its config path.
+ *
+ * Every composition writes fresh module files, because the module loader
+ * caches by URL, and a fresh config file, because the kernel refuses a config
+ * path whose contents changed since it was first read: a config change between
+ * boots is a new trust decision. A participant's content binding is the digest
+ * of its module's bytes, so a participant whose source is unchanged keeps the
+ * same identity across reboots of one workspace.
+ */
+async function compose(
+  participants: readonly Participant[],
+  extra: Readonly<Record<string, unknown>> = {},
+): Promise<string> {
+  const services: { path: string; official?: boolean }[] = [
+    { path: 'kernel:serviceModules/identityRegistry.js', official: true },
+    { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+  ];
 
-  return { descriptor, tokenId: token.id };
+  compositionCount += 1;
+
+  for (const participant of participants) {
+    const modulePath = join(workspace.root, `${participant.token}.${String(compositionCount)}.mjs`);
+
+    await writeFile(modulePath, participantModule(participant), 'utf8');
+    services.push(participant.official === undefined
+      ? { path: modulePath }
+      : { path: modulePath, official: participant.official });
+  }
+
+  const configPath = join(workspace.operatorRoot, `brud.config.${String(compositionCount)}.json`);
+
+  await writeFile(configPath, JSON.stringify({ services, ...extra }, null, 2), 'utf8');
+
+  return configPath;
 }
 
 async function boot(
-  probes: readonly ProbeFixture[],
+  participants: readonly Participant[],
+  extra: Readonly<Record<string, unknown>> = {},
 ): Promise<BrudKernel> {
-  const kernel = createDeferredKernel(workspace.configPath, {
-    options: workspace.options,
-  });
-
-  for (const probe of probes) {
-    kernel.register(probe.descriptor);
-  }
-
-  await kernel.boot({ options: workspace.options });
+  const configPath = await compose(participants, extra);
+  const kernel = await bootKernel(configPath, { options: workspace.options });
   bootedKernels.push(kernel);
 
   return kernel;
 }
 
-function caller(): ServiceContext {
-  return {
-    callerId: 'kernel',
-    tier: 'core',
-    options: workspace.options,
-  };
+async function bootRefused(
+  participants: readonly Participant[],
+  check: (error: unknown) => boolean,
+  extra: Readonly<Record<string, unknown>> = {},
+): Promise<void> {
+  const configPath = await compose(participants, extra);
+
+  await assert.rejects(bootKernel(configPath, { options: workspace.options }), check);
 }
 
-function registryOf(kernel: BrudKernel): IExposedApiRegistry {
+async function shutdown(kernel: BrudKernel): Promise<void> {
+  if (kernel.lifecycleState === 'RUNNING') {
+    await kernel.shutdown();
+  }
+
+  const index = bootedKernels.indexOf(kernel);
+
+  if (index >= 0) {
+    bootedKernels.splice(index, 1);
+  }
+}
+
+function hostRegistry(kernel: BrudKernel): IExposedApiRegistry {
   return kernel.requestAccess<IExposedApiRegistry>(
-    caller(),
+    { callerId: 'host', tier: 'core', options: {} },
     ExposedApiRegistryToken,
   );
 }
 
-function access(
-  origin: 'kernel' | 'runtime' | 'host',
-  overrides: Partial<{
-    readonly callerId: string;
-    readonly subjectId: string;
-    readonly official: boolean;
-  }> = {},
-): {
-  readonly callerId: string;
-  readonly tier: 'core';
-  readonly workspaceRoot: string;
-  readonly origin: 'kernel' | 'runtime' | 'host';
-  readonly subjectId?: string;
-  readonly official?: boolean;
-} {
-  return {
-    callerId: overrides.callerId ?? 'test.external.caller',
-    tier: 'core',
-    workspaceRoot: workspace.workspaceRoot,
-    origin,
-    ...(overrides.subjectId === undefined ? {} : { subjectId: overrides.subjectId }),
-    ...(overrides.official === undefined ? {} : { official: overrides.official }),
-  };
+/** Resolves in a host-origin chain and pings the handle in the same chain. */
+function hostPing(
+  kernel: BrudKernel,
+  name: string,
+  options?: { readonly version?: ExposedApiVersion; readonly expectedOwner?: string },
+  capabilities: readonly string[] = [],
+): string | null {
+  return kernel.runHostCall({ capabilities }, () => {
+    const handle = hostRegistry(kernel).resolve<{ readonly ping: () => string }>(name, options);
+
+    return handle === null ? null : handle.ping();
+  });
 }
 
-function scopeRecord(): {
-  readonly records: readonly {
-    readonly name: string;
-    readonly version: ExposedApiVersion;
-    readonly scope: ExposedApiScope;
-  }[];
-} {
-  return JSON.parse(readFileSync(workspace.scopeRecordPath, 'utf8')) as {
-    readonly records: readonly {
-      readonly name: string;
-      readonly version: ExposedApiVersion;
-      readonly scope: ExposedApiScope;
-    }[];
-  };
+function reports(): Record<string, Record<string, unknown>> {
+  return (globalThis as { __scopeModel?: Record<string, Record<string, unknown>> }).__scopeModel ?? {};
 }
 
 function recordFor(name: string, version: ExposedApiVersion = 1): {
@@ -213,346 +229,269 @@ function recordFor(name: string, version: ExposedApiVersion = 1): {
   readonly version: ExposedApiVersion;
   readonly scope: ExposedApiScope;
 } | undefined {
-  return scopeRecord().records.find(
-    (record) => record.name === name && record.version === version,
-  );
+  const document = JSON.parse(readFileSync(workspace.scopeRecordPath, 'utf8')) as {
+    readonly records: readonly { readonly name: string; readonly version: ExposedApiVersion; readonly scope: ExposedApiScope }[];
+  };
+
+  return document.records.find((record) => record.name === name && record.version === version);
 }
 
-async function shutdown(kernel: BrudKernel): Promise<void> {
-  if (kernel.lifecycleState === 'RUNNING') {
-    await kernel.shutdown();
-  }
+function identityOf(token: string): string {
+  const record = loadIdentityRegistryStorage(workspace.identityRegistryPath)
+    .records.find((entry) => entry.publisher === token);
+
+  assert.ok(record !== undefined, `identity recorded for ${token}`);
+
+  return record.token;
 }
+
+const RUNTIME_PROBE = (names: readonly string[]): string => `
+  for (const name of ${JSON.stringify(names)}) {
+    const handle = registry.resolve(name);
+    report[name] = handle === null ? 'refused' : handle.ping();
+  }`;
 
 describe('universal exposed API scope model', () => {
-  it('kernel scope accepts only kernel origin', async (t) => {
-    const kernel = await boot([
-      createProbe('test.scope.kernel', [{
-        apiName: 'test.scope.kernel',
-        registration: { capability: 'test:read', scope: 'kernel', projection: () => 'kernel-handle' },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
+  it('applies the four-case origin-and-scope rule exactly', () => {
+    const matrix = Object.fromEntries(EXPOSED_API_SCOPES.map((scope) => [
+      scope,
+      EXPOSED_API_ORIGINS.filter((origin) => exposedApiScopeAllowsOrigin(scope, origin)),
+    ]));
 
-    assert.equal(registry.resolve('test.scope.kernel', ['test:read'], access('kernel')), 'kernel-handle');
-    assert.equal(registry.resolve('test.scope.kernel', ['test:read'], access('runtime')), null);
-    assert.equal(registry.resolve('test.scope.kernel', ['test:read'], access('host')), null);
-  });
-
-  it('runtime scope accepts kernel and runtime origins, not host', async (t) => {
-    const kernel = await boot([
-      createProbe('test.scope.runtime', [{
-        apiName: 'test.scope.runtime',
-        registration: { capability: 'test:read', scope: 'runtime', projection: () => 'runtime-handle' },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
-
-    assert.equal(registry.resolve('test.scope.runtime', ['test:read'], access('kernel')), 'runtime-handle');
-    assert.equal(registry.resolve('test.scope.runtime', ['test:read'], access('runtime')), 'runtime-handle');
-    assert.equal(registry.resolve('test.scope.runtime', ['test:read'], access('host')), null);
-  });
-
-  it('host scope accepts only host origin', async (t) => {
-    const kernel = await boot([
-      createProbe('test.scope.host', [{
-        apiName: 'test.scope.host',
-        registration: { capability: 'test:read', scope: 'host', projection: () => 'host-handle' },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
-
-    assert.equal(registry.resolve('test.scope.host', ['test:read'], access('host')), 'host-handle');
-    assert.equal(registry.resolve('test.scope.host', ['test:read'], access('kernel')), null);
-    assert.equal(registry.resolve('test.scope.host', ['test:read'], access('runtime')), null);
-  });
-
-  it('any scope accepts every origin', async (t) => {
-    const kernel = await boot([
-      createProbe('test.scope.any', [{
-        apiName: 'test.scope.any',
-        registration: { capability: 'test:read', scope: 'any', projection: () => 'any-handle' },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
-
-    for (const origin of ['kernel', 'runtime', 'host'] as const) {
-      assert.equal(registry.resolve('test.scope.any', ['test:read'], access(origin)), 'any-handle');
-    }
-  });
-
-  it('defaults an omitted version, scope, and policy to 1, kernel, and empty', async (t) => {
-    const kernel = await boot([
-      createProbe('test.scope.default', [{
-        apiName: 'test.scope.default',
-        registration: { capability: 'test:read', projection: () => 'default-handle' },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
-    const resolved = registry.resolveWithMetadata(
-      'test.scope.default',
-      ['test:read'],
-      access('kernel'),
-    );
-
-    assert.equal(resolved?.handle, 'default-handle');
-    assert.equal(resolved?.version, 1);
-    assert.equal(resolved?.scope, 'kernel');
-    assert.deepEqual(resolved?.policy, {});
-    assert.equal(registry.scopeOf('test.scope.default'), 'kernel');
-    assert.deepEqual(recordFor('test.scope.default'), {
-      name: 'test.scope.default',
-      version: 1,
-      scope: 'kernel',
+    assert.deepEqual(matrix, {
+      kernel: ['kernel'],
+      runtime: ['kernel', 'runtime'],
+      host: ['host'],
+      any: ['kernel', 'runtime', 'host'],
     });
-    assert.equal(registry.resolve('test.scope.default', ['test:read'], access('runtime')), null);
-    assert.equal(registry.resolve('test.scope.default', ['test:read'], access('host')), null);
+  });
+
+  it('enforces each scope against real runtime-origin and host-origin chains', async () => {
+    const names = ['model.kernel', 'model.runtime', 'model.host', 'model.any'];
+    const kernel = await boot([
+      {
+        token: 'model.giver',
+        exposures: [
+          { name: 'model.kernel', scope: 'kernel' },
+          { name: 'model.runtime', scope: 'runtime' },
+          { name: 'model.host', scope: 'host' },
+          { name: 'model.any', scope: 'any' },
+        ],
+        bindings: PING_BINDINGS,
+      },
+      { token: 'model.caller', onRunning: RUNTIME_PROBE(names) },
+    ]);
+
+    assert.deepEqual(reports()['model.caller'], {
+      'model.kernel': 'refused',
+      'model.runtime': 'model.runtime@1',
+      'model.host': 'refused',
+      'model.any': 'model.any@1',
+    });
+    assert.deepEqual(
+      names.map((name) => hostPing(kernel, name)),
+      [null, null, 'model.host@1', 'model.any@1'],
+    );
+  });
+
+  it('defaults an omitted version, scope, and policy to 1, kernel, and the empty policy', async () => {
+    const kernel = await boot([
+      { token: 'model.defaults', exposures: [{ name: 'model.defaults' }], bindings: PING_BINDINGS },
+      { token: 'model.caller', onRunning: RUNTIME_PROBE(['model.defaults']) },
+    ]);
+
+    assert.deepEqual(recordFor('model.defaults'), { name: 'model.defaults', version: 1, scope: 'kernel' });
+    assert.equal(reports()['model.caller']?.['model.defaults'], 'refused');
+    assert.equal(hostPing(kernel, 'model.defaults'), null);
   });
 
   it('persists the scope record across shutdown and reboot', async () => {
-    const first = await boot([
-      createProbe('test.persist', [{
-        apiName: 'test.persist',
-        registration: { capability: 'test:read', scope: 'runtime', projection: () => 'persisted' },
-      }]),
-    ]);
+    const participants: Participant[] = [{
+      token: 'model.persist',
+      exposures: [{ name: 'model.persist', scope: 'host' }],
+      bindings: PING_BINDINGS,
+    }];
+    const first = await boot(participants);
 
-    assert.deepEqual(recordFor('test.persist'), {
-      name: 'test.persist',
-      version: 1,
-      scope: 'runtime',
-    });
+    assert.deepEqual(recordFor('model.persist'), { name: 'model.persist', version: 1, scope: 'host' });
     await shutdown(first);
 
-    const second = await boot([
-      createProbe('test.persist', [{
-        apiName: 'test.persist',
-        registration: { capability: 'test:read', scope: 'runtime', projection: () => 'persisted-again' },
-      }]),
-    ]);
+    const second = await boot(participants);
 
-    try {
-      const registry = registryOf(second);
-      assert.equal(registry.scopeOf('test.persist'), 'runtime');
-      assert.equal(
-        registry.resolve('test.persist', ['test:read'], access('runtime')),
-        'persisted-again',
-      );
-      assert.equal(registry.resolve('test.persist', ['test:read'], access('host')), null);
-    } finally {
-      await shutdown(second);
-    }
+    assert.equal(hostPing(second, 'model.persist'), 'model.persist@1');
+    assert.deepEqual(recordFor('model.persist'), { name: 'model.persist', version: 1, scope: 'host' });
   });
 
-  it('refuses narrowing within one version on reboot and names both scopes', async () => {
-    const first = await boot([
-      createProbe('test.narrow', [{
-        apiName: 'test.narrow',
-        registration: { capability: 'test:read', scope: 'runtime' },
-      }]),
-    ]);
-    await shutdown(first);
+  it('refuses narrowing within one major version on reboot and names both scopes', async () => {
+    await shutdown(await boot([{ token: 'model.narrow', exposures: [{ name: 'model.narrow', scope: 'runtime' }] }]));
 
-    const second = createDeferredKernel(workspace.configPath, {
-      options: workspace.options,
-    });
-    const probe = createProbe('test.narrow', [{
-      apiName: 'test.narrow',
-      registration: { capability: 'test:read', scope: 'kernel' },
-    }]);
-    second.register(probe.descriptor);
-
-    await assert.rejects(
-      second.boot({ options: workspace.options }),
+    await bootRefused(
+      [{ token: 'model.narrow', exposures: [{ name: 'model.narrow', scope: 'kernel' }] }],
       (error: unknown) => {
         assert.ok(error instanceof ExposedApiScopeNarrowingError);
         assert.equal(error.code, 'EXPOSED_API_SCOPE_NARROWED');
-        assert.equal(error.apiName, 'test.narrow');
+        assert.equal(error.apiName, 'model.narrow');
         assert.equal(error.version, '1');
         assert.equal(error.persistedScope, 'runtime');
         assert.equal(error.requestedScope, 'kernel');
-        assert.match(error.message, /runtime/u);
-        assert.match(error.message, /kernel/u);
         return true;
       },
     );
 
-    assert.deepEqual(recordFor('test.narrow'), {
-      name: 'test.narrow',
-      version: 1,
-      scope: 'runtime',
-    });
+    assert.deepEqual(recordFor('model.narrow'), { name: 'model.narrow', version: 1, scope: 'runtime' });
   });
 
-  it('allows widening within one version and records it', async () => {
-    const first = await boot([
-      createProbe('test.widen', [{
-        apiName: 'test.widen',
-        registration: { capability: 'test:read', scope: 'kernel' },
-      }]),
-    ]);
-    await shutdown(first);
+  it('allows widening within one major version and records it', async () => {
+    await shutdown(await boot([{ token: 'model.widen', exposures: [{ name: 'model.widen', scope: 'kernel' }] }]));
 
-    const second = await boot([
-      createProbe('test.widen', [{
-        apiName: 'test.widen',
-        registration: { capability: 'test:read', scope: 'runtime', projection: () => 'widened' },
-      }]),
-    ]);
+    const second = await boot([{
+      token: 'model.widen',
+      exposures: [{ name: 'model.widen', scope: 'any' }],
+      bindings: PING_BINDINGS,
+    }]);
 
-    try {
-      assert.deepEqual(recordFor('test.widen'), {
-        name: 'test.widen',
-        version: 1,
-        scope: 'runtime',
-      });
-      const registry = registryOf(second);
-      assert.equal(registry.scopeOf('test.widen'), 'runtime');
-      assert.equal(registry.resolve('test.widen', ['test:read'], access('runtime')), 'widened');
-    } finally {
-      await shutdown(second);
-    }
+    assert.deepEqual(recordFor('model.widen'), { name: 'model.widen', version: 1, scope: 'any' });
+    assert.equal(hostPing(second, 'model.widen'), 'model.widen@1');
   });
 
-  it('allows a new major version with a narrower scope and keeps both versions callable', async (t) => {
+  it('keeps a new major version separate, with its own scope, under the same owner', async () => {
+    const kernel = await boot([{
+      token: 'model.majors',
+      exposures: [
+        { name: 'model.majors', version: 1, scope: 'host' },
+        { name: 'model.majors', version: '2.1.0', scope: 'kernel' },
+      ],
+      bindings: PING_BINDINGS,
+    }]);
+
+    assert.equal(hostPing(kernel, 'model.majors', { version: 1 }), 'model.majors@1');
+    assert.equal(hostPing(kernel, 'model.majors', { version: 2 }), null);
+    assert.equal(hostPing(kernel, 'model.majors', { version: '2.0.0' }), null);
+    assert.deepEqual(recordFor('model.majors', 1), { name: 'model.majors', version: 1, scope: 'host' });
+    assert.deepEqual(recordFor('model.majors', 2), { name: 'model.majors', version: 2, scope: 'kernel' });
+  });
+
+  it('evaluates every Layer 1 input mechanically: class, origin, capabilities, and official status', async () => {
     const kernel = await boot([
-      createProbe('test.coexist', [
-        {
-          apiName: 'test.coexist',
-          registration: {
-            capability: 'test:read',
-            version: 1,
-            scope: 'runtime',
-            projection: () => 'v1',
-          },
-        },
-        {
-          apiName: 'test.coexist',
-          registration: {
-            capability: 'test:read',
-            version: 2,
-            scope: 'kernel',
-            projection: () => 'v2',
-          },
-        },
-      ]),
+      {
+        token: 'model.layer1',
+        exposures: [
+          { name: 'model.hostClass', scope: 'any', policy: { policyVersion: 1, callerClasses: ['host'] } },
+          { name: 'model.runtimeOrigin', scope: 'any', policy: { policyVersion: 1, origins: ['runtime'] } },
+          { name: 'model.capable', scope: 'any', policy: { policyVersion: 1, capabilities: ['model:read'] } },
+          { name: 'model.official', scope: 'any', policy: { policyVersion: 1, official: true } },
+        ],
+        bindings: PING_BINDINGS,
+      },
+      {
+        token: 'model.plain',
+        onRunning: RUNTIME_PROBE(['model.hostClass', 'model.runtimeOrigin', 'model.capable', 'model.official']),
+      },
+      {
+        token: 'model.entitled',
+        official: true,
+        capabilities: ['model:read'],
+        onRunning: RUNTIME_PROBE(['model.capable', 'model.official']),
+      },
     ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
 
-    assert.equal(registry.resolve('test.coexist', ['test:read'], access('runtime'), 1), 'v1');
-    assert.equal(registry.resolve('test.coexist', ['test:read'], access('kernel'), 1), 'v1');
-    assert.equal(registry.resolve('test.coexist', ['test:read'], access('host'), 1), null);
-    assert.equal(registry.resolve('test.coexist', ['test:read'], access('kernel'), 2), 'v2');
-    assert.equal(registry.resolve('test.coexist', ['test:read'], access('runtime'), 2), null);
-    assert.deepEqual(registry.registeredApiIdentities().map(
-      (identity) => `${identity.name}@${String(identity.version)}`,
-    ), ['test.coexist@1', 'test.coexist@2']);
-
-    assert.deepEqual(recordFor('test.coexist', 1), {
-      name: 'test.coexist',
-      version: 1,
-      scope: 'runtime',
+    assert.deepEqual(reports()['model.plain'], {
+      'model.hostClass': 'refused',
+      'model.runtimeOrigin': 'model.runtimeOrigin@1',
+      'model.capable': 'refused',
+      'model.official': 'refused',
     });
-    assert.deepEqual(recordFor('test.coexist', 2), {
-      name: 'test.coexist',
-      version: 2,
-      scope: 'kernel',
+    assert.deepEqual(reports()['model.entitled'], {
+      'model.capable': 'model.capable@1',
+      'model.official': 'model.official@1',
     });
+    assert.equal(hostPing(kernel, 'model.hostClass'), 'model.hostClass@1');
+    assert.equal(hostPing(kernel, 'model.runtimeOrigin'), null);
+    assert.equal(hostPing(kernel, 'model.capable'), null);
+    assert.equal(hostPing(kernel, 'model.capable', undefined, ['model:read']), 'model.capable@1');
   });
 
-  it('stores and returns the policy with the resolved handle without enforcing it', async (t) => {
-    const policy = Object.freeze({
-      allowedCallers: ['nobody'],
-      requireOfficial: true,
-    });
-    const kernel = await boot([
-      createProbe('test.policy', [{
-        apiName: 'test.policy',
-        registration: {
-          capability: 'test:read',
-          scope: 'runtime',
-          policy,
-          projection: () => 'policy-handle',
-        },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
+  it('resolves by expected owner identity and fails when the owner differs', async () => {
+    const kernel = await boot([{
+      token: 'model.owned',
+      exposures: [{ name: 'model.owned', scope: 'host' }],
+      bindings: PING_BINDINGS,
+    }]);
+    const owner = identityOf('model.owned');
 
-    const resolved = registry.resolveWithMetadata(
-      'test.policy',
-      ['test:read'],
-      access('runtime', { official: false }),
-    );
+    assert.equal(hostPing(kernel, 'model.owned', { expectedOwner: owner }), 'model.owned@1');
+    assert.equal(hostPing(kernel, 'model.owned', { expectedOwner: `${owner}-other` }), null);
+  });
 
-    assert.equal(resolved?.handle, 'policy-handle');
-    assert.deepEqual(resolved?.policy, policy);
-    assert.deepEqual(resolved?.policies, [policy]);
-    assert.equal(
-      registry.resolve('test.policy', ['test:read'], access('runtime', { official: false })),
-      'policy-handle',
+  it('honours the composition\'s owner pin and refuses a registration that contradicts it', async () => {
+    const participants: Participant[] = [
+      { token: 'model.pinOwner', exposures: [{ name: 'model.pinned', scope: 'host' }], bindings: PING_BINDINGS },
+      { token: 'model.other' },
+    ];
+
+    await shutdown(await boot(participants));
+
+    const owner = identityOf('model.pinOwner');
+    const other = identityOf('model.other');
+    const pinned = await boot(participants, { exposureOwners: { 'model.pinned': owner } });
+
+    assert.equal(hostPing(pinned, 'model.pinned'), 'model.pinned@1');
+    await shutdown(pinned);
+
+    await bootRefused(
+      participants,
+      (error: unknown) => (error as { readonly code?: unknown }).code === 'EXPOSED_API_OWNER_PIN',
+      { exposureOwners: { 'model.pinned': other } },
     );
   });
 
-  it('checks the root origin before the immediate caller shape', async (t) => {
-    const kernel = await boot([
-      createProbe('test.origin', [
-        {
-          apiName: 'test.origin.host',
-          registration: { capability: 'test:read', scope: 'host', projection: () => 'host' },
-        },
-        {
-          apiName: 'test.origin.runtime',
-          registration: { capability: 'test:read', scope: 'runtime', projection: () => 'runtime' },
-        },
-        {
-          apiName: 'test.origin.kernel',
-          registration: { capability: 'test:read', scope: 'kernel', projection: () => 'kernel' },
-        },
-      ]),
-    ]);
-    t.after(() => shutdown(kernel));
-    const registry = registryOf(kernel);
-    const hostShaped = access('runtime', { callerId: 'brud.host.daemon' });
-    const pluginShaped = access('kernel', {
-      callerId: 'brud.core.pluginManager',
-      subjectId: 'acme.plugin',
-      official: false,
-    });
+  it('fails the call and records the mismatch when owner code does not provide a declared exposure', async () => {
+    const kernel = await boot([{
+      token: 'model.unbound',
+      exposures: [{ name: 'model.unbound', scope: 'host' }],
+    }]);
 
-    assert.equal(registry.resolve('test.origin.host', ['test:read'], hostShaped), null);
-    assert.equal(
-      registry.resolve('test.origin.host', ['test:read'], access('host', { callerId: 'brud.host.daemon' })),
-      'host',
-    );
-
-    const inferredPlugin = {
-      callerId: 'brud.core.pluginManager',
-      tier: 'core' as const,
-      workspaceRoot: workspace.workspaceRoot,
-      subjectId: 'acme.plugin',
-      official: false,
-    };
-
-    assert.equal(registry.resolve('test.origin.kernel', ['test:read'], inferredPlugin), null);
-    assert.equal(registry.resolve('test.origin.runtime', ['test:read'], inferredPlugin), 'runtime');
-    assert.equal(registry.resolve('test.origin.host', ['test:read'], pluginShaped), null);
+    assert.equal(hostPing(kernel, 'model.unbound'), null);
+    assert.ok(kernel.readObservations().some((record) =>
+      record.event === 'exposure-binding-mismatch' && record.detail['name'] === 'model.unbound'));
   });
 
-  it('write-protects the scope record while the kernel runs', async (t) => {
+  it('gives participants no way to register: the view is resolve only and the window is sealed', async () => {
+    await boot([{
+      token: 'model.late',
+      onRunning: `
+        report.keys = Object.keys(registry);
+        try { registry.register('x', { name: 'model.late' }); report.register = 'accepted'; }
+        catch (error) { report.register = error instanceof TypeError ? 'absent' : String(error); }`,
+    }]);
+
+    assert.deepEqual(reports()['model.late'], { keys: ['resolve'], register: 'absent' });
+  });
+
+  it('applies the per-identity call and size limits to resolve', async () => {
     const kernel = await boot([
-      createProbe('test.protected', [{
-        apiName: 'test.protected',
-        registration: { capability: 'test:read', scope: 'kernel' },
-      }]),
+      { token: 'model.limited', exposures: [{ name: 'model.limited', scope: 'runtime' }], bindings: PING_BINDINGS },
+      {
+        token: 'model.flood',
+        onRunning: `
+          let granted = 0;
+          for (let index = 0; index < 10_001; index += 1) {
+            if (registry.resolve('model.limited') !== null) { granted += 1; }
+          }
+          report.granted = granted;
+          report.oversized = registry.resolve('x'.repeat(70_000));`,
+      },
     ]);
-    t.after(() => shutdown(kernel));
+    const flood = reports()['model.flood'] as { readonly granted: number; readonly oversized: unknown };
+
+    assert.ok(flood.granted >= 1 && flood.granted <= 10_000, `granted ${String(flood.granted)} calls`);
+    assert.equal(flood.oversized, null);
+    assert.ok(kernel.readObservations().some((record) =>
+      record.event === 'resolve-refused' && record.detail['reason'] === 'call or size limit exceeded'));
+  });
+
+  it('write-protects the scope record while the kernel runs', async () => {
+    await boot([{ token: 'model.protected', exposures: [{ name: 'model.protected', scope: 'kernel' }] }]);
 
     const before = readFileSync(workspace.scopeRecordPath, 'utf8');
 
@@ -564,156 +503,54 @@ describe('universal exposed API scope model', () => {
   });
 
   it('refuses boot when the persisted scope record is corrupt', async () => {
-    const first = await boot([
-      createProbe('test.corrupt', [{
-        apiName: 'test.corrupt',
-        registration: { capability: 'test:read', scope: 'runtime' },
-      }]),
-    ]);
-    await shutdown(first);
+    const participants: Participant[] = [{ token: 'model.corrupt', exposures: [{ name: 'model.corrupt', scope: 'runtime' }] }];
 
+    await shutdown(await boot(participants));
     await writeFile(workspace.scopeRecordPath, '{not-json', 'utf8');
 
-    const second = createDeferredKernel(workspace.configPath, {
-      options: workspace.options,
+    await bootRefused(participants, (error: unknown) => {
+      assert.ok(error instanceof ExposedApiScopeRecordCorruptError);
+      assert.equal(error.code, 'EXPOSED_API_SCOPE_RECORD_CORRUPT');
+      return true;
     });
-    second.register(createProbe('test.corrupt', [{
-      apiName: 'test.corrupt',
-      registration: { capability: 'test:read', scope: 'runtime' },
-    }]).descriptor);
-
-    await assert.rejects(
-      second.boot({ options: workspace.options }),
-      (error: unknown) => {
-        assert.ok(error instanceof ExposedApiScopeRecordCorruptError);
-        assert.equal(error.code, 'EXPOSED_API_SCOPE_RECORD_CORRUPT');
-        return true;
-      },
-    );
   });
 
   it('refuses boot when a valid-looking scope record fails its integrity digest', async () => {
-    const first = await boot([
-      createProbe('test.digest', [{
-        apiName: 'test.digest',
-        registration: { capability: 'test:read', scope: 'runtime' },
-      }]),
-    ]);
-    await shutdown(first);
+    const participants: Participant[] = [{ token: 'model.digest', exposures: [{ name: 'model.digest', scope: 'runtime' }] }];
 
-    const document = JSON.parse(
-      readFileSync(workspace.scopeRecordPath, 'utf8'),
-    ) as {
+    await shutdown(await boot(participants));
+
+    const document = JSON.parse(readFileSync(workspace.scopeRecordPath, 'utf8')) as {
       records: { name: string; version: ExposedApiVersion; scope: ExposedApiScope }[];
     };
-    const record = document.records.find((entry) => entry.name === 'test.digest');
+    const record = document.records.find((entry) => entry.name === 'model.digest');
     assert.ok(record);
     record.scope = 'kernel';
     await writeFile(workspace.scopeRecordPath, JSON.stringify(document), 'utf8');
 
-    const second = createDeferredKernel(workspace.configPath, {
-      options: workspace.options,
+    await bootRefused(participants, (error: unknown) => {
+      assert.ok(error instanceof ExposedApiScopeRecordCorruptError);
+      assert.match(error.reason, /integrity digest mismatch/u);
+      return true;
     });
-    second.register(createProbe('test.digest', [{
-      apiName: 'test.digest',
-      registration: { capability: 'test:read', scope: 'runtime' },
-    }]).descriptor);
-
-    await assert.rejects(
-      second.boot({ options: workspace.options }),
-      (error: unknown) => {
-        assert.ok(error instanceof ExposedApiScopeRecordCorruptError);
-        assert.match(error.reason, /integrity digest mismatch/u);
-        return true;
-      },
-    );
   });
 
-  it('refuses invalid version, scope, and policy declarations', async () => {
-    const cases: readonly {
-      readonly probe: ProbeFixture;
-      readonly expected: new (...args: never[]) => Error;
-    }[] = [
-      {
-        probe: createProbe('test.invalid.version', [{
-          apiName: 'test.invalid.version',
-          registration: { capability: 'test:read', version: 0 },
-        }]),
-        expected: ExposedApiInvalidVersionError,
-      },
-      {
-        probe: createProbe('test.invalid.scope', [{
-          apiName: 'test.invalid.scope',
-          registration: { capability: 'test:read', scope: 'inside' as ExposedApiScope },
-        }]),
-        expected: ExposedApiInvalidScopeError,
-      },
-      {
-        probe: createProbe('test.invalid.policy', [{
-          apiName: 'test.invalid.policy',
-          registration: {
-            capability: 'test:read',
-            policy: { callback: () => undefined } as unknown as Readonly<Record<string, unknown>>,
-          },
-        }]),
-        expected: ExposedApiInvalidPolicyError,
-      },
+  it('fails closed on an invalid version, scope, or policy declaration', async () => {
+    const cases: readonly { readonly exposure: Readonly<Record<string, unknown>>; readonly code: string }[] = [
+      { exposure: { name: 'model.bad', version: 0 }, code: 'EXPOSED_API_INVALID_VERSION' },
+      { exposure: { name: 'model.bad', scope: 'everywhere' }, code: 'EXPOSED_API_INVALID_SCOPE' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 2 } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 1, allowedCallers: ['x'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 1, origins: ['moon'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 1, capabilities: ['Not A Token'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'not a name' }, code: 'EXPOSED_API_INVALID_NAME' },
     ];
 
-    for (const testCase of cases) {
-      const kernel = createDeferredKernel(workspace.configPath, {
-        options: workspace.options,
-      });
-      kernel.register(testCase.probe.descriptor);
-
-      await assert.rejects(
-        kernel.boot({ options: workspace.options }),
-        (error: unknown) => {
-          assert.ok(error instanceof testCase.expected);
-          return true;
-        },
+    for (const { exposure, code } of cases) {
+      await bootRefused(
+        [{ token: 'model.invalid', exposures: [exposure] }],
+        (error: unknown) => (error as { readonly code?: unknown }).code === code,
       );
     }
-  });
-
-  it('default-denies an exposure that declares no public policy and honours a giver-declared public marker', async (t) => {
-    const kernel = await boot([
-      createProbe('test.policy.private', [{
-        apiName: 'test.policy.private',
-        registration: {
-          capability: 'test:read',
-          scope: 'runtime',
-          projection: () => 'private-handle',
-        },
-      }]),
-      createProbe('test.policy.public', [{
-        apiName: 'test.policy.public',
-        registration: {
-          // The giver declares its own public policy. The kernel ships no preset.
-          capability: '*',
-          scope: 'runtime',
-          projection: () => 'public-handle',
-        },
-      }]),
-    ]);
-    t.after(() => shutdown(kernel));
-
-    const registry = registryOf(kernel);
-
-    assert.equal(
-      registry.resolve('test.policy.private', [], access('runtime')),
-      null,
-      'an exposure with no declared public policy must default-deny an uncapable caller',
-    );
-    assert.equal(
-      registry.resolve('test.policy.private', ['test:read'], access('runtime')),
-      'private-handle',
-      'a caller holding the declared capability resolves the private exposure',
-    );
-    assert.equal(
-      registry.resolve('test.policy.public', [], access('runtime')),
-      'public-handle',
-      'a giver-declared public marker matches every caller',
-    );
   });
 });

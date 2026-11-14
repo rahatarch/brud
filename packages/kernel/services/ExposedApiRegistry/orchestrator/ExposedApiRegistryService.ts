@@ -1,48 +1,46 @@
-import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
-import {
-  isCapabilityToken,
-} from '../../../src/contracts/capability.js';
-import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
-import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
+import type {
+  KernelCallAuthority,
+  KernelCallContext,
+} from '../../../src/contracts/callChain.js';
+import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
+import type { ExposureDeclaration } from '../../../src/contracts/manifest.js';
 import {
   ExposedApiDisposedError,
-  ExposedApiDuplicateCapabilityError,
-  ExposedApiInvalidCapabilityError,
+  ExposedApiDuplicateExposureError,
   ExposedApiInvalidNameError,
-  ExposedApiInvalidPolicyError,
   ExposedApiInvalidScopeError,
   ExposedApiInvalidVersionError,
   ExposedApiNameCollisionError,
+  ExposedApiNotAttachedError,
+  ExposedApiOwnerPinError,
   ExposedApiRegistrationClosedError,
   ExposedApiScopeNarrowingError,
-  ExposedApiUnknownServiceError,
+  ExposedApiUnavailableError,
 } from '../contracts/errors.js';
-import type { IExposedApiRegistry } from '../contracts/IExposedApiRegistry.js';
+import type {
+  IExposedApiAdmission,
+  IExposedApiRegistry,
+} from '../contracts/IExposedApiRegistry.js';
+import {
+  evaluateExposedApiPolicy,
+  parseExposedApiPolicy,
+  type ExposedApiPolicy,
+} from '../contracts/policy.js';
+import { isExposureProvider } from '../contracts/registrant.js';
 import {
   EXPOSED_API_NAME_PATTERN,
-  exposedApiScopeAllowsOrigin,
+  exposedApiMajor,
   exposedApiScopeRank,
-  isExposedApiOrigin,
   isExposedApiScope,
   isExposedApiVersion,
-  type ExposedApiAccessContext,
+  type ExposedApiBinding,
   type ExposedApiCaller,
-  type ExposedApiEntry,
-  type ExposedApiIdentity,
-  type ExposedApiOrigin,
-  type ExposedApiPolicy,
-  type ExposedApiRegistration,
-  type ExposedApiResolved,
+  type ExposedApiResolveOptions,
   type ExposedApiScope,
-  type ExposedApiVersion,
 } from '../contracts/types.js';
+import { ExposedApiRegistryToken } from '../descriptor/tokens.js';
 import {
-  JsonValueError,
-  canonicalJson,
-  cloneJsonRecord,
-  isPlainRecord,
-} from '../../shared/canonicalJson.js';
-import {
+  EXPOSED_API_SCOPE_RECORD_MAX_NAME_LENGTH,
   loadScopeRecord,
   persistScopeRecord,
   protectScopeRecord,
@@ -54,123 +52,88 @@ import {
 /** API names accept dotted, kebab, and snake segments. */
 export { EXPOSED_API_NAME_PATTERN };
 
-/** Maximum accepted canonical policy size in bytes. */
-export const EXPOSED_API_MAX_POLICY_BYTES = 65_536;
-
 /** Collaborators injected into {@link ExposedApiRegistryService}. */
 export interface ExposedApiRegistryDependencies {
-  /** Mediated access used to resolve each registered token. */
-  readonly broker: IKernelAccessBroker;
-
-  /** Registry identity used when a caller supplies no access context. */
-  readonly callerContext: ServiceContext;
-
   /**
-   * Absolute path to the protected per-product scope record.
+   * Absolute path to the protected per-composition scope record.
    *
    * When omitted, scope is tracked in memory for the lifetime of the service.
-   * Hosts that require cross-boot persistence supply an absolute path.
    */
   readonly scopeRecordPath?: string;
 }
 
-/** Validates and freezes a policy declaration. */
-function normalizePolicy(value: unknown): ExposedApiPolicy {
-  try {
-    const policy = cloneJsonRecord(value);
+/** One registered exposure. */
+interface ExposureEntry {
+  readonly name: string;
+  readonly major: number;
+  readonly scope: ExposedApiScope;
+  readonly policy: ExposedApiPolicy;
+  readonly owner: string;
+}
 
-    if (Buffer.byteLength(canonicalJson(policy), 'utf8') > EXPOSED_API_MAX_POLICY_BYTES) {
-      throw new ExposedApiInvalidPolicyError(
-        `must be at most ${String(EXPOSED_API_MAX_POLICY_BYTES)} canonical bytes`,
-      );
-    }
+/** Source name the registry uses on the kernel's observation stream. */
+const OBSERVATION_SOURCE = ExposedApiRegistryToken.id;
 
-    return policy;
-  } catch (error: unknown) {
-    if (error instanceof ExposedApiInvalidPolicyError) {
-      throw error;
-    }
+/** Default projection: the giver's instance itself. */
+function identityProjection(service: unknown): unknown {
+  return service;
+}
 
-    const reason = error instanceof JsonValueError
-      ? error.message
-      : 'must be a JSON object';
-
-    throw new ExposedApiInvalidPolicyError(reason);
-  }
+/** Builds the caller view a projection receives. */
+function callerView(context: KernelCallContext): ExposedApiCaller {
+  return Object.freeze({
+    identity: context.caller.identity,
+    callerClass: context.caller.callerClass,
+    official: context.caller.official,
+    capabilities: context.caller.capabilities,
+    origin: context.origin,
+  });
 }
 
 /**
- * Derives the root origin of a call chain from an access context.
+ * The resolution primitive.
  *
- * An explicit origin always wins. The fallbacks cover the existing callers
- * that predate origin propagation: plugin resolution supplies a plugin subject
- * and is a runtime-origin chain; daemon and embedded host callers are host
- * origin; direct kernel-side access is kernel origin.
- *
- * @param access - Broker access context.
- * @returns The root origin, or `null` when an explicit origin is invalid.
+ * Holds no participant name, no participant token, no caller identifier, no
+ * caller list, and no policy of its own. It stores what each participant's
+ * manifest declares, keyed by the owner's kernel-issued identity, and
+ * evaluates each giver's declared Layer 1 policy against the kernel-provided
+ * execution context.
  */
-export function deriveExposedApiOrigin(
-  access: ExposedApiAccessContext | undefined,
-): ExposedApiOrigin | null {
-  if (access === undefined) {
-    return 'kernel';
-  }
+export class ExposedApiRegistryService
+implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
+  readonly #entries = new Map<string, ExposureEntry>();
 
-  if (access.origin !== undefined) {
-    return isExposedApiOrigin(access.origin) ? access.origin : null;
-  }
+  readonly #owners = new Map<string, string>();
 
-  if (
-    typeof access.subjectId === 'string'
-    && access.subjectId.length > 0
-    && access.subjectId !== access.callerId
-  ) {
-    return 'runtime';
-  }
+  readonly #bindings = new Map<string, ExposedApiBinding>();
 
-  if (access.callerId === 'brud.host.daemon' || access.callerId === 'brud.daemon') {
-    return 'host';
-  }
+  readonly #scopes = new Map<string, ScopeRecordEntry>();
 
-  if (access.tier === 'userland') {
-    return 'runtime';
-  }
+  readonly #storagePath: string | undefined;
 
-  return 'kernel';
-}
+  #authority: KernelCallAuthority | undefined;
 
-/**
- * Dumb store for service-declared exposures.
- *
- * It does not interpret capabilities, projections, or merge semantics beyond
- * invoking what the declaring service supplied. It enforces the declared scope
- * against the root origin and records the scope for the next boot. Access
- * authority remains with the access broker and each service's descriptor.
- * Policy declarations are stored and returned, never evaluated.
- */
-export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceLifecycle {
-  private readonly entries = new Map<string, ExposedApiEntry[]>();
+  #pins: Readonly<Record<string, string>> = Object.freeze({});
 
-  private readonly scopes = new Map<string, ScopeRecordEntry>();
+  #sealed = false;
 
-  private readonly dependencies: ExposedApiRegistryDependencies;
+  #disposed = false;
 
-  private readonly storagePath: string | undefined;
+  #initialized = false;
 
-  private closed = false;
+  #protectedRecord = false;
 
-  private disposed = false;
+  #dirty = false;
 
-  private initialized = false;
+  /** The only view a participant receives: `resolve`. */
+  readonly publicView: IExposedApiRegistry;
 
-  private protectedRecord = false;
-
-  private dirty = false;
-
-  constructor(dependencies: ExposedApiRegistryDependencies) {
-    this.dependencies = dependencies;
-    this.storagePath = dependencies.scopeRecordPath;
+  constructor(dependencies: ExposedApiRegistryDependencies = {}) {
+    this.#storagePath = dependencies.scopeRecordPath;
+    this.publicView = Object.freeze({
+      resolve: <T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null =>
+        this.resolve<T>(name, options),
+    });
   }
 
   /**
@@ -180,123 +143,150 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
    * record refuses boot. An existing record is made read-only for the runtime.
    */
   async initialize(): Promise<void> {
-    if (this.initialized) {
+    if (this.#initialized) {
       return;
     }
 
-    this.initialized = true;
+    this.#initialized = true;
 
-    if (this.storagePath === undefined) {
+    if (this.#storagePath === undefined) {
       return;
     }
 
-    const loaded = loadScopeRecord(this.storagePath);
+    const loaded = loadScopeRecord(this.#storagePath);
 
     if (loaded !== undefined) {
       for (const record of loaded) {
-        this.scopes.set(
-          scopeRecordIdentityKey(record.name, record.version),
-          record,
-        );
+        this.#scopes.set(scopeRecordIdentityKey(record.name, record.version), record);
       }
 
-      protectScopeRecord(this.storagePath);
-      this.protectedRecord = true;
+      protectScopeRecord(this.#storagePath);
+      this.#protectedRecord = true;
     }
   }
 
   /** Seals the window and persists the final scope record. */
   async onRunning(): Promise<void> {
-    this.closeRegistration();
+    this.seal();
 
-    if (this.storagePath !== undefined && this.dirty) {
+    if (this.#storagePath !== undefined && this.#dirty) {
       this.#persist();
     }
   }
 
-  /** Releases the protected-path claim and clears every exposure. */
+  /** Releases the protected-path claim and forgets every exposure. */
   async dispose(): Promise<void> {
-    if (this.storagePath !== undefined && this.protectedRecord) {
-      releaseScopeRecordProtection(this.storagePath);
-      this.protectedRecord = false;
+    if (this.#storagePath !== undefined && this.#protectedRecord) {
+      releaseScopeRecordProtection(this.#storagePath);
+      this.#protectedRecord = false;
     }
 
-    this.disposed = true;
-    this.closed = true;
-    this.entries.clear();
+    this.#disposed = true;
+    this.#sealed = true;
+    this.#entries.clear();
+    this.#owners.clear();
+    this.#bindings.clear();
   }
 
   /** Whether {@link dispose} has run. */
   get isDisposed(): boolean {
-    return this.disposed;
+    return this.#disposed;
+  }
+
+  /** Whether the registration window is sealed. */
+  get isSealed(): boolean {
+    return this.#sealed;
   }
 
   /** Absolute scope-record path, when persistence is configured. */
   get scopeRecordPath(): string | undefined {
-    return this.storagePath;
+    return this.#storagePath;
   }
 
-  registerApi<TService>(
-    name: string,
-    token: ServiceToken<TService>,
-    registration: ExposedApiRegistration,
+  /**
+   * Attaches the kernel's call authority and the composition's name pins.
+   *
+   * Called once by the kernel, during admission, before any registration.
+   *
+   * @param authority - The kernel's call authority.
+   * @param ownerPins - Exposure names pinned to an owner identity.
+   */
+  attachKernel(
+    authority: KernelCallAuthority,
+    ownerPins: Readonly<Record<string, string>>,
   ): void {
-    if (this.disposed) {
+    if (this.#disposed) {
       throw new ExposedApiDisposedError();
     }
 
-    if (this.closed) {
+    if (this.#sealed || this.#authority !== undefined) {
+      throw new ExposedApiRegistrationClosedError('kernel attachment');
+    }
+
+    this.#authority = authority;
+    this.#pins = Object.freeze({ ...ownerPins });
+  }
+
+  register(owner: string, declaration: ExposureDeclaration): void {
+    const name = typeof declaration?.name === 'string' ? declaration.name : String(declaration?.name);
+
+    if (this.#disposed) {
+      throw new ExposedApiDisposedError();
+    }
+
+    if (this.#sealed) {
       throw new ExposedApiRegistrationClosedError(name);
     }
 
-    if (!EXPOSED_API_NAME_PATTERN.test(name)) {
-      throw new ExposedApiInvalidNameError(name);
+    if (this.#authority === undefined) {
+      throw new ExposedApiNotAttachedError();
     }
 
     if (
-      registration.capability !== '*'
-      && !isCapabilityToken(registration.capability)
+      typeof declaration?.name !== 'string'
+      || declaration.name.length > EXPOSED_API_SCOPE_RECORD_MAX_NAME_LENGTH
+      || !EXPOSED_API_NAME_PATTERN.test(declaration.name)
     ) {
-      throw new ExposedApiInvalidCapabilityError(registration.capability);
+      throw new ExposedApiInvalidNameError(name);
     }
 
-    if (!this.dependencies.broker.hasService(token)) {
-      throw new ExposedApiUnknownServiceError(token.id);
+    if (typeof owner !== 'string' || owner.length === 0) {
+      throw new ExposedApiNotAttachedError();
     }
 
-    const version = registration.version === undefined ? 1 : registration.version;
+    const version = declaration.version ?? 1;
 
     if (!isExposedApiVersion(version)) {
       throw new ExposedApiInvalidVersionError(version);
     }
 
-    const requestedScope = registration.scope === undefined
-      ? 'kernel'
-      : registration.scope;
+    const major = exposedApiMajor(version);
+    const requestedScope = declaration.scope ?? 'kernel';
 
     if (!isExposedApiScope(requestedScope)) {
       throw new ExposedApiInvalidScopeError(requestedScope);
     }
 
-    const policy = normalizePolicy(
-      registration.policy === undefined ? {} : registration.policy,
-    );
+    const policy = parseExposedApiPolicy(declaration.policy);
+    const pinned = this.#pins[name];
 
-    const identityKey = scopeRecordIdentityKey(name, version);
-    const existing = this.entries.get(identityKey);
-    const persisted = this.scopes.get(identityKey);
-
-    if (existing !== undefined) {
-      const owner = existing[0];
-
-      if (owner !== undefined && owner.tokenId !== token.id) {
-        throw new ExposedApiNameCollisionError(name, owner.tokenId);
-      }
-
-      if (existing.some((entry) => entry.capability === registration.capability)) {
-        throw new ExposedApiDuplicateCapabilityError(name, registration.capability);
-      }
+    if (pinned !== undefined && pinned !== owner) {
+      throw new ExposedApiOwnerPinError(name);
     }
+
+    const nameOwner = this.#owners.get(name);
+
+    if (nameOwner !== undefined && nameOwner !== owner) {
+      throw new ExposedApiNameCollisionError(name, nameOwner);
+    }
+
+    const key = scopeRecordIdentityKey(name, major);
+
+    if (this.#entries.has(key)) {
+      throw new ExposedApiDuplicateExposureError(name, major);
+    }
+
+    const persisted = this.#scopes.get(key);
 
     if (
       persisted !== undefined
@@ -304,246 +294,282 @@ export class ExposedApiRegistryService implements IExposedApiRegistry, IServiceL
     ) {
       throw new ExposedApiScopeNarrowingError(
         name,
-        String(version),
+        String(major),
         persisted.scope,
         requestedScope,
       );
     }
 
-    const effectiveScope = persisted !== undefined
-      && exposedApiScopeRank(persisted.scope) > exposedApiScopeRank(requestedScope)
-      ? persisted.scope
-      : requestedScope;
-
-    if (persisted === undefined || persisted.scope !== effectiveScope) {
-      this.scopes.set(identityKey, { name, version, scope: effectiveScope });
-      this.dirty = true;
+    if (persisted === undefined || persisted.scope !== requestedScope) {
+      this.#scopes.set(key, { name, version: major, scope: requestedScope });
+      this.#dirty = true;
     }
 
-    if (existing !== undefined) {
-      for (let index = 0; index < existing.length; index += 1) {
-        const entry = existing[index] as ExposedApiEntry;
+    this.#entries.set(key, Object.freeze({ name, major, scope: requestedScope, policy, owner }));
+    this.#owners.set(name, owner);
+  }
 
-        if (entry.scope !== effectiveScope) {
-          existing[index] = Object.freeze({ ...entry, scope: effectiveScope });
-        }
-      }
+  /** Seals the registration window. Idempotent. Kernel-only. */
+  seal(): void {
+    this.#sealed = true;
+  }
+
+  resolve<T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null {
+    const authority = this.#authority;
+    const context = authority?.current();
+
+    if (authority === undefined || context === undefined || this.#disposed) {
+      return this.#refuse(authority, undefined, 'resolve-refused', {
+        name: typeof name === 'string' ? name : null,
+        reason: 'no kernel call context',
+      });
     }
 
-    const entry: ExposedApiEntry = Object.freeze({
-      name,
-      version,
-      scope: effectiveScope,
-      policy,
-      token: token as ServiceToken<unknown>,
-      tokenId: token.id,
-      capability: registration.capability,
-      projection: registration.projection ?? identity,
-      ...(registration.combine === undefined ? {} : { combine: registration.combine }),
+    const expectedOwner = options?.expectedOwner;
+    const requestBytes = Buffer.byteLength(String(name), 'utf8')
+      + Buffer.byteLength(typeof expectedOwner === 'string' ? expectedOwner : '', 'utf8')
+      + Buffer.byteLength(String(options?.version ?? ''), 'utf8');
+
+    if (!authority.admitCall(context.caller, requestBytes)) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name: String(name),
+        reason: 'call or size limit exceeded',
+      });
+    }
+
+    const version = options?.version ?? 1;
+
+    if (typeof name !== 'string' || !isExposedApiVersion(version)) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name: String(name),
+        reason: 'malformed request',
+      });
+    }
+
+    const entry = this.#entries.get(scopeRecordIdentityKey(name, exposedApiMajor(version)));
+
+    if (entry === undefined) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: 'no such exposure',
+      });
+    }
+
+    if (!authority.isLive(entry.owner)) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: 'owner identity is not live',
+      });
+    }
+
+    if (expectedOwner !== undefined && expectedOwner !== entry.owner) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: 'owner differs from the expected owner',
+      });
+    }
+
+    const decision = evaluateExposedApiPolicy(entry.policy, entry.scope, context);
+
+    if (!decision.allowed) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: decision.reason,
+      });
+    }
+
+    const binding = this.#bind(authority, entry);
+
+    if (binding === undefined) {
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: 'owner code does not provide the declared exposure',
+      });
+    }
+
+    const instance = authority.instanceOf(entry.owner);
+    const projection = binding.projection ?? identityProjection;
+    const value = authority.runAs(entry.owner, () => projection(instance, callerView(context)));
+
+    return this.#handle(authority, entry, value) as T;
+  }
+
+  /** Records a refusal on the observation stream and returns the uniform refusal. */
+  #refuse(
+    authority: KernelCallAuthority | undefined,
+    context: KernelCallContext | undefined,
+    event: string,
+    detail: Readonly<Record<string, unknown>>,
+  ): null {
+    authority?.observe(OBSERVATION_SOURCE, event, {
+      ...detail,
+      callerIdentity: context?.caller.identity ?? null,
+      callerClass: context?.caller.callerClass ?? null,
+      origin: context?.origin ?? null,
     });
 
-    if (existing === undefined) {
-      this.entries.set(identityKey, [entry]);
-    } else {
-      existing.push(entry);
-    }
+    return null;
   }
 
-  resolve<T = unknown>(
-    name: string,
-    callerCapabilities: Iterable<string>,
-    access?: ExposedApiAccessContext,
-    version?: ExposedApiVersion,
-  ): T | null {
-    return this.resolveWithMetadata<T>(name, callerCapabilities, access, version)
-      ?.handle ?? null;
+  /**
+   * Binds one declared exposure to its owner's code, on first use.
+   *
+   * When the owner's code does not provide a declared exposure, the call fails
+   * and the mismatch is recorded. Code cannot bind an undeclared exposure,
+   * because only declared exposures are ever looked up.
+   */
+  #bind(authority: KernelCallAuthority, entry: ExposureEntry): ExposedApiBinding | undefined {
+    const key = scopeRecordIdentityKey(entry.name, entry.major);
+    const cached = this.#bindings.get(key);
+
+    if (cached !== undefined) {
+      return cached;
+    }
+
+    const instance = authority.instanceOf(entry.owner);
+    const binding = isExposureProvider(instance)
+      ? authority.runAs(entry.owner, () => instance.provideExposure(entry.name, entry.major))
+      : undefined;
+
+    if (
+      binding === undefined
+      || binding === null
+      || typeof binding !== 'object'
+      || (binding.projection !== undefined && typeof binding.projection !== 'function')
+    ) {
+      authority.observe(OBSERVATION_SOURCE, 'exposure-binding-mismatch', {
+        name: entry.name,
+        major: entry.major,
+        owner: entry.owner,
+      });
+
+      return undefined;
+    }
+
+    const frozen: ExposedApiBinding = Object.freeze({ ...binding });
+    this.#bindings.set(key, frozen);
+
+    return frozen;
   }
 
-  resolveWithMetadata<T = unknown>(
-    name: string,
-    callerCapabilities: Iterable<string>,
-    access?: ExposedApiAccessContext,
-    version: ExposedApiVersion = 1,
-  ): ExposedApiResolved<T> | null {
-    if (this.disposed || !isExposedApiVersion(version)) {
-      return null;
+  /**
+   * Wraps a projected value in a handle that is a reference, not a grant.
+   *
+   * Every use of the handle evaluates Layer 1 again against the root origin of
+   * the chain using it, and runs the giver's code as the giver. Primitive
+   * values are data, not references, and are returned as they are.
+   */
+  #handle(authority: KernelCallAuthority, entry: ExposureEntry, value: unknown): unknown {
+    if (value === null || (typeof value !== 'object' && typeof value !== 'function')) {
+      return value;
     }
 
-    const identityKey = scopeRecordIdentityKey(name, version);
-    const entries = this.entries.get(identityKey);
+    const real = value as object;
 
-    if (entries === undefined) {
-      return null;
-    }
+    const authorize = (): void => {
+      const context = authority.current();
+      const reason = context === undefined
+        ? 'no kernel call context'
+        : !authority.admitCall(context.caller, 0)
+          ? 'call or size limit exceeded'
+          : !authority.isLive(entry.owner)
+            ? 'owner identity is not live'
+            : ((): string | undefined => {
+                const decision = evaluateExposedApiPolicy(entry.policy, entry.scope, context);
 
-    const origin = deriveExposedApiOrigin(access);
+                return decision.allowed ? undefined : decision.reason;
+              })();
 
-    if (origin === null) {
-      return null;
-    }
+      if (reason !== undefined) {
+        authority.observe(OBSERVATION_SOURCE, 'invoke-refused', {
+          name: entry.name,
+          major: entry.major,
+          reason,
+          callerIdentity: context?.caller.identity ?? null,
+          callerClass: context?.caller.callerClass ?? null,
+          origin: context?.origin ?? null,
+        });
 
-    const declaredScope = this.scopes.get(identityKey)?.scope ?? entries[0]?.scope;
-
-    if (declaredScope === undefined || !exposedApiScopeAllowsOrigin(declaredScope, origin)) {
-      return null;
-    }
-
-    const capabilities = new Set(callerCapabilities);
-    const matching = entries.filter(
-      (entry) => entry.capability === '*' || capabilities.has(entry.capability),
-    );
-
-    if (matching.length === 0) {
-      return null;
-    }
-
-    const accessContext: ServiceContext = access === undefined
-      ? this.dependencies.callerContext
-      : {
-          callerId: access.callerId,
-          tier: access.tier,
-          options: { 'workspace.root': access.workspaceRoot },
-        };
-    const callerWorkspaceRoot = accessContext.options['workspace.root'];
-
-    const caller: ExposedApiCaller = {
-      capabilities,
-      official: access?.official === true,
-      callerId: accessContext.callerId,
-      subjectId: access?.subjectId ?? accessContext.callerId,
-      workspaceRoot: typeof callerWorkspaceRoot === 'string' ? callerWorkspaceRoot : '',
+        throw new ExposedApiUnavailableError();
+      }
     };
 
-    const projections = matching.map((entry) => {
-      const service = this.dependencies.broker.requestAccess(
-        accessContext,
-        entry.token,
-      );
+    const invoke = (fn: (...args: unknown[]) => unknown, thisArg: unknown, args: unknown[]): unknown => {
+      authorize();
 
-      return entry.projection(service, caller);
+      return authority.runAs(entry.owner, () => Reflect.apply(fn, thisArg, args));
+    };
+
+    // The proxy target is an empty, extensible stand-in so the handle can wrap
+    // frozen projections without breaking proxy invariants.
+    const target = typeof real === 'function'
+      ? ((): void => undefined) as unknown as object
+      : {};
+
+    return new Proxy(target, {
+      get: (_target, property): unknown => {
+        authorize();
+
+        const member = Reflect.get(real, property, real) as unknown;
+
+        return typeof member === 'function'
+          ? (...args: unknown[]): unknown =>
+              invoke(member as (...args: unknown[]) => unknown, real, args)
+          : member;
+      },
+      apply: (_target, thisArg, args: unknown[]): unknown =>
+        invoke(real as (...args: unknown[]) => unknown, thisArg, args),
+      has: (_target, property): boolean => {
+        authorize();
+
+        return Reflect.has(real, property);
+      },
+      ownKeys: (): (string | symbol)[] => {
+        authorize();
+
+        return Reflect.ownKeys(real);
+      },
+      getOwnPropertyDescriptor: (_target, property): PropertyDescriptor | undefined => {
+        authorize();
+
+        const descriptor = Reflect.getOwnPropertyDescriptor(real, property);
+
+        return descriptor === undefined ? undefined : { ...descriptor, configurable: true };
+      },
+      getPrototypeOf: (): object | null => Reflect.getPrototypeOf(real),
+      set: (): boolean => false,
+      defineProperty: (): boolean => false,
+      deleteProperty: (): boolean => false,
+      setPrototypeOf: (): boolean => false,
+      preventExtensions: (): boolean => false,
     });
-
-    const handle = projections.length === 1
-      ? projections[0]
-      : combineMatching(matching, projections, caller);
-
-    return Object.freeze({
-      name,
-      version,
-      scope: declaredScope,
-      policy: matching[0]?.policy ?? Object.freeze({}),
-      policies: Object.freeze(matching.map((entry) => entry.policy)),
-      handle: handle as T,
-    });
-  }
-
-  scopeOf(name: string, version: ExposedApiVersion = 1): ExposedApiScope | null {
-    if (!isExposedApiVersion(version)) {
-      return null;
-    }
-
-    return this.scopes.get(scopeRecordIdentityKey(name, version))?.scope ?? null;
-  }
-
-  closeRegistration(): void {
-    this.closed = true;
-  }
-
-  isRegistrationOpen(): boolean {
-    return !this.closed && !this.disposed;
-  }
-
-  registeredApiNames(): readonly string[] {
-    const names: string[] = [];
-
-    for (const entries of this.entries.values()) {
-      const name = entries[0]?.name;
-
-      if (name !== undefined && !names.includes(name)) {
-        names.push(name);
-      }
-    }
-
-    return Object.freeze(names);
-  }
-
-  registeredApiIdentities(): readonly ExposedApiIdentity[] {
-    const identities: ExposedApiIdentity[] = [];
-
-    for (const entries of this.entries.values()) {
-      const entry = entries[0];
-
-      if (entry !== undefined) {
-        identities.push(Object.freeze({ name: entry.name, version: entry.version }));
-      }
-    }
-
-    return Object.freeze(identities);
   }
 
   /** Persists the exact in-memory scope record and verifies the written file. */
   #persist(): void {
-    if (this.storagePath === undefined) {
+    if (this.#storagePath === undefined) {
       return;
     }
 
-    if (this.protectedRecord) {
-      releaseScopeRecordProtection(this.storagePath);
-      this.protectedRecord = false;
+    if (this.#protectedRecord) {
+      releaseScopeRecordProtection(this.#storagePath);
+      this.#protectedRecord = false;
     }
 
     try {
-      persistScopeRecord(this.storagePath, [...this.scopes.values()]);
+      persistScopeRecord(this.#storagePath, [...this.#scopes.values()]);
 
       // Read the document back so the file trusted on the next boot is the
       // file that was integrity-checked in this one.
-      loadScopeRecord(this.storagePath);
+      loadScopeRecord(this.#storagePath);
 
-      protectScopeRecord(this.storagePath);
-      this.protectedRecord = true;
+      protectScopeRecord(this.#storagePath);
+      this.#protectedRecord = true;
     } finally {
-      if (!this.protectedRecord) {
-        protectScopeRecord(this.storagePath);
-        this.protectedRecord = true;
+      if (!this.#protectedRecord) {
+        protectScopeRecord(this.#storagePath);
+        this.#protectedRecord = true;
       }
     }
   }
-}
-
-/** Default projection: the service instance itself. */
-function identity(service: unknown): unknown {
-  return service;
-}
-
-/** Combines matching projections using the first supplied combiner. */
-function combineMatching(
-  matching: readonly ExposedApiEntry[],
-  projections: readonly unknown[],
-  caller: ExposedApiCaller,
-): unknown {
-  const combine = matching.find(
-    (entry) => entry.combine !== undefined,
-  )?.combine ?? combineDefault;
-
-  return combine(projections, caller);
-}
-
-/**
- * Default combiner.
- *
- * Plain records merge shallowly. Anything else falls back to the last
- * matching projection so class instances keep their prototypes.
- */
-function combineDefault(
-  projections: readonly unknown[],
-): unknown {
-  if (projections.length === 0) {
-    return null;
-  }
-
-  if (projections.every(isPlainRecord)) {
-    return Object.freeze(Object.assign({}, ...projections));
-  }
-
-  return projections[projections.length - 1];
 }

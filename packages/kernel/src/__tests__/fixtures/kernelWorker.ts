@@ -1,6 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from '../support/standardKernel.js';
 import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
 import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { workspaceContextOptions } from '../support/workspaceContext.js';

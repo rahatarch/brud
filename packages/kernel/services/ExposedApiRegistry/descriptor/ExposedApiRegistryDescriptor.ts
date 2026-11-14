@@ -13,23 +13,21 @@ export const EXPOSED_API_REGISTRY_CONTEXT_SCOPE = 'exposedApi';
 /** Contract version declared for the Registry interface. */
 export const EXPOSED_API_REGISTRY_CONTRACT_VERSION = '1.0.0';
 
-/** Methods declared for the Registry interface. */
-export const EXPOSED_API_REGISTRY_CONTRACT_METHODS = [
-  'registerApi',
-  'resolve',
-  'resolveWithMetadata',
-  'scopeOf',
-  'closeRegistration',
-  'isRegistrationOpen',
-  'registeredApiNames',
-  'registeredApiIdentities',
-] as const;
+/**
+ * Methods declared for the Registry interface.
+ *
+ * `resolve` is open to every participant. `register` is kernel-only: the
+ * kernel calls it during admission, and it is never part of the view a
+ * participant receives.
+ */
+export const EXPOSED_API_REGISTRY_CONTRACT_METHODS = ['register', 'resolve'] as const;
 
 /**
  * Optional context field holding the absolute protected scope-record path.
  *
- * Hosts that need cross-boot scope persistence supply this path. When it is
- * absent the registry keeps the scope record in memory for one boot.
+ * This is the registry's own field, declared in its own namespace. Hosts that
+ * need cross-boot scope persistence supply it. When it is absent the registry
+ * keeps the scope record in memory for one boot.
  */
 export const EXPOSED_API_SCOPE_RECORD_PATH_FIELD = 'exposedApi.scopeRecord.path';
 
@@ -37,12 +35,9 @@ export const EXPOSED_API_SCOPE_RECORD_PATH_FIELD = 'exposedApi.scopeRecord.path'
 export interface ExposedApiRegistryDescriptorOptions {
   /** Absolute scope-record path used instead of the context field. */
   readonly scopeRecordPath?: string;
-
-  /** Observation hook used by the standard composition. */
-  readonly onConstruct?: (service: ExposedApiRegistryService) => void;
 }
 
-/** Reads an optional non-empty string from the context bag. */
+/** Reads an optional non-empty string from the registry's own context field. */
 function optionalContextString(
   options: Readonly<Record<string, unknown>>,
   field: string,
@@ -53,13 +48,14 @@ function optionalContextString(
 }
 
 /**
- * Builds the `brud.core.exposedApiRegistry` descriptor.
+ * Builds the resolution primitive's descriptor.
  *
- * The Registry has no service dependencies. Every service declares its
- * exposures during the standard kernel's boot pinner, while the broker gate is
- * suspended and before `RUNNING`.
+ * The descriptor carries no caller list and no access policy of its own:
+ * `resolve` is open to every participant, and the projection hands every
+ * caller only `resolve`. Registration is reachable only by the kernel, which
+ * holds the instance during admission.
  *
- * @param options - Construction observation hook and storage override.
+ * @param options - Storage override.
  */
 export function createExposedApiRegistryDescriptor(
   options?: ExposedApiRegistryDescriptorOptions,
@@ -68,30 +64,19 @@ export function createExposedApiRegistryDescriptor(
     token: ExposedApiRegistryToken,
     tier: EXPOSED_API_REGISTRY_SERVICE_TIER,
     dependencies: [],
-    accessPolicy: {
-      allowedCallers: ['kernel', 'PluginManager', 'brud.host.daemon'],
-    },
     contract: {
       version: EXPOSED_API_REGISTRY_CONTRACT_VERSION,
       methods: EXPOSED_API_REGISTRY_CONTRACT_METHODS,
     },
-    factory: (context, broker): ExposedApiRegistryService => {
+    factory: (context): ExposedApiRegistryService => {
       const scopeRecordPath = options?.scopeRecordPath
         ?? optionalContextString(context.options, EXPOSED_API_SCOPE_RECORD_PATH_FIELD);
-      const service = new ExposedApiRegistryService({
-        broker,
-        callerContext: {
-          callerId: ExposedApiRegistryToken.id,
-          tier: 'core',
-          options: context.options,
-        },
-        ...(scopeRecordPath === undefined ? {} : { scopeRecordPath }),
-      });
 
-      options?.onConstruct?.(service);
-
-      return service;
+      return new ExposedApiRegistryService(
+        scopeRecordPath === undefined ? {} : { scopeRecordPath },
+      );
     },
+    project: (instance): IExposedApiRegistry => instance.publicView,
   };
 }
 

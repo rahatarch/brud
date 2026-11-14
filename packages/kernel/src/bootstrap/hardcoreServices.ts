@@ -1,3 +1,5 @@
+import type { KernelCallAuthority } from '../contracts/callChain.js';
+import type { ExposureDeclaration } from '../contracts/manifest.js';
 import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /**
@@ -21,13 +23,13 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '2fa8cbf99d6e71f1652a1c999f73f7f859d031562baa27786262e4f05b34cfcb';
+  'b0368e85f16e05b5470c0bcce129364a9bd4af02f58e654df3cfa78da48a1b70';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  'e412d87d4d936f49eb1419307a0545604b32500b3b1131bce63d0ec7dccf5a4f';
+  '4d18d1444b7b245f2c63a59d212177fe4c18046dd7e9e609ad7c023ffa5bf4ac';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
@@ -40,12 +42,17 @@ interface IdentityBootBinding {
 
 /** Structural surface the identity registry's boot hook calls. */
 interface IdentityBootSurface {
-  issue(binding: IdentityBootBinding): unknown;
+  issue(binding: IdentityBootBinding): { readonly token: string };
 }
 
 /** Structural surface the exposed API registry's boot hook calls. */
 interface ExposedApiBootSurface {
-  closeRegistration(): void;
+  attachKernel(
+    authority: KernelCallAuthority,
+    ownerPins: Readonly<Record<string, string>>,
+  ): void;
+  register(owner: string, declaration: ExposureDeclaration): void;
+  seal(): void;
 }
 
 /** Narrows an instance to the identity registry's boot surface. */
@@ -66,7 +73,9 @@ function asExposedApiBootSurface(instance: unknown, token: string): ExposedApiBo
   if (
     instance === null
     || typeof instance !== 'object'
-    || typeof (instance as { readonly closeRegistration?: unknown }).closeRegistration !== 'function'
+    || typeof (instance as { readonly attachKernel?: unknown }).attachKernel !== 'function'
+    || typeof (instance as { readonly register?: unknown }).register !== 'function'
+    || typeof (instance as { readonly seal?: unknown }).seal !== 'function'
   ) {
     throw new TypeError(`Hardcore service "${token}" does not expose its declared boot surface`);
   }
@@ -83,12 +92,13 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     contractVersion: '1.0.0',
     contractInterface: ['issue', 'resolve', 'retire', 'revoke'],
     // Records one provisional binding per composed participant while the
-    // registry is still mutable.
+    // registry is still mutable, and records the issued token as that
+    // participant's kernel identity.
     boot: (instance: unknown, context: HardcoreBootContext): void => {
       const registry = asIdentityBootSurface(instance, context.token);
 
       for (const entry of context.composition) {
-        registry.issue({
+        const record = registry.issue({
           publisher: entry.token,
           contentHash: entry.contentHash,
           metadata: Object.freeze({
@@ -98,6 +108,8 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
             provisional: true,
           }),
         });
+
+        context.recordIdentity(entry.token, record.token);
       }
     },
   },
@@ -106,21 +118,35 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     expectedContentHash: EXPOSED_API_REGISTRY_SOURCE_HASH,
     expectedBuiltContentHash: EXPOSED_API_REGISTRY_BUILT_HASH,
     contractVersion: '1.0.0',
-    contractInterface: [
-      'registerApi',
-      'resolve',
-      'resolveWithMetadata',
-      'scopeOf',
-      'closeRegistration',
-      'isRegistrationOpen',
-      'registeredApiNames',
-      'registeredApiIdentities',
-    ],
-    // Seals the boot registration window before RUNNING. Sealing is
-    // idempotent, so a composition whose registrant pass already sealed the
-    // window observes no change.
+    contractInterface: ['register', 'resolve'],
+    // Admission. Attaches the kernel's call authority and the composition's
+    // name pins, registers every exposure each participant's manifest declares
+    // under that participant's kernel identity, and seals the window before
+    // any composed participant is constructed.
     boot: (instance: unknown, context: HardcoreBootContext): void => {
-      asExposedApiBootSurface(instance, context.token).closeRegistration();
+      const registry = asExposedApiBootSurface(instance, context.token);
+
+      registry.attachKernel(context.authority, context.config.exposureOwners ?? {});
+
+      for (const entry of context.composition) {
+        if (entry.manifest.exposures.length === 0) {
+          continue;
+        }
+
+        const owner = context.identityOf(entry.token);
+
+        if (owner === undefined) {
+          throw new TypeError(
+            `Participant "${entry.token}" declares exposures but has no kernel identity`,
+          );
+        }
+
+        for (const declaration of entry.manifest.exposures) {
+          registry.register(owner, declaration);
+        }
+      }
+
+      registry.seal();
     },
   },
 ];

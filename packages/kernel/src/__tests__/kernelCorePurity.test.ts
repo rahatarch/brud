@@ -289,10 +289,6 @@ describe('kernel core purity', () => {
 
   it('keeps core boot options and the service module context generic', async () => {
     const bootTypes = await readFile(join(SOURCE_ROOT, 'bootstrap', 'bootTypes.ts'), 'utf8');
-    const standardKernel = await readFile(
-      join(SOURCE_ROOT, 'bootstrap', 'createStandardKernel.ts'),
-      'utf8',
-    );
     const kernelContract = await readFile(
       join(SOURCE_ROOT, 'contracts', 'kernel.ts'),
       'utf8',
@@ -314,11 +310,6 @@ describe('kernel core purity', () => {
       'KernelBootOptions must contain only the generic options bag and a logger',
     );
     assert.deepEqual(
-      [...interfacePropertyNames(standardKernel, 'CreateStandardKernelOptions')].sort(),
-      [],
-      'CreateStandardKernelOptions must not name service or plugin concepts',
-    );
-    assert.deepEqual(
       [...interfacePropertyNames(bootTypes, 'KernelServiceModuleContext')].sort(),
       ['logger', 'options', 'shared'],
       'KernelServiceModuleContext must contain only options, logger, and shared',
@@ -331,11 +322,10 @@ describe('kernel core purity', () => {
 
     const leaked: string[] = [];
 
-    for (const source of [bootTypes, standardKernel, kernelContract]) {
+    for (const source of [bootTypes, kernelContract]) {
       for (const interfaceName of [
         'BootKernelOptions',
         'ComposeKernelOptions',
-        'CreateStandardKernelOptions',
         'KernelBootOptions',
         'KernelServiceModuleContext',
       ]) {

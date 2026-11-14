@@ -1,5 +1,6 @@
 import type { IKernelAccessBroker } from './accessBroker.js';
 import type { IServiceLifecycle, ServiceContext, ServiceTier } from './lifecycle.js';
+import type { ParticipantManifest } from './manifest.js';
 import type { ServiceAccessPolicy } from './policy.js';
 import type { ServiceToken } from './serviceToken.js';
 
@@ -47,6 +48,14 @@ export interface ServiceDescriptor<TService, TInternal extends TService = TServi
    * a declared contract on the services it names.
    */
   readonly contract?: ServiceContractDeclaration;
+
+  /**
+   * Declarative manifest: what the participant requests and which exposures
+   * it gives, with their scopes and policies.
+   *
+   * Data only. The kernel admits it at boot without invoking {@link factory}.
+   */
+  readonly manifest?: ParticipantManifest;
 
   /**
    * Builds the service instance.

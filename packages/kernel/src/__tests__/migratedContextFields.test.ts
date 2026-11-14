@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import { ContextContractError } from '../contracts/contextContract.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import { createServiceToken } from '../contracts/serviceToken.js';

@@ -4,11 +4,15 @@ import {
   EXPOSED_API_SCOPE_RECORD_PATH_FIELD,
   createExposedApiRegistryDescriptor,
 } from './descriptor/ExposedApiRegistryDescriptor.js';
-import type { IExposedApiRegistry } from './contracts/IExposedApiRegistry.js';
-import { isExposedApiRegistrant } from './contracts/registrant.js';
 
-const REGISTRY_SLOT = 'brud.core.exposedApiRegistry.instance';
-
+/**
+ * Composes the resolution primitive through the standard service-module
+ * contract.
+ *
+ * The module declares only its own namespaced storage field. It publishes no
+ * instance: registration is the kernel's, during admission, and every
+ * participant reaches `resolve` through the access broker.
+ */
 export function createService(context: KernelServiceModuleContext) {
   context.declareContextFields(EXPOSED_API_REGISTRY_CONTEXT_SCOPE, [
     {
@@ -19,28 +23,5 @@ export function createService(context: KernelServiceModuleContext) {
     },
   ]);
 
-  return createExposedApiRegistryDescriptor({
-    onConstruct: (service) => {
-      context.shared[REGISTRY_SLOT] = service;
-    },
-  });
-}
-
-export function registerBootRegistrants(
-  context: KernelServiceModuleContext,
-  instances: readonly object[],
-): void {
-  const registry = context.shared[REGISTRY_SLOT] as IExposedApiRegistry | undefined;
-
-  if (registry === undefined) {
-    return;
-  }
-
-  for (const instance of instances) {
-    if (isExposedApiRegistrant(instance)) {
-      instance.registerWithApiRegistry(registry);
-    }
-  }
-
-  registry.closeRegistration();
+  return createExposedApiRegistryDescriptor();
 }

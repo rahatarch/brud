@@ -21,7 +21,7 @@ export interface BootKernelOptions {
   readonly logger?: KernelLogger;
 }
 
-/** Options accepted by {@link createDeferredKernel} and {@link createStandardKernel}. */
+/** Options accepted by {@link createDeferredKernel}. */
 export interface ComposeKernelOptions {
   /** Open options bag built by the host before boot. */
   readonly options?: Readonly<Record<string, unknown>>;
@@ -93,7 +93,9 @@ export interface KernelServiceModuleContext {
  * participant. The loader invokes them without knowing which service
  * implements them:
  * - `pinBootPolicies` ingests a boot snapshot while the broker gate is open.
- * - `registerBootRegistrants` claims kinds and exposes APIs before `RUNNING`.
+ * - `registerBootRegistrants` makes boot-time claims before `RUNNING`.
+ *   Exposures are not among them: they are declared in each participant's
+ *   manifest and admitted by the kernel.
  */
 export interface ServiceModule {
   /** Builds and returns this service's descriptor or descriptors. */

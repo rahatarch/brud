@@ -1,90 +1,46 @@
-import type { CapabilityToken } from '../../../src/contracts/capability.js';
-import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
-import type {
-  ExposedApiAccessContext,
-  ExposedApiIdentity,
-  ExposedApiRegistration,
-  ExposedApiResolved,
-  ExposedApiScope,
-  ExposedApiVersion,
-} from './types.js';
+import type { ExposureDeclaration } from '../../../src/contracts/manifest.js';
+import type { ExposedApiResolveOptions } from './types.js';
 
 /**
- * Level-1 exposed API registry.
+ * The resolution primitive, as every participant sees it.
  *
- * The Registry is a dumb store: it maps a versioned API identity to
- * `(token, capability, projection)` entries and resolves matching projections
- * through the access broker. It checks the declared scope against the call
- * chain's root origin and returns the stored policy with the resolved handle.
- * It never interprets a capability, a projection, or a policy; those belong to
- * the declaring service and its giver.
+ * `resolve` is open to every participant in the composition. It takes no
+ * caller list and applies no policy of its own: it reads the caller and the
+ * chain's root origin from the kernel-provided execution context and evaluates
+ * the giver's declared Layer 1 policy.
  */
 export interface IExposedApiRegistry {
   /**
-   * Declares an exposed API for a registered service.
+   * Resolves an exposure for the current caller.
    *
-   * The same service may add multiple capability entries for one identity.
-   * A different service claiming the same `(name, version)` is a collision.
-   * A different version is a different identity and may be claimed separately.
+   * Layer 1 is evaluated here, to decide whether the caller may see the
+   * exposure, and again on every use of the returned handle, against the root
+   * origin of the chain using it. A handle is a reference, not a grant.
    *
-   * @param name - Stable API name.
-   * @param token - Service token resolved at dispatch time.
-   * @param registration - Capability, version, scope, policy, projection, and
-   * optional combiner.
+   * A caller the policy does not permit receives exactly what it would receive
+   * for an exposure that does not exist: `null`. The detailed reason goes to
+   * the kernel's observation stream.
+   *
+   * @param name - Exposure name.
+   * @param options - Version and expected owner identity.
+   * @returns The handle, or `null`.
    */
-  registerApi<TService>(
-    name: string,
-    token: ServiceToken<TService>,
-    registration: ExposedApiRegistration,
-  ): void;
+  resolve<T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null;
+}
 
+/**
+ * Registration, as only the kernel sees it.
+ *
+ * The kernel calls `register` during admission, on each participant's behalf,
+ * from that participant's manifest. It is never part of the view a participant
+ * receives, and it is refused for everyone once the boot window seals.
+ */
+export interface IExposedApiAdmission {
   /**
-   * Resolves the projection a caller may reach for one API identity.
+   * Registers one declared exposure for its owner.
    *
-   * @param name - API name.
-   * @param callerCapabilities - Capabilities the caller declared.
-   * @param access - Broker identity, official context, and root
-   * origin.
-   * @param version - API version; defaults to major version 1.
-   * @returns The projection, a combined projection, or `null` when the origin
-   * or capability is refused.
+   * @param owner - Kernel-issued identity token of the declaring participant.
+   * @param declaration - The exposure exactly as the manifest declares it.
    */
-  resolve<T = unknown>(
-    name: string,
-    callerCapabilities: Iterable<CapabilityToken>,
-    access?: ExposedApiAccessContext,
-    version?: ExposedApiVersion,
-  ): T | null;
-
-  /**
-   * Resolves the projection together with its stored declaration.
-   *
-   * @param name - API name.
-   * @param callerCapabilities - Capabilities the caller declared.
-   * @param access - Broker identity, official context, and root
-   * origin.
-   * @param version - API version; defaults to major version 1.
-   * @returns The resolved handle, scope, and policy, or `null`.
-   */
-  resolveWithMetadata<T = unknown>(
-    name: string,
-    callerCapabilities: Iterable<CapabilityToken>,
-    access?: ExposedApiAccessContext,
-    version?: ExposedApiVersion,
-  ): ExposedApiResolved<T> | null;
-
-  /** Returns the recorded scope for one identity, or `null` when unknown. */
-  scopeOf(name: string, version?: ExposedApiVersion): ExposedApiScope | null;
-
-  /** Seals the boot registration window. Idempotent. */
-  closeRegistration(): void;
-
-  /** Whether new exposures may still be registered. */
-  isRegistrationOpen(): boolean;
-
-  /** Registered API names in first-registration order. */
-  registeredApiNames(): readonly string[];
-
-  /** Registered versioned identities in first-registration order. */
-  registeredApiIdentities(): readonly ExposedApiIdentity[];
+  register(owner: string, declaration: ExposureDeclaration): void;
 }

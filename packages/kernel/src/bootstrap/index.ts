@@ -3,6 +3,7 @@ export {
   createDeferredKernel,
 } from './bootKernelInternal.js';
 export {
+  HardcoreIdentityError,
   HardcoreServiceError,
   buildHardcoreBootEntries,
   computePackageContentHash,
@@ -24,10 +25,6 @@ export {
   HARDCORE_SERVICES,
   isHardcoreToken,
 } from './hardcoreServices.js';
-export {
-  createStandardKernel,
-  type CreateStandardKernelOptions,
-} from './createStandardKernel.js';
 export type {
   BootKernelOptions,
   ComposeKernelOptions,

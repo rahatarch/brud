@@ -17,6 +17,35 @@ import { KernelAccessBroker } from './KernelAccessBroker.js';
 import { topologicalSort } from './dag.js';
 import { LifecycleStateError } from './errors.js';
 import type { KernelLifecycleState } from './state.js';
+import type {
+  CallOrigin,
+  KernelCallAuthority,
+  KernelCallLimits,
+  KernelCaller,
+  KernelHostSession,
+  KernelObservation,
+} from '../contracts/callChain.js';
+import {
+  KERNEL_CALLER,
+  KernelCallChain,
+  UNIDENTIFIED_PARTICIPANT,
+  type ChainParticipant,
+} from './callChain.js';
+
+/**
+ * Runs the compiled hardcore boot calls.
+ *
+ * Called once, after the hardcore partition initializes and before any
+ * composed participant is constructed. Returns every admitted participant
+ * with the caller the kernel records for it.
+ */
+export type HardcoreBootCall = (
+  instances: readonly {
+    readonly tokenId: string;
+    readonly instance: IServiceLifecycle;
+  }[],
+  authority: KernelCallAuthority,
+) => readonly ChainParticipant[] | void | Promise<readonly ChainParticipant[] | void>;
 
 /**
  * Planned: the operation dispatch surface is a universal kernel primitive.
@@ -84,13 +113,10 @@ export class BrudKernel implements IBrudKernel {
    */
   private bootOptions: Readonly<Record<string, unknown>> = {};
   private readonly bootPinner: ((instances: readonly IServiceLifecycle[]) => Promise<void>) | undefined;
-  private readonly bootHardcore:
-    | ((instances: readonly {
-      readonly tokenId: string;
-      readonly instance: IServiceLifecycle;
-    }[]) => Promise<void> | void)
-    | undefined;
+  private readonly bootHardcore: HardcoreBootCall | undefined;
   private readonly contextContract: ContextContract | undefined;
+  /** The kernel's call chain: origins, callers, limits, and observations. */
+  private readonly calls: KernelCallChain;
   /**
    * Tokens the compiled hardcore list supplies to the boot loader.
    *
@@ -102,12 +128,10 @@ export class BrudKernel implements IBrudKernel {
   constructor(options?: {
     maxCallDepth?: number;
     bootPinner?: (instances: readonly IServiceLifecycle[]) => Promise<void>;
-    bootHardcore?: (instances: readonly {
-      readonly tokenId: string;
-      readonly instance: IServiceLifecycle;
-    }[]) => Promise<void> | void;
+    bootHardcore?: HardcoreBootCall;
     contextContract?: ContextContract;
     hardcoreTokens?: readonly string[];
+    callLimits?: KernelCallLimits;
   }) {
     this.bootPinner = options?.bootPinner;
     this.bootHardcore = options?.bootHardcore;
@@ -119,6 +143,60 @@ export class BrudKernel implements IBrudKernel {
     this.maxCallDepth = options?.maxCallDepth ?? 5;
     this.registry = new KernelRegistry();
     this.accessBroker = new KernelAccessBroker(this.registry, () => this.state);
+    this.calls = new KernelCallChain(
+      (tokenId) => this.registry.getInstance(tokenId),
+      options?.callLimits,
+    );
+  }
+
+  /**
+   * Runs an operation inside a host-origin call chain.
+   *
+   * @param session - The host session's declaration.
+   * @param operation - Work performed inside the chain.
+   */
+  runHostCall<T>(session: KernelHostSession, operation: () => T): T {
+    return this.calls.runHost(session, operation);
+  }
+
+  /** Reads the kernel's observation stream. Only the kernel's holder can. */
+  readObservations(): readonly KernelObservation[] {
+    return this.calls.observations();
+  }
+
+  /**
+   * Appends one record to the observation stream.
+   *
+   * Used by the kernel's own boot loader; participants never hold the kernel.
+   */
+  recordObservation(source: string, event: string, detail: Readonly<Record<string, unknown>>): void {
+    this.calls.observe(source, event, detail);
+  }
+
+  /**
+   * The root origin and caller under which the kernel runs one service's
+   * lifecycle work.
+   *
+   * A hardcore service is the kernel's own root primitive and runs in a
+   * kernel-origin chain. Every other participant runs in a runtime-origin chain
+   * as itself.
+   */
+  private frameFor(tokenId: string): { readonly origin: CallOrigin; readonly caller: KernelCaller } {
+    if (this.hardcoreTokens.has(tokenId)) {
+      return { origin: 'kernel', caller: KERNEL_CALLER };
+    }
+
+    return {
+      origin: 'runtime',
+      caller: this.calls.callerForToken(tokenId) ?? UNIDENTIFIED_PARTICIPANT,
+    };
+  }
+
+  /** Runs one service's lifecycle work inside its own frame. */
+  private runFor<T>(tokenId: string, operation: () => T): T {
+    const frame = this.frameFor(tokenId);
+
+    return this.calls.runRoot(frame.origin, frame.caller, operation);
   }
 
   get lifecycleState(): KernelLifecycleState {
@@ -171,50 +249,74 @@ export class BrudKernel implements IBrudKernel {
         }
       }
 
-      const initOrder = [...hardcoreOrder, ...composedOrder];
-
       this.initializedServices.length = 0;
       this.bootOptions = options.options ?? {};
 
-      for (const descriptor of initOrder) {
-        const context: ServiceContext = {
-          callerId: 'kernel',
-          tier: descriptor.tier,
-          options: this.bootOptions,
-          ...(options.logger === undefined ? {} : { logger: options.logger }),
-        };
+      const construct = async (descriptor: ServiceDescriptor<unknown>): Promise<void> => {
+        await this.runFor(descriptor.token.id, async (): Promise<void> => {
+          const context: ServiceContext = {
+            callerId: 'kernel',
+            tier: descriptor.tier,
+            options: this.bootOptions,
+            ...(options.logger === undefined ? {} : { logger: options.logger }),
+          };
 
-        const instance = descriptor.factory(context, this.accessBroker);
-        this.registry.setInstance(descriptor.token.id, instance);
+          const instance = descriptor.factory(context, this.accessBroker);
+          this.registry.setInstance(descriptor.token.id, instance);
 
-        if (typeof instance.initialize === 'function') {
-          await instance.initialize(this.accessBroker);
-        }
+          if (typeof instance.initialize === 'function') {
+            await instance.initialize(this.accessBroker);
+          }
 
-        this.initializedServices.push({ tokenId: descriptor.token.id, instance });
-      }
-
-      // Boot snapshot pinning. Services whose policy must be frozen from
-      // another service's state (validation) register a pinner; it runs here,
-      // while the broker's lifecycle gate is suspended for this one bounded
-      // operation, so the frozen policy exists before any caller can resolve
-      // the token. The hook is a no-op when no pinner was registered.
-      const pinner = this.bootPinner;
-      if (pinner !== undefined) {
-        await this.accessBroker.withLifecycleGateSuspended(async (): Promise<void> => {
-          await pinner(this.initializedServices.map((entry) => entry.instance));
+          this.initializedServices.push({ tokenId: descriptor.token.id, instance });
         });
+      };
+
+      for (const descriptor of hardcoreOrder) {
+        await construct(descriptor);
       }
 
-      // Hardcore boot calls run here, after every service is initialized and
-      // before the kernel enters RUNNING. A hardcore service is still mutable
-      // at this point; its own onRunning hook closes the window.
+      // Admission. The hardcore boot calls run once the hardcore partition is
+      // initialized and before any composed participant is constructed. They
+      // record each participant's identity, admit each participant's declared
+      // exposures from its manifest, and seal the registration window. No
+      // participant code has run yet.
       const hardcore = this.bootHardcore;
       if (hardcore !== undefined) {
-        await hardcore(this.initializedServices.map((entry) => ({
-          tokenId: entry.tokenId,
-          instance: entry.instance,
-        })));
+        const participants = await this.calls.runRoot(
+          'kernel',
+          KERNEL_CALLER,
+          () => hardcore(
+            this.initializedServices.map((entry) => ({
+              tokenId: entry.tokenId,
+              instance: entry.instance,
+            })),
+            this.calls,
+          ),
+        );
+
+        if (participants !== undefined) {
+          this.calls.admitParticipants(participants);
+        }
+      }
+
+      for (const descriptor of composedOrder) {
+        await construct(descriptor);
+      }
+
+      // Boot snapshot pinning. A module whose policy must be frozen from
+      // another participant's state registers a pinner; it runs here, while
+      // the broker's lifecycle gate is suspended for this one bounded
+      // operation, so the frozen policy exists before any caller can resolve
+      // the token. The hook is a no-op when no pinner was registered. Module
+      // hooks are participant code, so they run in a runtime-origin chain.
+      const pinner = this.bootPinner;
+      if (pinner !== undefined) {
+        await this.calls.runRoot('runtime', UNIDENTIFIED_PARTICIPANT, async (): Promise<void> => {
+          await this.accessBroker.withLifecycleGateSuspended(async (): Promise<void> => {
+            await pinner(this.initializedServices.map((entry) => entry.instance));
+          });
+        });
       }
 
       // The pin phase is the last point where a service may declare a field.
@@ -237,9 +339,9 @@ export class BrudKernel implements IBrudKernel {
     this.runningHooksPending = true;
 
     try {
-      for (const { instance } of this.initializedServices) {
+      for (const { tokenId, instance } of this.initializedServices) {
         if (typeof instance.onRunning === 'function') {
-          await instance.onRunning(this.accessBroker);
+          await this.runFor(tokenId, () => instance.onRunning?.(this.accessBroker));
         }
       }
     } catch (error: unknown) {
@@ -279,6 +381,7 @@ export class BrudKernel implements IBrudKernel {
     }
 
     this.registry.clearInstances();
+    this.calls.clearParticipants();
     this.state = 'DISPOSED';
 
     if (firstError !== undefined) {
@@ -328,6 +431,7 @@ export class BrudKernel implements IBrudKernel {
     }
 
     this.registry.clearInstances();
+    this.calls.clearParticipants();
   }
 
   async execute<TInput, TOutput>(

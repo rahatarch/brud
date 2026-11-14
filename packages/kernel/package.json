@@ -12,10 +12,15 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "test": "node ../../scripts/run-kernel-tests.mjs",
-    "test:history-scale": "node --expose-gc --import tsx --test \"services/UniversalHistory/unified/__tests__/*.scale.ts\"",
-    "clean": "rimraf dist tsconfig.tsbuildinfo"
+    "build": "node scripts/clean.mjs && tsc",
+    "test": "node scripts/run-tests.mjs",
+    "clean": "node scripts/clean.mjs",
+    "prepack": "npm run build && node scripts/verify-dist.mjs"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "22.x",
+    "tsx": "^4.0.0",
+    "typescript": "^5.9.3"
+  }
 }

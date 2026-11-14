@@ -18,6 +18,9 @@ import {
 } from '../bootstrap/index.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { KernelAccessBroker } from '../engine/KernelAccessBroker.js';
+import { KernelCallChain } from '../engine/callChain.js';
+import { admitParticipantManifest } from '../contracts/manifest.js';
+import { parseBrudConfig } from '../bootstrap/config/parse.js';
 import { KernelRegistry } from '../engine/KernelRegistry.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
@@ -232,8 +235,8 @@ describe('hardcore mechanism boundary (BC-4)', () => {
       ['issue'],
     );
     assert.deepEqual(
-      serviceVocabularyIn('const sealed = (x) => x.closeRegistration();'),
-      ['closeRegistration'],
+      serviceVocabularyIn('const admitted = (x) => x.register(owner, declaration);'),
+      ['register'],
     );
     assert.deepEqual(
       serviceVocabularyIn("const token = 'brud.core.exposedApiRegistry';"),
@@ -302,12 +305,14 @@ describe('two real hardcore services through one generic mechanism', () => {
         path: 'kernel:serviceModules/identityRegistry.js',
         official: true,
         resolvedPath: IDENTITY_SHIM,
+        manifest: admitParticipantManifest(IdentityRegistryToken.id, identityDescriptor.manifest),
       },
       {
         descriptor: exposedApiDescriptor as unknown as ServiceDescriptor<unknown, unknown>,
         path: 'kernel:serviceModules/exposedApiRegistry.js',
         official: true,
         resolvedPath: EXPOSED_API_SHIM,
+        manifest: admitParticipantManifest(ExposedApiRegistryToken.id, exposedApiDescriptor.manifest),
       },
     ];
 
@@ -331,9 +336,9 @@ describe('two real hardcore services through one generic mechanism', () => {
     await exposedApi.initialize();
 
     try {
-      assert.equal(exposedApi.isRegistrationOpen(), true);
+      assert.equal(exposedApi.isSealed, false);
 
-      invokeHardcoreBootHooks(
+      const identities = invokeHardcoreBootHooks(
         HARDCORE_SERVICES,
         [
           { tokenId: IdentityRegistryToken.id, instance: identity },
@@ -341,10 +346,19 @@ describe('two real hardcore services through one generic mechanism', () => {
         ],
         packageHashes,
         composition,
+        parseBrudConfig(readFileSync(KERNEL_CONFIG_PATH, 'utf8'), KERNEL_CONFIG_PATH),
+        new KernelCallChain(() => undefined),
       );
 
-      // The exposed API registry's own hook sealed its own window.
-      assert.equal(exposedApi.isRegistrationOpen(), false);
+      // The exposed API registry's own hook admitted and sealed its own window.
+      assert.equal(exposedApi.isSealed, true);
+
+      // The identity registry's own hook recorded one kernel identity per
+      // participant, visible to every later hook through the mechanism.
+      assert.deepEqual(
+        [...identities.keys()].sort(),
+        [ExposedApiRegistryToken.id, IdentityRegistryToken.id].sort(),
+      );
 
       // The identity registry's own hook recorded one binding per participant,
       // each carrying the verified package digest the mechanism supplied.
@@ -354,6 +368,7 @@ describe('two real hardcore services through one generic mechanism', () => {
       const byPublisher = new Map(records.map((record) => [record.publisher, record]));
 
       assert.equal(records.length, 2);
+      assert.equal(identities.get(IdentityRegistryToken.id), byPublisher.get(IdentityRegistryToken.id)?.token);
       assert.equal(
         byPublisher.get(IdentityRegistryToken.id)?.contentHash,
         identityEntry.expectedContentHash,
@@ -402,7 +417,9 @@ describe('two real hardcore services through one generic mechanism', () => {
         ExposedApiRegistryToken,
       );
 
-      assert.equal(registry.isRegistrationOpen(), false);
+      // Registration is the kernel's alone: every caller's view is resolve.
+      assert.deepEqual(Object.keys(registry), ['resolve']);
+      assert.equal(kernel.runHostCall({}, () => registry.resolve('test.unregistered')), null);
 
       const records = loadIdentityRegistryStorage(storagePath).records;
       const exposedApiRecord = records.find(
@@ -417,13 +434,13 @@ describe('two real hardcore services through one generic mechanism', () => {
   });
 });
 
-/** Writes a composed fixture that declares one exposed API at boot. */
+/** Writes a composed fixture whose manifest declares one exposed API. */
 async function writeRegistrantModule(root: string): Promise<string> {
   const modulePath = join(root, 'persistence-registrant.mjs');
 
   await writeFile(modulePath, `const token = {
   id: 'test.hardcore.persistenceRegistrant',
-  description: 'Declares one exposed API at boot',
+  description: 'Declares one exposed API in its manifest',
   _brand: [],
 };
 
@@ -432,14 +449,14 @@ export function createService() {
     token,
     tier: 'userland',
     dependencies: [],
-    factory: () => ({
-      registerWithApiRegistry(registry) {
-        registry.registerApi('test.persistence.api', token, {
-          capability: 'test:read',
-          scope: 'runtime',
-        });
-      },
-    }),
+    manifest: {
+      exposures: [{
+        name: 'test.persistence.api',
+        scope: 'runtime',
+        policy: { policyVersion: 1, capabilities: ['test:read'] },
+      }],
+    },
+    factory: () => ({}),
   };
 }
 `, 'utf8');
@@ -539,12 +556,8 @@ describe('hardcore persistence independence (BC-6)', () => {
     const second = await bootOnce();
 
     try {
-      const registry = second.requestAccess<IExposedApiRegistry>(
-        { callerId: 'kernel', tier: 'core', options },
-        ExposedApiRegistryToken,
-      );
-
-      assert.equal(registry.scopeOf('test.persistence.api'), 'runtime');
+      // The reloaded record is the scope the second boot enforces.
+      assert.deepEqual(loadScopeRecord(scopeRecordPath), firstScope);
     } finally {
       await second.shutdown();
     }

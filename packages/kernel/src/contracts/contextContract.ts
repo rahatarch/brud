@@ -4,6 +4,11 @@
  * Services declare the fields they need from the host-supplied options bag.
  * The core builds one schema from those declarations, enforces it at the boot
  * and runtime boundaries, and never names a concrete field itself.
+ *
+ * Each participant declares only its own fields under its own namespace and
+ * reads only its own fields. The bag is owner-namespaced and opaque to the
+ * kernel core, and no kernel code synthesizes a context field. Secrets never
+ * travel in the bag: every participant constructed by the kernel receives it.
  */
 
 /** Primitive types the contract understands. */
@@ -383,6 +388,55 @@ export class ContextContract {
             actualType: describeValueType(value),
           },
         );
+      }
+    }
+  }
+
+  /**
+   * Lists, per declaring owner, the required fields the bag does not carry.
+   *
+   * @param options - Host-supplied values.
+   * @returns Owner id mapped to its missing required field names.
+   */
+  missingRequiredByOwner(
+    options: Readonly<Record<string, unknown>>,
+  ): ReadonlyMap<string, readonly string[]> {
+    const missing = new Map<string, string[]>();
+
+    for (const field of this.fields.values()) {
+      if (field.required && options[field.name] === undefined) {
+        const names = missing.get(field.ownerId) ?? [];
+        names.push(field.name);
+        missing.set(field.ownerId, names);
+      }
+    }
+
+    return missing;
+  }
+
+  /**
+   * Withdraws every declaration one owner made.
+   *
+   * Used when admission prunes an optional participant before boot.
+   *
+   * @param ownerId - Stable identity of the declaring module.
+   */
+  withdraw(ownerId: string): void {
+    if (this.locked) {
+      throw new ContextContractError(
+        'Context contract is locked; declarations cannot be withdrawn after the kernel reached RUNNING.',
+      );
+    }
+
+    for (const [name, field] of [...this.fields]) {
+      if (field.ownerId === ownerId) {
+        this.fields.delete(name);
+      }
+    }
+
+    for (const [scope, owner] of [...this.owners]) {
+      if (owner === ownerId) {
+        this.owners.delete(scope);
       }
     }
   }

@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from '../support/standardKernel.js';
 import type { ServiceContext } from '../../contracts/lifecycle.js';
 import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
 import { DurableNodeStorageDriver } from '../../../../services/BrudFileSystem/drivers/DurableNodeStorageDriver.js';

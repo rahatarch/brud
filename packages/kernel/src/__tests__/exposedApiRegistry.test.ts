@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import type {
   IServiceLifecycle,
   ServiceContext,

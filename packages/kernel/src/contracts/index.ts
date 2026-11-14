@@ -24,6 +24,33 @@ export type {
 
 export type { KernelBootOptions, IBrudKernel } from './kernel.js';
 
+export type {
+  CallOrigin,
+  CallerClass,
+  KernelCallAuthority,
+  KernelCallContext,
+  KernelCallLimits,
+  KernelCaller,
+  KernelHostSession,
+  KernelObservation,
+} from './callChain.js';
+export {
+  CALLER_CLASSES,
+  CALL_ORIGINS,
+  DEFAULT_KERNEL_CALL_LIMITS,
+} from './callChain.js';
+
+export type {
+  AdmittedManifest,
+  ExposureDeclaration,
+  ParticipantManifest,
+  ParticipantRequests,
+} from './manifest.js';
+export {
+  ParticipantManifestError,
+  admitParticipantManifest,
+} from './manifest.js';
+
 export type { Token } from './container.js';
 export { createToken } from './container.js';
 export type { IServiceContainer } from './container.js';

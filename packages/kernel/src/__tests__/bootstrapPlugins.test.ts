@@ -29,7 +29,7 @@ import { UniversalHistoryToken } from '../../../services/UniversalHistory/descri
 import type { NamespaceHistoryHandle } from '../../../services/UniversalHistory/unified/service/types.js';
 import { CORE_API_NAME, lastProjectionWins } from '../../services/ExposedApiRegistry/contracts/index.js';
 import { ReadOnlyFacade } from '../../../services/BrudFileSystem/projection/index.js';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import { createSeededApiRegistryDescriptor, createTestApiRegistry, MapServiceBroker } from './support/testApiRegistry.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';

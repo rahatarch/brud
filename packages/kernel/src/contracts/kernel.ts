@@ -1,4 +1,5 @@
 import type { IKernelAccessBroker } from './accessBroker.js';
+import type { KernelHostSession, KernelObservation } from './callChain.js';
 import type { ContextSchema } from './contextContract.js';
 import type { KernelLogger } from './lifecycle.js';
 import type { ServiceDescriptor } from './serviceDescriptor.js';
@@ -42,8 +43,27 @@ export interface IBrudKernel extends IKernelAccessBroker {
   /**
    * Validates an options bag against the locked context schema.
    *
-   * Used by hosts that build a fresh context after boot, such as a daemon
-   * attaching a client session.
+   * Used by hosts that build a fresh context after boot.
    */
   validateContextOptions(options: Readonly<Record<string, unknown>>): void;
+
+  /**
+   * Runs an operation inside a host-origin call chain.
+   *
+   * This is the only way a chain gets the `host` origin. It is a method of the
+   * kernel object, which only the host holds; a participant receives the access
+   * broker, never the kernel. The host calls it from its authenticated session.
+   *
+   * @param session - The host session's declaration.
+   * @param operation - Work performed inside the host-origin chain.
+   */
+  runHostCall<T>(session: KernelHostSession, operation: () => T): T;
+
+  /**
+   * Reads the kernel's observation stream.
+   *
+   * Detailed denial reasons are recorded here, never returned to the refused
+   * caller. Only the holder of the kernel object can read the stream.
+   */
+  readObservations(): readonly KernelObservation[];
 }

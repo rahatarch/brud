@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import { ContextContractError } from '../contracts/contextContract.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 

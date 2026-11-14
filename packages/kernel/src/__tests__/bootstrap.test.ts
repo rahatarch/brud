@@ -7,7 +7,7 @@ import { DurableNodeStorageDriver } from '../../../services/BrudFileSystem/drive
 import { FileSystemToken } from '../../../services/BrudFileSystem/descriptor/tokens.js';
 import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import { UniversalHistoryToken } from '../../../services/UniversalHistory/descriptor/tokens.js';
-import { createStandardKernel } from '../bootstrap/index.js';
+import { createStandardKernel } from './support/standardKernel.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';

@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from './standardKernel.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
 import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
 import { workspaceContextOptions } from './workspaceContext.js';

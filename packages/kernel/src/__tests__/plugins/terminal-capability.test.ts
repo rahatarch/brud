@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '../../bootstrap/index.js';
+import { createStandardKernel } from '../support/standardKernel.js';
 import type { BrudKernel } from '../../engine/BrudKernel.js';
 import type {
   IBrudPlugin,
