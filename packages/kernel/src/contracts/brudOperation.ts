@@ -1,23 +1,12 @@
 /**
- * Shared operation-kind vocabulary for the `[BRUD]` Parser and Router.
+ * Operation-kind mechanism.
  *
- * The Parser emits a `kind` for every operation; the Router accepts boot-time
- * registrations keyed by the same value. Both services import this module so
- * the vocabulary cannot drift between them.
- *
- * The type is open by design: a future Level-1 peer may claim a new kind at
- * boot. Only the two built-ins are recognised by the current wire grammar's
- * shorthand form.
+ * An operation kind is an open, shape-validated token. Any participant may
+ * claim a kind and any participant may emit one. The kernel defines only the
+ * token's shape; it does not define which kinds exist, which kind is assumed
+ * when none is written, or which participant serves a kind. Concrete kind
+ * values belong to the participants that claim them.
  */
-
-/** Built-in kind served by `brud.core.tools`. */
-export const BRUD_KIND_TOOL = 'tool' as const;
-
-/** Built-in kind served by `brud.core.actions`. */
-export const BRUD_KIND_ACTION = 'action' as const;
-
-/** Kind assumed by a bare `[CALL <name>]` header, preserving v2 documents. */
-export const BRUD_DEFAULT_KIND = BRUD_KIND_TOOL;
 
 /** Open operation-kind identity. */
 export type BrudOperationKind = string;

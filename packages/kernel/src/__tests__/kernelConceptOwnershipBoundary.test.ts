@@ -729,6 +729,97 @@ export function dormantReintroductionViolations(
 }
 
 /**
+ * The universal operation-kind mechanism (R-05).
+ *
+ * These are the only declarations the kernel's kind vocabulary exports: the
+ * open kind identity, the token shape, and its validator.
+ */
+const KIND_MECHANISM_EXPORTS: readonly string[] = [
+  'BRUD_KIND_PATTERN',
+  'BrudOperationKind',
+  'isValidBrudKind',
+].sort();
+
+/**
+ * Officials' kind values and the built-in kind type that named them.
+ *
+ * They belong to the services that claim them (R-05), not to the kernel.
+ */
+const OFFICIAL_KIND_DECLARATIONS: readonly string[] = [
+  'BRUD_DEFAULT_KIND',
+  'BRUD_KIND_ACTION',
+  'BRUD_KIND_TOOL',
+  'BrudBuiltInKind',
+];
+
+/** A dotted service token or caller identifier, such as `owner.area.name`. */
+const DOTTED_PARTICIPANT_IDENTIFIER = /\b[a-z][\w-]+(?:\.[a-z][\w-]+)+\b/iu;
+
+/**
+ * Returns every way the kernel's kind vocabulary carries more than the
+ * mechanism.
+ *
+ * The check is structural: any export outside the mechanism, any exported
+ * fixed kind value, any literal kind type, and any comment naming a
+ * participant or a dotted service token is a finding, including a value or
+ * service that has never existed.
+ */
+export function kindVocabularyViolations(source: string): readonly string[] {
+  const file = ts.createSourceFile(
+    'brudOperation.ts',
+    source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const violations = new Set<string>();
+
+  for (const name of exportedDeclarationNames(source)) {
+    if (!KIND_MECHANISM_EXPORTS.includes(name)) {
+      violations.add(`export:${name}`);
+    }
+  }
+
+  const containsLiteralType = (node: ts.Node): boolean => {
+    if (ts.isLiteralTypeNode(node)) {
+      return true;
+    }
+
+    return ts.forEachChild(node, containsLiteralType) ?? false;
+  };
+
+  for (const statement of file.statements) {
+    const exported = statement.modifiers?.some(
+      (modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
+    ) ?? false;
+
+    if (!exported) {
+      continue;
+    }
+
+    if (ts.isTypeAliasDeclaration(statement) && containsLiteralType(statement.type)) {
+      violations.add(`literalType:${statement.name.text}`);
+    }
+  }
+
+  for (const declaration of exportedDeclarationsWithComments('brudOperation.ts', source)) {
+    for (const value of declaration.stringValues) {
+      violations.add(`value:${declaration.name}=${value}`);
+    }
+  }
+
+  for (const comment of commentsInSource(source)) {
+    const text = comment.replace(/\s+/gu, ' ').trim();
+
+    if (participantShapingText(text) || DOTTED_PARTICIPANT_IDENTIFIER.test(text)) {
+      violations.add(`comment:${text}`);
+    }
+  }
+
+  return [...violations].sort();
+}
+
+/**
  * The only named fields a kernel boot options type may declare.
  *
  * The kernel owns the host-supplied options bag and the logger. Every other
@@ -985,8 +1076,6 @@ const KNOWN_EXPORT_PARTICIPANT_FINDINGS = new Set<string>([
   'services/ExposedApiRegistry/contracts/types.ts:ExposedApiCaller.subjectId: comment',
   'services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.ts:deriveExposedApiOrigin: comment',
   'src/bootstrap/config/types.ts:BrudConfigEntry.official: comment',
-  'src/contracts/brudOperation.ts:BRUD_KIND_ACTION: comment',
-  'src/contracts/brudOperation.ts:BRUD_KIND_TOOL: comment',
   'src/contracts/handler.ts:PluginMetadata: name',
 ]);
 
@@ -1185,6 +1274,77 @@ describe('BC-8: no officialness on a descriptor and no removed dormant declarati
         'services/IdentityRegistry/serviceModule.ts:requireIdentityRegistry',
         'src/contracts/brudOperation.ts:BrudBuiltInKind',
         'src/contracts/container.ts:counter',
+      ],
+    );
+  });
+});
+
+describe('BC-9: the kernel kind vocabulary is the mechanism, not the officials\' values', () => {
+  it('exports no official kind value from the real package root', async () => {
+    const kernelModule = await import('../../index.js') as Record<string, unknown>;
+
+    for (const name of OFFICIAL_KIND_DECLARATIONS) {
+      assert.equal(
+        Object.prototype.hasOwnProperty.call(kernelModule, name),
+        false,
+        `the kernel package must not export ${name}`,
+      );
+    }
+
+    assert.equal(typeof kernelModule.isValidBrudKind, 'function');
+    assert.ok(kernelModule.BRUD_KIND_PATTERN instanceof RegExp);
+  });
+
+  it('keeps the open kind mechanism and no official kind name in the root exports', async () => {
+    const rootNames = await kernelRootExportNames();
+
+    assert.deepEqual(
+      OFFICIAL_KIND_DECLARATIONS.filter((name) => rootNames.has(name)),
+      [],
+    );
+    assert.deepEqual(
+      KIND_MECHANISM_EXPORTS.filter((name) => !rootNames.has(name)),
+      [],
+    );
+  });
+
+  it('carries only the mechanism and names no service in the real kind contract', async () => {
+    const source = await readFile(BRUD_OPERATION, 'utf8');
+
+    assert.deepEqual(kindVocabularyViolations(source), []);
+    assert.deepEqual([...exportedDeclarationNames(source)].sort(), KIND_MECHANISM_EXPORTS);
+  });
+
+  it('detects a reintroduced value, built-in type, and service-naming comment (guard canary)', () => {
+    assert.deepEqual(
+      kindVocabularyViolations([
+        '/** Shared kind vocabulary for the Parser and Router. */',
+        'export type BrudOperationKind = string;',
+        '/** Built-in kind served by `brud.core.tools`. */',
+        "export const BRUD_KIND_TOOL = 'tool' as const;",
+        "export type BrudBuiltInKind = 'tool' | 'action';",
+      ].join('\n')),
+      [
+        'comment:/** Built-in kind served by `brud.core.tools`. */',
+        'comment:/** Shared kind vocabulary for the Parser and Router. */',
+        'export:BRUD_KIND_TOOL',
+        'export:BrudBuiltInKind',
+        'literalType:BrudBuiltInKind',
+        'value:BRUD_KIND_TOOL=tool',
+      ],
+    );
+  });
+
+  it('fails on a kind value and service token the kernel has never seen (guard canary)', () => {
+    assert.deepEqual(
+      kindVocabularyViolations([
+        '/** Kind claimed by `acme.widgets`. */',
+        "export const ACME_WIDGET_KIND = 'widget';",
+      ].join('\n')),
+      [
+        'comment:/** Kind claimed by `acme.widgets`. */',
+        'export:ACME_WIDGET_KIND',
+        'value:ACME_WIDGET_KIND=widget',
       ],
     );
   });
