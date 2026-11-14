@@ -145,6 +145,24 @@ export interface KernelCallAuthority {
   instanceOf(identity: string): unknown;
 
   /**
+   * Starts a chain with the given origin and a participant's recorded caller.
+   *
+   * The caller is the participant the kernel admitted under `identity`; it is
+   * resolved from the same admission record {@link callerForIdentity} reads, so
+   * the frame carries the participant's kernel-issued identity and its parent
+   * relation exactly as the kernel recorded them. Unlike {@link runAs}, this
+   * member sets the chain's root origin and does not require an active chain.
+   * It composes what the kernel's own root-start and run-as paths do, without
+   * exposing either.
+   *
+   * @param origin - Root origin the new chain starts with.
+   * @param identity - Kernel-issued identity token of the participant.
+   * @param operation - Work performed inside the chain as that participant.
+   * @throws {Error} When the identity is not live in this composition.
+   */
+  runAsOrigin<T>(origin: CallOrigin, identity: string, operation: () => T): T;
+
+  /**
    * The kernel caller recorded for an identity token, or `undefined`.
    *
    * Reads the same admission record `isLive` and `instanceOf` read. Used to

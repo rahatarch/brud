@@ -1,5 +1,12 @@
-import type { ServiceDescriptor, ServiceTier } from '../../../src/contracts/index.js';
+import type {
+  IKernelAccessBroker,
+  KernelCallAuthority,
+  ServiceContext,
+  ServiceDescriptor,
+  ServiceTier,
+} from '../../../src/contracts/index.js';
 import { createServiceToken } from '../../../src/contracts/index.js';
+import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/index.js';
 
 /** Tier assigned to the cage's descriptor. */
 export const WASM_CAGE_SERVICE_TIER: ServiceTier = 'core';
@@ -21,14 +28,22 @@ export interface IWasmCage {
   /**
    * Runs one caged participant's `resolve` against the exposed-API registry.
    *
-   * The cage starts a `runtime`-origin chain (W-06), scopes the caged
-   * participant's identity under the cage's, and carries the parent relation
-   * on the caller frame (W-07). The implementation lands in a later step.
+   * The cage starts a `runtime`-origin chain with the caged participant's
+   * recorded caller (W-06), so the frame carries the participant's
+   * kernel-issued identity and its parent relation (W-07). The cage does not
+   * decide policy: the registry evaluates the giver's Layer 1 policy. The cage
+   * is the door, and `resolve` is the only method on its surface (W-02, W-09).
    *
+   * @param participantIdentity - The caged participant's kernel-issued token.
    * @param name - The exposure to resolve.
+   * @param options - Version and expected owner identity.
    * @returns The resolved handle, or `null`.
    */
-  resolve<T = unknown>(name: string): T | null;
+  resolve<T = unknown>(
+    participantIdentity: string,
+    name: string,
+    options?: { readonly version?: number | string; readonly expectedOwner?: string },
+  ): T | null;
 }
 
 /** Token identifying the cage. */
@@ -47,6 +62,20 @@ export const WasmCageToken = createServiceToken<IWasmCage>(
  * descriptor shape is what the hardcore list and the kernel's registration
  * require now.
  */
+/**
+ * The registry's resolve, as the cage calls it.
+ *
+ * The cage reaches the registry through the broker; it never imports the
+ * registry package. The shape is the one `IExposedApiRegistry.resolve`
+ * declares, narrowed to what the cage forwards.
+ */
+interface RegistryResolveSurface {
+  resolve<T = unknown>(
+    name: string,
+    options?: { readonly version?: number | string; readonly expectedOwner?: string },
+  ): T | null;
+}
+
 export function createWasmCageDescriptor(): ServiceDescriptor<IWasmCage> {
   return {
     token: WasmCageToken,
@@ -56,10 +85,50 @@ export function createWasmCageDescriptor(): ServiceDescriptor<IWasmCage> {
       version: WASM_CAGE_CONTRACT_VERSION,
       methods: WASM_CAGE_CONTRACT_METHODS,
     },
-    factory: (): IWasmCage => ({
-      resolve<T = unknown>(_name: string): T | null {
-        return null;
-      },
-    }),
+    factory: (context: ServiceContext, broker: IKernelAccessBroker): IWasmCage => {
+      // The cage starts a runtime-origin chain per caged call. The chain-start
+      // member needs the kernel's call authority, which the factory does not
+      // receive. The cage captures it in `bindAuthority`, called from its boot
+      // hook (a later step). Until then a caged call is refused rather than
+      // run without a chain.
+      let authority: KernelCallAuthority | undefined;
+
+      const registryFor = (caller: ServiceContext): RegistryResolveSurface => broker.requestAccess(
+        caller,
+        ExposedApiRegistryToken as unknown as Parameters<IKernelAccessBroker['requestAccess']>[1],
+      ) as RegistryResolveSurface;
+
+      const instance: IWasmCage & { bindAuthority(value: KernelCallAuthority): void } = {
+        bindAuthority(value: KernelCallAuthority): void {
+          authority = value;
+        },
+        resolve<T = unknown>(
+          participantIdentity: string,
+          name: string,
+          options?: { readonly version?: number | string; readonly expectedOwner?: string },
+        ): T | null {
+          const callAuthority = authority;
+
+          if (callAuthority === undefined) {
+            return null;
+          }
+
+          const caller: ServiceContext = {
+            callerId: participantIdentity,
+            tier: context.tier,
+            options: context.options,
+          };
+          const registry = registryFor(caller);
+
+          return callAuthority.runAsOrigin(
+            'runtime',
+            participantIdentity,
+            () => registry.resolve<T>(name, options),
+          );
+        },
+      };
+
+      return instance;
+    },
   };
 }

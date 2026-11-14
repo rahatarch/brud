@@ -167,6 +167,22 @@ export class KernelCallChain implements KernelCallAuthority {
     return frame?.chain === this ? frame.context : undefined;
   }
 
+  runAsOrigin<T>(origin: CallOrigin, identity: string, operation: () => T): T {
+    const participant = this.#byIdentity.get(identity);
+
+    if (participant === undefined) {
+      throw new Error('Identity is not live in this composition');
+    }
+
+    return frames.run(
+      {
+        chain: this,
+        context: Object.freeze({ origin, caller: participant.caller }),
+      },
+      operation,
+    );
+  }
+
   runAs<T>(identity: string, operation: () => T): T {
     const context = this.current();
 

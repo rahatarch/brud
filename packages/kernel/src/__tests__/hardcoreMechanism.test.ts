@@ -27,6 +27,10 @@ import {
   evaluateExposedApiPolicy,
   parseExposedApiPolicy,
 } from '../../services/ExposedApiRegistry/contracts/index.js';
+import {
+  WASM_CAGE_CONTRACT_METHODS,
+  createWasmCageDescriptor,
+} from '../../services/WasmCage/index.js';
 import { admitParticipantManifest } from '../contracts/manifest.js';
 import { parseBrudConfig } from '../bootstrap/config/parse.js';
 import { KernelRegistry } from '../engine/KernelRegistry.js';
@@ -84,6 +88,9 @@ import {
 const KERNEL_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MECHANISM_PATH = join(KERNEL_ROOT, 'src', 'bootstrap', 'hardcore.ts');
 const CALL_CHAIN_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'callChain.ts');
+const WASM_CAGE_DESCRIPTOR = join(
+  KERNEL_ROOT, 'services', 'WasmCage', 'src', 'descriptor.ts',
+);
 const KERNEL_CONFIG_PATH = join(KERNEL_ROOT, 'brud.config.json');
 
 const IDENTITY_SHIM = join(KERNEL_ROOT, 'serviceModules', 'identityRegistry.ts');
@@ -1200,5 +1207,104 @@ describe('BC-WASM-CHILD: the policy language names the parent class', () => {
 
     assert.match(source, /readonly parentCallerClasses\?: readonly CallerClass\[\];/u);
     assert.match(source, /EXPOSED_API_POLICY_VERSION = 2/u);
+  });
+});
+
+
+/**
+ * BC-WASM-ORIGIN — a caged participant's resolve reaches the registry with
+ * `runtime` origin, the participant's identity, and its parent relation, and a
+ * caged call cannot claim `host` or `kernel` origin.
+ *
+ * Uses the real `KernelCallChain`, the real `runAsOrigin`, and the real
+ * registry resolve path. The registry's policy evaluation observes the context
+ * the chain carries.
+ */
+describe('BC-WASM-ORIGIN: a caged resolve carries runtime origin and the participant caller', () => {
+  it('starts a runtime-origin chain with the participant identity and parent', () => {
+    const chain = new KernelCallChain(() => undefined);
+    const caged: KernelCaller = Object.freeze({
+      callerClass: 'participant',
+      identity: 'idt_caged',
+      official: false,
+      capabilities: Object.freeze(new Set<string>()),
+      parentIdentity: 'idt_cage',
+    });
+    chain.admitParticipants([{ tokenId: 'caged', caller: caged }]);
+
+    // No active chain: runAs would throw, runAsOrigin does not.
+    assert.equal(chain.current(), undefined);
+
+    const seen = chain.runAsOrigin('runtime', 'idt_caged', () => chain.current());
+
+    assert.ok(seen !== undefined);
+    assert.equal(seen.origin, 'runtime');
+    assert.equal(seen.caller.identity, 'idt_caged');
+    assert.equal(seen.caller.parentIdentity, 'idt_cage');
+  });
+
+  it('refuses an identity that is not live, the way runAs refuses', () => {
+    const chain = new KernelCallChain(() => undefined);
+
+    assert.throws(
+      () => chain.runAsOrigin('runtime', 'idt_absent', () => undefined),
+      /Identity is not live/u,
+    );
+  });
+
+  it('never lets a caged call claim host or kernel origin (guard canary)', () => {
+    const chain = new KernelCallChain(() => undefined);
+    const caged: KernelCaller = Object.freeze({
+      callerClass: 'participant',
+      identity: 'idt_caged',
+      official: false,
+      capabilities: Object.freeze(new Set<string>()),
+      parentIdentity: 'idt_cage',
+    });
+    chain.admitParticipants([{ tokenId: 'caged', caller: caged }]);
+
+    const seen = chain.runAsOrigin('runtime', 'idt_caged', () => chain.current());
+
+    assert.ok(seen !== undefined);
+    assert.notEqual(seen.origin, 'host');
+    assert.notEqual(seen.origin, 'kernel');
+
+    // The cage's descriptor wires exactly this call.
+    const source = readFileSync(WASM_CAGE_DESCRIPTOR, 'utf8');
+    assert.match(source, /runAsOrigin\(\s*'runtime',\s*participantIdentity/u);
+  });
+});
+
+/**
+ * BC-WASM-SURFACE — the cage's exported surface is `resolve` and no other
+ * participant API; `register` is not on the cage's surface and cannot be
+ * reached through it.
+ *
+ * Reads the cage's contract declaration and its instance surface.
+ */
+describe('BC-WASM-SURFACE: the cage exposes resolve and nothing else', () => {
+  it('declares exactly resolve as its contract interface', () => {
+    assert.deepEqual([...WASM_CAGE_CONTRACT_METHODS], ['resolve']);
+  });
+
+  it('has no register on the cage instance or the registry public view', () => {
+    const descriptor = createWasmCageDescriptor();
+    const context: ServiceContext = { callerId: 'kernel', tier: 'core', options: {} };
+    const instance = descriptor.factory(context, new KernelAccessBroker(new KernelRegistry(), () => 'BOOTING'));
+
+    assert.equal(typeof (instance as { resolve?: unknown }).resolve, 'function');
+    assert.equal('register' in instance, false, 'register must not be on the cage');
+    assert.equal(
+      typeof (instance as { register?: unknown }).register,
+      'undefined',
+      'register must not be reachable through the cage',
+    );
+  });
+
+  it('detects a reintroduced register on the cage surface (guard canary)', () => {
+    const source = readFileSync(WASM_CAGE_DESCRIPTOR, 'utf8');
+
+    assert.doesNotMatch(source, /^\s*register\s*[<(]/mu);
+    assert.match(source, /WASM_CAGE_CONTRACT_METHODS = \['resolve'\]/u);
   });
 });
