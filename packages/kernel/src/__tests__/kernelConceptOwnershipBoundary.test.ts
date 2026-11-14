@@ -634,31 +634,28 @@ export function interfaceMemberNames(source: string, interfaceName: string): rea
   return names;
 }
 
-/** Service option names no kernel boot type may declare. */
-const SERVICE_OPTION_NAMES: readonly string[] = [
-  'workspaceRoot',
-  'projectRoot',
-  'partitionPrefix',
-  'storageDriver',
-  'mutationJournal',
-  'plugins',
-  'initialPlugins',
-  'certifyPlugins',
-  'officialPlugins',
-  'history',
-  'settings',
-  'filesystem',
-  'terminal',
-  'router',
-  'pluginManager',
-  'identity',
-  'exposedApi',
-  'validation',
-  'brandRegistry',
-  'universalHistory',
-];
+/**
+ * The only named fields a kernel boot options type may declare.
+ *
+ * The kernel owns the host-supplied options bag and the logger. Every other
+ * named member is a service's option, whatever the service is called, and
+ * belongs inside the bag where that service interprets it.
+ */
+const KERNEL_OWNED_BOOT_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['BootKernelOptions', ['logger', 'options']],
+  ['ComposeKernelOptions', ['logger', 'options']],
+  ['KernelBootOptions', ['logger', 'options']],
+  ['CreateStandardKernelOptions', []],
+]);
 
-/** Returns service option names declared by the boot-type interfaces. */
+/**
+ * Returns every named member of a kernel boot options type that the kernel
+ * does not itself own.
+ *
+ * The test is structural, not a list of today's service names: any named
+ * member outside the kernel-owned set is a service's option, including an
+ * option belonging to a service that does not exist yet.
+ */
 export function serviceOptionMembers(
   sources: readonly { readonly label: string; readonly source: string; readonly interfaces: readonly string[] }[],
 ): readonly string[] {
@@ -666,8 +663,14 @@ export function serviceOptionMembers(
 
   for (const { label, source, interfaces } of sources) {
     for (const interfaceName of interfaces) {
+      const owned = KERNEL_OWNED_BOOT_FIELDS.get(interfaceName);
+
+      if (owned === undefined) {
+        continue;
+      }
+
       for (const member of interfaceMemberNames(source, interfaceName)) {
-        if (SERVICE_OPTION_NAMES.includes(member)) {
+        if (!owned.includes(member)) {
           violations.push(`${label}:${interfaceName}.${member}`);
         }
       }
@@ -749,6 +752,24 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
     const kernelContract = await readFile(KERNEL_CONTRACT, 'utf8');
     const standardKernel = await readFile(STANDARD_KERNEL, 'utf8');
 
+    assert.deepEqual(serviceOptionMembers([
+      {
+        label: 'bootTypes.ts',
+        source: bootTypes,
+        interfaces: ['BootKernelOptions', 'ComposeKernelOptions'],
+      },
+      {
+        label: 'kernel.ts',
+        source: kernelContract,
+        interfaces: ['KernelBootOptions'],
+      },
+      {
+        label: 'createStandardKernel.ts',
+        source: standardKernel,
+        interfaces: ['CreateStandardKernelOptions'],
+      },
+    ]), []);
+
     assert.deepEqual(
       [...interfaceMemberNames(bootTypes, 'BootKernelOptions')].sort(),
       ['logger', 'options'],
@@ -769,24 +790,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
       [...interfaceMemberNames(standardKernel, 'CreateStandardKernelOptions')].sort(),
       [],
     );
-
-    assert.deepEqual(serviceOptionMembers([
-      {
-        label: 'bootTypes.ts',
-        source: bootTypes,
-        interfaces: ['BootKernelOptions', 'ComposeKernelOptions', 'KernelServiceModuleContext'],
-      },
-      {
-        label: 'kernel.ts',
-        source: kernelContract,
-        interfaces: ['KernelBootOptions'],
-      },
-      {
-        label: 'createStandardKernel.ts',
-        source: standardKernel,
-        interfaces: ['CreateStandardKernelOptions'],
-      },
-    ]), []);
   });
 
   it('keeps the boot loader free of plugin handoff keys and the plugin type', async () => {
@@ -813,6 +816,59 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
         { label: 'canary.ts', source, interfaces: ['BootKernelOptions'] },
       ]),
       ['canary.ts:BootKernelOptions.plugins', 'canary.ts:BootKernelOptions.storageDriver'],
+    );
+  });
+
+  it('fails on a service option the kernel has never seen (guard canary)', () => {
+    const source = `
+      interface BootKernelOptions {
+        options?: Record<string, unknown>;
+        logger?: unknown;
+        catalogRoot?: string;
+        mcpBridge?: unknown;
+      }
+    `;
+
+    assert.deepEqual(
+      serviceOptionMembers([
+        { label: 'canary.ts', source, interfaces: ['BootKernelOptions'] },
+      ]),
+      [
+        'canary.ts:BootKernelOptions.catalogRoot',
+        'canary.ts:BootKernelOptions.mcpBridge',
+      ],
+    );
+
+    assert.deepEqual(
+      serviceOptionMembers([
+        {
+          label: 'canary.ts',
+          source: `
+            interface CreateStandardKernelOptions {
+              [option: string]: unknown;
+              searchIndexPath?: string;
+            }
+          `,
+          interfaces: ['CreateStandardKernelOptions'],
+        },
+      ]),
+      ['canary.ts:CreateStandardKernelOptions.searchIndexPath'],
+    );
+
+    assert.deepEqual(
+      serviceOptionMembers([
+        {
+          label: 'canary.ts',
+          source: `
+            interface ComposeKernelOptions {
+              options?: Record<string, unknown>;
+              logger?: KernelLogger;
+            }
+          `,
+          interfaces: ['ComposeKernelOptions'],
+        },
+      ]),
+      [],
     );
   });
 });
