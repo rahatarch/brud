@@ -94,7 +94,7 @@ async function bootBridge(): Promise<Harness> {
   const bridge = createMcpBridgePlugin();
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins: [bridge, echoPlugin],
+    'pluginManager.plugins': { entries: [bridge, echoPlugin] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

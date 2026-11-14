@@ -93,7 +93,7 @@ describe('brud.core.utils service', () => {
     kernel = createStandardKernel({
       storageDriver: new DurableNodeStorageDriver(),
       history: { dbPath: join(root, '.brud', 'history', 'universal.db') },
-      initialPlugins: [plugin],
+      'pluginManager.plugins': { entries: [plugin] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(root)} });

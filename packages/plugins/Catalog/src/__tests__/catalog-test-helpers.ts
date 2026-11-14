@@ -165,7 +165,7 @@ export async function bootCatalogKernel(
 ): Promise<CatalogKernel> {
   const root = await mkdtemp(join(tmpdir(), 'brud-catalog-verify-'));
   const kernel = createStandardKernel({
-    initialPlugins: [catalogPlugin, ...extraPlugins],
+    'pluginManager.plugins': { entries: [catalogPlugin, ...extraPlugins] },
     history: { inMemory: true },
   });
 

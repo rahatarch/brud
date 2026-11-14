@@ -9,21 +9,15 @@ import { createDeferredKernel } from './bootKernelInternal.js';
  * Compatibility options for the config-backed standard kernel.
  *
  * The old hardcoded composition is gone; this wrapper selects the kernel's
- * default config. It exists because read-only plugin test harnesses still
- * import `createStandardKernel` from `@brud/kernel`.
+ * default config.
  *
  * The generic options bag can be supplied either flat (legacy embedders) or
- * under `options` (the canonical shape). Legacy host option names are mapped
- * into the namespace owned by the service that interprets them; the kernel
- * itself carries no plugin concept.
+ * under `options` (the canonical shape). Every service-specific value belongs
+ * to the service that interprets it; the kernel only forwards the bag.
  */
 export interface CreateStandardKernelOptions extends ComposeKernelOptions {
   /**
    * Legacy flat service options; merged into the generic bag.
-   *
-   * The wrapper recognizes the compatibility keys `initialPlugins` and
-   * `certifyInitialPlugins` and maps them into the plugin manager's own
-   * namespace. They are not named properties of a core boot boundary.
    */
   readonly [option: string]: unknown;
 }
@@ -31,7 +25,7 @@ export interface CreateStandardKernelOptions extends ComposeKernelOptions {
 /**
  * Builds an unbooted kernel from the kernel's default config.
  *
- * @param options - Generic options bag, logger, and plugin overrides.
+ * @param options - Generic options bag and logger.
  */
 export function createStandardKernel(
   options: CreateStandardKernelOptions = {},
@@ -39,8 +33,6 @@ export function createStandardKernel(
   const {
     options: nestedOptions,
     logger,
-    initialPlugins,
-    certifyInitialPlugins,
     ...flatOptions
   } = options;
   const bag: Record<string, unknown> = {
@@ -48,21 +40,7 @@ export function createStandardKernel(
     ...flatOptions,
   };
 
-  if (initialPlugins !== undefined) {
-    bag['pluginManager.plugins'] = { entries: initialPlugins };
-  }
-
-  if (certifyInitialPlugins !== undefined) {
-    bag['pluginManager.certifyPlugins'] = certifyInitialPlugins;
-  }
-
-  const configPath = defaultKernelConfigPath();
-
-  if (bag['pluginManager.configPath'] === undefined) {
-    bag['pluginManager.configPath'] = configPath;
-  }
-
-  return createDeferredKernel(configPath, {
+  return createDeferredKernel(defaultKernelConfigPath(), {
     options: bag,
     ...(logger === undefined ? {} : { logger: logger as KernelLogger }),
   });

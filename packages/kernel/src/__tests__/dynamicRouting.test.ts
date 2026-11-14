@@ -76,7 +76,7 @@ async function prepare(
     : [];
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins,
+    'pluginManager.plugins': { entries: initialPlugins },
   });
 
   if (options.withService !== false) {

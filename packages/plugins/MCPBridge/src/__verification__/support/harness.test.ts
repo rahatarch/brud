@@ -97,8 +97,8 @@ export async function bootBridgeHarness(
   const plugins = options.plugins ?? OFFICIAL_PLUGINS();
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    certifyInitialPlugins: options.certifyInitialPlugins ?? true,
-    initialPlugins: [...plugins, bridge],
+    'pluginManager.certifyPlugins': options.certifyInitialPlugins ?? true,
+    'pluginManager.plugins': { entries: [...plugins, bridge] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

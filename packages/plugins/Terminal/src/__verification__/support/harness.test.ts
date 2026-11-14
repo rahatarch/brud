@@ -56,7 +56,7 @@ export async function bootTerminalHarness(
   const kernel = createStandardKernel({
     history: { inMemory: true },
     ...(policy === undefined ? {} : { terminal: { policy } }),
-    initialPlugins: [createTerminalPlugin()],
+    'pluginManager.plugins': { entries: [createTerminalPlugin()] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

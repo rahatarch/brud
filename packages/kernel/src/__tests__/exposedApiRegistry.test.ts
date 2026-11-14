@@ -79,7 +79,7 @@ async function prepare(
   const root = await mkdtemp(join(tmpdir(), 'brud-exposed-api-'));
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins,
+    'pluginManager.plugins': { entries: initialPlugins },
   });
   const domains = fixtures.map((fixture) => fixture());
 

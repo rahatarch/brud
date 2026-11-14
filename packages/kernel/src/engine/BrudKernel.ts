@@ -226,10 +226,10 @@ export class BrudKernel implements IBrudKernel {
     }
 
     // Post-boot start. The broker now grants access, so services can resolve
-    // their dependencies (the plugin manager activates plugins here). Hooks run
-    // one at a time in initialization order. Any failure rolls the whole
-    // kernel back: the broker stops granting, every initialized service is
-    // disposed in reverse order, and boot() rejects with the original error.
+    // their dependencies. Hooks run one at a time in initialization order.
+    // Any failure rolls the whole kernel back: the broker stops granting,
+    // every initialized service is disposed in reverse order, and boot()
+    // rejects with the original error.
     this.runningHooksPending = true;
 
     try {

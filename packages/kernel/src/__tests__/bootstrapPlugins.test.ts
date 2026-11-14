@@ -160,7 +160,7 @@ describe('createStandardKernel plugin integration', () => {
 
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [beta, alpha],
+      'pluginManager.plugins': { entries: [beta, alpha] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -240,11 +240,11 @@ describe('plugin capabilities requested during activation at boot', () => {
     const kernel = createStandardKernel({
       storageDriver: driver,
       history: { inMemory: true },
-      initialPlugins: [
+      'pluginManager.plugins': { entries: [
         createCapabilityPlugin('acme.boot.fs', ['fs:read'], async (context) => {
           readBack = await context.getFileSystem().readText('seed.txt');
         }),
-      ],
+      ] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -262,7 +262,7 @@ describe('plugin capabilities requested during activation at boot', () => {
   it('registers a tool during activate() and the tool is routable after boot', async () => {
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [
+      'pluginManager.plugins': { entries: [
         createCapabilityPlugin('acme.boot.tools', ['tools:register'], (context) => {
           context.registerTool({
             name: 'acme_boot_tool',
@@ -271,7 +271,7 @@ describe('plugin capabilities requested during activation at boot', () => {
             execute: async () => ({ status: 'success' }),
           });
         }),
-      ],
+      ] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -292,12 +292,12 @@ describe('plugin capabilities requested during activation at boot', () => {
     let historyResolved = false;
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [
+      'pluginManager.plugins': { entries: [
         createCapabilityPlugin('acme.boot.history', ['history:read'], (context) => {
           // Third-party plugins use the namespace handle since D-15 U-6.
           historyResolved = context.getHistory() !== undefined;
         }),
-      ],
+      ] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -375,7 +375,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     let coreDenied: unknown;
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [
+      'pluginManager.plugins': { entries: [
         createCapabilityPlugin('acme.history.reader', ['history:read'], (context) => {
           try {
             context.getUniversalHistory();
@@ -384,7 +384,7 @@ describe('plugin capabilities requested during activation at boot', () => {
           }
           handle = context.getHistory();
         }),
-      ],
+      ] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -433,7 +433,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     let coreDenied: unknown;
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [
+      'pluginManager.plugins': { entries: [
         createCapabilityPlugin('acme.history.writer', ['history:read', 'history:write'], (context) => {
           try {
             context.getUniversalHistory();
@@ -442,7 +442,7 @@ describe('plugin capabilities requested during activation at boot', () => {
           }
           handle = context.getHistory();
         }),
-      ],
+      ] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -488,7 +488,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     );
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [official],
+      'pluginManager.plugins': { entries: [official] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });
@@ -514,7 +514,7 @@ describe('plugin capabilities requested during activation at boot', () => {
     );
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [official],
+      'pluginManager.plugins': { entries: [official] },
     });
 
     await kernel.boot({ options: {...workspaceContextOptions(WORKSPACE_ROOT)} });

@@ -57,7 +57,9 @@ export async function bootTestKernel(
     history: options.onDiskHistory === true
       ? { dbPath: join(root, '.brud', 'history', 'universal.db') }
       : { inMemory: true },
-    ...(options.plugins === undefined ? {} : { initialPlugins: options.plugins }),
+    ...(options.plugins === undefined
+      ? {}
+      : { 'pluginManager.plugins': { entries: options.plugins } }),
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

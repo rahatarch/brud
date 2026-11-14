@@ -136,7 +136,7 @@ async function bootKernel(): Promise<Harness> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-mcp-server-')));
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins: [echoPlugin],
+    'pluginManager.plugins': { entries: [echoPlugin] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

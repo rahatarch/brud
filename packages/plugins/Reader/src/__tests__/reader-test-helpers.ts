@@ -69,7 +69,7 @@ export async function bootReaderKernel(
   const root = await makeRoot(options.prefix ?? 'brud-reader-verify-');
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins: [searchPlugin, readerPlugin, ...(options.initialPlugins ?? [])],
+    'pluginManager.plugins': { entries: [searchPlugin, readerPlugin, ...(options.initialPlugins ?? [])] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

@@ -27,9 +27,9 @@ const IDENTITY_REGISTRY_BUILT_HASH =
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  'ca2ade7e5f0ccbb59ec4c7e334a113cd96fc1ae5d3e7cbcb028eef468f47da54';
+  '739738f04a7d658dd90b36aaba43c89b5596c89e32bddb5850d8dfe99822fecb';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
-  '98c207452b3f562b2bfcf9368701d5de0961d3874bb458b8d775766e8b554814';
+  'de47e97ba4131246f24c730625fb49c105ca39ab3b1b2186a17a0a75bdc7fe57';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {

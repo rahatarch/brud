@@ -1,10 +1,10 @@
 /**
  * Extensible capability token vocabulary.
  *
- * Capabilities are declared by plugins and claimed by service exposures. They
- * are open strings: the kernel validates their shape, not membership in a
- * closed list. A token is one or more lowercase segments separated by `:`, for
- * example `fs:read` or `photoshop:access`.
+ * Capabilities are declared by the service that exposes an API and claimed by
+ * callers. They are open strings: the kernel validates their shape, not
+ * membership in a closed list. A token is one or more lowercase segments
+ * separated by `:`, for example `fs:read` or `photoshop:access`.
  *
  * The kernel provides this mechanism only. A giver that wants a public preset
  * declares it in its own contract; the kernel ships none.

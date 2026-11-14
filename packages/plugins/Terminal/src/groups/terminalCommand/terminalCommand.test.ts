@@ -41,7 +41,7 @@ async function bootKernel(): Promise<Harness> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-terminal-')));
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins: [createTerminalPlugin()],
+    'pluginManager.plugins': { entries: [createTerminalPlugin()] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

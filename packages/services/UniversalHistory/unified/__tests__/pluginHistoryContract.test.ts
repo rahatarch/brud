@@ -48,11 +48,11 @@ async function boot(context: TestContext): Promise<Harness> {
   const readState: ProbeState = {};
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    certifyInitialPlugins: true,
-    initialPlugins: [
+    'pluginManager.certifyPlugins': true,
+    'pluginManager.plugins': { entries: [
       createProbe('akkhar-labs.test.history-write', ['history:write'], writeState),
       createProbe('akkhar-labs.test.history-read', ['history:read'], readState),
-    ],
+    ] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

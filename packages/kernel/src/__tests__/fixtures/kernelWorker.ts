@@ -39,7 +39,7 @@ const plugin: IBrudPlugin = {
 
 const kernel = createStandardKernel({
   history: { dbPath: join(workspaceRoot, '.brud', 'history', 'universal.db') },
-  initialPlugins: [plugin],
+  'pluginManager.plugins': { entries: [plugin] },
 });
 
 await kernel.boot({ options: workspaceContextOptions(workspaceRoot) });

@@ -30,7 +30,7 @@ describe('Catalog plugin', () => {
   before(async () => {
     root = await mkdtemp(join(tmpdir(), 'brud-catalog-test-'));
     kernel = createStandardKernel({
-      initialPlugins: [catalogPlugin],
+      'pluginManager.plugins': { entries: [catalogPlugin] },
       history: { dbPath: join(root, '.brud', 'history', 'universal.db') },
     });
 

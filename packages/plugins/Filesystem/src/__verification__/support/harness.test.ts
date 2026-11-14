@@ -163,7 +163,7 @@ export async function bootVerificationKernel(
         : { inMemory: true }),
       ...(options.withoutMutationRecording === true ? { recordMutations: false } : {}),
     },
-    initialPlugins: plugins,
+    'pluginManager.plugins': { entries: plugins },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

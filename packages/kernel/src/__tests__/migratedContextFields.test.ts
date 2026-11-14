@@ -131,7 +131,7 @@ describe('migrated context fields', () => {
     const kernel = createStandardKernel({
       history: { inMemory: true },
       settings: { homeDirectory: join(root, 'home') },
-      initialPlugins: [plugin],
+      'pluginManager.plugins': { entries: [plugin] },
     });
 
     await kernel.boot({ options: bag });

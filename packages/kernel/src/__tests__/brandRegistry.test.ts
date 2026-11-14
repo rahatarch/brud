@@ -243,8 +243,8 @@ describe('Brand Registry in a booted kernel', () => {
     const root = await tempWorkspace(t);
     const kernel = createStandardKernel({
       history: { inMemory: true },
-      initialPlugins: [official],
-      certifyInitialPlugins: true,
+      'pluginManager.plugins': { entries: [official] },
+      'pluginManager.certifyPlugins': true,
     });
 
     t.after(async () => {

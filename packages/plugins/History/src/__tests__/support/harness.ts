@@ -39,8 +39,8 @@ export async function bootHistoryHarness(): Promise<HistoryHarness> {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-history-plugin-')));
   const kernel = createStandardKernel({
     history: { inMemory: true },
-    certifyInitialPlugins: true,
-    initialPlugins: [createHistoryPlugin()],
+    'pluginManager.certifyPlugins': true,
+    'pluginManager.plugins': { entries: [createHistoryPlugin()] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });

@@ -32,7 +32,9 @@ export async function bootRealKernel(
   const dbPath = join(root, '.brud', 'history', 'universal.db');
   const kernel = createStandardKernel({
     history: { dbPath },
-    ...(options.initialPlugins === undefined ? {} : { initialPlugins: options.initialPlugins }),
+    ...(options.initialPlugins === undefined
+      ? {}
+      : { 'pluginManager.plugins': { entries: options.initialPlugins } }),
   });
 
   await kernel.boot({ options: workspaceContextOptions(root) });

@@ -157,7 +157,7 @@ before(async () => {
   second = terminalPlugin('test.capability.second');
   kernel = createStandardKernel({
     history: { inMemory: true },
-    initialPlugins: [without.plugin, first.plugin, second.plugin],
+    'pluginManager.plugins': { entries: [without.plugin, first.plugin, second.plugin] },
   });
 
   await kernel.boot({ options: {...workspaceContextOptions(root)} });
