@@ -20,7 +20,8 @@ import {
 } from '../bootstrap/index.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { KernelAccessBroker } from '../engine/KernelAccessBroker.js';
-import { KernelCallChain } from '../engine/callChain.js';
+import { KERNEL_CALLER, KernelCallChain } from '../engine/callChain.js';
+import type { KernelCaller } from '../contracts/callChain.js';
 import { admitParticipantManifest } from '../contracts/manifest.js';
 import { parseBrudConfig } from '../bootstrap/config/parse.js';
 import { KernelRegistry } from '../engine/KernelRegistry.js';
@@ -77,6 +78,7 @@ import {
 
 const KERNEL_ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const MECHANISM_PATH = join(KERNEL_ROOT, 'src', 'bootstrap', 'hardcore.ts');
+const CALL_CHAIN_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'callChain.ts');
 const KERNEL_CONFIG_PATH = join(KERNEL_ROOT, 'brud.config.json');
 
 const IDENTITY_SHIM = join(KERNEL_ROOT, 'serviceModules', 'identityRegistry.ts');
@@ -1044,5 +1046,71 @@ describe('BC-WASM-NO-CAGE-IN-KERNEL: no kernel source outside the cage names it'
     const probe = 'const cage = "brud.core.wasmCage";';
 
     assert.match(probe, /brud\.core\.wasmCage/u);
+  });
+});
+
+
+/**
+ * BC-WASM-CHILD (frame half) — the caller frame carries the parent's identity.
+ *
+ * Reads the real `KernelCaller` contract, the real chain, and the real
+ * admission path. A top-level participant's caller has no parent; a caged
+ * child's caller carries the parent's kernel-issued identity token. The field
+ * is optional, so its absence on a top-level caller is the correct shape, not
+ * a gap.
+ */
+describe('BC-WASM-CHILD: the caller frame carries the parent identity', () => {
+  it('declares an optional parentIdentity on KernelCaller', () => {
+    const contract = readFileSync(CALL_CHAIN_CONTRACT, 'utf8');
+
+    assert.match(contract, /readonly parentIdentity\?: string;/u);
+
+    // The field is optional: `?` before the colon, never a required field.
+    const required = /readonly parentIdentity: string;/u.test(contract);
+    assert.equal(required, false, 'parentIdentity must be optional, not required');
+  });
+
+  it('carries no parent on a top-level participant and the parent on a caged child', () => {
+    const chain = new KernelCallChain(() => undefined);
+    const topLevel: KernelCaller = Object.freeze({
+      callerClass: 'participant',
+      identity: 'idt_top',
+      official: false,
+      capabilities: Object.freeze(new Set<string>()),
+    });
+    const child: KernelCaller = Object.freeze({
+      callerClass: 'participant',
+      identity: 'idt_child',
+      official: false,
+      capabilities: Object.freeze(new Set<string>()),
+      parentIdentity: 'idt_top',
+    });
+
+    chain.admitParticipants([
+      { tokenId: 'top', caller: topLevel },
+      { tokenId: 'child', caller: child },
+    ]);
+
+    const topFrame = chain.runRoot('runtime', topLevel, () => chain.current());
+    assert.ok(topFrame !== undefined);
+    assert.equal(topFrame.caller.parentIdentity, undefined, 'top-level has no parent');
+
+    const childFrame = chain.runRoot('runtime', child, () => chain.current());
+    assert.ok(childFrame !== undefined);
+    assert.equal(childFrame.caller.parentIdentity, 'idt_top');
+
+    // The frame a mediated call into the child produces keeps the parent.
+    const mediated = chain.runRoot('runtime', KERNEL_CALLER, () => chain.runAs('idt_child', () => chain.current()));
+    assert.ok(mediated !== undefined);
+    assert.equal(mediated.caller.parentIdentity, 'idt_top');
+  });
+
+  it('records the parent from the composed descriptor at admission (guard canary)', () => {
+    const source = readFileSync(
+      resolvePath(dirname(fileURLToPath(import.meta.url)), '..', 'bootstrap', 'bootKernelInternal.ts'),
+      'utf8',
+    );
+
+    assert.match(source, /parentIdentity: entry\.parentIdentity/u);
   });
 });

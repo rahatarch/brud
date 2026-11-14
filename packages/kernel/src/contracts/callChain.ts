@@ -60,6 +60,17 @@ export interface KernelCaller {
 
   /** Capabilities the caller declared it wants. A request, not a grant. */
   readonly capabilities: ReadonlySet<string>;
+
+  /**
+   * The parent's kernel-issued identity token, when the caller is a caged child.
+   *
+   * Optional. A top-level participant has no parent and omits the field. A caged
+   * child carries the identity token of the participant that loaded it, or the
+   * cage's own identity token, as the kernel issued it at admission. The value
+   * is the parent's identity, never the parent's name, token id, or descriptor
+   * label. The child's own identity is separate and unchanged.
+   */
+  readonly parentIdentity?: string;
 }
 
 /** The kernel-provided execution context of the current call. */

@@ -154,6 +154,9 @@ export function createDeferredKernel(
           identity: identities.get(entry.token) ?? null,
           official: entry.official,
           capabilities: Object.freeze(new Set(entry.manifest.capabilities)),
+          ...(entry.parentIdentity === undefined
+            ? {}
+            : { parentIdentity: entry.parentIdentity }),
         });
 
         return { tokenId: entry.token, caller };

@@ -42,6 +42,15 @@ export interface HardcoreBootEntry {
 
   /** The participant's validated, frozen manifest. */
   readonly manifest: AdmittedManifest;
+
+  /**
+   * The parent's kernel-issued identity token, for a caged child.
+   *
+   * `undefined` for a top-level participant. A caged child carries the identity
+   * of the participant that loaded it, or the cage's identity, as the kernel
+   * issued it at admission. The caller frame records it verbatim.
+   */
+  readonly parentIdentity?: string;
 }
 
 /**
@@ -132,6 +141,12 @@ export interface ComposedServiceDescriptor {
 
   /** The participant's validated, frozen manifest. */
   readonly manifest: AdmittedManifest;
+
+  /**
+   * The parent's kernel-issued identity token, when the composed service is a
+   * caged child. `undefined` for a top-level participant.
+   */
+  readonly parentIdentity?: string;
 }
 
 /** Raised when a compiled-in hardcore service fails verification. */
@@ -482,6 +497,9 @@ export function buildHardcoreBootEntries(
     contentHash: packageHashes.get(service.descriptor.token.id)
       ?? contentHashForEntry(service.resolvedPath),
     manifest: service.manifest,
+    ...(service.parentIdentity === undefined
+      ? {}
+      : { parentIdentity: service.parentIdentity }),
   }));
 }
 
