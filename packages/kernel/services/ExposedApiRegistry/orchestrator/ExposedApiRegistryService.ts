@@ -24,6 +24,7 @@ import type {
 import {
   evaluateExposedApiPolicy,
   parseExposedApiPolicy,
+  type ExposedApiEvaluationContext,
   type ExposedApiPolicy,
 } from '../contracts/policy.js';
 import { isExposureProvider } from '../contracts/registrant.js';
@@ -73,6 +74,31 @@ interface ExposureEntry {
 
 /** Source name the registry uses on the kernel's observation stream. */
 const OBSERVATION_SOURCE = ExposedApiRegistryToken.id;
+
+/**
+ * Resolves the caller's parent class from the frame's parent identity.
+ *
+ * The parent identity is the field the caller frame carries; its class is read
+ * from the kernel's admission record, never from the caller's request. A caller
+ * with no parent gets no `parentCallerClass`, and a policy that names
+ * `parentCallerClasses` refuses it.
+ */
+function withParentCallerClass(
+  authority: KernelCallAuthority,
+  context: KernelCallContext,
+): ExposedApiEvaluationContext {
+  const parentIdentity = context.caller.parentIdentity;
+
+  if (parentIdentity === undefined) {
+    return context;
+  }
+
+  const parent = authority.callerForIdentity(parentIdentity);
+
+  return parent === undefined
+    ? context
+    : { ...context, parentCallerClass: parent.callerClass };
+}
 
 /** Default projection: the giver's instance itself. */
 function identityProjection(service: unknown): unknown {
@@ -369,7 +395,11 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
       });
     }
 
-    const decision = evaluateExposedApiPolicy(entry.policy, entry.scope, context);
+    const decision = evaluateExposedApiPolicy(
+      entry.policy,
+      entry.scope,
+      withParentCallerClass(authority, context),
+    );
 
     if (!decision.allowed) {
       return this.#refuse(authority, context, 'resolve-refused', {
@@ -475,7 +505,11 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
           : !authority.isLive(entry.owner)
             ? 'owner identity is not live'
             : ((): string | undefined => {
-                const decision = evaluateExposedApiPolicy(entry.policy, entry.scope, context);
+                const decision = evaluateExposedApiPolicy(
+                  entry.policy,
+                  entry.scope,
+                  withParentCallerClass(authority, context),
+                );
 
                 return decision.allowed ? undefined : decision.reason;
               })();

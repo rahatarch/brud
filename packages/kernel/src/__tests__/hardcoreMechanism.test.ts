@@ -22,6 +22,11 @@ import type { BrudKernel } from '../engine/BrudKernel.js';
 import { KernelAccessBroker } from '../engine/KernelAccessBroker.js';
 import { KERNEL_CALLER, KernelCallChain } from '../engine/callChain.js';
 import type { KernelCaller } from '../contracts/callChain.js';
+import {
+  EXPOSED_API_POLICY_VERSION,
+  evaluateExposedApiPolicy,
+  parseExposedApiPolicy,
+} from '../../services/ExposedApiRegistry/contracts/index.js';
 import { admitParticipantManifest } from '../contracts/manifest.js';
 import { parseBrudConfig } from '../bootstrap/config/parse.js';
 import { KernelRegistry } from '../engine/KernelRegistry.js';
@@ -797,7 +802,7 @@ export function createService() {
       exposures: [{
         name: 'test.persistence.api',
         scope: 'runtime',
-        policy: { policyVersion: 1, capabilities: ['test:read'] },
+        policy: { policyVersion: 2, capabilities: ['test:read'] },
       }],
     },
     factory: () => ({}),
@@ -1112,5 +1117,88 @@ describe('BC-WASM-CHILD: the caller frame carries the parent identity', () => {
     );
 
     assert.match(source, /parentIdentity: entry\.parentIdentity/u);
+  });
+});
+
+
+/**
+ * BC-WASM-CHILD (policy half) — the policy language names the parent's class.
+ *
+ * Reads the real policy language and the real evaluator. `parentCallerClasses`
+ * accepts the three caller classes; a version-1 policy is refused by the
+ * version-2 evaluator; and a policy naming the field refuses a top-level caller
+ * and passes a caller whose parent is of the named class.
+ */
+describe('BC-WASM-CHILD: the policy language names the parent class', () => {
+  it('accepts parentCallerClasses with the three caller classes', () => {
+    const policy = parseExposedApiPolicy({
+      policyVersion: 2,
+      parentCallerClasses: ['participant', 'kernel', 'host'],
+    });
+
+    assert.deepEqual([...(policy.parentCallerClasses ?? [])].sort(), ['host', 'kernel', 'participant']);
+    assert.throws(
+      () => parseExposedApiPolicy({ policyVersion: 2, parentCallerClasses: ['nobody'] }),
+      /parentCallerClasses/u,
+    );
+  });
+
+  it('refuses a version-1 policy by the version-2 evaluator', () => {
+    assert.throws(
+      () => parseExposedApiPolicy({ policyVersion: 1, capabilities: ['x:read'] }),
+      /policyVersion must be 2/u,
+    );
+    assert.equal(EXPOSED_API_POLICY_VERSION, 2);
+  });
+
+  it('refuses a top-level caller and passes a caller whose parent is the named class', () => {
+    const policy = parseExposedApiPolicy({
+      policyVersion: 2,
+      parentCallerClasses: ['participant'],
+    });
+    const scope = 'any' as const;
+    const childCaller: KernelCaller = {
+      callerClass: 'participant',
+      identity: 'idt_child',
+      official: false,
+      capabilities: new Set<string>(),
+      parentIdentity: 'idt_parent',
+    };
+
+    const topLevel = evaluateExposedApiPolicy(policy, scope, {
+      origin: 'runtime',
+      caller: {
+        callerClass: 'participant',
+        identity: 'idt_top',
+        official: false,
+        capabilities: new Set<string>(),
+      },
+    });
+    assert.equal(topLevel.allowed, false);
+    assert.match(String(topLevel.allowed ? '' : topLevel.reason), /has none/u);
+
+    const withParent = evaluateExposedApiPolicy(policy, scope, {
+      origin: 'runtime',
+      caller: childCaller,
+      parentCallerClass: 'participant',
+    });
+    assert.equal(withParent.allowed, true);
+
+    const wrongParent = evaluateExposedApiPolicy(policy, scope, {
+      origin: 'runtime',
+      caller: childCaller,
+      parentCallerClass: 'host',
+    });
+    assert.equal(wrongParent.allowed, false);
+  });
+
+  it('detects a reintroduced missing field (guard canary)', () => {
+    const source = readFileSync(
+      resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..', 'services', 'ExposedApiRegistry', 'contracts', 'policy.ts'),
+      'utf8',
+    );
+
+    assert.match(source, /readonly parentCallerClasses\?: readonly CallerClass\[\];/u);
+    assert.match(source, /EXPOSED_API_POLICY_VERSION = 2/u);
   });
 });

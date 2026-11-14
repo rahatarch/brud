@@ -24,8 +24,17 @@ import { exposedApiScopeAllowsOrigin, type ExposedApiScope } from './types.js';
  * the caller's official status in the composition.
  */
 
-/** The only policy language version this registry evaluates. */
-export const EXPOSED_API_POLICY_VERSION = 1;
+/**
+ * The only policy language version this registry evaluates.
+ *
+ * Version 2 adds `parentCallerClasses`. A version-1 policy is refused by the
+ * version-2 evaluator, fail-closed, the same way an unknown version is refused:
+ * `parseExposedApiPolicy` requires `policyVersion === EXPOSED_API_POLICY_VERSION`.
+ * The bump is intentional. A version-1 declaration predates the parent-class
+ * check and must be re-declared at version 2 to be evaluated, so no version-1
+ * policy can reach the evaluator without having passed the version check.
+ */
+export const EXPOSED_API_POLICY_VERSION = 2;
 
 /** Largest accepted canonical policy size in bytes. */
 export const EXPOSED_API_MAX_POLICY_BYTES = 65_536;
@@ -40,6 +49,16 @@ export interface ExposedApiPolicy {
 
   /** Identity classes admitted. */
   readonly callerClasses?: readonly CallerClass[];
+
+  /**
+   * Identity classes the caller's parent must belong to.
+   *
+   * Names the class of the caller's parent, never a participant's name. A
+   * top-level caller has no parent and does not satisfy a policy that names
+   * `parentCallerClasses`. Evaluated after the `callerClasses` check; the other
+   * checks continue to apply.
+   */
+  readonly parentCallerClasses?: readonly CallerClass[];
 
   /** Capabilities the caller must have declared. Every one is required. */
   readonly capabilities?: readonly string[];
@@ -57,6 +76,7 @@ const POLICY_KEYS = new Set([
   'policyVersion',
   'origins',
   'callerClasses',
+  'parentCallerClasses',
   'capabilities',
   'official',
 ]);
@@ -150,6 +170,7 @@ export function parseExposedApiPolicy(value: unknown): ExposedApiPolicy {
     policyVersion: typeof EXPOSED_API_POLICY_VERSION;
     origins?: readonly CallOrigin[];
     callerClasses?: readonly CallerClass[];
+    parentCallerClasses?: readonly CallerClass[];
     capabilities?: readonly string[];
     official?: boolean;
   } = { policyVersion: EXPOSED_API_POLICY_VERSION };
@@ -160,6 +181,14 @@ export function parseExposedApiPolicy(value: unknown): ExposedApiPolicy {
 
   if (record.callerClasses !== undefined) {
     policy.callerClasses = stringList(record.callerClasses, 'callerClasses', isCallerClass);
+  }
+
+  if (record.parentCallerClasses !== undefined) {
+    policy.parentCallerClasses = stringList(
+      record.parentCallerClasses,
+      'parentCallerClasses',
+      isCallerClass,
+    );
   }
 
   if (record.capabilities !== undefined) {
@@ -178,6 +207,18 @@ export function parseExposedApiPolicy(value: unknown): ExposedApiPolicy {
 }
 
 /**
+ * The kernel-provided context of one evaluation, plus the parent's class.
+ *
+ * `parentCallerClass` is resolved by the kernel from the caller frame's
+ * `parentIdentity` against the admission record, never from the caller's
+ * request. It is `undefined` when the caller has no parent.
+ */
+export interface ExposedApiEvaluationContext extends KernelCallContext {
+  /** Class of the caller's parent, when the caller is a caged child. */
+  readonly parentCallerClass?: CallerClass;
+}
+
+/**
  * Evaluates a Layer 1 policy for one call.
  *
  * Deterministic: the same policy, scope, and kernel-provided context always
@@ -190,7 +231,7 @@ export function parseExposedApiPolicy(value: unknown): ExposedApiPolicy {
 export function evaluateExposedApiPolicy(
   policy: ExposedApiPolicy,
   scope: ExposedApiScope,
-  context: KernelCallContext,
+  context: ExposedApiEvaluationContext,
 ): ExposedApiPolicyDecision {
   if (!exposedApiScopeAllowsOrigin(scope, context.origin)) {
     return { allowed: false, reason: `scope "${scope}" does not admit origin "${context.origin}"` };
@@ -208,6 +249,20 @@ export function evaluateExposedApiPolicy(
       allowed: false,
       reason: `policy does not admit caller class "${context.caller.callerClass}"`,
     };
+  }
+
+  if (policy.parentCallerClasses !== undefined) {
+    if (
+      context.parentCallerClass === undefined
+      || !policy.parentCallerClasses.includes(context.parentCallerClass)
+    ) {
+      return {
+        allowed: false,
+        reason: context.parentCallerClass === undefined
+          ? 'policy admits only callers with a parent, and the caller has none'
+          : `policy does not admit parent caller class "${context.parentCallerClass}"`,
+      };
+    }
   }
 
   if (policy.capabilities !== undefined) {

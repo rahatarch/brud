@@ -199,6 +199,10 @@ export class KernelCallChain implements KernelCallAuthority {
     return participant === undefined ? undefined : this.#instanceOf(participant.tokenId);
   }
 
+  callerForIdentity(identity: string): KernelCaller | undefined {
+    return this.#byIdentity.get(identity)?.caller;
+  }
+
   admitCall(caller: KernelCaller, requestBytes: number): boolean {
     if (!Number.isFinite(requestBytes) || requestBytes > this.#limits.maxRequestBytes) {
       return false;

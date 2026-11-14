@@ -145,6 +145,17 @@ export interface KernelCallAuthority {
   instanceOf(identity: string): unknown;
 
   /**
+   * The kernel caller recorded for an identity token, or `undefined`.
+   *
+   * Reads the same admission record `isLive` and `instanceOf` read. Used to
+   * resolve the caller's class for a caller that is named by another caller's
+   * frame — the parent of a caged child — without the caller supplying it.
+   *
+   * @param identity - Kernel-issued identity token.
+   */
+  callerForIdentity(identity: string): KernelCaller | undefined;
+
+  /**
    * Applies the per-identity call and size limits to one mediated call.
    *
    * @param caller - The caller making the call.

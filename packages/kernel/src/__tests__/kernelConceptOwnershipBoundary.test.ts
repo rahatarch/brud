@@ -1855,7 +1855,7 @@ describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ru
         token: 'impostor.giver',
         exposures: [
           { name: 'impostor.kernelOnly', scope: 'kernel' },
-          { name: 'impostor.officialOnly', scope: 'any', policy: { policyVersion: 1, official: true } },
+          { name: 'impostor.officialOnly', scope: 'any', policy: { policyVersion: 2, official: true } },
           { name: 'impostor.hostOnly', scope: 'host' },
           { name: 'impostor.open', scope: 'runtime' },
         ],
@@ -1957,7 +1957,7 @@ describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ru
         exposures: [{
           name: 'leak.guarded',
           scope: 'any',
-          policy: { policyVersion: 1, capabilities: ['leak:secret'] },
+          policy: { policyVersion: 2, capabilities: ['leak:secret'] },
         }],
         bindings: PING_BINDINGS,
       },

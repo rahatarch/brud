@@ -149,6 +149,7 @@ async function compose(
     { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
     { path: 'kernel:serviceModules/parser.js', official: true },
     { path: 'kernel:serviceModules/router.js', official: true },
+    { path: 'kernel:serviceModules/wasmCage.js', official: true },
   ];
 
   compositionCount += 1;
@@ -379,10 +380,10 @@ describe('universal exposed API scope model', () => {
       {
         token: 'model.layer1',
         exposures: [
-          { name: 'model.hostClass', scope: 'any', policy: { policyVersion: 1, callerClasses: ['host'] } },
-          { name: 'model.runtimeOrigin', scope: 'any', policy: { policyVersion: 1, origins: ['runtime'] } },
-          { name: 'model.capable', scope: 'any', policy: { policyVersion: 1, capabilities: ['model:read'] } },
-          { name: 'model.official', scope: 'any', policy: { policyVersion: 1, official: true } },
+          { name: 'model.hostClass', scope: 'any', policy: { policyVersion: 2, callerClasses: ['host'] } },
+          { name: 'model.runtimeOrigin', scope: 'any', policy: { policyVersion: 2, origins: ['runtime'] } },
+          { name: 'model.capable', scope: 'any', policy: { policyVersion: 2, capabilities: ['model:read'] } },
+          { name: 'model.official', scope: 'any', policy: { policyVersion: 2, official: true } },
         ],
         bindings: PING_BINDINGS,
       },
@@ -542,10 +543,10 @@ describe('universal exposed API scope model', () => {
     const cases: readonly { readonly exposure: Readonly<Record<string, unknown>>; readonly code: string }[] = [
       { exposure: { name: 'model.bad', version: 0 }, code: 'EXPOSED_API_INVALID_VERSION' },
       { exposure: { name: 'model.bad', scope: 'everywhere' }, code: 'EXPOSED_API_INVALID_SCOPE' },
-      { exposure: { name: 'model.bad', policy: { policyVersion: 2 } }, code: 'EXPOSED_API_INVALID_POLICY' },
-      { exposure: { name: 'model.bad', policy: { policyVersion: 1, allowedCallers: ['x'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
-      { exposure: { name: 'model.bad', policy: { policyVersion: 1, origins: ['moon'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
-      { exposure: { name: 'model.bad', policy: { policyVersion: 1, capabilities: ['Not A Token'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 1 } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 2, allowedCallers: ['x'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 2, origins: ['moon'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
+      { exposure: { name: 'model.bad', policy: { policyVersion: 2, capabilities: ['Not A Token'] } }, code: 'EXPOSED_API_INVALID_POLICY' },
       { exposure: { name: 'not a name' }, code: 'EXPOSED_API_INVALID_NAME' },
     ];
 
