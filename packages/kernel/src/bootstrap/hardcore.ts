@@ -236,6 +236,21 @@ function isFile(candidate: string): boolean {
   }
 }
 
+/**
+ * File extensions that are opaque binary leaves.
+ *
+ * A binary leaf is part of the package graph, but it has no import graph and
+ * cannot be read as text. Its content is its bytes, and the walk records it as
+ * a leaf: its path plus the SHA-256 of its bytes, with no traversal. A `.node`
+ * addon is the case the WASM cage's runtime ships as.
+ */
+const BINARY_LEAF_EXTENSIONS: readonly string[] = ['.node'];
+
+/** Reports whether a path is a binary leaf the graph records without traversal. */
+function isBinaryLeaf(filePath: string): boolean {
+  return BINARY_LEAF_EXTENSIONS.some((extension) => filePath.endsWith(extension));
+}
+
 /** Returns the transitive relative-import graph rooted at one file. */
 function collectPackageGraph(entryPath: string): ReadonlyMap<string, string> {
   const root = dirname(resolvePath(entryPath));
@@ -251,6 +266,12 @@ function collectPackageGraph(entryPath: string): ReadonlyMap<string, string> {
 
     visited.add(absolute);
     files.set(relative(root, absolute).replaceAll('\\', '/'), absolute);
+
+    // A binary leaf is recorded and not traversed: it has no import graph and
+    // its bytes are not text.
+    if (isBinaryLeaf(absolute)) {
+      return;
+    }
 
     const contents = readFileSync(absolute, 'utf8');
 

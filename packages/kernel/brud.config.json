@@ -15,6 +15,10 @@
     {
       "path": "kernel:serviceModules/router.js",
       "official": true
+    },
+    {
+      "path": "kernel:serviceModules/wasmCage.js",
+      "official": true
     }
   ],
   "plugins": []

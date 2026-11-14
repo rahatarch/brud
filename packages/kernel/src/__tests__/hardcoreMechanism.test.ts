@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, extname, join, resolve as resolvePath, sep } from 'node:path';
+import { dirname, extname, join, relative as relativePath, resolve as resolvePath, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,6 +10,7 @@ import {
   HARDCORE_SERVICES,
   bootKernel,
   buildHardcoreBootEntries,
+  computePackageContentHash,
   invokeHardcoreBootHooks,
   verifyHardcoreServices,
   type BrudConfig,
@@ -57,6 +58,12 @@ import {
   RouterToken,
   createRouterDescriptor,
 } from '../../services/Router/index.js';
+import {
+  WASM_CAGE_CONTRACT_METHODS,
+  WASM_CAGE_CONTRACT_VERSION,
+  WasmCageToken,
+  createWasmCageDescriptor,
+} from '../../services/WasmCage/index.js';
 
 /**
  * Production-mirror proofs that the hardcore mechanism is generic.
@@ -76,6 +83,7 @@ const IDENTITY_SHIM = join(KERNEL_ROOT, 'serviceModules', 'identityRegistry.ts')
 const EXPOSED_API_SHIM = join(KERNEL_ROOT, 'serviceModules', 'exposedApiRegistry.ts');
 const PARSER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'parser.ts');
 const ROUTER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'router.ts');
+const WASM_CAGE_SHIM = join(KERNEL_ROOT, 'serviceModules', 'wasmCage.ts');
 
 const HARDCORE_METHOD_NAMES: readonly string[] = [
   ...new Set([
@@ -83,6 +91,7 @@ const HARDCORE_METHOD_NAMES: readonly string[] = [
     ...EXPOSED_API_REGISTRY_CONTRACT_METHODS,
     ...PARSER_CONTRACT_METHODS,
     ...ROUTER_CONTRACT_METHODS,
+    ...WASM_CAGE_CONTRACT_METHODS,
   ]),
 ];
 
@@ -91,10 +100,12 @@ const HARDCORE_SERVICE_NAMES: readonly string[] = [
   ExposedApiRegistryToken.id,
   ParserToken.id,
   RouterToken.id,
+  WasmCageToken.id,
   'IdentityRegistry',
   'ExposedApiRegistry',
   'Parser',
   'Router',
+  'WasmCage',
 ];
 
 /** The real contract each compiled entry must declare, keyed by token id. */
@@ -117,6 +128,10 @@ const OWN_CONTRACTS: ReadonlyMap<
   [RouterToken.id, {
     version: ROUTER_CONTRACT_VERSION,
     methods: [...ROUTER_CONTRACT_METHODS],
+  }],
+  [WasmCageToken.id, {
+    version: WASM_CAGE_CONTRACT_VERSION,
+    methods: [...WASM_CAGE_CONTRACT_METHODS],
   }],
 ]);
 
@@ -448,8 +463,8 @@ describe('hardcore mechanism boundary (BC-4)', () => {
   });
 });
 
-describe('four real hardcore services through one generic mechanism', () => {
-  it('compiles exactly four entries, each with its own contract and a uniform boot hook', () => {
+describe('five real hardcore services through one generic mechanism', () => {
+  it('compiles exactly five entries, each with its own contract and a uniform boot hook', () => {
     assert.deepEqual(
       HARDCORE_SERVICES.map((entry) => entry.token),
       [
@@ -457,17 +472,23 @@ describe('four real hardcore services through one generic mechanism', () => {
         ExposedApiRegistryToken.id,
         ParserToken.id,
         RouterToken.id,
+        'brud.core.wasmCage',
       ],
     );
 
-    const [identity, exposedApi, parser, router] = HARDCORE_SERVICES;
+    const [identity, exposedApi, parser, router, wasmCage] = HARDCORE_SERVICES;
 
     assert.ok(
       identity !== undefined
       && exposedApi !== undefined
       && parser !== undefined
-      && router !== undefined,
+      && router !== undefined
+      && wasmCage !== undefined,
     );
+
+    assert.deepEqual(wasmCage.contractInterface, ['resolve']);
+    assert.equal(wasmCage.contractVersion, '1.0.0');
+    assert.equal(wasmCage.boot.length, 2);
     assert.equal(identity.contractVersion, IDENTITY_REGISTRY_CONTRACT_VERSION);
     assert.deepEqual(identity.contractInterface, [...IDENTITY_REGISTRY_CONTRACT_METHODS]);
     assert.equal(exposedApi.contractVersion, EXPOSED_API_REGISTRY_CONTRACT_VERSION);
@@ -478,7 +499,7 @@ describe('four real hardcore services through one generic mechanism', () => {
     assert.deepEqual(router.contractInterface, [...ROUTER_CONTRACT_METHODS]);
 
     // Each entry carries its own boot hook object, not a shared one.
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 4);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 5);
 
     for (const entry of HARDCORE_SERVICES) {
       assert.equal(entry.boot.length, 2, `${entry.token} boot hook must take (instance, context)`);
@@ -486,8 +507,8 @@ describe('four real hardcore services through one generic mechanism', () => {
       assert.match(entry.expectedBuiltContentHash, HEX_DIGEST);
     }
 
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 4);
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 4);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 5);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 5);
   });
 
   it('verifies each real package against its own entry and calls each real hook with its own verified data', async (t: TestContext) => {
@@ -537,23 +558,33 @@ describe('four real hardcore services through one generic mechanism', () => {
         resolvedPath: ROUTER_SHIM,
         manifest: admitParticipantManifest(RouterToken.id, routerDescriptor.manifest),
       },
+      {
+        descriptor: createWasmCageDescriptor() as unknown as ServiceDescriptor<unknown, unknown>,
+        path: 'kernel:serviceModules/wasmCage.js',
+        official: true,
+        resolvedPath: WASM_CAGE_SHIM,
+        manifest: admitParticipantManifest(WasmCageToken.id, undefined),
+      },
     ];
 
-    // Real verification of all four real packages against the real compiled
+    // Real verification of all five real packages against the real compiled
     // list. Each package is checked against its own entry's source pin.
     const packageHashes = verifyHardcoreServices(HARDCORE_SERVICES, composed, KERNEL_CONFIG_PATH);
-    const [identityEntry, exposedApiEntry, parserEntry, routerEntry] = HARDCORE_SERVICES;
+    const [identityEntry, exposedApiEntry, parserEntry, routerEntry, wasmCageEntry] =
+      HARDCORE_SERVICES;
 
     assert.ok(
       identityEntry !== undefined
       && exposedApiEntry !== undefined
       && parserEntry !== undefined
-      && routerEntry !== undefined,
+      && routerEntry !== undefined
+      && wasmCageEntry !== undefined,
     );
     assert.equal(packageHashes.get(IdentityRegistryToken.id), identityEntry.expectedContentHash);
     assert.equal(packageHashes.get(ExposedApiRegistryToken.id), exposedApiEntry.expectedContentHash);
     assert.equal(packageHashes.get(ParserToken.id), parserEntry.expectedContentHash);
     assert.equal(packageHashes.get(RouterToken.id), routerEntry.expectedContentHash);
+    assert.equal(packageHashes.get(WasmCageToken.id), wasmCageEntry.expectedContentHash);
 
     const composition = buildHardcoreBootEntries(composed, packageHashes);
 
@@ -593,6 +624,7 @@ describe('four real hardcore services through one generic mechanism', () => {
         [
           ExposedApiRegistryToken.id,
           IdentityRegistryToken.id,
+          WasmCageToken.id,
           ParserToken.id,
           RouterToken.id,
         ].sort(),
@@ -605,7 +637,7 @@ describe('four real hardcore services through one generic mechanism', () => {
       const records = loadIdentityRegistryStorage(storagePath).records;
       const byPublisher = new Map(records.map((record) => [record.publisher, record]));
 
-      assert.equal(records.length, 4);
+      assert.equal(records.length, 5);
       assert.equal(identities.get(IdentityRegistryToken.id), byPublisher.get(IdentityRegistryToken.id)?.token);
       assert.equal(
         byPublisher.get(IdentityRegistryToken.id)?.contentHash,
@@ -663,6 +695,7 @@ describe('four real hardcore services through one generic mechanism', () => {
         [
           ExposedApiRegistryToken.id,
           IdentityRegistryToken.id,
+          WasmCageToken.id,
           ParserToken.id,
           RouterToken.id,
         ].sort(),
@@ -684,7 +717,7 @@ describe('four real hardcore services through one generic mechanism', () => {
       const parserRecord = records.find((record) => record.publisher === ParserToken.id);
       const routerRecord = records.find((record) => record.publisher === RouterToken.id);
 
-      assert.equal(records.length, 4);
+      assert.equal(records.length, 5);
       assert.equal(exposedApiRecord?.contentHash, HARDCORE_SERVICES[1]?.expectedContentHash);
       assert.equal(parserRecord?.contentHash, HARDCORE_SERVICES[2]?.expectedContentHash);
       assert.equal(routerRecord?.contentHash, HARDCORE_SERVICES[3]?.expectedContentHash);
@@ -826,9 +859,10 @@ describe('hardcore persistence independence (BC-6)', () => {
         'kernel:serviceModules/exposedApiRegistry.js',
         'kernel:serviceModules/parser.js',
         'kernel:serviceModules/router.js',
+        'kernel:serviceModules/wasmCage.js',
         registrantPath,
       ],
-      'the composition carries the four hardcore services and one non-storage fixture only',
+      'the composition carries the five hardcore services and one non-storage fixture only',
     );
 
     const configPath = join(root, 'brud.config.json');
@@ -883,5 +917,132 @@ describe('hardcore persistence independence (BC-6)', () => {
       'the same composition keeps the same identity tokens across a restart',
     );
     assert.deepEqual(loadScopeRecord(scopeRecordPath), firstScope);
+  });
+});
+
+
+
+/**
+ * BC-WASM-PIN — the cage's compiled pin covers its main `.node` binary.
+ *
+ * Reads the compiled list's cage entry and the cage's package on disk. Fails
+ * if the pinned source hash is not the hash of the package graph that contains
+ * the binary, which is what proves the pin covers the `.node` and not only the
+ * cage's TypeScript.
+ */
+describe('BC-WASM-PIN: the cage pin covers its main .node binary', () => {
+  const CAGE_ROOT = resolvePath(
+    dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    'services',
+    'WasmCage',
+  );
+  const CAGE_ENTRY = join(CAGE_ROOT, 'serviceModule.ts');
+  const CAGE_SHIM = join(CAGE_ROOT, '..', '..', 'serviceModules', 'wasmCage.ts');
+  const CAGE_BINARY = join(CAGE_ROOT, 'native', 'brud-wasm-cage.linux-x64-gnu.node');
+
+  it('pins the cage source hash to the graph that contains the .node', () => {
+    const cage = HARDCORE_SERVICES.find((entry) => entry.token === 'brud.core.wasmCage');
+
+    assert.ok(cage, 'the compiled list carries the cage');
+    assert.equal(cage.contractVersion, '1.0.0');
+    assert.deepEqual([...cage.contractInterface], ['resolve']);
+    assert.equal(typeof cage.boot, 'function');
+    assert.equal(cage.boot.length, 2, 'the boot hook has the uniform two-argument signature');
+
+    assert.ok(existsSync(CAGE_BINARY), 'the cage binary exists on disk');
+    assert.equal(computePackageContentHash(CAGE_SHIM), cage.expectedContentHash);
+  });
+
+  it('changes the pin when the .node bytes change (guard canary)', () => {
+    const original = computePackageContentHash(CAGE_SHIM);
+    const originalBytes = readFileSync(CAGE_BINARY);
+    const tampered = Buffer.concat([originalBytes, Buffer.from([0x00])]);
+
+    try {
+      writeFileSync(CAGE_BINARY, tampered);
+      const afterTamper = computePackageContentHash(CAGE_SHIM);
+      assert.notEqual(afterTamper, original, 'the pin must cover the binary bytes');
+    } finally {
+      writeFileSync(CAGE_BINARY, originalBytes);
+    }
+
+    assert.equal(computePackageContentHash(CAGE_SHIM), original, 'restored byte-identically');
+  });
+});
+
+/**
+ * BC-WASM-NO-CAGE-IN-KERNEL — no kernel source outside the cage's directory
+ * names a cage concept, a Wasmtime term, or a caged-participant term.
+ *
+ * Reads the kernel's non-test source outside `services/WasmCage/`. A hit means
+ * the kernel core knows a concept the cage owns, which the self-containment
+ * rule forbids.
+ */
+describe('BC-WASM-NO-CAGE-IN-KERNEL: no kernel source outside the cage names it', () => {
+  const CAGE_RELATIVE = join('services', 'WasmCage');
+
+  function nonCageKernelSources(directory: string): readonly string[] {
+    const found: string[] = [];
+
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const absolute = join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        if (entry.name === 'node_modules' || entry.name === 'dist'
+          || entry.name === '__tests__' || entry.name === 'target') {
+          continue;
+        }
+
+        if (relativePath(CAGE_RELATIVE, absolute) === '.' || absolute.endsWith(CAGE_RELATIVE)) {
+          continue;
+        }
+
+        found.push(...nonCageKernelSources(absolute));
+        continue;
+      }
+
+      if (entry.isFile() && entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) {
+        found.push(absolute);
+      }
+    }
+
+    return found;
+  }
+
+  it('names no cage concept outside services/WasmCage/', () => {
+    const root = resolvePath(dirname(fileURLToPath(import.meta.url)), '..', '..');
+    const violations: string[] = [];
+
+    for (const file of nonCageKernelSources(root)) {
+      const source = readFileSync(file, 'utf8');
+
+      // Two kernel files legitimately name the cage. The compiled hardcore list
+      // carries every entry's token, the cage's included, exactly as it carries
+      // `brud.core.identityRegistry` and the others. The cage's own
+      // `serviceModules/wasmCage.ts` shim is the cage's entry point, the same
+      // shape as the four other `serviceModules/*.ts` shims. Both are exempt by
+      // name; every other kernel source must not name a cage concept.
+      if (file.endsWith(join('bootstrap', 'hardcoreServices.ts'))
+        || file.endsWith(join('serviceModules', 'wasmCage.ts'))) {
+        continue;
+      }
+
+      for (const pattern of [/\bWasmtime\b/u, /\bwasmtime\b/u, /brud\.core\.wasmCage/u,
+        /\bwasmCage\b/u, /\bWasmCage\b/u, /\bcaged participant\b/iu]) {
+        if (pattern.test(source)) {
+          violations.push(`${relativePath(root, file)}: ${String(pattern)}`);
+        }
+      }
+    }
+
+    assert.deepEqual(violations, []);
+  });
+
+  it('detects a reintroduced cage concept (guard canary)', () => {
+    const probe = 'const cage = "brud.core.wasmCage";';
+
+    assert.match(probe, /brud\.core\.wasmCage/u);
   });
 });

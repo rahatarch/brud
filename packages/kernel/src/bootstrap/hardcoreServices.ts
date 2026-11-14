@@ -45,6 +45,20 @@ const ROUTER_SOURCE_HASH =
 const ROUTER_BUILT_HASH =
   'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
 
+/**
+ * Pinned digests of the WASM cage package.
+ *
+ * The source pin is computed by `computePackageContentHash` over the cage's
+ * package graph, which includes the cage's built `.node` artifact as a binary
+ * leaf. The built pin is recorded as needing a build: no built kernel has been
+ * produced since the cage was added, so the value below is a placeholder that
+ * a kernel build replaces.
+ */
+const WASM_CAGE_SOURCE_HASH =
+  'f64c2ca7b05e5c790bfeb2bb2b72b55fd960291d4f9d3a5832c6a768328127f0';
+const WASM_CAGE_BUILT_HASH =
+  '0000000000000000000000000000000000000000000000000000000000000000';
+
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
   readonly publisher: string;
@@ -191,6 +205,24 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     // opened by its descriptor and closed by its module's boot-registrant hook,
     // which the kernel calls after composed construction; this hook only
     // satisfies the uniform signature.
+    boot: (_instance: unknown, _context: HardcoreBootContext): void => {
+      void _instance;
+      void _context;
+    },
+  },
+  {
+    token: 'brud.core.wasmCage',
+    expectedContentHash: WASM_CAGE_SOURCE_HASH,
+    expectedBuiltContentHash: WASM_CAGE_BUILT_HASH,
+    contractVersion: '1.0.0',
+    contractInterface: ['resolve'],
+    // The cage's boot hook is a no-op at this step.
+    //
+    // The three things the design record (W-05, Gap 3) names — register the
+    // registry facade, record the cage's identity as non-official, seal —
+    // need the exposed-API registry's registration path and the identity
+    // mapping, and both land in a later plan step. This hook satisfies the
+    // mechanism's uniform signature and does nothing else.
     boot: (_instance: unknown, _context: HardcoreBootContext): void => {
       void _instance;
       void _context;
