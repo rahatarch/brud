@@ -20,8 +20,8 @@ const DEFAULT_MAX_OPERATIONS = 1_000;
  * Level-1 Brud Protocol v2 Parser.
  *
  * Owns the `[BRUD]` scanner and nothing else. It has no registry, no broker
- * dependency, and no knowledge of the kind vocabulary beyond the shared
- * syntactic default. Routing belongs to `brud.core.router`.
+ * dependency, and no knowledge of the kind vocabulary beyond validating the
+ * kind token written on the header. Routing belongs to `brud.core.router`.
  */
 export class ParserService implements IBrudParserService, IServiceLifecycle {
   private disposed = false;

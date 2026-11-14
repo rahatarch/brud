@@ -77,6 +77,7 @@ beforeEach(async () => {
     options: {
       'identity.registry.path': identityRegistryPath,
       'exposedApi.scopeRecord.path': scopeRecordPath,
+      'router.root': root,
     },
   };
 
@@ -146,6 +147,8 @@ async function compose(
   const services: { path: string; official?: boolean }[] = [
     { path: 'kernel:serviceModules/identityRegistry.js', official: true },
     { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+    { path: 'kernel:serviceModules/parser.js', official: true },
+    { path: 'kernel:serviceModules/router.js', official: true },
   ];
 
   compositionCount += 1;

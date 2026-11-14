@@ -2,7 +2,6 @@ import {
   isValidBrudKind,
   type BrudOperationKind,
 } from '../../../src/contracts/brudOperation.js';
-import { PARSER_DEFAULT_KIND } from '../contracts/kind.js';
 import { parseParameters } from './parameters.js';
 import { BRACE_PATTERN, BrudParseError, CALL_PATTERN } from './syntax.js';
 
@@ -10,7 +9,7 @@ export { BRUD_PARSE_ERROR, BrudParseError } from './syntax.js';
 
 /** One `[CALL …]` … `[END]` block with its kind, name and parsed parameters. */
 export interface ScannedCall {
-  /** Operation kind declared by the header, or the default for a bare name. */
+  /** Operation kind declared by the header. */
   readonly kind: BrudOperationKind;
 
   /** Operation name (tool or action name) taken from the opening marker. */
@@ -73,9 +72,8 @@ export function extractWrapper(raw: string): { readonly body: string; readonly l
  * The wrapper is extracted first, then every `[CALL …]` is split at the first
  * `[END]` that is not inside a protected parameter.
  *
- * Header forms:
- * - `[CALL <name>]` — defaults to `kind: tool`.
- * - `[CALL <kind> <name>]` — explicit kind, e.g. `[CALL action list_sessions]`.
+ * Header form: `[CALL <kind> <name>]`, e.g. `[CALL action list_sessions]`.
+ * A bare `[CALL <name>]` header names no kind and is refused.
  *
  * @param raw - Untrusted model output.
  * @param resolveProtected - Protected-parameter resolver.
@@ -181,8 +179,8 @@ interface CallHeader {
 /**
  * Parses a `[CALL …]` header.
  *
- * One token is a bare operation name and defaults to `tool`; two tokens are
- * `<kind> <name>`. The kind must satisfy the shared kind grammar.
+ * Two tokens are `<kind> <name>`. The kind must satisfy the shared kind
+ * grammar. One token names no kind, so the header is refused.
  *
  * @param trimmed - Trimmed header line.
  * @param line - Absolute 1-based line number for diagnostics.
@@ -203,7 +201,7 @@ function parseCallHeader(trimmed: string, line: number): CallHeader | undefined 
   }
 
   if (second === undefined) {
-    return { kind: PARSER_DEFAULT_KIND, name: first };
+    throw new BrudParseError('operation kind is required in [CALL]', line);
   }
 
   if (second === '') {

@@ -40,6 +40,8 @@ async function writeConfig(root: string, services: readonly string[]): Promise<s
     services: [
       { path: 'kernel:serviceModules/identityRegistry.js', official: true },
       { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+      { path: 'kernel:serviceModules/parser.js', official: true },
+      { path: 'kernel:serviceModules/router.js', official: true },
       ...services.map((path) => ({ path, official: true })),
     ],
     plugins: [],

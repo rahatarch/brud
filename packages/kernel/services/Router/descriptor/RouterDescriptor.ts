@@ -10,6 +10,19 @@ import { RouterToken } from './tokens.js';
 /** Tier assigned to the Router descriptor. */
 export const ROUTER_SERVICE_TIER: ServiceTier = 'core';
 
+/** Contract version declared for the Router interface. */
+export const ROUTER_CONTRACT_VERSION = '1.0.0';
+
+/** Methods declared for the Router interface. */
+export const ROUTER_CONTRACT_METHODS = [
+  'register',
+  'closeRegistration',
+  'isRegistrationOpen',
+  'registeredKinds',
+  'route',
+  'dispatch',
+] as const;
+
 /** Configuration for {@link createRouterDescriptor}. */
 export interface RouterDescriptorOptions {
   /** Parser override for standalone construction and tests. */
@@ -36,6 +49,10 @@ export function createRouterDescriptor(
     token: RouterToken,
     tier: ROUTER_SERVICE_TIER,
     dependencies: [ParserToken],
+    contract: {
+      version: ROUTER_CONTRACT_VERSION,
+      methods: ROUTER_CONTRACT_METHODS,
+    },
     accessPolicy: {
       allowedCallers: ['kernel', ROUTER_CALLER_ID, 'brud.host.daemon'],
     },

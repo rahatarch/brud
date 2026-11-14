@@ -530,7 +530,7 @@ describe('hardcore service enforcement production mirror', () => {
     await assert.rejects(readFile(plugin.markerPath, 'utf8'));
   });
 
-  it('initializes both hardcore services before every composed service in the full daemon composition', async (t) => {
+  it('initializes every hardcore service before every composed service in the full daemon composition', async (t) => {
     const workspace = await createWorkspace(t);
     const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
     const composed = await daemonServices();
@@ -558,8 +558,8 @@ describe('hardcore service enforcement production mirror', () => {
 
     const observed = (await readFile(observer.logPath, 'utf8')).trim().split('\n');
 
-    // The composed observer is listed first in the config, yet both hardcore
-    // services occupy the first two initialization positions, in config order
+    // The composed observer is listed first in the config, yet the hardcore
+    // services occupy the first initialization positions, in dependency order
     // inside the hardcore partition.
     assert.deepEqual(observed, [
       'init:protected',

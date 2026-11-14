@@ -3,15 +3,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { bootKernel, type BrudKernel } from '../../index.js';
-import type { ServiceContext } from '../contracts/lifecycle.js';
-import {
-  PARSER_DEFAULT_KIND,
-  type IBrudParserService,
-} from '../../services/Parser/contracts/index.js';
-import { ParserToken } from '../../services/Parser/descriptor/tokens.js';
-import { isValidRouterKind } from '../../services/Router/contracts/index.js';
-import { workspaceContextOptions } from './support/workspaceContext.js';
+import { bootKernel, type BrudKernel } from '../../../index.js';
+import type { ServiceContext } from '../../../src/contracts/lifecycle.js';
+import type { IBrudParserService } from '../contracts/index.js';
+import { ParserToken } from '../descriptor/tokens.js';
+import { isValidRouterKind } from '../../Router/contracts/index.js';
+import { workspaceContextOptions } from '../../../src/__tests__/support/workspaceContext.js';
 
 const roots: string[] = [];
 
@@ -52,7 +49,7 @@ async function bootParserRouter(): Promise<{
 }
 
 describe('Parser and Router kind declarations', () => {
-  it('parses a bare header with the Parser\'s own default kind', async () => {
+  it('refuses a bare header because it names no operation kind', async () => {
     const { kernel, parser } = await bootParserRouter();
 
     try {
@@ -64,13 +61,44 @@ describe('Parser and Router kind declarations', () => {
         '[/BRUD]',
       ].join('\n'));
 
+      assert.equal(parsed.ok, false);
+
+      if (parsed.ok) {
+        assert.fail('a bare [CALL] header must not parse');
+      }
+
+      assert.equal(parsed.error.code, 'PARSE_ERROR');
+      assert.equal(
+        parsed.error.friendly,
+        'operation kind is required in [CALL] (line 2)',
+      );
+      assert.equal(parsed.error.details, parsed.error.friendly);
+      assert.equal(parsed.error.line, 2);
+    } finally {
+      await kernel.shutdown();
+    }
+  });
+
+  it('parses an explicit header with the kind written on it', async () => {
+    const { kernel, parser } = await bootParserRouter();
+
+    try {
+      const parsed = parser.parse([
+        '[BRUD]',
+        '[CALL tool echo]',
+        'text: hello',
+        '[END]',
+        '[/BRUD]',
+      ].join('\n'));
+
       assert.equal(parsed.ok, true);
 
       if (!parsed.ok) {
         return;
       }
 
-      assert.equal(parsed.operations[0]?.kind, PARSER_DEFAULT_KIND);
+      assert.equal(parsed.operations.length, 1);
+      assert.equal(parsed.operations[0]?.kind, 'tool');
       assert.equal(parsed.operations[0]?.name, 'echo');
     } finally {
       await kernel.shutdown();
@@ -78,7 +106,7 @@ describe('Parser and Router kind declarations', () => {
   });
 
   it('validates kind tokens through its own contract validator', () => {
-    assert.equal(isValidRouterKind(PARSER_DEFAULT_KIND), true);
+    assert.equal(isValidRouterKind('tool'), true);
     assert.equal(isValidRouterKind('action'), true);
     assert.equal(isValidRouterKind('widget-2'), true);
     assert.equal(isValidRouterKind('not a kind'), false);

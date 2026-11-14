@@ -1,5 +1,4 @@
 export type { IBrudParserService } from './IParserService.js';
-export { PARSER_DEFAULT_KIND } from './kind.js';
 export type {
   BrudOperation,
   BrudParseFailure,

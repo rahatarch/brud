@@ -41,6 +41,8 @@ async function bootWith(
         { path: FIXTURE_PATH },
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
         { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+        { path: 'kernel:serviceModules/parser.js', official: true },
+        { path: 'kernel:serviceModules/router.js', official: true },
       ],
       plugins: [],
     }),
@@ -51,6 +53,7 @@ async function bootWith(
     options: {
       __contractDeclarations: declarations,
       ...identityRegistryContextOptions(root),
+      'router.root': root,
       ...options,
     },
   });

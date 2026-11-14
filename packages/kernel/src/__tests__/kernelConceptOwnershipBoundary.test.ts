@@ -1773,7 +1773,7 @@ interface FixtureComposition {
   readonly kernels: BrudKernel[];
 }
 
-/** Writes a real composition: the two hardcore services plus the fixtures. */
+/** Writes a real composition: the four hardcore services plus the fixtures. */
 async function writeComposition(
   t: TestContext,
   participants: readonly FixtureParticipant[],
@@ -1799,6 +1799,8 @@ async function writeComposition(
   const services: { path: string; official?: boolean }[] = [
     { path: 'kernel:serviceModules/identityRegistry.js', official: true },
     { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
+    { path: 'kernel:serviceModules/parser.js', official: true },
+    { path: 'kernel:serviceModules/router.js', official: true },
   ];
 
   for (const [index, participant] of participants.entries()) {
@@ -1813,7 +1815,11 @@ async function writeComposition(
   const configPath = join(root, 'brud.config.json');
   await writeFile(configPath, JSON.stringify({ services }, null, 2), 'utf8');
 
-  return { configPath, options: { 'identity.registry.path': identityPath }, kernels };
+  return {
+    configPath,
+    options: { 'identity.registry.path': identityPath, 'router.root': root },
+    kernels,
+  };
 }
 
 /** Boots a real kernel from a real composition; its cleanup shuts it down. */

@@ -33,6 +33,18 @@ const EXPOSED_API_REGISTRY_SOURCE_HASH =
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
+/** Pinned digests of the parser package. */
+const PARSER_SOURCE_HASH =
+  '47f283d3b7fc1bc5c5343e4bf029560822e77f28f58122c2693b98e0d8d0c38a';
+const PARSER_BUILT_HASH =
+  'b38c009b141eb7b15c8a0fd59529f75396c63f1a71f5eff264430dbf11998c6e';
+
+/** Pinned digests of the router package. */
+const ROUTER_SOURCE_HASH =
+  '8a3addc9379350ee6405657f193088ac7fdc60ba9cd3bdd17a5ad2a845171a87';
+const ROUTER_BUILT_HASH =
+  'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
+
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
   readonly publisher: string;
@@ -147,6 +159,41 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
       }
 
       registry.seal();
+    },
+  },
+  {
+    token: 'brud.core.parser',
+    expectedContentHash: PARSER_SOURCE_HASH,
+    expectedBuiltContentHash: PARSER_BUILT_HASH,
+    contractVersion: '1.0.0',
+    contractInterface: ['parse'],
+    // The Parser performs no boot-time work. Its instance is ready once the
+    // kernel initializes it; this hook only satisfies the uniform signature.
+    boot: (_instance: unknown, _context: HardcoreBootContext): void => {
+      void _instance;
+      void _context;
+    },
+  },
+  {
+    token: 'brud.core.router',
+    expectedContentHash: ROUTER_SOURCE_HASH,
+    expectedBuiltContentHash: ROUTER_BUILT_HASH,
+    contractVersion: '1.0.0',
+    contractInterface: [
+      'register',
+      'closeRegistration',
+      'isRegistrationOpen',
+      'registeredKinds',
+      'route',
+      'dispatch',
+    ],
+    // The Router performs no boot-time work here. Its registration window is
+    // opened by its descriptor and closed by its module's boot-registrant hook,
+    // which the kernel calls after composed construction; this hook only
+    // satisfies the uniform signature.
+    boot: (_instance: unknown, _context: HardcoreBootContext): void => {
+      void _instance;
+      void _context;
     },
   },
 ];

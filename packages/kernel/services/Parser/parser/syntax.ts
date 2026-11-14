@@ -11,8 +11,8 @@ export const BRACE_PATTERN = /^\{([^{}]+)\}$/;
  * Call header: `[CALL <name>]` or `[CALL <kind> <name>]`.
  *
  * Group 1 is the first token and group 2 the optional second token. The
- * scanner decides which is the kind from the group count, so the bare
- * single-token form keeps naming a `tool`.
+ * scanner requires the two-token form and refuses the bare single-token form,
+ * because a bare header names no kind.
  */
 export const CALL_PATTERN = /^\[CALL\s+([^\s\]]+)(?:\s+([^\s\]]+))?\s*\]$/;
 
