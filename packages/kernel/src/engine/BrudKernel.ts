@@ -18,6 +18,10 @@ import { topologicalSort } from './dag.js';
 import { LifecycleStateError } from './errors.js';
 import type { KernelLifecycleState } from './state.js';
 
+/**
+ * Planned: the operation dispatch surface is a universal kernel primitive.
+ * No production caller drives it yet; it is retained deliberately.
+ */
 export interface KernelExecuteOptions {
   signal?: AbortSignal;
   metadata?: Record<string, unknown>;
@@ -91,7 +95,7 @@ export class BrudKernel implements IBrudKernel {
    * Tokens the compiled hardcore list supplies to the boot loader.
    *
    * The engine uses this only to partition the initialization order. It never
-   * infers hardcoredness from a descriptor's token, tier, or official flag.
+   * infers hardcoredness from a descriptor's token or tier.
    */
   private readonly hardcoreTokens: ReadonlySet<string>;
 

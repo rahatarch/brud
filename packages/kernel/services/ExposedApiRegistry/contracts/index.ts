@@ -6,9 +6,7 @@ export {
 } from './registrant.js';
 export {
   CORE_API_NAME,
-  identityProjection,
   lastProjectionWins,
-  type CoreApiName,
 } from './coreApis.js';
 export {
   EXPOSED_API_NAME_PATTERN,

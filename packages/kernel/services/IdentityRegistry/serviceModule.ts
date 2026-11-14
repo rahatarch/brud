@@ -1,5 +1,4 @@
 import type { KernelServiceModuleContext } from '../../src/bootstrap/bootTypes.js';
-import type { IIdentityRegistry } from './contracts/types.js';
 import {
   IDENTITY_REGISTRY_CONTEXT_SCOPE,
   IDENTITY_REGISTRY_PATH_CONTEXT_FIELD,
@@ -32,23 +31,3 @@ export function createService(context: KernelServiceModuleContext) {
   });
 }
 
-/**
- * Reads the identity registry instance published during construction.
- *
- * A boot-time issuer calls this from its own descriptor factory or
- * `initialize`, and declares {@link IdentityRegistryToken} as a dependency so
- * the registry has already loaded its storage.
- */
-export function requireIdentityRegistry(
-  context: KernelServiceModuleContext,
-): IIdentityRegistry {
-  const registry = context.shared[IDENTITY_REGISTRY_SLOT] as IIdentityRegistry | undefined;
-
-  if (registry === undefined) {
-    throw new Error(
-      'brud.core.identityRegistry must be constructed before a boot-time identity issuer runs',
-    );
-  }
-
-  return registry;
-}

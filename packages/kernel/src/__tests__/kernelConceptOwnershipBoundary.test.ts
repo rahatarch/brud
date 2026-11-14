@@ -24,6 +24,29 @@ const BOOT_TYPES = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootTypes.ts');
 const KERNEL_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'kernel.ts');
 const STANDARD_KERNEL = join(KERNEL_ROOT, 'src', 'bootstrap', 'createStandardKernel.ts');
 const BOOT_LOADER = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootKernelInternal.ts');
+const SERVICE_DESCRIPTOR = join(KERNEL_ROOT, 'src', 'contracts', 'serviceDescriptor.ts');
+const CORE_APIS = join(
+  KERNEL_ROOT,
+  'services',
+  'ExposedApiRegistry',
+  'contracts',
+  'coreApis.ts',
+);
+const IDENTITY_REGISTRY_SERVICE = join(
+  KERNEL_ROOT,
+  'services',
+  'IdentityRegistry',
+  'orchestrator',
+  'IdentityRegistryService.ts',
+);
+const IDENTITY_REGISTRY_MODULE = join(
+  KERNEL_ROOT,
+  'services',
+  'IdentityRegistry',
+  'serviceModule.ts',
+);
+const BRUD_OPERATION = join(KERNEL_ROOT, 'src', 'contracts', 'brudOperation.ts');
+const CONTAINER_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'container.ts');
 
 const BANNED_EXPORT_NAMES: readonly string[] = [
   'KernelPlugin',
@@ -641,6 +664,77 @@ export function interfaceMemberNames(source: string, interfaceName: string): rea
  * named member is a service's option, whatever the service is called, and
  * belongs inside the bag where that service interprets it.
  */
+/** Reports any officialness field declared on the service descriptor shape. */
+export function descriptorOfficialMembers(source: string): readonly string[] {
+  return interfaceMemberNames(source, 'ServiceDescriptor')
+    .filter((name) => name === 'official');
+}
+
+/**
+ * Non-universal dormant declarations removed in cleanup Step 5.
+ *
+ * Paths are relative to the kernel package root. Each name belonged to a
+ * specific participant or duplicated that participant's concept, so it does
+ * not return to the kernel.
+ */
+const REMOVED_DORMANT_EXPORTS: ReadonlyMap<string, readonly string[]> = new Map([
+  [
+    'services/ExposedApiRegistry/contracts/coreApis.ts',
+    ['CoreApiName', 'identityProjection'],
+  ],
+  [
+    'services/IdentityRegistry/orchestrator/IdentityRegistryService.ts',
+    ['createIdentityRegistry'],
+  ],
+  [
+    'services/IdentityRegistry/serviceModule.ts',
+    ['requireIdentityRegistry'],
+  ],
+  ['src/contracts/brudOperation.ts', ['BrudBuiltInKind']],
+]);
+
+/** Non-exported dormant state that belonged to no universal primitive. */
+const REMOVED_DORMANT_IDENTIFIERS: ReadonlyMap<string, readonly string[]> = new Map([
+  ['src/contracts/container.ts', ['counter']],
+]);
+
+/**
+ * Returns every removed non-universal dormant declaration that reappeared.
+ *
+ * The check is keyed by the file that owned the declaration, so a name that is
+ * legitimate elsewhere does not trigger a finding.
+ */
+export function dormantReintroductionViolations(
+  sources: readonly { readonly file: string; readonly source: string }[],
+): readonly string[] {
+  const violations: string[] = [];
+
+  for (const { file, source } of sources) {
+    const exportedNames = new Set(exportedDeclarationNames(source));
+
+    for (const name of REMOVED_DORMANT_EXPORTS.get(file) ?? []) {
+      if (exportedNames.has(name)) {
+        violations.push(`${file}:${name}`);
+      }
+    }
+
+    for (const name of REMOVED_DORMANT_IDENTIFIERS.get(file) ?? []) {
+      if (new RegExp(`\\b${escapeRegExp(name)}\\b`, 'u').test(source)) {
+        violations.push(`${file}:${name}`);
+      }
+    }
+  }
+
+  return violations.sort();
+}
+
+/**
+ * The only named fields a kernel boot options type may declare.
+ *
+ * The kernel owns the host-supplied options bag and the logger. Every other
+ * named member is a service's option, whatever the service is called, and
+ * belongs inside the bag where that service interprets it.
+ */
 const KERNEL_OWNED_BOOT_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
   ['BootKernelOptions', ['logger', 'options']],
   ['ComposeKernelOptions', ['logger', 'options']],
@@ -894,7 +988,6 @@ const KNOWN_EXPORT_PARTICIPANT_FINDINGS = new Set<string>([
   'src/contracts/brudOperation.ts:BRUD_KIND_ACTION: comment',
   'src/contracts/brudOperation.ts:BRUD_KIND_TOOL: comment',
   'src/contracts/handler.ts:PluginMetadata: name',
-  'src/contracts/serviceDescriptor.ts:ServiceDescriptor.official: comment',
 ]);
 
 describe('BC-5: kernel source carries no plugin-manager key', () => {
@@ -1004,6 +1097,95 @@ describe('BC-7: kernel root exports no participant-shaped declaration', () => {
     assert.deepEqual(
       participantShapedExportFindings(declarations, new Set(['Probe'])),
       ['canary.ts:Probe.subjectId: comment'],
+    );
+  });
+});
+
+describe('BC-8: no officialness on a descriptor and no removed dormant declaration', () => {
+  it('declares no officialness field on the real service descriptor', async () => {
+    const source = await readFile(SERVICE_DESCRIPTOR, 'utf8');
+
+    assert.deepEqual(descriptorOfficialMembers(source), []);
+    assert.deepEqual(
+      [...interfaceMemberNames(source, 'ServiceDescriptor')].sort(),
+      [
+        'accessPolicy',
+        'contract',
+        'dependencies',
+        'factory',
+        'project',
+        'tier',
+        'token',
+      ],
+    );
+  });
+
+  it('keeps every removed non-universal dormant declaration absent', async () => {
+    const sources = [
+      {
+        file: 'services/ExposedApiRegistry/contracts/coreApis.ts',
+        source: await readFile(CORE_APIS, 'utf8'),
+      },
+      {
+        file: 'services/IdentityRegistry/orchestrator/IdentityRegistryService.ts',
+        source: await readFile(IDENTITY_REGISTRY_SERVICE, 'utf8'),
+      },
+      {
+        file: 'services/IdentityRegistry/serviceModule.ts',
+        source: await readFile(IDENTITY_REGISTRY_MODULE, 'utf8'),
+      },
+      {
+        file: 'src/contracts/brudOperation.ts',
+        source: await readFile(BRUD_OPERATION, 'utf8'),
+      },
+      {
+        file: 'src/contracts/container.ts',
+        source: await readFile(CONTAINER_CONTRACT, 'utf8'),
+      },
+    ];
+
+    assert.deepEqual(dormantReintroductionViolations(sources), []);
+  });
+
+  it('detects a reintroduced officialness field and dormant declaration (guard canary)', () => {
+    assert.deepEqual(
+      descriptorOfficialMembers(
+        'interface ServiceDescriptor<T> { token: T; official?: boolean; }',
+      ),
+      ['official'],
+    );
+    assert.deepEqual(
+      dormantReintroductionViolations([
+        {
+          file: 'services/ExposedApiRegistry/contracts/coreApis.ts',
+          source: 'export type CoreApiName = string;\n'
+            + 'export function identityProjection(value: unknown) { return value; }',
+        },
+        {
+          file: 'services/IdentityRegistry/orchestrator/IdentityRegistryService.ts',
+          source: 'export function createIdentityRegistry() {}',
+        },
+        {
+          file: 'services/IdentityRegistry/serviceModule.ts',
+          source: 'export function requireIdentityRegistry() {}',
+        },
+        {
+          file: 'src/contracts/brudOperation.ts',
+          source: 'export type BrudBuiltInKind = string;',
+        },
+        {
+          file: 'src/contracts/container.ts',
+          source: 'let counter = 0;',
+        },
+      ]),
+      [
+        'services/ExposedApiRegistry/contracts/coreApis.ts:CoreApiName',
+        'services/ExposedApiRegistry/contracts/coreApis.ts:identityProjection',
+        'services/IdentityRegistry/orchestrator/IdentityRegistryService.ts:createIdentityRegistry',
+        'services/IdentityRegistry/serviceModule.ts:requireIdentityRegistry',
+        'src/contracts/brudOperation.ts:BrudBuiltInKind',
+        'src/contracts/container.ts:counter',
+      ],
     );
   });
 });

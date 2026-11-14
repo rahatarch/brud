@@ -1,7 +1,10 @@
 export type Token<T> = symbol & { __brand: T };
 
-let counter = 0;
-
+/**
+ * Planned: the token-keyed container is a universal kernel primitive. It is
+ * constructed and consulted by the dispatch pipeline; no production module
+ * registers into it yet.
+ */
 export function createToken<T>(description: string): Token<T> {
   return Symbol(description) as Token<T>;
 }

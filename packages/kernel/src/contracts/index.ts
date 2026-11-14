@@ -53,7 +53,7 @@ export {
   isCapabilityToken,
 } from './capability.js';
 
-export type { BrudBuiltInKind, BrudOperationKind } from './brudOperation.js';
+export type { BrudOperationKind } from './brudOperation.js';
 export {
   BRUD_DEFAULT_KIND,
   BRUD_KIND_ACTION,

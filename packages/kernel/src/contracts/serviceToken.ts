@@ -41,6 +41,9 @@ export function createServiceToken<TService>(
 /**
  * Extracts the public service interface carried by a service token.
  *
+ * Planned: this is a universal type-level helper with no current consumer. It
+ * is retained deliberately as part of the token primitive.
+ *
  * @typeParam TToken - A {@link ServiceToken} type.
  */
 export type InferService<TToken> = TToken extends ServiceToken<infer TService> ? TService : never;

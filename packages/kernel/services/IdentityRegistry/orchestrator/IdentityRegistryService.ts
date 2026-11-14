@@ -24,10 +24,11 @@ import {
   canonicalJson,
   cloneJsonRecord,
   isPlainRecord,
-} from '../storage/json.js';
+} from '../../shared/canonicalJson.js';
 import {
   IDENTITY_REGISTRY_MAX_METADATA_BYTES,
   IDENTITY_REGISTRY_MAX_OPAQUE_LENGTH,
+  identityBindingKey,
   loadIdentityRegistryStorage,
   persistIdentityRegistryStorage,
 } from '../storage/registryDocument.js';
@@ -92,11 +93,6 @@ function requireMetadata(value: unknown): Readonly<Record<string, unknown>> {
   }
 }
 
-/** Builds the deterministic lookup key for one binding. */
-function bindingKey(publisher: string, contentHash: string): string {
-  return canonicalJson([publisher, contentHash]);
-}
-
 /** Returns an immutable copy of one record. */
 function snapshot(record: MutableIdentityRecord): IdentityRecord {
   return Object.freeze({
@@ -154,7 +150,7 @@ export class IdentityRegistryService implements IIdentityRegistry, IServiceLifec
       };
 
       this.#byToken.set(record.token, mutable);
-      this.#byBinding.set(bindingKey(record.publisher, record.contentHash), mutable);
+      this.#byBinding.set(identityBindingKey(record.publisher, record.contentHash), mutable);
     }
 
     this.#registryId = loaded.registryId;
@@ -176,7 +172,7 @@ export class IdentityRegistryService implements IIdentityRegistry, IServiceLifec
     const publisher = requireOpaqueString(candidate.publisher, 'publisher');
     const contentHash = requireOpaqueString(candidate.contentHash, 'contentHash');
     const metadata = requireMetadata(candidate.metadata);
-    const key = bindingKey(publisher, contentHash);
+    const key = identityBindingKey(publisher, contentHash);
     const existing = this.#byBinding.get(key);
 
     if (existing !== undefined) {
@@ -353,9 +349,3 @@ export class IdentityRegistryService implements IIdentityRegistry, IServiceLifec
   }
 }
 
-/** Builds a standalone registry instance. */
-export function createIdentityRegistry(
-  options: IdentityRegistryServiceOptions,
-): IdentityRegistryService {
-  return new IdentityRegistryService(options);
-}

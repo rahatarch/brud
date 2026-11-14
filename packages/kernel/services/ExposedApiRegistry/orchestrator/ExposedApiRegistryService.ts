@@ -40,7 +40,8 @@ import {
   JsonValueError,
   canonicalJson,
   cloneJsonRecord,
-} from '../storage/json.js';
+  isPlainRecord,
+} from '../../shared/canonicalJson.js';
 import {
   loadScopeRecord,
   persistScopeRecord,
@@ -545,15 +546,4 @@ function combineDefault(
   }
 
   return projections[projections.length - 1];
-}
-
-/** Whether a value is a plain object record. */
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-
-  const prototype: unknown = Object.getPrototypeOf(value);
-
-  return prototype === Object.prototype || prototype === null;
 }

@@ -1,8 +1,9 @@
 /**
- * Canonical JSON helpers for the protected scope record.
+ * Canonical JSON helpers for the kernel's integrity-protected documents.
  *
- * The record's integrity digest must survive key reordering, so serialization
- * sorts object keys and accepts only JSON-native values.
+ * Integrity digests must survive key reordering, so serialization is
+ * canonical: object keys are sorted, arrays keep their order, and only
+ * JSON-native values are accepted.
  */
 
 /** Raised when a value cannot be represented as JSON. */

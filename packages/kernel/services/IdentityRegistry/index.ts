@@ -32,7 +32,6 @@ export type { IdentityRegistryDescriptorOptions } from './descriptor/descriptor.
 export { IdentityRegistryToken } from './descriptor/tokens.js';
 export {
   IdentityRegistryService,
-  createIdentityRegistry,
 } from './orchestrator/IdentityRegistryService.js';
 export type { IdentityRegistryServiceOptions } from './orchestrator/IdentityRegistryService.js';
 export {

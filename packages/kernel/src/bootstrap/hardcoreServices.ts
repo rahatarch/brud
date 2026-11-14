@@ -21,15 +21,15 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  'a0b19b177faed122b6b0432244361bc2322f424d9d790d5223b0991ab33adcd4';
+  '2fa8cbf99d6e71f1652a1c999f73f7f859d031562baa27786262e4f05b34cfcb';
 const IDENTITY_REGISTRY_BUILT_HASH =
-  'f25f215d3dc02cf608ed636a66f294e9affe72eb33a73768c9e881f4731e5724';
+  'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '739738f04a7d658dd90b36aaba43c89b5596c89e32bddb5850d8dfe99822fecb';
+  'e412d87d4d936f49eb1419307a0545604b32500b3b1131bce63d0ec7dccf5a4f';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
-  'de47e97ba4131246f24c730625fb49c105ca39ab3b1b2186a17a0a75bdc7fe57';
+  '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
@@ -125,7 +125,12 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
   },
 ];
 
-/** Reports whether a token is named by the compiled hardcore list. */
+/**
+ * Reports whether a token is named by the compiled hardcore list.
+ *
+ * Planned: this universal membership helper has no production caller yet. The
+ * engine currently receives the set it needs from the loader.
+ */
 export function isHardcoreToken(token: string): boolean {
   return HARDCORE_SERVICES.some((hardcore) => hardcore.token === token);
 }

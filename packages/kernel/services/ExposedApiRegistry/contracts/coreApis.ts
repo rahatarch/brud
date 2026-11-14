@@ -19,9 +19,6 @@ export const CORE_API_NAME = Object.freeze({
   pluginManager: 'pluginManager',
 } as const);
 
-/** Union of the built-in API names. */
-export type CoreApiName = typeof CORE_API_NAME[keyof typeof CORE_API_NAME];
-
 /**
  * Default combiner: the last matching projection wins.
  *
@@ -34,13 +31,4 @@ export function lastProjectionWins(
   return projections.length === 0
     ? null
     : projections[projections.length - 1];
-}
-
-/**
- * Identity projection.
- *
- * @param service - Resolved service instance.
- */
-export function identityProjection(service: unknown): unknown {
-  return service;
 }

@@ -26,7 +26,12 @@ export interface HardcoreBootEntry {
   /** Config path used to compose the service. */
   readonly path: string;
 
-  /** Whether the config declared the service first-party. */
+  /**
+   * Whether the composition's config declared the service first-party.
+   *
+   * Planned: recorded for the composition's officialness mapping; no current
+   * reader consumes the boot-time record.
+   */
   readonly official: boolean;
 
   /** Package content digest used as the provisional content binding. */

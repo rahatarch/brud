@@ -19,9 +19,6 @@ export const BRUD_KIND_ACTION = 'action' as const;
 /** Kind assumed by a bare `[CALL <name>]` header, preserving v2 documents. */
 export const BRUD_DEFAULT_KIND = BRUD_KIND_TOOL;
 
-/** Kinds the current shorthand grammar names explicitly. */
-export type BrudBuiltInKind = typeof BRUD_KIND_TOOL | typeof BRUD_KIND_ACTION;
-
 /** Open operation-kind identity. */
 export type BrudOperationKind = string;
 

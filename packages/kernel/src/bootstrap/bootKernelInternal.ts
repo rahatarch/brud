@@ -17,7 +17,7 @@ import {
   releaseConfigProtection,
   verifyConfigIntegrity,
 } from './config/integrity.js';
-import { parseBrudConfig } from './config/parse.js';
+import { lineOf, parseBrudConfig } from './config/parse.js';
 import {
   buildHardcoreBootEntries,
   invokeHardcoreBootHooks,
@@ -220,12 +220,7 @@ export function createDeferredKernel(
       hardcoreBootEntries = buildHardcoreBootEntries(composed, packageHashes);
 
       for (const service of composed) {
-        const descriptorToRegister: ServiceDescriptor<unknown, unknown> =
-          service.official
-            ? { ...service.descriptor, official: true }
-            : service.descriptor;
-
-        kernel.register(descriptorToRegister);
+        kernel.register(service.descriptor);
       }
     })();
 
@@ -451,11 +446,4 @@ function isServiceDescriptor(value: unknown): value is ServiceDescriptor<unknown
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
-function lineOf(raw: string, token: string): number | undefined {
-  const needle = JSON.stringify(token);
-  const index = raw.split('\n').findIndex((line) => line.includes(needle));
-
-  return index < 0 ? undefined : index + 1;
 }
