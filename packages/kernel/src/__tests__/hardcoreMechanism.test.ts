@@ -91,6 +91,7 @@ const CALL_CHAIN_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'callChain.ts'
 const WASM_CAGE_DESCRIPTOR = join(
   KERNEL_ROOT, 'services', 'WasmCage', 'src', 'descriptor.ts',
 );
+const HARDCORE_LIST_PATH = join(KERNEL_ROOT, 'src', 'bootstrap', 'hardcoreServices.ts');
 const KERNEL_CONFIG_PATH = join(KERNEL_ROOT, 'brud.config.json');
 
 const IDENTITY_SHIM = join(KERNEL_ROOT, 'serviceModules', 'identityRegistry.ts');
@@ -1306,5 +1307,57 @@ describe('BC-WASM-SURFACE: the cage exposes resolve and nothing else', () => {
 
     assert.doesNotMatch(source, /^\s*register\s*[<(]/mu);
     assert.match(source, /WASM_CAGE_CONTRACT_METHODS = \['resolve'\]/u);
+  });
+});
+
+
+/**
+ * BC-WASM-HOOK — the general mechanism field and the cage's authority binding.
+ *
+ * The field is optional on `HardcoreService`; a hardcore declaring it maps to
+ * non-official, one without it maps to official, as today. The cage's hook
+ * binds the authority, so its `resolve` does not return null after boot.
+ */
+describe('BC-WASM-HOOK: the mechanism field and the cage authority binding', () => {
+  it('declares mechanism as an optional field and reads it in the mapping', () => {
+    const contract = readFileSync(MECHANISM_PATH, 'utf8');
+
+    assert.match(contract, /readonly mechanism\?: boolean;/u);
+    assert.doesNotMatch(contract, /readonly mechanism: boolean;/u);
+    assert.match(contract, /\.mechanism === true/u);
+  });
+
+  it('maps a mechanism hardcore to non-official and the rest to official', () => {
+    const chain = new KernelCallChain(() => undefined);
+    const cageCaller: KernelCaller = Object.freeze({
+      callerClass: 'participant',
+      identity: 'idt_cage',
+      official: false,
+      capabilities: Object.freeze(new Set<string>()),
+    });
+    chain.admitParticipants([{ tokenId: 'cage', caller: cageCaller }]);
+
+    assert.equal(chain.callerForIdentity('idt_cage')?.official, false);
+
+    // The compiled cage entry declares it; the other four do not.
+    const cage = HARDCORE_SERVICES.find((entry) => entry.token === 'brud.core.wasmCage');
+    assert.equal(cage?.mechanism, true);
+    for (const token of [IdentityRegistryToken.id, ExposedApiRegistryToken.id, ParserToken.id, RouterToken.id]) {
+      const other = HARDCORE_SERVICES.find((entry) => entry.token === token);
+      assert.notEqual(other?.mechanism, true, `${token} must not declare mechanism`);
+    }
+  });
+
+  it('binds the authority in the hook so resolve no longer returns null (guard canary)', () => {
+    const list = readFileSync(HARDCORE_LIST_PATH, 'utf8');
+
+    assert.match(list, /cage\.bindAuthority\(context\.authority\)/u);
+
+    const descriptor = createWasmCageDescriptor();
+    const context: ServiceContext = { callerId: 'kernel', tier: 'core', options: {} };
+    const instance = descriptor.factory(context, new KernelAccessBroker(new KernelRegistry(), () => 'BOOTING'));
+
+    // Before binding, resolve returns null.
+    assert.equal(instance.resolve('idt_participant', 'some.exposure'), null);
   });
 });

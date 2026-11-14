@@ -26,6 +26,17 @@ export const WASM_CAGE_CONTRACT_METHODS = ['resolve'] as const;
 /** Public interface the cage promises to the kernel. */
 export interface IWasmCage {
   /**
+   * Binds the kernel's call authority.
+   *
+   * Called once from the cage's hardcore boot hook, with the authority the
+   * kernel hands that hook. Before it is called, `resolve` returns `null`
+   * rather than running without a chain.
+   *
+   * @param value - The kernel's call authority.
+   */
+  bindAuthority(value: KernelCallAuthority): void;
+
+  /**
    * Runs one caged participant's `resolve` against the exposed-API registry.
    *
    * The cage starts a `runtime`-origin chain with the caged participant's

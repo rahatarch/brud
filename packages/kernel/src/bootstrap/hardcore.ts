@@ -114,6 +114,17 @@ export interface HardcoreService extends HardcoreContract {
   /** Service token id. */
   readonly token: string;
 
+  /**
+   * Declares that this hardcore is a mechanism, not an official participant.
+   *
+   * A hardcore that sets this maps to non-official in the identity-to-official
+   * mapping; a hardcore without it maps to official, which is what every
+   * hardcore entry is today. The field names no service: it is a general
+   * category for any hardcore that is a mechanism rather than an official
+   * participant, and the mapping reads it in `buildHardcoreBootEntries`.
+   */
+  readonly mechanism?: boolean;
+
   /** Expected digest of the source representation of the resolved package. */
   readonly expectedContentHash: string;
 
@@ -489,11 +500,14 @@ export function verifyHardcoreServices(
 export function buildHardcoreBootEntries(
   composed: readonly ComposedServiceDescriptor[],
   packageHashes: ReadonlyMap<string, string>,
+  list: readonly HardcoreService[] = [],
 ): readonly HardcoreBootEntry[] {
   return composed.map((service) => Object.freeze({
     token: service.descriptor.token.id,
     path: service.path,
-    official: packageHashes.has(service.descriptor.token.id) || service.official === true,
+    official: list.find((entry) => entry.token === service.descriptor.token.id)?.mechanism === true
+      ? false
+      : packageHashes.has(service.descriptor.token.id) || service.official === true,
     contentHash: packageHashes.get(service.descriptor.token.id)
       ?? contentHashForEntry(service.resolvedPath),
     manifest: service.manifest,

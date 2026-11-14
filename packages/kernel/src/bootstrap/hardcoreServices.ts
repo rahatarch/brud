@@ -55,7 +55,7 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '923c16e08278b26f8f21afe8568ca513972917cd237688ee58eb6a0e80cca6a8';
+  '9b7664499fd0ad62563f617990ea2a032b9b37051d68067acf83eabe183819fa';
 const WASM_CAGE_BUILT_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -216,16 +216,16 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     expectedBuiltContentHash: WASM_CAGE_BUILT_HASH,
     contractVersion: '1.0.0',
     contractInterface: ['resolve'],
-    // The cage's boot hook is a no-op at this step.
-    //
-    // The three things the design record (W-05, Gap 3) names — register the
-    // registry facade, record the cage's identity as non-official, seal —
-    // need the exposed-API registry's registration path and the identity
-    // mapping, and both land in a later plan step. This hook satisfies the
-    // mechanism's uniform signature and does nothing else.
-    boot: (_instance: unknown, _context: HardcoreBootContext): void => {
-      void _instance;
-      void _context;
+    // The cage is a mechanism, not an official participant: it holds the
+    // participants the composition has not declared official. The identity-to-
+    // official mapping reads this and maps the cage to non-official.
+    mechanism: true,
+    // The cage's boot hook binds the kernel's call authority so its `resolve`
+    // can start a runtime-origin chain. It opens no participant-facing
+    // registration, so the seal is a no-op.
+    boot: (instance: unknown, context: HardcoreBootContext): void => {
+      const cage = instance as { bindAuthority(value: KernelCallAuthority): void };
+      cage.bindAuthority(context.authority);
     },
   },
 ];

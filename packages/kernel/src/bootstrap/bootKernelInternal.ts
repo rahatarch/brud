@@ -265,7 +265,7 @@ export function createDeferredKernel(
       // service initialization phase.
       const packageHashes = verifyHardcoreServices(HARDCORE_SERVICES, composed, configPath);
       hardcorePackageHashes = packageHashes;
-      hardcoreBootEntries = buildHardcoreBootEntries(composed, packageHashes);
+      hardcoreBootEntries = buildHardcoreBootEntries(composed, packageHashes, HARDCORE_SERVICES);
 
       for (const service of composed) {
         kernel.register(service.descriptor);
