@@ -4,6 +4,8 @@ Nov 11, 2026 · @Rahat Hasan
 
 **Status. Decided for the interface; dependent on trust-tier ratification.** This document records the interface contract between the kernel's loader and the WASM host. It is a design record, not an implementation guide. It is written for future implementation tasks, not for users, and it lives at docs/architecture/WASM_HOST_INTERFACE.md. It does not restate the trust model recorded in the security architecture document; it consumes that document's decisions and defines the in-process confinement interface that the trust-tier design requires. Its authority depends on the trust-tier direction being formally adopted, which is recorded as Q-01.
 
+**Correction (2026-11-14). Identity is issued by the kernel, not derived by the loader.** This document previously stated that the loader derives an entry's stable identity from the entry's manifest, or from the service descriptor for a service that has no separate manifest, and stated identity as a manifest field and a field a caged child could propose. The implemented rule is different. Identity is issued by the kernel, never declared by a participant: the kernel creates an Identity Token at admission, binds it to the participant's verified publisher and contents, and attaches it to the participant's execution context; the participant cannot propose, choose, copy, or claim it. The loader receives the kernel-issued token and does not derive, declare, or choose it. This correction was applied to §2.1 (the loader's inputs and the derivation paragraph), §2.4 (the WASM path), the cage specification (the entry identity item), §5.1 (the manifest declarations), §8 (the child-load request and the child's identity rule), and Q-11 (the top-level-versus-child question, whose premise changed from "requests an identity" to "requests a participant"). The authority for the corrected rule is the kernel's identity mechanism in the identity registry service and the rule "Identity is issued by the kernel" in `ARCHITECTURE_RULES.md`. The companion decision record `docs/architecture/KERNEL_IDENTITY.md` records the resolution of its own dependency in favor of the kernel-issued identity.
+
 ## Purpose and scope
 
 The kernel is the loader. It reads the composition, determines each entry's tier from the entry's official flag, and loads official entries in Node and unofficial entries in the WASM cage. The WASM host is kernel infrastructure, not a service. It is constructed by the kernel, owned by the kernel, and never registered in the service container or exposed to an entry.
@@ -66,10 +68,10 @@ The loader receives the following logical information for each top-level entry. 
 | Integrity pin | Lets the loader verify the entry before it reaches either tier. The trust root for this pin is outside this document. |
 | Capability grant | The effective set of capabilities the entry may use. A manifest may request capabilities; the grant is the trusted authority's answer. |
 | Resource profile | The effective admission, per-call, per-cage, and per-family limits. |
-| Manifest locator or embedded manifest | Supplies identity, version, declared imports, declared exports, and the requested capability set. |
+| Manifest locator or embedded manifest | Supplies the participant's version, declared imports, declared exports, and the requested capability set. It does not supply identity. |
 | Composition identity and digest | Binds the boot trust report, diagnostics, and integrity checks to the exact composition that was read. |
 
-The loader derives an entry's stable identity from the entry's manifest, or from the service descriptor for a service that has no separate manifest. The source locator is not identity: the same package may be installed in more than one place, and two different packages may try to present the same identity. The loader rejects duplicate identities at the top level.
+The kernel issues an entry's stable identity and hands it to the loader. The token is issued when the participant is admitted, bound to the participant's verified contents, and attached to the participant's execution context; the loader receives it and does not derive, declare, or choose it. The manifest and the source locator are not identity: the same package may be installed in more than one place, and two different packages may try to present the same declared identifier. The loader rejects duplicate identities at the top level.
 
 The official flag is read only from the top-level composition. A package manifest, a nested composition, a dependency, or a runtime request cannot supply official status. This is the composition authority rule that the security architecture document leaves outside its own scope; this design consumes it.
 
@@ -89,11 +91,11 @@ The Node path is the existing path. This design does not alter what an official 
 
 ### 2.4 The WASM path
 
-For an unofficial entry, the loader reads the module bytes and manifest, verifies the integrity pin, derives the entry identity and kind, and builds a cage specification. It hands that specification to the host and never imports the caged module through Node's module system.
+For an unofficial entry, the loader reads the module bytes and manifest, verifies the integrity pin, takes the entry identity and kind the kernel issued for the entry, and builds a cage specification. It hands that specification to the host and never imports the caged module through Node's module system.
 
 The cage specification contains:
 
-- the entry identity and the entry kind, as declared by the composition section;
+- the entry identity the kernel issued for the entry, and the entry kind as declared by the composition section;
 - the module bytes or an exact, already-verified source reference;
 - the manifest, including declared imports, declared exports, requested capabilities, and contract version;
 - the effective capability grant, after the loader's policy has reduced the manifest request to what the composition permits;
@@ -217,7 +219,7 @@ The host does not expose a callback registration import, a shared queue, a share
 
 A caged entry declares its public surface in its manifest. The declaration is untrusted input and is validated by the host before it is used. The manifest declares:
 
-- the entry identity, version, and boundary contract version;
+- the entry's version and boundary contract version (identity is issued by the kernel and is not a manifest field);
 - the entry's role: service, plugin, or both, consistent with the composition section that selected it;
 - tools, each with a stable name, description, input schema, required caller permissions, and the export name that implements it;
 - actions, with the same fields as tools;
@@ -314,12 +316,12 @@ A caged entry may need to load its own children. An unofficial extension manager
 
 Loading code is a kernel capability with exactly one frozen holder, declared in the top-level composition. The holder may be a Node entry or a caged entry. A caged holder does not receive a raw instantiation primitive. It receives the child-load import. The kernel's loader, not the caged host, validates the request and performs the load.
 
-A child-load request contains the child's source, proposed identity, manifest, requested capabilities, and requested resource profile. The kernel applies these rules:
+A child-load request contains the child's source, manifest, requested capabilities, and requested resource profile. It does not contain an identity; the kernel issues the child's identity and scopes it under the parent's. The kernel applies these rules:
 
 1. The parent must hold the loader capability. Holding a general management capability is not enough.
 2. The child is always caged. The child's own official flag, whether in its manifest or in a nested composition, is ignored and recorded. There is no path from a child request to the Node tier.
 3. The child's effective grant is a subset of the parent's effective grant. A child may receive fewer capabilities, never more. A child does not automatically inherit the parent's loader capability; if it needs to load grandchildren, that capability must be granted explicitly and remains bounded by the parent's grant.
-4. The child's identity is scoped under the parent's identity. The scoped identity is stable, unique, and used for ownership, attribution, history, and diagnostics. A child cannot act as the parent, and the parent cannot use the child to escape its own grant.
+4. The kernel issues the child's identity and scopes it under the parent's identity. The scoped identity is stable, unique, and used for ownership, attribution, history, and diagnostics. A child cannot act as the parent, and the parent cannot use the child to escape its own grant.
 5. The child's resource profile is bounded by the parent's remaining family budget. A child cannot receive a larger budget than the parent can supply, and a family cannot exceed its aggregate limits.
 6. A child cannot outlive its parent. Retiring the parent retires every child in reverse order, cancels in-flight calls, disposes registrations, and releases the family's resources. Unloading a child does not affect its siblings beyond the family budget.
 
@@ -460,7 +462,7 @@ The following decisions belong to a future task. This design does not resolve th
 
 **Q-10 — Composition representation and defaults.** What are the exact composition fields for a caged entry: manifest location, grant set, resource profile, contract version, and module format? Can one entry appear in both the service and plugin sections? What are the default grants and default resource profiles when the composition omits them?
 
-**Q-11 — Top-level versus child identity.** When a caged parent requests an identity that is also declared at the top level, does the parent receive a restricted view of the top-level instance, or is the request refused? The invariant is that the parent cannot create a second, more privileged instance; the policy is open.
+**Q-11 — Top-level versus child identity.** When a caged parent requests a participant that is also admitted at the top level, does the parent receive a restricted view of the top-level instance, or is the request refused? (The parent does not request an identity: the kernel issues identity. It requests a load, and the kernel decides whether the same participant it already admitted is presented as a restricted view or refused.) The invariant is that the parent cannot create a second, more privileged instance; the policy is open. This question's premise changed from "requests an identity" to "requests a participant" when the identity rule was corrected; see the correction note.
 
 **Q-12 — Resource-failure semantics.** Does a trap retire the cage or only fail the call? Are effects already committed through kernel services reversible by the host, or only by the history service? What stable result does the caller see, and what does the parent see when a child is retired for resource exhaustion?
 
