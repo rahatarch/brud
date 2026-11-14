@@ -1,0 +1,33 @@
+[package]
+name = "brud-wasm-cage"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "napi-rs binding over Wasmtime for the Brud kernel's WASM cage"
+license = "Apache-2.0 WITH LLVM-exception"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasmtime = { version = "=50.0.0", default-features = false, features = [
+  "cranelift",
+  "runtime",
+  "std",
+  "wat",
+  "parallel-compilation",
+  "pooling-allocator",
+] }
+wasmtime-wasi = { version = "=50.0.0", default-features = false, features = ["p1"] }
+napi = { version = "=3.16.2", default-features = false, features = ["napi8"] }
+napi-derive = "=3.7.1"
+
+[build-dependencies]
+napi-build = "=2.6.0"
+
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+opt-level = 3
