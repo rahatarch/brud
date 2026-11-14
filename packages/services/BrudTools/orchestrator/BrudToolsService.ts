@@ -2,7 +2,7 @@ import { BRUD_KIND_TOOL } from '@brud/kernel';
 import type { OperationResult } from '@brud/kernel';
 import type { IServiceLifecycle } from '@brud/kernel';
 import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
-import type { IRouterService } from '../../Router/contracts/IRouterService.js';
+import type { IRouterService } from '@brud/kernel/services/Router/contracts/IRouterService.js';
 import {
   ToolDisposedError,
   ToolNotFoundError,

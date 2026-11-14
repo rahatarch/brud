@@ -1,4 +1,4 @@
-import type { BrudOperationKind } from '@brud/kernel';
+import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
 import type { BrudOperation } from '../../Parser/contracts/index.js';
 import type {
   BrudRouteOptions,

@@ -7,10 +7,10 @@ import {
 } from '../../contracts/serviceToken.js';
 import type { IBrudPlugin } from '../../../../services/PluginManager/contracts/IBrudPlugin.js';
 import type { IPluginContext } from '../../../../services/PluginManager/contracts/IPluginContext.js';
-import type { IRouterRegistrant } from '../../../../services/Router/contracts/registrant.js';
-import type { IRouterService } from '../../../../services/Router/contracts/IRouterService.js';
-import { ROUTER_CALLER_ID } from '../../../../services/Router/contracts/caller.js';
-import { RouterToken } from '../../../../services/Router/descriptor/tokens.js';
+import type { IRouterRegistrant } from '../../../services/Router/contracts/registrant.js';
+import type { IRouterService } from '../../../services/Router/contracts/IRouterService.js';
+import { ROUTER_CALLER_ID } from '../../../services/Router/contracts/caller.js';
+import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
 
 /** Kind claimed by the synthetic peer service. Clearly non-shipped. */
 export const TEST_QUERY_KIND = 'test_query' as const;

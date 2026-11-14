@@ -1,4 +1,4 @@
-import type { IServiceLifecycle } from '@brud/kernel';
+import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import {
   OperationLimitExceededError,
   ParserDisposedError,

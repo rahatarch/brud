@@ -41,11 +41,11 @@
       "official": true
     },
     {
-      "path": "@brud/service-parser/serviceModule.js",
+      "path": "kernel:serviceModules/parser.js",
       "official": true
     },
     {
-      "path": "@brud/service-router/serviceModule.js",
+      "path": "kernel:serviceModules/router.js",
       "official": true
     },
     {

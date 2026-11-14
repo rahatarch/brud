@@ -1,7 +1,7 @@
-import type { IKernelAccessBroker } from '@brud/kernel';
-import { isValidBrudKind } from '@brud/kernel';
-import type { OperationResult } from '@brud/kernel';
-import type { IServiceLifecycle, ServiceContext } from '@brud/kernel';
+import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
+import { isValidRouterKind } from '../contracts/kind.js';
+import type { OperationResult } from '../../../src/contracts/handler.js';
+import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
 import type {
   BrudOperation,
   BrudParseFailure,
@@ -14,7 +14,7 @@ import {
   RouterRegistrationClosedError,
   RouterUnknownServiceError,
 } from '../contracts/errors.js';
-import { requireContextString } from '@brud/kernel';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
 import { ROUTER_ROOT_CONTEXT_FIELD } from '../bootOptions.js';
 import type { IRouterService } from '../contracts/IRouterService.js';
 import type {
@@ -98,7 +98,7 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       throw new RouterRegistrationClosedError(registration.kind);
     }
 
-    if (!isValidBrudKind(registration.kind)) {
+    if (!isValidRouterKind(registration.kind)) {
       throw new RouterInvalidKindError(registration.kind);
     }
 

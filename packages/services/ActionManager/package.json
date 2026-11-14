@@ -32,7 +32,6 @@
   "dependencies": {
     "@brud/kernel": "*",
     "@brud/service-tools": "*",
-    "@brud/service-router": "*",
     "@brud/service-settings": "*",
     "@brud/service-validation": "*"
   },

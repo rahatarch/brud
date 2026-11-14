@@ -1,4 +1,4 @@
-import type { KernelServiceModuleContext } from '@brud/kernel';
+import type { KernelServiceModuleContext } from '../../src/bootstrap/bootTypes.js';
 import { ROUTER_CONTEXT_SCOPE, ROUTER_ROOT_CONTEXT_FIELD } from './bootOptions.js';
 import { createRouterDescriptor } from './descriptor/RouterDescriptor.js';
 import type { IRouterService } from './contracts/IRouterService.js';

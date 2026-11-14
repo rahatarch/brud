@@ -1,6 +1,6 @@
-import type { BrudOperationKind } from '@brud/kernel';
-import type { OperationResult } from '@brud/kernel';
-import type { ServiceToken } from '@brud/kernel';
+import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
+import type { OperationResult } from '../../../src/contracts/handler.js';
+import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 import type {
   BrudOperation,
   BrudParseFailure,
@@ -111,7 +111,7 @@ export interface BrudRouteRegistration<TService> {
   /** Kind this service handles, e.g. `tool` or `action`. */
   readonly kind: BrudOperationKind;
 
-  /** Token the Router resolves through the access broker at dispatch time. */
+  /** Token resolved through the access broker at dispatch time. */
   readonly token: ServiceToken<TService>;
 
   /**

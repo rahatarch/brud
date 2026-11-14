@@ -1,5 +1,5 @@
-import type { ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
+import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import { ParserToken } from '../../Parser/descriptor/tokens.js';
 import type { IBrudParserService } from '../../Parser/contracts/IParserService.js';
 import { ROUTER_CALLER_ID } from '../contracts/caller.js';
@@ -22,9 +22,9 @@ export interface RouterDescriptorOptions {
 /**
  * Builds the `brud.core.router` service descriptor.
  *
- * The router declares `brud.core.parser` as an ordering dependency. The parser
- * is resolved lazily through the broker on the first `route` call, because the
- * broker serves requests only once the kernel is RUNNING.
+ * It declares the syntax service token as an ordering dependency. The syntax
+ * service is resolved lazily through the broker on the first `route` call,
+ * because the broker serves requests only once the kernel is RUNNING.
  *
  * @param options - Parser override and construction hook.
  * @returns A core-tier descriptor for `brud.core.router`.

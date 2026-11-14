@@ -20,6 +20,7 @@ import {
   type BrudKernel,
   type IExposedApiRegistry,
 } from '../../index.js';
+import { ROUTER_CONTEXT_SCOPE } from '../../services/Router/bootOptions.js';
 
 /**
  * Boundary checks for the ownership moves of cleanup Step 3.
@@ -1992,6 +1993,7 @@ describe('BC-13: no kernel file names a specific participant\'s context field (R
   const ownScopes: ReadonlySet<string> = new Set([
     IDENTITY_REGISTRY_CONTEXT_SCOPE,
     EXPOSED_API_REGISTRY_CONTEXT_SCOPE,
+    ROUTER_CONTEXT_SCOPE,
   ]);
 
   it('names only fields inside the kernel folder\'s own declared namespaces', async () => {

@@ -9,9 +9,9 @@ import type {
   BrudParseOptions,
   BrudParseResult,
   IBrudParserService,
-} from '../../../../services/Parser/contracts/index.js';
-import { ParserService } from '../../../../services/Parser/orchestrator/index.js';
-import { ParserToken } from '../../../../services/Parser/descriptor/tokens.js';
+} from '../../../services/Parser/contracts/index.js';
+import { ParserService } from '../../../services/Parser/orchestrator/index.js';
+import { ParserToken } from '../../../services/Parser/descriptor/tokens.js';
 import type {
   IBrudToolsService,
   IPluginExecutionContext,
@@ -19,13 +19,13 @@ import type {
 } from '../../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { BrudToolsService } from '../../../../services/BrudTools/orchestrator/index.js';
 import { BrudToolsToken } from '../../../../services/BrudTools/descriptor/tokens.js';
-import { ROUTER_CALLER_ID } from '../../../../services/Router/contracts/caller.js';
+import { ROUTER_CALLER_ID } from '../../../services/Router/contracts/caller.js';
 import type {
   BrudRouteResult,
   RoutedOperationOutcome,
-} from '../../../../services/Router/contracts/types.js';
-import { RouterService } from '../../../../services/Router/orchestrator/index.js';
-import { RouterToken } from '../../../../services/Router/descriptor/tokens.js';
+} from '../../../services/Router/contracts/types.js';
+import { RouterService } from '../../../services/Router/orchestrator/index.js';
+import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
 import { workspaceContextOptions } from './workspaceContext.js';
 
 /** Tool-shaped parsed operation used by the historical parser suites. */

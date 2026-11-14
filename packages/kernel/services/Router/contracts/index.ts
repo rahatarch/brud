@@ -1,4 +1,5 @@
 export { ROUTER_CALLER_ID } from './caller.js';
+export { isValidRouterKind } from './kind.js';
 export type { IRouterService } from './IRouterService.js';
 export type { IRouterRegistrant } from './registrant.js';
 export { isRouterRegistrant } from './registrant.js';

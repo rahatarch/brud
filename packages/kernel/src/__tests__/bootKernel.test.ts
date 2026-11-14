@@ -240,7 +240,7 @@ describe('bootKernel config composition', () => {
       services: [
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
         { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
-        { path: '@brud/service-router/serviceModule.js' },
+        { path: 'kernel:serviceModules/router.js' },
       ],
       plugins: [],
     });

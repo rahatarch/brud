@@ -1,11 +1,11 @@
-import type { BrudOperationKind } from '@brud/kernel';
+import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
 
 /**
  * One parsed `[BRUD]` operation.
  *
- * The Parser knows only the wire syntax: an operation carries its synthesized
- * document index, the shared kind token, the name written on the header, and
- * the parameter map. It never resolves a tool, an action, or a service.
+ * This service knows only the wire syntax: an operation carries its
+ * synthesized document index, the shared kind token, the name written on the
+ * header, and the parameter map. It never resolves a target or a service.
  */
 export interface BrudOperation {
   /** 1-based document index synthesized from operation order. */

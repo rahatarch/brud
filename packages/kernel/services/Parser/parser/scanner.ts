@@ -1,8 +1,8 @@
 import {
-  BRUD_DEFAULT_KIND,
   isValidBrudKind,
   type BrudOperationKind,
-} from '@brud/kernel';
+} from '../../../src/contracts/brudOperation.js';
+import { PARSER_DEFAULT_KIND } from '../contracts/kind.js';
 import { parseParameters } from './parameters.js';
 import { BRACE_PATTERN, BrudParseError, CALL_PATTERN } from './syntax.js';
 
@@ -203,7 +203,7 @@ function parseCallHeader(trimmed: string, line: number): CallHeader | undefined 
   }
 
   if (second === undefined) {
-    return { kind: BRUD_DEFAULT_KIND, name: first };
+    return { kind: PARSER_DEFAULT_KIND, name: first };
   }
 
   if (second === '') {

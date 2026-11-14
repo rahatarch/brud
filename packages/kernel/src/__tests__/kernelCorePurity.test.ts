@@ -1,4 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
+import { isBuiltin } from 'node:module';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
@@ -20,7 +21,16 @@ import * as ts from 'typescript';
 const SOURCE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 const KERNEL_ROOT = resolve(SOURCE_ROOT, '..');
 const SERVICE_ROOT = join(KERNEL_ROOT, 'services');
+const PARSER_ROOT = join(SERVICE_ROOT, 'Parser');
+const ROUTER_ROOT = join(SERVICE_ROOT, 'Router');
 const PLUGINS_ROOT = resolve(KERNEL_ROOT, '..', 'plugins');
+
+/** Names the kind mechanism exports; every other kind-contract name is a value. */
+const KIND_MECHANISM_IMPORTS = new Set([
+  'BRUD_KIND_PATTERN',
+  'BrudOperationKind',
+  'isValidBrudKind',
+]);
 
 const SKIPPED_DIRECTORIES = new Set(['__tests__', 'node_modules', 'dist']);
 
@@ -88,6 +98,126 @@ export function forbiddenImport(file: string, specifier: string): string | undef
   }
 
   return undefined;
+}
+
+/**
+ * Returns the offending specifier when a service-package file imports
+ * anything other than its own in-kernel files or a platform builtin.
+ */
+export function outsideKernelImport(file: string, specifier: string): string | undefined {
+  if (specifier.startsWith('.')) {
+    const resolved = resolve(dirname(file), specifier);
+
+    return isInside(resolved, KERNEL_ROOT) ? undefined : specifier;
+  }
+
+  if (specifier.startsWith('node:') || isBuiltin(specifier)) {
+    return undefined;
+  }
+
+  return specifier;
+}
+
+/** Reports whether a module specifier names the kernel's kind contract. */
+function isKernelKindContract(specifier: string): boolean {
+  const normalized = specifier.replace(/\\/g, '/');
+
+  return normalized === 'brudOperation.js'
+    || normalized.endsWith('/contracts/brudOperation.js')
+    || normalized.endsWith('/contracts/brudOperation.ts');
+}
+
+/**
+ * Returns every name imported from the kernel's kind contract that is not part
+ * of the open mechanism.
+ *
+ * The mechanism is the open kind type, the token pattern, and the validator.
+ * Any other name (a concrete kind value, a default kind, or a built-in kind)
+ * is a violation.
+ */
+export function kindContractValueImports(source: string): readonly string[] {
+  const file = ts.createSourceFile(
+    'kindImports.ts',
+    source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const found: string[] = [];
+
+  const checkName = (name: string): void => {
+    if (!KIND_MECHANISM_IMPORTS.has(name)) {
+      found.push(name);
+    }
+  };
+
+  const checkClause = (clause: ts.ImportClause | ts.ExportDeclaration['exportClause'] | undefined): void => {
+    if (clause === undefined) {
+      return;
+    }
+
+    if (ts.isImportClause(clause)) {
+      if (clause.name !== undefined) {
+        checkName('default');
+      }
+
+      const bindings = clause.namedBindings;
+
+      if (bindings === undefined) {
+        return;
+      }
+
+      if (ts.isNamespaceImport(bindings)) {
+        checkName('namespace');
+        return;
+      }
+
+      for (const element of bindings.elements) {
+        checkName((element.propertyName ?? element.name).text);
+      }
+
+      return;
+    }
+
+    if (ts.isNamespaceExport(clause)) {
+      checkName('namespace');
+      return;
+    }
+
+    for (const element of clause.elements) {
+      checkName((element.propertyName ?? element.name).text);
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isImportDeclaration(node)) {
+      const specifier = node.moduleSpecifier;
+
+      if (ts.isStringLiteral(specifier) && isKernelKindContract(specifier.text)) {
+        checkClause(node.importClause);
+      }
+    } else if (ts.isExportDeclaration(node)) {
+      const specifier = node.moduleSpecifier;
+
+      if (
+        specifier !== undefined
+        && ts.isStringLiteral(specifier)
+        && isKernelKindContract(specifier.text)
+      ) {
+        if (node.exportClause === undefined) {
+          found.push('*');
+        } else {
+          checkClause(node.exportClause);
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(file);
+
+  return found;
 }
 
 /**
@@ -456,5 +586,84 @@ describe('kernel core purity', () => {
       '../services/D/side-effect.js',
       './local.js',
     ].sort());
+  });
+});
+
+describe('Parser and Router self-containment', () => {
+  it('imports nothing outside the kernel folder except the platform', async () => {
+    const files = [
+      ...await collectSourceFiles(PARSER_ROOT),
+      ...await collectSourceFiles(ROUTER_ROOT),
+    ];
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const contents = await readFile(file, 'utf8');
+
+      for (const specifier of importSpecifiers(contents)) {
+        const offending = outsideKernelImport(file, specifier);
+
+        if (offending !== undefined) {
+          violations.push(
+            `${relative(KERNEL_ROOT, file)} imports "${offending}" outside the kernel folder`,
+          );
+        }
+      }
+    }
+
+    assert.deepEqual(
+      violations,
+      [],
+      `Parser and Router must stay inside the kernel folder:\n${violations.join('\n')}`,
+    );
+  });
+
+  it('imports no kind value from the kernel kind contract', async () => {
+    const files = [
+      ...await collectSourceFiles(PARSER_ROOT),
+      ...await collectSourceFiles(ROUTER_ROOT),
+    ];
+    const violations: string[] = [];
+
+    for (const file of files) {
+      const contents = await readFile(file, 'utf8');
+
+      for (const name of kindContractValueImports(contents)) {
+        violations.push(
+          `${relative(KERNEL_ROOT, file)} imports kind value "${name}" from the kernel kind contract`,
+        );
+      }
+    }
+
+    assert.deepEqual(
+      violations,
+      [],
+      `Parser and Router must declare their own kind values:\n${violations.join('\n')}`,
+    );
+  });
+
+  it('detects an outside import and a kind value (guard canary)', () => {
+    const file = join(PARSER_ROOT, 'Canary.ts');
+
+    assert.equal(
+      outsideKernelImport(file, '../../../../services/Foo/index.js'),
+      '../../../../services/Foo/index.js',
+    );
+    assert.equal(outsideKernelImport(file, '@brud/kernel'), '@brud/kernel');
+    assert.equal(outsideKernelImport(file, 'node:crypto'), undefined);
+    assert.equal(outsideKernelImport(file, './contracts/kind.js'), undefined);
+
+    assert.deepEqual(
+      kindContractValueImports(
+        "import { BRUD_KIND_TOOL } from '../../../src/contracts/brudOperation.js';",
+      ),
+      ['BRUD_KIND_TOOL'],
+    );
+    assert.deepEqual(
+      kindContractValueImports(
+        "import { BRUD_KIND_PATTERN, isValidBrudKind, type BrudOperationKind } from '../../../src/contracts/brudOperation.js';",
+      ),
+      [],
+    );
   });
 });

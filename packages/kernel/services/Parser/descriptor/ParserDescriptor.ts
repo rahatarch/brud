@@ -1,5 +1,5 @@
-import type { ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
+import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
+import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import type { IBrudParserService } from '../contracts/IParserService.js';
 import { ParserService } from '../orchestrator/index.js';
 import { ParserToken } from './tokens.js';
@@ -10,8 +10,8 @@ export const PARSER_SERVICE_TIER: ServiceTier = 'core';
 /**
  * Builds the `brud.core.parser` service descriptor.
  *
- * The parser declares no dependencies: it is a pure syntax engine. It sits
- * before the router and every routing consumer in the standard boot order.
+ * It declares no dependencies: it is a pure syntax engine. It sits before the
+ * routing service and every routing consumer in the standard boot order.
  *
  * @returns A core-tier descriptor for `brud.core.parser`.
  */

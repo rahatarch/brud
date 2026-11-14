@@ -69,6 +69,8 @@ describe('non-hardcore service packages through the production boot path', () =>
       [
         'kernel:serviceModules/exposedApiRegistry.js',
         'kernel:serviceModules/identityRegistry.js',
+        'kernel:serviceModules/parser.js',
+        'kernel:serviceModules/router.js',
       ],
       'only the services in the kernel service directory may use a kernel-internal path',
     );
@@ -86,8 +88,6 @@ describe('non-hardcore service packages through the production boot path', () =>
       '@brud/service-filesystem',
       '@brud/service-validation',
       '@brud/service-terminal',
-      '@brud/service-parser',
-      '@brud/service-router',
       '@brud/service-tools',
       '@brud/service-actions',
       '@brud/service-history',

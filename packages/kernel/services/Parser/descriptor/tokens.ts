@@ -1,4 +1,4 @@
-import { createServiceToken } from '@brud/kernel';
+import { createServiceToken } from '../../../src/contracts/serviceToken.js';
 import type { IBrudParserService } from '../contracts/IParserService.js';
 
 /**

@@ -11,11 +11,11 @@ import type { IActionManager } from '../../../services/ActionManager/contracts/I
 import { ActionManagerToken } from '../../../services/ActionManager/descriptor/tokens.js';
 import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
-import type { IBrudParserService } from '../../../services/Parser/contracts/IParserService.js';
-import { ParserToken } from '../../../services/Parser/descriptor/tokens.js';
-import type { IRouterService } from '../../../services/Router/contracts/IRouterService.js';
-import { RouterKindCollisionError, RouterRegistrationClosedError } from '../../../services/Router/contracts/errors.js';
-import { RouterToken } from '../../../services/Router/descriptor/tokens.js';
+import type { IBrudParserService } from '../../services/Parser/contracts/IParserService.js';
+import { ParserToken } from '../../services/Parser/descriptor/tokens.js';
+import type { IRouterService } from '../../services/Router/contracts/IRouterService.js';
+import { RouterKindCollisionError, RouterRegistrationClosedError } from '../../services/Router/contracts/errors.js';
+import { RouterToken } from '../../services/Router/descriptor/tokens.js';
 import {
   TEST_QUERY_KIND,
   TEST_QUERY_PLUGIN_ID,
