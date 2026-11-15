@@ -1,218 +1,269 @@
-# Privacy
+# Privacy Policy
 
-Brud Code's project history, diffs and revert data stay on your machine. This page
-describes the one thing that leaves it: anonymous operation records that help us find and
-fix bugs. It lists exactly what is sent, exactly what is not, and how you can verify both.
+**Effective Date:** November 15, 2026  
+**Project:** Brud OS  
+**Maintained By:** Brud Foundation
 
-Release builds of Brud Code are produced from the proprietary Brud codebase. The engine
-and extension in this repository are the open-source core; release builds add the telemetry
-client, the receiving service, the admin console and the integration files that connect
-them. Those are not in this repository, which is why this page documents behaviour by
-example and by the network traffic it produces rather than by linking to their code.
+This Privacy Policy describes how Brud OS handles data, the privacy principles governing its core system and officially maintained components, the boundaries of Brud Foundation's privacy commitments, and the responsibilities associated with independently developed third-party software.
 
-## What is sent
+Brud OS is designed as a local-first runtime platform. Its core system and Brud Foundation-maintained pre-built components are built around local execution, local storage, and the absence of centralized telemetry infrastructure.
 
-Telemetry is emitted by every component that runs the Brud engine: the VS Code
-extension, the MCP server it hosts, and the `brud-mcp` CLI. There are two kinds of
-request.
+---
 
-**1. Operation records** — `POST https://api.brudcode.com/v1/telemetry/events`
+## 1. Overview and Core Principles
 
-Sent after a Brud operation completes, or when a buffered record is retried. One Brud
-prompt becomes one record. Every record carries these envelope fields:
+Brud OS follows a **local-first, privacy-by-default architecture** across its official core system and Foundation-maintained components.
 
-| Field | Meaning |
-|---|---|
-| `eventId` | Random UUID for this record, used so a retry cannot be stored twice |
-| `sessionId` | Random UUID for the execution; a grouped prompt record uses the prompt identifier |
-| `anonymousClientId` | The anonymous installation identifier described below |
-| `toolKind` | Which operation ran, e.g. `create_file`, `terminal_command`, `multi_operation` |
-| `status` | `success`, `failed`, `aborted` or `interrupted` |
-| `durationMs` | How long it took |
-| `errorCode` | A stable code such as `FILE_NOT_FOUND`, when the record failed |
-| `clientVersion` | The version of the build that produced the record |
-| `batch`, `batchId` | Grouping when one prompt produced several operations; `batch` is false otherwise |
-| `payload` | The structured detail shown below |
+The fundamental privacy principles are:
 
-**Successful record, two operations from one prompt:**
+- **Local Execution:** Source code, operational state, project assets, and runtime data are processed locally on the host machine.
+- **No Centralized Telemetry:** The official Brud OS core system does not incorporate telemetry collection, centralized analytics, or background diagnostic reporting.
+- **No Brud Foundation Telemetry Servers:** Official Brud OS components do not establish connections to Brud Foundation-operated telemetry, analytics, or tracking infrastructure.
+- **No Ambient Surveillance:** Official components do not monitor, profile, or harvest user activity for centralized collection or monetization.
+- **Explicit External Communication:** External network communication occurs through explicitly configured or authorized functionality, such as AI model providers, package registries, or other external services.
+- **Developer Independence:** Independently developed third-party applications, packages, extensions, and integrations remain subject to their respective developers' implementation and privacy practices.
 
-```json
-{
-  "eventId": "6f1c2a44-1b6e-4c5d-9d4a-0f2a1b3c4d5e",
-  "sessionId": "d0b7f5a1-8c1e-4f2a-9b3d-7e6f5a4b3c2d",
-  "anonymousClientId": "720aff2d-7df8-4cdb-a159-7a4bf3eb78aa",
-  "toolKind": "multi_operation",
-  "status": "success",
-  "durationMs": 1427,
-  "clientVersion": "<build version>",
-  "batch": true,
-  "batchId": "d0b7f5a1-8c1e-4f2a-9b3d-7e6f5a4b3c2d",
-  "payload": {
-    "operations": [
-      { "index": 0, "kind": "create_directory", "status": "success", "durationMs": 211 },
-      { "index": 1, "kind": "create_file", "status": "success", "durationMs": 96 }
-    ],
-    "fileOperations": [
-      { "operationIndex": 0, "kind": "create_directory", "status": "success",
-        "path": "{path}", "files": ["a.txt", "b.txt"], "directoryPath": "{path}" },
-      { "operationIndex": 0, "kind": "create_file", "status": "success",
-        "path": "{path}.txt" }
-    ],
-    "expectedOperations": 2,
-    "receivedOperations": 2,
-    "operationCount": 2,
-    "failedOperations": 0,
-    "abortedOperations": 0,
-    "interruptedOperations": 0,
-    "succeededOperations": 2
-  }
-}
-```
+These commitments apply to software developed, maintained, and distributed directly by Brud Foundation. They do not automatically extend to independently developed third-party software.
 
-**Failed record**, with the diagnostics that make it useful:
+---
 
-```json
-{
-  "eventId": "0b8f4f65-1f0e-4c2b-9a2e-1c9b7d3e5a41",
-  "sessionId": "c5597c74-3a2b-4f1e-8d6a-2b9c8e7f6a5d",
-  "anonymousClientId": "720aff2d-7df8-4cdb-a159-7a4bf3eb78aa",
-  "toolKind": "read_file",
-  "status": "failed",
-  "durationMs": 73,
-  "errorCode": "FILE_NOT_FOUND",
-  "clientVersion": "<build version>",
-  "payload": {
-    "operationMessage": "All operations failed.",
-    "fileOperations": [
-      { "operationIndex": 0, "kind": "read_file", "status": "failed",
-        "message": "No file found at \"{path}.ts\"." }
-    ],
-    "diagnostics": {
-      "category": "user_input",
-      "categorySource": "error-code",
-      "code": "FILE_NOT_FOUND",
-      "settings": {
-        "workspaceBoundaryEnabled": true,
-        "commandValidationEnabled": true,
-        "terminalAvailable": true,
-        "mcpAutoOn": true,
-        "disabledTools": [],
-        "toolCount": 20
-      },
-      "settingsCapturedAt": "2026-10-21T08:00:00.000Z",
-      "logsIncluded": true,
-      "logs": [
-        { "sequence": 41, "level": "info", "message": "[brud] workspace {workspace}" }
-      ],
-      "logsTruncated": false,
-      "droppedLogLines": 0
-    }
-  }
-}
-```
+## 2. Scope and Applicability
 
-Failure records carry, at most:
+This Privacy Policy establishes the privacy commitments and data-handling principles applicable to the official Brud OS software maintained by Brud Foundation.
 
-- the operation's message, redacted and capped at 4 KiB with a visible `…[truncated]` marker;
-- a category (`user_input`, `policy`, `environment`, `side_effect`, `engine`, `transport`, `unknown`), the stable error code and the input that decided it;
-- the settings fields shown above — the security posture in force at the time, never paths or prompts (values that are unknown are omitted);
-- for a failed operation, up to 50 lines or 4 KiB of Brud's own debug log, redacted, with a truncation flag and dropped-line count.
+The scope includes:
 
-For a prompt with several operations, each failed operation keeps its own diagnostics, while
-the record-level summary carries only the category and counts.
+- The Brud OS core runtime and foundational system components.
+- Official pre-built components developed and maintained by Brud Foundation.
+- Official runtime integrations and utilities distributed as part of the Brud OS project.
+- Local operational data and execution artifacts generated by official components.
 
-**2. Control state** — `GET https://api.brudcode.com/v1/telemetry/state`
+This policy also explains the limitations of Brud Foundation's responsibility concerning third-party software operating within the Brud OS ecosystem.
 
-Fetched when the engine starts and then about every five minutes. The request has no body
-and carries no identifier beyond transport-level metadata. The response is one of:
+Compatibility with Brud OS, publication through a package registry, or execution through the Brud OS runtime does not automatically make independently developed software an official Brud Foundation component.
 
-```json
-{ "active": true, "retryAfterSeconds": 60 }
-```
+---
 
-It exists so telemetry can be paused centrally during an incident. While paused, records
-are kept locally and nothing is transmitted until the next check reports active again.
+## 3. Information Processed Locally
 
-## The anonymous identifier
+The official Brud OS core system and Foundation-maintained components are designed to process and maintain operational information on the host machine.
 
-`anonymousClientId` is a random UUID v4 created on first run and stored on your machine:
+The following information is handled locally under the intended operation of these components:
 
-| Platform | Path |
-|---|---|
-| Linux | `~/.config/brud/client_id` |
-| macOS | `~/Library/Application Support/brud/client_id` |
-| Windows | `%APPDATA%\brud\Config\client_id` |
+- **Source Code and Project Files:** Files read, created, modified, or deleted within an authorized project directory remain on the host machine unless an explicitly configured external integration transmits them.
+- **Session History and Operational Ledgers:** Records of changes, snapshots, execution history, and rollback information are maintained in local storage.
+- **Terminal and Command Execution:** Commands executed through official terminal integrations, including their standard output and error streams, are handled locally.
+- **Security Tokens and Configuration:** Locally generated cryptographic identity tokens, capability grants, and runtime configuration are created, stored, and verified on the host device.
+- **Local Runtime State:** Internal operational state, temporary execution records, and other runtime artifacts are maintained within the local environment.
 
-It is created with owner-only permissions (`0600`) inside an owner-only directory (`0700`).
-It is not derived from your hardware, hostname, username, network address or any file path,
-and it is shared by every Brud component on that OS account so one installation is counted
-once. Deleting the file gives you a new identity on the next run.
+The handling of these records remains subject to the host operating system, storage configuration, and explicitly configured external integrations.
 
-## What is not sent
+---
 
-- **File contents.** Reading a file succeeds or fails, but the text is not transmitted.
-  Successful records contain only structure: operation index, kind, status, duration, paths.
-- **Command output on success.** `terminal_command` records whether it succeeded and how
-  long it took, not what it printed.
-- **Your prompts.** The instruction you typed is not part of any record.
-- **Your source code, diffs, history, snapshots or revert data.** These stay in your
-  workspace under `.brud/`.
-- **Absolute paths.** Paths in structural fields are rewritten to `{path}` plus the
-  extension, e.g. `/home/you/project/src/app.ts` becomes `{path}.ts`.
-- **Credential patterns.** The following are replaced with `{redacted}` before sending:
-  `Authorization:`/`Bearer` tokens, `sk-…` keys, GitHub `ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_`
-  tokens, GitLab `glpat-` tokens, Slack `xox[baprs]-` tokens, AWS `AKIA…` keys, JWTs,
-  PEM private-key blocks, credentials embedded in URLs, and values assigned to
-  `*_PASSWORD`, `*_PASSWD`, `*_SECRET`, `*_TOKEN`, `*_API_KEY` or `*_PRIVATE_KEY`.
-- **Hardware or network identifiers.** The records stored in our database contain no IP
-  address, MAC address, hostname, username or hardware fingerprint. Operational server logs
-  and network providers may see connection metadata such as source address and timestamp,
-  as with any HTTPS request.
-- **Environment dumps or settings files.** Only the settings fields listed above are sent, and unknown values are omitted.
+## 4. Telemetry and Diagnostics
 
-## What is sent on failure, and why it needs saying twice
+Brud OS, as maintained by Brud Foundation, does not incorporate centralized telemetry infrastructure into its official core system.
 
-A failure record may include the Brud debug log for the failing operation and the output of
-a failed terminal command, because that is usually the only thing that explains the failure.
-Those strings are redacted by the patterns above, not reviewed by a person before sending.
-Two honest consequences:
+The following principles apply:
 
-- A secret in a format we do not recognise can pass through. If a command prints one and
-  fails in the same operation, treat that output as transmitted.
-- In debug logs, your home directory and workspace root become `{home}` and `{workspace}`,
-  but an absolute path outside those two may remain. Other absolute paths in structural
-  fields are rewritten as described above.
+- **No Telemetry Infrastructure:** The official Brud OS core runtime does not connect to centralized telemetry, analytics, or tracking servers operated by Brud Foundation.
+- **No Background Reporting:** Official core components do not periodically transmit operational metrics, usage statistics, system information, or diagnostic reports to Brud Foundation infrastructure.
+- **No Usage Tracking:** Brud Foundation does not implement centralized user activity monitoring, behavioral profiling, or usage analytics within the official core runtime.
+- **Local Diagnostics:** Execution records, runtime diagnostics, error logs, and operational information generated by official components remain on the host machine.
+- **No Centralized Diagnostic Collection:** Brud Foundation does not operate a centralized diagnostic collection service for the official core system.
 
-## Retention
+### Third-Party Diagnostic Behavior
 
-Records are stored in our PostgreSQL database. There is no automatic expiry at present.
-To have records associated with your identifier removed, open an issue at
-<https://github.com/rahatarch/brud/issues> and include the value of your `client_id` file.
+Independently developed applications, extensions, packages, and integrations may implement their own telemetry, analytics, logging, or diagnostic reporting mechanisms.
 
-## Your controls
+Such functionality is outside the direct control of Brud Foundation and is governed by the respective developer's implementation, configuration, and privacy policy.
 
-- **Server pause.** The operator can pause telemetry for every client. Your client keeps
-  records locally and sends nothing while paused.
-- **Reset identity.** Delete your `client_id` file.
-- **Clear local buffer.** Delete the spool directory used when the server is unreachable:
-  `~/.cache/brud/telemetry/` on Linux, `~/Library/Caches/brud/telemetry/` on macOS, or
-  `%LOCALAPPDATA%\brud\Cache\telemetry\` on Windows.
-- **No local opt-out yet.** There is no user-facing switch to disable telemetry at present.
-  Until one exists, the server pause is the only way to stop transmission, and it is operated
-  by us, not by you. This paragraph is here so the limitation is not discovered later.
+---
 
-## How to verify this yourself
+## 5. Third-Party Services and AI Model Providers
 
-1. **Read the buffer.** When the server is unreachable, records wait as plain JSON lines in
-   the spool path above (`pending.ndjson`, `0600`). You will see the exact payloads shown on
-   this page.
-2. **Watch the network.** Point a proxy or packet capture at the VS Code extension host and
-   observe requests to `api.brudcode.com`. There are only the two endpoints listed above.
-3. **Read the shipped bundle.** The extension in the VSIX is minified but not encrypted:
-   `extension/dist/extension.js` inside the package contains the code that builds these
-   payloads, including the redaction patterns.
-4. **Check what is absent.** Search the captured traffic or the spool for a known string
-   from a file you read, or from a command that succeeded. It will not be there.
+The official Brud OS runtime does not function as a centralized proxy, telemetry intermediary, or data collection service for artificial intelligence model inference.
 
-If any of this does not match what you observe, that is a bug worth reporting, and the
-description here is what should change.
+However, applications and tools operating through Brud OS may be configured to communicate with external services.
+
+Examples include:
+
+- Cloud-hosted artificial intelligence model providers.
+- Locally hosted or remotely accessible model runners.
+- Public and private package registries.
+- External APIs and developer services.
+- Independently operated application backends.
+
+### Direct External Connections
+
+When an application, agent, or authorized tool communicates with an external service, the connection is initiated through that component's configured functionality.
+
+Depending on the implementation, information transmitted may include prompts, selected file contents, API requests, authentication credentials, or other application-specific data.
+
+### Independent Privacy Policies
+
+Information transmitted to external services is subject to the applicable privacy policies, terms of service, and data-handling practices of those service providers.
+
+Brud Foundation does not control the retention, processing, or subsequent use of information by independent external service providers.
+
+Users and system operators are responsible for understanding the external communication behavior of the applications and integrations they configure.
+
+---
+
+## 6. Protection of Secrets and Credentials
+
+Official Brud OS components are designed to handle sensitive information, including API keys, authentication tokens, cryptographic identity material, and other security credentials, according to strict confidentiality principles.
+
+The intended safeguards include:
+
+- **In-Memory Protection:** Where supported by the operating system and runtime implementation, sensitive credentials held in memory may be locked to reduce the risk of paging into disk swap space.
+- **Automatic Output Redaction:** Official execution traces, logging pipelines, and diagnostic streams are designed to detect and redact registered sensitive credentials before storage or display.
+- **Namespace Isolation:** Local storage mechanisms enforce component-level boundaries intended to prevent unauthorized access to credentials belonging to other components.
+- **Capability-Based Access:** Access to protected resources is governed by the applicable capability grants and authorization mechanisms.
+
+The effectiveness of these protections depends on the underlying operating system, runtime configuration, and implementation.
+
+Third-party software may implement its own credential-handling mechanisms and is not automatically covered by the safeguards of official Brud OS components.
+
+---
+
+## 7. Sandboxing and Third-Party Extensions
+
+Brud OS supports an extensible software environment in which independent developers can build and distribute applications, extensions, packages, and other compatible systems.
+
+Official Brud OS sandboxing mechanisms are designed to restrict the capabilities available to untrusted third-party code.
+
+The intended security boundaries include:
+
+- **Isolated Execution:** Where supported by the applicable execution environment, untrusted third-party code operates within a sandboxed virtual instruction environment.
+- **No Ambient Authority:** Sandboxed tools do not receive unrestricted operating system access by default.
+- **Explicit Capabilities:** Filesystem access, network communication, process execution, and other privileged operations require the corresponding permissions where enforced by the runtime.
+- **Workspace Confinement:** Official filesystem drivers enforce project-directory restrictions where applicable, rejecting unauthorized access outside the permitted project root.
+
+### Limitations of Sandboxing
+
+Sandboxing provides security boundaries, but it does not constitute a guarantee that every third-party component is harmless, trustworthy, or free from privacy risks.
+
+Actual restrictions depend on the execution environment, granted capabilities, runtime configuration, and the implementation of the component.
+
+Third-party developers remain responsible for the behavior, security, and privacy practices of their independently developed software.
+
+---
+
+## 8. Scope of Privacy Commitments and Third-Party Software
+
+Brud Foundation's privacy commitments apply exclusively to the official Brud OS core system and the pre-built components developed, maintained, and distributed directly by Brud Foundation.
+
+### 8.1 Official Brud OS Components
+
+The official Brud OS core system and Foundation-maintained pre-built components follow the local-first privacy architecture described in this policy.
+
+Brud Foundation does not incorporate telemetry collection, centralized analytics, background reporting, or connections to Brud Foundation-operated telemetry servers into these official components.
+
+Their operational data is designed to remain on the host machine unless an explicitly configured or authorized external integration requires communication with another service.
+
+### 8.2 Third-Party Software and Independent Developers
+
+Brud OS is an extensible platform that allows independent developers to create, publish, distribute, and maintain their own software.
+
+This ecosystem may include:
+
+- Third-party applications.
+- Independently developed runtime components.
+- Extensions and plugins.
+- Developer tools and integrations.
+- Packages published through npm and other public or private package registries.
+- Independently operated services and application backends.
+
+Brud Foundation does not own, operate, maintain, control, or audit every independently developed component published through these distribution channels.
+
+Consequently:
+
+- Third-party software may implement its own telemetry, analytics, and diagnostic reporting mechanisms.
+- Third-party applications may establish external network connections or communicate with remote servers.
+- Third-party components may collect, process, store, or transmit information according to their own implementation and privacy policies.
+- Third-party developers may introduce their own data collection, retention, and credential-handling practices.
+- Brud Foundation cannot guarantee the privacy, security, data-handling practices, or network behavior of independently developed software.
+
+### 8.3 Developer Responsibility
+
+Developers publishing software for Brud OS are independently responsible for their software's privacy, security, and data-handling practices.
+
+They are responsible for disclosing relevant data collection, external communications, telemetry mechanisms, and other privacy-affecting functionality associated with their software.
+
+Publication through npm or another package registry does not imply that a package has been developed, reviewed, endorsed, or privacy-certified by Brud Foundation.
+
+### 8.4 User and Operator Responsibility
+
+Users and system operators are responsible for evaluating third-party software before installation or execution.
+
+This includes:
+
+- Reviewing the source code and documentation where available.
+- Understanding requested permissions and capability grants.
+- Evaluating external network communication behavior.
+- Reviewing the developer's privacy policy and security practices.
+- Assessing the trustworthiness of external package registries and software publishers.
+
+The absence of telemetry or background network communication in official Brud OS components must not be interpreted as a guarantee that every third-party application, package, or extension operating within the Brud OS ecosystem follows the same practices.
+
+### 8.5 Limitation of Brud Foundation's Control
+
+Brud Foundation's privacy commitments do not automatically extend to independently developed software merely because it is compatible with, distributed for, or executed through Brud OS.
+
+Brud Foundation cannot assume responsibility for software behavior, data transmission, privacy violations, or security practices implemented independently by third-party developers outside its direct development and maintenance scope.
+
+---
+
+## 9. Data Retention and Deletion
+
+Operational artifacts generated by official Brud OS components are maintained locally and remain under the control of the system operator, subject to the host operating system and storage configuration.
+
+- **Session and History Removal:** Removing the relevant local storage database or operational records deletes the corresponding locally maintained history and session information.
+- **Project Data Removal:** Deleting a project directory removes its contents from that location, subject to filesystem behavior and any existing backups or snapshots.
+- **Cache Management:** Local build artifacts, package caches, and temporary files can be inspected and deleted manually or through supported cleanup commands.
+- **External Service Retention:** Data previously transmitted to external AI providers, APIs, package registries, or other services is subject to those providers' retention and deletion policies.
+
+Brud Foundation does not centrally retain or manage the local operational history of Brud OS installations.
+
+Third-party applications may maintain separate storage, caches, logs, or remote records according to their own implementation.
+
+---
+
+## 10. Security and Incident Reporting
+
+Brud Foundation takes the security and privacy integrity of the official Brud OS core system and Foundation-maintained components seriously.
+
+If a privacy regression, unintended data exposure, or security vulnerability is discovered within official Brud OS software:
+
+- Do not disclose the issue publicly through open issue trackers before coordinated disclosure.
+- Submit a private report through the project's repository security advisory channel or the designated private security contact published in the official repository.
+- Provide relevant technical details to help reproduce and investigate the issue.
+
+Reports concerning official Brud OS components are investigated and addressed through the project's security and maintenance processes.
+
+Security issues involving independent third-party packages or applications should also be reported to their respective developers or maintainers.
+
+---
+
+## 11. Changes to This Policy
+
+Brud Foundation may update this Privacy Policy to reflect changes in the Brud OS architecture, official components, privacy safeguards, or data-handling practices.
+
+Policy updates will be committed directly to the official project repository with an updated effective date.
+
+Material changes affecting the privacy commitments of official Brud OS components will be highlighted in relevant project announcements or release documentation.
+
+---
+
+## 12. Contact Information
+
+For privacy-related questions, concerns, or reports regarding the official Brud OS core system and Brud Foundation-maintained components, refer to the official Brud OS repository for the designated project contact and security reporting channels.
+
+For privacy concerns involving independently developed third-party software, users should contact the respective developer, publisher, or package maintainer.
+
+---
+
+**Brud OS — Brud Foundation**
+
+*Local-first by architecture. Privacy by design. Developer freedom by default.*

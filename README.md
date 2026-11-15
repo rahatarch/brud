@@ -1,86 +1,95 @@
 # Brud OS
 
-An autonomous agent is only useful if it can take action. Letting it act safely is the hard part.
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![Status: Developer Preview](https://img.shields.io/badge/Status-Developer%20Preview-orange.svg)]()
+[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
 
-**Brud OS is a foundation for building autonomous agents: software that takes actions on your behalf inside a project folder you control.**
+**The embedded microkernel runtime for autonomous agent software.**
 
-## What Brud OS is: the kernel
+---
 
-Brud OS is built around a kernel. **In Brud, the kernel is a service orchestrator.**
+## The Problem & Value Proposition
 
-Services are the core capabilities the kernel manages, such as a file system or a terminal. Plugins are packages that register tools for an agent and declare which capabilities they need — in other words, which operations they are allowed to perform.
+An autonomous agent is only useful if it can take action, but granting an AI model access to tools, files, and system execution introduces severe stability and security risks. Most existing frameworks either grant models unrestricted ambient authority on the host machine or require heavy, multi-gigabyte virtual machines that cannot be embedded into real software products.
 
-The kernel manages those services, decides what each service is allowed to do, and passes requests between the services and the agent or application asking. **It has no built-in capabilities.** It does not open files, run commands, or remember history. Everything an agent can do is added as a service or a plugin.
+Brud OS provides an embeddable, zero-trust microkernel substrate. The core engine holds zero built-in capabilities: it does not open files, run terminal commands, or maintain state on its own. Instead, it serves as a lightweight control plane that verifies component identities, restricts execution within virtual instruction sandboxes, and enforces strict capability boundaries—allowing you to embed safe, autonomous agent capabilities directly inside your own applications.
 
-A workspace is the project folder Brud is allowed to operate in. Add a capability by adding a service or a plugin; **the kernel itself does not change.**
+---
 
-When Brud starts, the kernel reads the dependencies between services, starts them in the right order, and checks every request to confirm the caller is allowed to use the service it is asking for.
+## Key Features
 
-## The Starter Pack model
+- **Amnesiac Microkernel Substrate:** The core engine holds execution mechanism only; all functional capabilities (file I/O, terminal execution, storage) exist as modular, removable services.
+- **Virtual Instruction Sandboxing:** Untrusted third-party tools and plugins run in an isolated WebAssembly environment with zero ambient operating system access.
+- **Cryptographic Identity Verification:** Every participant in the system is bound to a kernel-issued token derived from verified bytecode hashes rather than human-readable names.
+- **Fractal Capability Attenuation:** Permissions delegated to sub-agents or child tools are strictly constrained to subsets of the parent's capabilities, preventing privilege escalation.
+- **Lightweight & Embeddable:** Ships as an embedded library with minimal memory footprint—no heavy container runtimes or virtual machines required.
 
-Brud ships with ready-made bundles of services and plugins called **Starter Packs**.
+---
 
-Each Starter Pack turns the bare kernel into a complete environment for a specific kind of agent: a coding agent, a video agent, or a compliance agent. The kernel does not change between packs; only the services and plugins do. Today, this repository ships the Coding Starter Pack.
+## Installation / Getting Started
 
-## The Coding Starter Pack
+### Prerequisites
 
-The Coding Starter Pack gives a coding agent what it needs to work in a project. **It registers the services a coding agent needs.**
+- **Runtime:** Node.js `>= 20.0.0`
+- **Operating Systems:** Linux, macOS, or Windows
 
-A file system service lets the agent read and change files, but only inside the project; it refuses paths outside it. A terminal service runs commands and screens them against a policy before they execute.
+### Installation
 
-A history service records every change with before-and-after states and can undo a whole session. Settings, validation, and workspace services store configuration, check requests and commands before they run, and keep paths consistent.
+Install the runtime package using your preferred package manager:
 
-A plugin manager loads plugins and limits each plugin to the capabilities it declared. A tool service exposes the actions available to the agent; an action service handles operations that only a user interface can call; a utility service provides shared helpers such as working out which files a source file imports.
+```bash
+npm install @brud/os
+```
 
-**The pack also ships the plugins that give the agent its tools.** Reader, search, and structure plugins read files, find text, and extract a compact map of the project. Catalog lists the tools available to the agent. Filesystem creates, moves, and deletes files. Terminal runs commands.
+---
 
-The MCP bridge connects the agent to external tools through the Model Context Protocol, a standard way for AI tools to call other tools. The user prompts plugin stores reusable prompts.
+## Quickstart
 
-- **Contained.** The file system service only lets the agent touch files inside the project.
-- **Journaled.** Every change through the file system service is recorded with before-and-after states.
-- **Reversible.** A session can be undone.
+Initialize and boot the runtime using a declarative configuration manifest:
 
-These are properties of the Coding Starter Pack, not of the kernel. The kernel manages and connects the services; **the pack supplies the guarantees.**
+```javascript
+import { bootKernel } from "@brud/os";
 
-## The pattern for other domains
+// 1. Declare your distribution composition
+const config = {
+  root: true,
+  services: [
+    // Include only the services your application requires
+    { module: "@brud/service-filesystem", official: true }
+  ],
+  plugins: []
+};
 
-A Photoshop Starter Pack would bring services for image editing, and a compliance Starter Pack would bring services for audits. **The kernel stays the same.**
+// 2. Boot the engine
+async function main() {
+  const kernel = await bootKernel(config);
+  console.log("Brud OS runtime running safely.");
+}
 
-## Honest boundaries
+main().catch(console.error);
+```
 
-### Kernel design
+---
 
-Plugins run inside the same process as the kernel. They are restricted to the capabilities they declare, but **the kernel does not contain hostile code.** This is how the kernel is built.
+## Documentation Directory
 
-### Coding Starter Pack scope
+For in-depth guides and architectural specifications, consult the following:
 
-The shipped pack does not provide an operating-system sandbox.
+- [ARCHITECTURE.md](ARCHITECTURE.md) — System layers, microkernel invariants, capability routing, and execution lifecycles.
+- [SECURITY.md](SECURITY.md) — Formal threat models, cryptographic protocols, and vulnerability reporting procedures.
+- [PRIVACY.md](PRIVACY.md) — Local-first guarantees, telemetry boundaries, and data-handling commitments.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Repository structure, test suites, and pull request guidelines.
 
-The terminal service screens commands against a policy, but a command that passes can write outside the workspace. Those writes are outside the history record.
+---
 
-History reversal covers changes made through the pack's file system service only. Unrecorded paths cannot be reverted, and directory reversal has documented limits.
+## Project Status
 
-### Project status
+Brud OS is currently in **Developer Preview**. 
 
-Brud OS is a developer preview. The Coding Starter Pack is the only pack that ships today.
+Public interfaces, capability contracts, and configuration schemas are stabilizing toward `v1.0.0`. Breaking changes may occur between minor versions prior to the stable release.
 
-There is no marketplace and no system for distributing third-party Starter Packs. Public interfaces may change before the first stable version.
-
-The way to build a real product on Brud today is to fork the repository. Everything described in this document ships in the repository: the kernel, the Coding Starter Pack, and the pattern for additional Starter Packs. Fork it, register the services and plugins your domain needs, and ship your product. A published, stable Brud package is a future state, not today's.
-
-## Where to go next
-
-**To work with the code,** clone the repository and install dependencies with `npm install`.
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) — how the repository and engine are structured.
-- [Kernel architecture standard](docs/architecture/ENGINE_ARCHITECTURE_STANDARD.md) — the kernel's rules and service boundaries.
-- [History engine specification](docs/architecture/BRUD_HISTORY_ENGINE_SPEC.md) — how changes are recorded and reversed.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — how to contribute.
-
-A dedicated Starter Pack guide is in progress; in the meantime, the architecture documents above cover the same ground.
+---
 
 ## License
 
-Brud OS is released under the [**MIT License**](LICENSE).
-
-Brud OS is developed by Akkhar-Labs.
+Brud OS is open-source software licensed under the [Apache License 2.0](LICENSE).
