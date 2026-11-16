@@ -68,7 +68,7 @@ const WASM_CAGE_BUILT_HASH =
  * placeholder that a kernel build replaces.
  */
 const EVENTS_SOURCE_HASH =
-  'e462f0c97bd6d46d696c05fbdbb12508200571688c3edfde0c254e7ef2068d43';
+  'dd3f2d31aa533df86da633be96b377dda114214812a8c0225becdd409f45df2e';
 const EVENTS_BUILT_HASH =
   '0c865aeee5907bbd0de3f3616191728c203ecdfc9a515fce91a5213d0ce99842';
 
