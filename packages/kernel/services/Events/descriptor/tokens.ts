@@ -1,0 +1,1 @@
+export { EventsToken } from '../contracts/tokens.js';

@@ -74,6 +74,12 @@ import {
   WasmCageToken,
   createWasmCageDescriptor,
 } from '../../services/WasmCage/index.js';
+import {
+  EVENTS_CONTRACT_METHODS,
+  EVENTS_CONTRACT_VERSION,
+  EventsToken,
+  createEventsDescriptor,
+} from '../../services/Events/index.js';
 
 /**
  * Production-mirror proofs that the hardcore mechanism is generic.
@@ -99,6 +105,7 @@ const EXPOSED_API_SHIM = join(KERNEL_ROOT, 'serviceModules', 'exposedApiRegistry
 const PARSER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'parser.ts');
 const ROUTER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'router.ts');
 const WASM_CAGE_SHIM = join(KERNEL_ROOT, 'serviceModules', 'wasmCage.ts');
+const EVENTS_SHIM = join(KERNEL_ROOT, 'serviceModules', 'events.ts');
 
 const HARDCORE_METHOD_NAMES: readonly string[] = [
   ...new Set([
@@ -107,6 +114,12 @@ const HARDCORE_METHOD_NAMES: readonly string[] = [
     ...PARSER_CONTRACT_METHODS,
     ...ROUTER_CONTRACT_METHODS,
     ...WASM_CAGE_CONTRACT_METHODS,
+    // The events methods (`emit`, `pull`, `close`, `list`) are ordinary English
+    // words the mechanism's own prose and parameters legitimately use (e.g. the
+    // `list` parameter names the compiled hardcore list). They are too generic
+    // to serve as BC-4 boundary markers, so they are deliberately omitted here.
+    // The events token and type name remain guarded below in
+    // HARDCORE_SERVICE_NAMES, which is what BC-4 actually protects.
   ]),
 ];
 
@@ -116,11 +129,13 @@ const HARDCORE_SERVICE_NAMES: readonly string[] = [
   ParserToken.id,
   RouterToken.id,
   WasmCageToken.id,
+  EventsToken.id,
   'IdentityRegistry',
   'ExposedApiRegistry',
   'Parser',
   'Router',
   'WasmCage',
+  'Events',
 ];
 
 /** The real contract each compiled entry must declare, keyed by token id. */
@@ -147,6 +162,10 @@ const OWN_CONTRACTS: ReadonlyMap<
   [WasmCageToken.id, {
     version: WASM_CAGE_CONTRACT_VERSION,
     methods: [...WASM_CAGE_CONTRACT_METHODS],
+  }],
+  [EventsToken.id, {
+    version: EVENTS_CONTRACT_VERSION,
+    methods: [...EVENTS_CONTRACT_METHODS],
   }],
 ]);
 
@@ -478,8 +497,8 @@ describe('hardcore mechanism boundary (BC-4)', () => {
   });
 });
 
-describe('five real hardcore services through one generic mechanism', () => {
-  it('compiles exactly five entries, each with its own contract and a uniform boot hook', () => {
+describe('six real hardcore services through one generic mechanism', () => {
+  it('compiles exactly six entries, each with its own contract and a uniform boot hook', () => {
     assert.deepEqual(
       HARDCORE_SERVICES.map((entry) => entry.token),
       [
@@ -488,22 +507,28 @@ describe('five real hardcore services through one generic mechanism', () => {
         ParserToken.id,
         RouterToken.id,
         'brud.core.wasmCage',
+        'brud.core.events',
       ],
     );
 
-    const [identity, exposedApi, parser, router, wasmCage] = HARDCORE_SERVICES;
+    const [identity, exposedApi, parser, router, wasmCage, events] = HARDCORE_SERVICES;
 
     assert.ok(
       identity !== undefined
       && exposedApi !== undefined
       && parser !== undefined
       && router !== undefined
-      && wasmCage !== undefined,
+      && wasmCage !== undefined
+      && events !== undefined,
     );
 
     assert.deepEqual(wasmCage.contractInterface, ['resolve']);
     assert.equal(wasmCage.contractVersion, '1.0.0');
     assert.equal(wasmCage.boot.length, 2);
+    assert.deepEqual(events.contractInterface, ['emit', 'pull', 'close', 'list']);
+    assert.equal(events.contractVersion, '1.0.0');
+    assert.equal(events.boot.length, 2);
+    assert.equal(events.mechanism, true);
     assert.equal(identity.contractVersion, IDENTITY_REGISTRY_CONTRACT_VERSION);
     assert.deepEqual(identity.contractInterface, [...IDENTITY_REGISTRY_CONTRACT_METHODS]);
     assert.equal(exposedApi.contractVersion, EXPOSED_API_REGISTRY_CONTRACT_VERSION);
@@ -514,7 +539,7 @@ describe('five real hardcore services through one generic mechanism', () => {
     assert.deepEqual(router.contractInterface, [...ROUTER_CONTRACT_METHODS]);
 
     // Each entry carries its own boot hook object, not a shared one.
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 5);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 6);
 
     for (const entry of HARDCORE_SERVICES) {
       assert.equal(entry.boot.length, 2, `${entry.token} boot hook must take (instance, context)`);
@@ -522,8 +547,8 @@ describe('five real hardcore services through one generic mechanism', () => {
       assert.match(entry.expectedBuiltContentHash, HEX_DIGEST);
     }
 
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 5);
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 5);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 6);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 6);
   });
 
   it('verifies each real package against its own entry and calls each real hook with its own verified data', async (t: TestContext) => {
@@ -580,12 +605,19 @@ describe('five real hardcore services through one generic mechanism', () => {
         resolvedPath: WASM_CAGE_SHIM,
         manifest: admitParticipantManifest(WasmCageToken.id, undefined),
       },
+      {
+        descriptor: createEventsDescriptor() as unknown as ServiceDescriptor<unknown, unknown>,
+        path: 'kernel:serviceModules/events.js',
+        official: true,
+        resolvedPath: EVENTS_SHIM,
+        manifest: admitParticipantManifest(EventsToken.id, undefined),
+      },
     ];
 
-    // Real verification of all five real packages against the real compiled
+    // Real verification of all six real packages against the real compiled
     // list. Each package is checked against its own entry's source pin.
     const packageHashes = verifyHardcoreServices(HARDCORE_SERVICES, composed, KERNEL_CONFIG_PATH);
-    const [identityEntry, exposedApiEntry, parserEntry, routerEntry, wasmCageEntry] =
+    const [identityEntry, exposedApiEntry, parserEntry, routerEntry, wasmCageEntry, eventsEntry] =
       HARDCORE_SERVICES;
 
     assert.ok(
@@ -593,13 +625,15 @@ describe('five real hardcore services through one generic mechanism', () => {
       && exposedApiEntry !== undefined
       && parserEntry !== undefined
       && routerEntry !== undefined
-      && wasmCageEntry !== undefined,
+      && wasmCageEntry !== undefined
+      && eventsEntry !== undefined,
     );
     assert.equal(packageHashes.get(IdentityRegistryToken.id), identityEntry.expectedContentHash);
     assert.equal(packageHashes.get(ExposedApiRegistryToken.id), exposedApiEntry.expectedContentHash);
     assert.equal(packageHashes.get(ParserToken.id), parserEntry.expectedContentHash);
     assert.equal(packageHashes.get(RouterToken.id), routerEntry.expectedContentHash);
     assert.equal(packageHashes.get(WasmCageToken.id), wasmCageEntry.expectedContentHash);
+    assert.equal(packageHashes.get(EventsToken.id), eventsEntry.expectedContentHash);
 
     const composition = buildHardcoreBootEntries(composed, packageHashes);
 
@@ -642,6 +676,7 @@ describe('five real hardcore services through one generic mechanism', () => {
           WasmCageToken.id,
           ParserToken.id,
           RouterToken.id,
+          EventsToken.id,
         ].sort(),
       );
 
@@ -652,7 +687,7 @@ describe('five real hardcore services through one generic mechanism', () => {
       const records = loadIdentityRegistryStorage(storagePath).records;
       const byPublisher = new Map(records.map((record) => [record.publisher, record]));
 
-      assert.equal(records.length, 5);
+      assert.equal(records.length, 6);
       assert.equal(identities.get(IdentityRegistryToken.id), byPublisher.get(IdentityRegistryToken.id)?.token);
       assert.equal(
         byPublisher.get(IdentityRegistryToken.id)?.contentHash,
@@ -713,6 +748,7 @@ describe('five real hardcore services through one generic mechanism', () => {
           WasmCageToken.id,
           ParserToken.id,
           RouterToken.id,
+          EventsToken.id,
         ].sort(),
       );
 
@@ -732,7 +768,7 @@ describe('five real hardcore services through one generic mechanism', () => {
       const parserRecord = records.find((record) => record.publisher === ParserToken.id);
       const routerRecord = records.find((record) => record.publisher === RouterToken.id);
 
-      assert.equal(records.length, 5);
+      assert.equal(records.length, 6);
       assert.equal(exposedApiRecord?.contentHash, HARDCORE_SERVICES[1]?.expectedContentHash);
       assert.equal(parserRecord?.contentHash, HARDCORE_SERVICES[2]?.expectedContentHash);
       assert.equal(routerRecord?.contentHash, HARDCORE_SERVICES[3]?.expectedContentHash);
@@ -875,9 +911,10 @@ describe('hardcore persistence independence (BC-6)', () => {
         'kernel:serviceModules/parser.js',
         'kernel:serviceModules/router.js',
         'kernel:serviceModules/wasmCage.js',
+        'kernel:serviceModules/events.js',
         registrantPath,
       ],
-      'the composition carries the five hardcore services and one non-storage fixture only',
+      'the composition carries the six hardcore services and one non-storage fixture only',
     );
 
     const configPath = join(root, 'brud.config.json');

@@ -19,6 +19,8 @@ const ENTRIES = [
   'TerminalService/serviceModule.ts',
   'kernel:serviceModules/parser.js',
   'kernel:serviceModules/router.js',
+  'kernel:serviceModules/wasmCage.js',
+  'kernel:serviceModules/events.js',
   'BrudTools/serviceModule.ts',
   'ActionManager/serviceModule.ts',
   'UniversalHistory/historySession.ts',

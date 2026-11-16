@@ -34,6 +34,8 @@ async function bootParserRouter(): Promise<{
       { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
       { path: 'kernel:serviceModules/parser.js', official: true },
       { path: 'kernel:serviceModules/router.js', official: true },
+      { path: 'kernel:serviceModules/wasmCage.js', official: true },
+      { path: 'kernel:serviceModules/events.js', official: true },
     ],
     plugins: [],
   }, null, 2), 'utf8');

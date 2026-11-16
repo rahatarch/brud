@@ -59,6 +59,19 @@ const WASM_CAGE_SOURCE_HASH =
 const WASM_CAGE_BUILT_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000';
 
+/**
+ * Pinned digests of the events hardcore package.
+ *
+ * The source pin is computed by `computePackageContentHash` over the events
+ * package graph. The built pin is recorded as needing a build: no built kernel
+ * has been produced since the events package was added, so the value below is a
+ * placeholder that a kernel build replaces.
+ */
+const EVENTS_SOURCE_HASH =
+  'e462f0c97bd6d46d696c05fbdbb12508200571688c3edfde0c254e7ef2068d43';
+const EVENTS_BUILT_HASH =
+  '0c865aeee5907bbd0de3f3616191728c203ecdfc9a515fce91a5213d0ce99842';
+
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
   readonly publisher: string;
@@ -226,6 +239,25 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     boot: (instance: unknown, context: HardcoreBootContext): void => {
       const cage = instance as { bindAuthority(value: KernelCallAuthority): void };
       cage.bindAuthority(context.authority);
+    },
+  },
+  {
+    token: 'brud.core.events',
+    expectedContentHash: EVENTS_SOURCE_HASH,
+    expectedBuiltContentHash: EVENTS_BUILT_HASH,
+    contractVersion: '1.0.0',
+    contractInterface: ['emit', 'pull', 'close', 'list'],
+    // Events are a mechanism, not an official participant: the events hardcore
+    // holds the declared events and carries deliveries; the participant that
+    // declares an event is the giver. The identity-to-official mapping reads
+    // this and maps the events hardcore to non-official.
+    mechanism: true,
+    // The events hardcore's boot hook binds the kernel's call authority so
+    // later steps can reach `admitCall`/`observe`. It opens no participant-
+    // facing registration.
+    boot: (instance: unknown, context: HardcoreBootContext): void => {
+      const events = instance as { bindAuthority(value: KernelCallAuthority): void };
+      events.bindAuthority(context.authority);
     },
   },
 ];

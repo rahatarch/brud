@@ -42,6 +42,8 @@ async function writeConfig(root: string, services: readonly string[]): Promise<s
       { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
       { path: 'kernel:serviceModules/parser.js', official: true },
       { path: 'kernel:serviceModules/router.js', official: true },
+      { path: 'kernel:serviceModules/wasmCage.js', official: true },
+      { path: 'kernel:serviceModules/events.js', official: true },
       ...services.map((path) => ({ path, official: true })),
     ],
     plugins: [],

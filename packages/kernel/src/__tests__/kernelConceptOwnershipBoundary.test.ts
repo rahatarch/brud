@@ -1801,6 +1801,8 @@ async function writeComposition(
     { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
     { path: 'kernel:serviceModules/parser.js', official: true },
     { path: 'kernel:serviceModules/router.js', official: true },
+    { path: 'kernel:serviceModules/wasmCage.js', official: true },
+    { path: 'kernel:serviceModules/events.js', official: true },
   ];
 
   for (const [index, participant] of participants.entries()) {
