@@ -44,6 +44,7 @@ async function writeConfig(root: string, services: readonly string[]): Promise<s
       { path: 'kernel:serviceModules/router.js', official: true },
       { path: 'kernel:serviceModules/wasmCage.js', official: true },
       { path: 'kernel:serviceModules/events.js', official: true },
+      { path: 'kernel:serviceModules/interception.js', official: true },
       ...services.map((path) => ({ path, official: true })),
     ],
     plugins: [],

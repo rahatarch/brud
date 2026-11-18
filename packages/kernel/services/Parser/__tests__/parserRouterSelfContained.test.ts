@@ -36,6 +36,7 @@ async function bootParserRouter(): Promise<{
       { path: 'kernel:serviceModules/router.js', official: true },
       { path: 'kernel:serviceModules/wasmCage.js', official: true },
       { path: 'kernel:serviceModules/events.js', official: true },
+      { path: 'kernel:serviceModules/interception.js', official: true },
     ],
     plugins: [],
   }, null, 2), 'utf8');

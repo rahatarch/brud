@@ -43,6 +43,8 @@ export {
 export type {
   AdmittedManifest,
   EventDeclaration,
+  InterceptionDeclaration,
+  InterceptionPointDeclaration,
   ExposureDeclaration,
   ParticipantManifest,
   ParticipantRequests,

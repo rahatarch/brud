@@ -61,6 +61,34 @@ export interface EventDeclaration {
   readonly payloadSchema?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * One interception a participant declares: it asks to intercept calls to an
+ * exposure another participant gives. Held only by the interception hardcore;
+ * it is not an exposure and is not reachable through `resolve`.
+ */
+export interface InterceptionDeclaration {
+  /** Exposure name to intercept. */
+  readonly target: string;
+
+  /** Major version of the target; defaults to 1. */
+  readonly version?: number | string;
+}
+
+/**
+ * One interception point a giver declares on one of its own exposures, naming
+ * (by service token) the interceptors it admits, in the order they run.
+ */
+export interface InterceptionPointDeclaration {
+  /** The giver's own exposure name. */
+  readonly exposure: string;
+
+  /** Major version of the exposure; defaults to 1. */
+  readonly version?: number | string;
+
+  /** Service tokens of the admitted interceptors, in run order. */
+  readonly admit: readonly string[];
+}
+
 /** A participant's manifest. */
 export interface ParticipantManifest {
   /** What the participant requests. */
@@ -71,6 +99,12 @@ export interface ParticipantManifest {
 
   /** Events the participant declares. */
   readonly events?: readonly EventDeclaration[];
+
+  /** Interceptions the participant asks for. */
+  readonly interceptions?: readonly InterceptionDeclaration[];
+
+  /** Interception points the participant opens on its own exposures. */
+  readonly interceptionPoints?: readonly InterceptionPointDeclaration[];
 }
 
 /** A manifest after the kernel has validated and frozen it. */
@@ -83,6 +117,12 @@ export interface AdmittedManifest {
 
   /** Declared events, deep-copied and frozen. */
   readonly events: readonly EventDeclaration[];
+
+  /** Declared interceptions, deep-copied and frozen. */
+  readonly interceptions: readonly InterceptionDeclaration[];
+
+  /** Declared interception points, deep-copied and frozen. */
+  readonly interceptionPoints: readonly InterceptionPointDeclaration[];
 }
 
 /** Raised when a manifest is not valid declarative data. */
@@ -99,10 +139,12 @@ export class ParticipantManifestError extends Error {
   }
 }
 
-const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events']);
+const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events', 'interceptions', 'interceptionPoints']);
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
 const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy', 'payloadSchema']);
+const INTERCEPTION_KEYS = new Set(['target', 'version']);
+const INTERCEPTION_POINT_KEYS = new Set(['exposure', 'version', 'admit']);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -177,6 +219,8 @@ export function admitParticipantManifest(
       capabilities: Object.freeze([]),
       exposures: Object.freeze([]),
       events: Object.freeze([]),
+      interceptions: Object.freeze([]),
+      interceptionPoints: Object.freeze([]),
     });
   }
 
@@ -309,9 +353,86 @@ export function admitParticipantManifest(
     });
   }
 
+  const interceptions = admitInterceptions(data.interceptions, participant);
+  const interceptionPoints = admitInterceptionPoints(data.interceptionPoints, participant);
+
   return Object.freeze({
     capabilities: Object.freeze(capabilities),
     exposures: Object.freeze(exposures),
     events: Object.freeze(events),
+    interceptions,
+    interceptionPoints,
   });
+}
+
+function assertVersion(value: unknown, path: string, participant: string): void {
+  if (value !== undefined && typeof value !== 'number' && typeof value !== 'string') {
+    throw new ParticipantManifestError(participant, `${path}.version must be a number or string`);
+  }
+}
+
+function admitInterceptions(value: unknown, participant: string): readonly InterceptionDeclaration[] {
+  if (value === undefined) {
+    return Object.freeze([]);
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ParticipantManifestError(participant, 'manifest.interceptions must be an array');
+  }
+
+  return Object.freeze(value.map((entry: unknown, index): InterceptionDeclaration => {
+    const path = `manifest.interceptions[${String(index)}]`;
+
+    if (!isPlainObject(entry)) {
+      throw new ParticipantManifestError(participant, `${path} must be an object`);
+    }
+
+    assertKnownKeys(entry, INTERCEPTION_KEYS, path, participant);
+
+    if (typeof entry.target !== 'string' || entry.target.length === 0) {
+      throw new ParticipantManifestError(participant, `${path}.target must be a non-empty string`);
+    }
+
+    assertVersion(entry.version, path, participant);
+
+    return Object.freeze(entry as unknown as InterceptionDeclaration);
+  }));
+}
+
+function admitInterceptionPoints(value: unknown, participant: string): readonly InterceptionPointDeclaration[] {
+  if (value === undefined) {
+    return Object.freeze([]);
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ParticipantManifestError(participant, 'manifest.interceptionPoints must be an array');
+  }
+
+  return Object.freeze(value.map((entry: unknown, index): InterceptionPointDeclaration => {
+    const path = `manifest.interceptionPoints[${String(index)}]`;
+
+    if (!isPlainObject(entry)) {
+      throw new ParticipantManifestError(participant, `${path} must be an object`);
+    }
+
+    assertKnownKeys(entry, INTERCEPTION_POINT_KEYS, path, participant);
+
+    if (typeof entry.exposure !== 'string' || entry.exposure.length === 0) {
+      throw new ParticipantManifestError(participant, `${path}.exposure must be a non-empty string`);
+    }
+
+    assertVersion(entry.version, path, participant);
+
+    const admit: unknown = entry.admit;
+
+    if (
+      !Array.isArray(admit)
+      || admit.some((token) => typeof token !== 'string' || token.length === 0)
+      || new Set(admit).size !== admit.length
+    ) {
+      throw new ParticipantManifestError(participant, `${path}.admit must be an array of unique non-empty service tokens`);
+    }
+
+    return Object.freeze({ ...(entry as unknown as InterceptionPointDeclaration), admit: Object.freeze([...admit as string[]]) });
+  }));
 }

@@ -21,6 +21,7 @@ const ENTRIES = [
   'kernel:serviceModules/router.js',
   'kernel:serviceModules/wasmCage.js',
   'kernel:serviceModules/events.js',
+  'kernel:serviceModules/interception.js',
   'BrudTools/serviceModule.ts',
   'ActionManager/serviceModule.ts',
   'UniversalHistory/historySession.ts',

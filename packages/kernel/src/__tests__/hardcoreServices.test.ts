@@ -46,6 +46,7 @@ const EXPOSED_API_METHODS = ['register', 'resolve'] as const;
 const MECHANISM_PATHS = new Set([
   'kernel:serviceModules/wasmCage.js',
   'kernel:serviceModules/events.js',
+  'kernel:serviceModules/interception.js',
 ]);
 
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;

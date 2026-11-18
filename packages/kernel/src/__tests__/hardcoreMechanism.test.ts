@@ -80,6 +80,12 @@ import {
   EventsToken,
   createEventsDescriptor,
 } from '../../services/Events/index.js';
+import {
+  INTERCEPTION_CONTRACT_METHODS,
+  INTERCEPTION_CONTRACT_VERSION,
+  InterceptionToken,
+  createInterceptionDescriptor,
+} from '../../services/Interception/index.js';
 
 /**
  * Production-mirror proofs that the hardcore mechanism is generic.
@@ -106,6 +112,7 @@ const PARSER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'parser.ts');
 const ROUTER_SHIM = join(KERNEL_ROOT, 'serviceModules', 'router.ts');
 const WASM_CAGE_SHIM = join(KERNEL_ROOT, 'serviceModules', 'wasmCage.ts');
 const EVENTS_SHIM = join(KERNEL_ROOT, 'serviceModules', 'events.ts');
+const INTERCEPTION_SHIM = join(KERNEL_ROOT, 'serviceModules', 'interception.ts');
 
 const HARDCORE_METHOD_NAMES: readonly string[] = [
   ...new Set([
@@ -130,6 +137,7 @@ const HARDCORE_SERVICE_NAMES: readonly string[] = [
   RouterToken.id,
   WasmCageToken.id,
   EventsToken.id,
+  InterceptionToken.id,
   'IdentityRegistry',
   'ExposedApiRegistry',
   'Parser',
@@ -166,6 +174,10 @@ const OWN_CONTRACTS: ReadonlyMap<
   [EventsToken.id, {
     version: EVENTS_CONTRACT_VERSION,
     methods: [...EVENTS_CONTRACT_METHODS],
+  }],
+  [InterceptionToken.id, {
+    version: INTERCEPTION_CONTRACT_VERSION,
+    methods: [...INTERCEPTION_CONTRACT_METHODS],
   }],
 ]);
 
@@ -498,7 +510,7 @@ describe('hardcore mechanism boundary (BC-4)', () => {
 });
 
 describe('six real hardcore services through one generic mechanism', () => {
-  it('compiles exactly six entries, each with its own contract and a uniform boot hook', () => {
+  it('compiles exactly seven entries, each with its own contract and a uniform boot hook', () => {
     assert.deepEqual(
       HARDCORE_SERVICES.map((entry) => entry.token),
       [
@@ -508,6 +520,7 @@ describe('six real hardcore services through one generic mechanism', () => {
         RouterToken.id,
         'brud.core.wasmCage',
         'brud.core.events',
+        'brud.core.interception',
       ],
     );
 
@@ -539,7 +552,7 @@ describe('six real hardcore services through one generic mechanism', () => {
     assert.deepEqual(router.contractInterface, [...ROUTER_CONTRACT_METHODS]);
 
     // Each entry carries its own boot hook object, not a shared one.
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 6);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.boot)).size, 7);
 
     for (const entry of HARDCORE_SERVICES) {
       assert.equal(entry.boot.length, 2, `${entry.token} boot hook must take (instance, context)`);
@@ -547,8 +560,8 @@ describe('six real hardcore services through one generic mechanism', () => {
       assert.match(entry.expectedBuiltContentHash, HEX_DIGEST);
     }
 
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 6);
-    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 6);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedContentHash)).size, 7);
+    assert.equal(new Set(HARDCORE_SERVICES.map((entry) => entry.expectedBuiltContentHash)).size, 7);
   });
 
   it('verifies each real package against its own entry and calls each real hook with its own verified data', async (t: TestContext) => {
@@ -611,6 +624,13 @@ describe('six real hardcore services through one generic mechanism', () => {
         official: true,
         resolvedPath: EVENTS_SHIM,
         manifest: admitParticipantManifest(EventsToken.id, undefined),
+      },
+      {
+        descriptor: createInterceptionDescriptor() as unknown as ServiceDescriptor<unknown, unknown>,
+        path: 'kernel:serviceModules/interception.js',
+        official: true,
+        resolvedPath: INTERCEPTION_SHIM,
+        manifest: admitParticipantManifest(InterceptionToken.id, undefined),
       },
     ];
 
@@ -677,6 +697,7 @@ describe('six real hardcore services through one generic mechanism', () => {
           ParserToken.id,
           RouterToken.id,
           EventsToken.id,
+          InterceptionToken.id,
         ].sort(),
       );
 
@@ -687,7 +708,7 @@ describe('six real hardcore services through one generic mechanism', () => {
       const records = loadIdentityRegistryStorage(storagePath).records;
       const byPublisher = new Map(records.map((record) => [record.publisher, record]));
 
-      assert.equal(records.length, 6);
+      assert.equal(records.length, 7);
       assert.equal(identities.get(IdentityRegistryToken.id), byPublisher.get(IdentityRegistryToken.id)?.token);
       assert.equal(
         byPublisher.get(IdentityRegistryToken.id)?.contentHash,
@@ -749,6 +770,7 @@ describe('six real hardcore services through one generic mechanism', () => {
           ParserToken.id,
           RouterToken.id,
           EventsToken.id,
+          InterceptionToken.id,
         ].sort(),
       );
 
@@ -768,7 +790,7 @@ describe('six real hardcore services through one generic mechanism', () => {
       const parserRecord = records.find((record) => record.publisher === ParserToken.id);
       const routerRecord = records.find((record) => record.publisher === RouterToken.id);
 
-      assert.equal(records.length, 6);
+      assert.equal(records.length, 7);
       assert.equal(exposedApiRecord?.contentHash, HARDCORE_SERVICES[1]?.expectedContentHash);
       assert.equal(parserRecord?.contentHash, HARDCORE_SERVICES[2]?.expectedContentHash);
       assert.equal(routerRecord?.contentHash, HARDCORE_SERVICES[3]?.expectedContentHash);
@@ -912,6 +934,7 @@ describe('hardcore persistence independence (BC-6)', () => {
         'kernel:serviceModules/router.js',
         'kernel:serviceModules/wasmCage.js',
         'kernel:serviceModules/events.js',
+        'kernel:serviceModules/interception.js',
         registrantPath,
       ],
       'the composition carries the six hardcore services and one non-storage fixture only',
@@ -953,6 +976,8 @@ describe('hardcore persistence independence (BC-6)', () => {
       { name: 'events.list', version: 1, scope: 'runtime' },
       { name: 'events.pull', version: 1, scope: 'runtime' },
       { name: 'events.subscribe', version: 1, scope: 'runtime' },
+      { name: 'interception.evaluate', version: 1, scope: 'any' },
+      { name: 'interception.list', version: 1, scope: 'runtime' },
       { name: 'test.persistence.api', version: 1, scope: 'runtime' },
     ]);
     assert.equal(rawScope.format, EXPOSED_API_SCOPE_RECORD_FORMAT);

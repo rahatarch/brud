@@ -23,25 +23,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '41634df495a44e3971a04fd9061077213827c82ec5be711a07099e271033258e';
+  '96e8271e63000b5b3d624ced3e9dc10c03d6df3016a89c966dced448dddceb07';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '713e72ccc2edbc73423682b68770166e593c163215842857c2f28639efb0f0af';
+  '32d9f049eb7a1d4dbefbd22f9c3f5020c49f2e87231eea6252c3cbeb8527d9e0';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  'cd6e0e3caf8945ca2f5b4803d3697ff157272e3a01ac23922470a5f93cd99bfd';
+  'df9808275d8d9cede6da94fd19407409ad6dd7505a9eaba0df164b3a12f781c8';
 const PARSER_BUILT_HASH =
   'b38c009b141eb7b15c8a0fd59529f75396c63f1a71f5eff264430dbf11998c6e';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '2dc4da6ca4b0d216a0735a99c315f9a1141e0831215de69f6c5faee03348b3bd';
+  'a3ed4d9cda9997a5dac33729090b8cc9f7f996461df173db5c13b03942da63c6';
 const ROUTER_BUILT_HASH =
   'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
 
@@ -55,7 +55,7 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  'b80b943af00291dbcd38f56506791e702c4bccb28d714e35ca4619bfc0719a45';
+  '7d506406b0d8476500fbcc6a509af4dad73ae549a6d647a2b0ba086445cf953f';
 const WASM_CAGE_BUILT_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -67,8 +67,14 @@ const WASM_CAGE_BUILT_HASH =
  * has been produced since the events package was added, so the value below is a
  * placeholder that a kernel build replaces.
  */
+/** Pinned digests of the interception package (recomputed with computePackageContentHash). */
+const INTERCEPTION_SOURCE_HASH =
+  '4d625a01754faf43ab6a58b0ecc112d552372ba538356d951e4eb9fb2981e108';
+const INTERCEPTION_BUILT_HASH =
+  '396e7fafb277679f1b40dc5421a08975cfd55ea7d4020bab28549579f70a845f';
+
 const EVENTS_SOURCE_HASH =
-  '57db2284b8f1fff3281f1a954dc2a82725227ed66b96c7e0596979e292870d32';
+  'a5fab2b816d5902885f389722f89d5589c469fff0889e8d194f80c307c314458';
 const EVENTS_BUILT_HASH =
   'dcf613227c696578c37bd21f06c6d874d421df71e0a526650ceded9cd806818f';
 
@@ -279,6 +285,33 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
           events.registerDeclaration(owner, declaration);
         }
       }
+    },
+  },
+  {
+    token: 'brud.core.interception',
+    expectedContentHash: INTERCEPTION_SOURCE_HASH,
+    expectedBuiltContentHash: INTERCEPTION_BUILT_HASH,
+    contractVersion: '1.0.0',
+    contractInterface: ['evaluate', 'list'],
+    // Interception is a mechanism: the giver of an interception point and the
+    // admitted interceptors are the participants; the hardcore only pairs them
+    // at boot and runs the verdicts.
+    mechanism: true,
+    boot: (instance: unknown, context: HardcoreBootContext): void => {
+      const interception = instance as {
+        bindAuthority(value: KernelCallAuthority): void;
+        registerComposition(participants: readonly {
+          readonly token: string;
+          readonly identity: string | undefined;
+          readonly manifest: HardcoreBootContext['composition'][number]['manifest'];
+        }[]): void;
+      };
+      interception.bindAuthority(context.authority);
+      interception.registerComposition(context.composition.map((entry) => ({
+        token: entry.token,
+        identity: context.identityOf(entry.token),
+        manifest: entry.manifest,
+      })));
     },
   },
 ];

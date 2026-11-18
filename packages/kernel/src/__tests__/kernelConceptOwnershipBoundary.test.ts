@@ -1803,6 +1803,7 @@ async function writeComposition(
     { path: 'kernel:serviceModules/router.js', official: true },
     { path: 'kernel:serviceModules/wasmCage.js', official: true },
     { path: 'kernel:serviceModules/events.js', official: true },
+    { path: 'kernel:serviceModules/interception.js', official: true },
   ];
 
   for (const [index, participant] of participants.entries()) {

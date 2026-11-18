@@ -45,6 +45,7 @@ async function bootWith(
         { path: 'kernel:serviceModules/router.js', official: true },
         { path: 'kernel:serviceModules/wasmCage.js', official: true },
         { path: 'kernel:serviceModules/events.js', official: true },
+        { path: 'kernel:serviceModules/interception.js', official: true },
       ],
       plugins: [],
     }),
