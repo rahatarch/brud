@@ -18,6 +18,7 @@ import {
   configureEventsLimits,
   resetEventsLimits,
 } from '../../services/Events/index.js';
+import { WasmCageToken } from '../../services/WasmCage/index.js';
 
 interface FixtureParticipant {
   readonly token: string;
@@ -451,11 +452,11 @@ describe('Events Step 5: delivery machinery', () => {
     assert.ok(observed.includes('events.emit.refused'));
   });
 
-  it('refuses a runtime-origin pull on a kernel-scope event, and keeps a policy-refused subscription open with a refusal on every pull', async (t) => {
+  it('refuses a runtime subscriber at subscribe time for a kernel-scope event and for a policy that does not admit it', async (t) => {
     resetFixtureReports();
 
     const kernel = await bootComposition(await writeComposition(t, [
-      subscriber('events.scope.kernel', 'test.scope.kernelOnly', '{}', 'report.inline = report.pull.pull(report.sub);'),
+      subscriber('events.scope.kernel', 'test.scope.kernelOnly'),
       subscriber('events.scope.policy', 'test.policy.kernelOrigin'),
       {
         token: 'events.scope.giver',
@@ -463,27 +464,15 @@ describe('Events Step 5: delivery machinery', () => {
           { name: 'test.scope.kernelOnly', version: 1, scope: 'kernel' },
           { name: 'test.policy.kernelOrigin', version: 1, scope: 'any', policy: { policyVersion: 2, origins: ['kernel'] } },
         ],
-        onRunning: `
-          const emit = registry.resolve('events.emit');
-          report.k = emit.emit('test.scope.kernelOnly', {});
-          report.p = emit.emit('test.policy.kernelOrigin', {});
-        `,
       },
-      reader(`
-        report.kernelScope = drain('events.scope.kernel');
-        report.policy1 = drain('events.scope.policy');
-        report.policy2 = drain('events.scope.policy');
-      `),
     ]));
     const reports = fixtureReports();
-    const read = reports['events.reader'];
+    const refusals = kernel.readObservations().filter((observation) => observation.event === 'events.subscribe.refused');
 
-    assert.equal((reports['events.scope.giver']?.k as { ok: boolean }).ok, true);
-    assert.equal(reasonOf(reports['events.scope.kernel']?.inline), 'policy-refused');
-    assert.equal(reasonOf(read?.kernelScope), 'policy-refused');
-    assert.equal(reasonOf(read?.policy1), 'policy-refused');
-    assert.equal(reasonOf(read?.policy2), 'policy-refused');
-    assert.ok(kernel.readObservations().some((observation) => observation.event === 'events.pull.refused'));
+    assert.equal(reports['events.scope.kernel']?.sub, null);
+    assert.equal(reports['events.scope.policy']?.sub, null);
+    assert.equal(refusals.length, 2);
+    assert.ok(refusals.every((observation) => String(observation.detail['reason']).startsWith('policy-refused')));
   });
 
   it('enforces drop-oldest, drop-newest, and refuse-emit per subscriber without blocking the others', async (t) => {
@@ -561,5 +550,102 @@ describe('Events Step 5: delivery machinery', () => {
     assert.deepEqual(sequences(read?.kept), [1]);
     assert.equal(reasonOf(read?.closed), 'closed');
     assert.equal(reasonOf(read?.unknown), 'unknown-subscription');
+  });
+});
+
+describe('Events Step 6: caged subscriber', () => {
+  it('a caged subscriber subscribes, pulls and closes through the cage resolve, as itself, and is refused kernel and host scope at both doors', async (t) => {
+    resetFixtureReports();
+
+    const cage = JSON.stringify({ id: WasmCageToken.id, description: 'cage', _brand: undefined });
+    const kernel = await bootComposition(await writeComposition(t, [
+      {
+        token: 'events.caged.child',
+        onRunning: "report.identity = registry.resolve('events.caged.parent.whoami').identity;",
+      },
+      {
+        token: 'events.caged.giver',
+        events: [
+          { name: 'test.caged.tick', version: 1, scope: 'runtime' },
+          { name: 'test.caged.kernelOnly', version: 1, scope: 'kernel' },
+          { name: 'test.caged.hostOnly', version: 1, scope: 'host' },
+        ],
+        exposures: [
+          { name: 'test.caged.subscribe', version: 1, scope: 'runtime' },
+          { name: 'test.caged.subscribeKernel', version: 1, scope: 'kernel' },
+        ],
+        bindings: `{
+          'test.caged.subscribe@1': (caller) => ({ subscribe: () =>
+            report.registry.resolve('events.subscribe').subscribe('test.caged.tick', { subscriber: caller }) }),
+          'test.caged.subscribeKernel@1': (caller) => ({ subscribe: () =>
+            report.registry.resolve('events.subscribe').subscribe('test.caged.kernelOnly', { subscriber: caller }) }),
+        }`,
+        onRunning: `
+          report.registry = registry;
+          const emit = registry.resolve('events.emit');
+          report.emits = [1, 2].map((n) => emit.emit('test.caged.tick', { n }));
+        `,
+      },
+      {
+        token: 'events.caged.parent',
+        exposures: [{ name: 'events.caged.parent.whoami', version: 1, scope: 'any' }],
+        bindings: "{ 'events.caged.parent.whoami@1': (caller) => ({ identity: caller.identity }) }",
+        onRunning: `
+          const cage = broker.requestAccess({ callerId: token.id, tier: 'userland', options: {} }, ${cage});
+          const child = globalThis.__eventsDeclarationFixture['events.caged.child'].identity;
+          report.child = child;
+          const api = cage.resolve(child, 'test.caged.subscribe');
+          report.sub = api ? api.subscribe() : 'unresolved';
+          report.pull = cage.resolve(child, 'events.pull');
+          const close = cage.resolve(child, 'events.close');
+          report.batch = report.pull.pull(report.sub);
+          report.parentPull = registry.resolve('events.pull').pull(report.sub);
+          report.parentClose = registry.resolve('events.close').close(report.sub);
+          report.closeResult = close.close(report.sub);
+          report.afterClose = report.pull.pull(report.sub);
+          report.kernelApi = cage.resolve(child, 'test.caged.subscribeKernel');
+          const subscribe = cage.resolve(child, 'events.subscribe');
+          report.kernelDirect = subscribe.subscribe('test.caged.kernelOnly');
+          report.hostDirect = subscribe.subscribe('test.caged.hostOnly');
+        `,
+      },
+    ]));
+    const reports = fixtureReports();
+    const parent = reports['events.caged.parent'];
+    const child = reports['events.caged.child']?.identity;
+
+    assert.equal(typeof child, 'string');
+    assert.equal(parent?.child, child);
+    assert.match(String(parent?.sub), /^test\.caged\.tick@1#\d+$/u);
+    assert.deepEqual(sequences(parent?.batch), [1, 2]);
+    assert.equal((parent?.batch as readonly { emitOrigin: string }[])[0]?.emitOrigin, 'runtime');
+    // Delegation: the recorded subscriber is the caged child, not the parent (and not the hardcore).
+    assert.equal(reasonOf(parent?.parentPull), 'not-subscriber');
+    assert.equal(reasonOf(parent?.parentClose), 'not-subscriber');
+    assert.equal(parent?.closeResult, undefined);
+    assert.equal(reasonOf(parent?.afterClose), 'closed');
+    // Resolve-time door: the kernel-scope subscription API is not reachable from the cage's runtime chain.
+    assert.equal(parent?.kernelApi, null);
+    // Subscribe-time door: kernel- and host-scope events are refused for the caged runtime subscriber.
+    assert.equal(parent?.kernelDirect, null);
+    assert.equal(parent?.hostDirect, null);
+
+    const refusals = kernel.readObservations().filter((observation) => observation.event === 'events.subscribe.refused');
+
+    assert.equal(refusals.length, 2);
+    assert.ok(refusals.every((observation) => observation.detail['subscriber'] === child && observation.detail['origin'] === 'runtime'));
+
+    // No per-pull policy or liveness refusals exist on the pull path.
+    assert.ok(!kernel.readObservations().some((observation) => observation.event === 'events.pull.refused'
+      && ['policy-refused', 'not-live'].includes(String(observation.detail['reason']))));
+
+    // A host-origin resolve of events.pull is refused at resolve time; a handle used with no chain is refused.
+    const hostRegistry = kernel.requestAccess<IExposedApiRegistry>(
+      { callerId: 'host', tier: 'core', options: {} },
+      ExposedApiRegistryToken,
+    );
+
+    assert.equal(kernel.runHostCall({}, () => hostRegistry.resolve('events.pull')), null);
+    assert.throws(() => (parent?.pull as { pull(id: unknown): unknown }).pull(parent?.sub));
   });
 });

@@ -68,9 +68,9 @@ const WASM_CAGE_BUILT_HASH =
  * placeholder that a kernel build replaces.
  */
 const EVENTS_SOURCE_HASH =
-  'cd2d9c1945643388f46c87556b596123c6341c0500d94971959ce2d026323000';
+  '57db2284b8f1fff3281f1a954dc2a82725227ed66b96c7e0596979e292870d32';
 const EVENTS_BUILT_HASH =
-  '591adca731f9dc1332016ec1b1b64a9964cbaec2ebcdaed760e3c4b8350cd376';
+  'dcf613227c696578c37bd21f06c6d874d421df71e0a526650ceded9cd806818f';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {

@@ -38,7 +38,7 @@ export interface EventDeliveryRecord {
 /** A reason-carrying refusal, distinguishable from an empty batch. */
 export interface EventsRefusal {
   readonly refused: true;
-  readonly reason: 'unknown-subscription' | 'not-subscriber' | 'closed' | 'not-live' | 'policy-refused';
+  readonly reason: 'unknown-subscription' | 'not-subscriber' | 'closed';
   readonly detail?: string;
 }
 

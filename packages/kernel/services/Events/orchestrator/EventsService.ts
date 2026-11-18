@@ -55,7 +55,7 @@ interface Subscription {
   readonly policy: EventsBackpressurePolicy;
   /** Last sequence delivered (or skipped past) for this subscription. */
   cursor: number;
-  /** Sequences this subscription will never receive (backpressure, not live). */
+  /** Sequences this subscription will never receive (backpressure). */
   readonly excluded: Set<number>;
   /** Tombstone set by `close`. */
   retired: boolean;
@@ -216,12 +216,6 @@ export class EventsService implements IEventsService {
         continue;
       }
 
-      if (!this.#isLive(subscription)) {
-        subscription.excluded.add(sequence);
-        this.#observe('events.delivery.dropped', { subscription: subscription.id, sequence, reason: 'not-live' });
-        continue;
-      }
-
       const pending = log.entries.filter((entry) =>
         entry.sequence > subscription.cursor && !subscription.excluded.has(entry.sequence));
 
@@ -259,8 +253,12 @@ export class EventsService implements IEventsService {
 
   /**
    * Pulls the next bounded batch for `caller`, which must be the subscriber.
-   * Scope and the owner's policy are re-evaluated on every pull against the
-   * subscriber's view and the current chain's origin.
+   *
+   * Scope and policy are not re-evaluated here: they were decided at subscribe
+   * (the giver's decision) and the registry re-checks the `events.pull`
+   * exposure's scope on every handle use. A participant's identity, class,
+   * capabilities, official status and origin are fixed at admission, so the
+   * outcome can only change through a reload or reboot.
    */
   public pullAs(
     caller: ExposedApiCaller | undefined,
@@ -279,16 +277,6 @@ export class EventsService implements IEventsService {
 
     if (subscription.retired) {
       return this.#refusePull(subscriptionId, refusal('closed'));
-    }
-
-    if (!this.#isLive(subscription)) {
-      return this.#refusePull(subscriptionId, refusal('not-live'));
-    }
-
-    const decision = this.#admits(subscription, caller.origin);
-
-    if (!decision.allowed) {
-      return this.#refusePull(subscriptionId, refusal('policy-refused', decision.reason));
     }
 
     const limits = eventsLimits();
@@ -328,7 +316,9 @@ export class EventsService implements IEventsService {
    * The subscriber is `caller` (a direct subscriber's own resolve) or, when
    * `options.subscriber` is given, the forwarded view; forwarding is honoured
    * only when `caller` is the event's catalogue owner (delegation by the
-   * owner). Returns the assigned identity `name@major#n`, or the uniform `null`.
+   * owner). The event's scope and the owner's policy are evaluated here,
+   * against the subscriber's view (identity, class, capabilities, official,
+   * origin). Returns the assigned identity `name@major#n`, or the uniform `null`.
    */
   public subscribeAs(
     caller: ExposedApiCaller | undefined,
@@ -357,6 +347,12 @@ export class EventsService implements IEventsService {
 
     if (subscriber.identity === null) {
       return this.#refuseSubscribe(eventName, 'no-subscriber-identity');
+    }
+
+    const decision = this.#admits(event, subscriber);
+
+    if (!decision.allowed) {
+      return this.#refuseSubscribe(eventName, `policy-refused: ${decision.reason}`, subscriber);
     }
 
     const policy = options?.policy ?? 'drop-oldest';
@@ -457,30 +453,19 @@ export class EventsService implements IEventsService {
     }
   }
 
-  #isLive(subscription: Subscription): boolean {
-    const identity = subscription.subscriber.identity;
-
-    return identity !== null && this.authority?.isLive(identity) === true;
-  }
-
-  #admits(subscription: Subscription, fallbackOrigin: ExposedApiCaller['origin']): ExposedApiPolicyDecision {
-    const event = this.#catalogue.get(subscription.event);
-
-    if (event === undefined) {
-      return { allowed: false, reason: 'event is no longer declared' };
-    }
-
+  /** Evaluates the event's scope and the owner's policy for `subscriber`. */
+  #admits(event: CatalogueEntry, subscriber: ExposedApiCaller): ExposedApiPolicyDecision {
     try {
       return evaluateExposedApiPolicy(
         parseExposedApiPolicy(event.policy),
         event.scope as ExposedApiScope,
         {
-          origin: this.authority?.current()?.origin ?? fallbackOrigin,
+          origin: subscriber.origin,
           caller: {
-            identity: subscription.subscriber.identity,
-            callerClass: subscription.subscriber.callerClass,
-            official: subscription.subscriber.official,
-            capabilities: subscription.subscriber.capabilities,
+            identity: subscriber.identity,
+            callerClass: subscriber.callerClass,
+            official: subscriber.official,
+            capabilities: subscriber.capabilities,
           },
         },
       );
@@ -510,8 +495,12 @@ export class EventsService implements IEventsService {
     return refused;
   }
 
-  #refuseSubscribe(eventName: string, reason: string): null {
-    this.#observe('events.subscribe.refused', { event: eventName, reason });
+  #refuseSubscribe(eventName: string, reason: string, subscriber?: ExposedApiCaller): null {
+    this.#observe('events.subscribe.refused', {
+      event: eventName,
+      reason,
+      ...(subscriber === undefined ? {} : { subscriber: subscriber.identity, origin: subscriber.origin }),
+    });
 
     return null;
   }
