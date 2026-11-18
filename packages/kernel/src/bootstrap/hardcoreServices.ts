@@ -23,25 +23,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  'bbe3980fd10059f951aa647315d1431ef19c967eef51ba7a640132046592e811';
+  '41634df495a44e3971a04fd9061077213827c82ec5be711a07099e271033258e';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  'd498400a73929999c742431d00a3fbb2438587719a229ab2c3fb034b4fc7a97a';
+  '713e72ccc2edbc73423682b68770166e593c163215842857c2f28639efb0f0af';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '213895118ac32e77391dc1613a175463a8ec7dfa440838431a32bf29983ed98e';
+  'cd6e0e3caf8945ca2f5b4803d3697ff157272e3a01ac23922470a5f93cd99bfd';
 const PARSER_BUILT_HASH =
   'b38c009b141eb7b15c8a0fd59529f75396c63f1a71f5eff264430dbf11998c6e';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '996581577f4018ba265817acbc17f7acd0832f4c879dacebc395ef7ac8cb87b6';
+  '2dc4da6ca4b0d216a0735a99c315f9a1141e0831215de69f6c5faee03348b3bd';
 const ROUTER_BUILT_HASH =
   'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
 
@@ -55,7 +55,7 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '0c19f9d4c98a38594abcfd411effd3d2e9b52b01f71b09c4ad72a75648d4bc3d';
+  'b80b943af00291dbcd38f56506791e702c4bccb28d714e35ca4619bfc0719a45';
 const WASM_CAGE_BUILT_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -68,9 +68,9 @@ const WASM_CAGE_BUILT_HASH =
  * placeholder that a kernel build replaces.
  */
 const EVENTS_SOURCE_HASH =
-  '9e23d11bd0fb6c02293ad05fb8f5ebae2fc34355b1cd558297563135391d5aca';
+  'cd2d9c1945643388f46c87556b596123c6341c0500d94971959ce2d026323000';
 const EVENTS_BUILT_HASH =
-  '3d4c8b4fa1c33c94969bba6c58bc352c874e93155f421d4aff69abd0387249c5';
+  '591adca731f9dc1332016ec1b1b64a9964cbaec2ebcdaed760e3c4b8350cd376';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {

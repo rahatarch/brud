@@ -2,7 +2,14 @@ import type { ServiceTier } from '../../../src/contracts/lifecycle.js';
 import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor.js';
 import { withExposureBindings } from '../../ExposedApiRegistry/contracts/registrant.js';
 import type { ExposedApiBinding } from '../../ExposedApiRegistry/contracts/types.js';
-import type { IEventsService } from '../contracts/IEventsService.js';
+import type {
+  EventDeliveryRecord,
+  EventsEmitResult,
+  EventsPullOptions,
+  EventsRefusal,
+  EventsSubscribeOptions,
+  IEventsService,
+} from '../contracts/IEventsService.js';
 import { EventsService } from '../orchestrator/index.js';
 import { EventsToken } from './tokens.js';
 
@@ -21,12 +28,15 @@ export const EVENTS_CONTRACT_METHODS = ['emit', 'pull', 'close', 'list', 'subscr
 function eventsExposureBindings(instance: EventsService): Record<string, ExposedApiBinding> {
   // withExposureBindings looks up a binding by `name@major`
   // (registrant.ts:exposureBindingKey), so each key carries its major version.
+  // The registry runs projection calls as the owner (the events hardcore), so
+  // each projection captures the resolver's caller view at resolve time and
+  // threads it into the instance (delegation by the owner, Step 5).
   return {
-    'events.emit@1': { projection: () => ({ emit: (name: string, payload: unknown): void => instance.emit(name, payload) }) },
-    'events.pull@1': { projection: () => ({ pull: (subscriptionId: string): readonly unknown[] => instance.pull(subscriptionId) }) },
-    'events.close@1': { projection: () => ({ close: (subscriptionId: string): void => instance.close(subscriptionId) }) },
+    'events.emit@1': { projection: (_service, caller) => ({ emit: (name: string, payload: unknown): EventsEmitResult => instance.emitAs(caller, name, payload) }) },
+    'events.pull@1': { projection: (_service, caller) => ({ pull: (subscriptionId: string, options?: EventsPullOptions): readonly EventDeliveryRecord[] | EventsRefusal => instance.pullAs(caller, subscriptionId, options) }) },
+    'events.close@1': { projection: (_service, caller) => ({ close: (subscriptionId: string): EventsRefusal | undefined => instance.closeAs(caller, subscriptionId) }) },
     'events.list@1': { projection: () => ({ list: (): readonly string[] => instance.list() }) },
-    'events.subscribe@1': { projection: () => ({ subscribe: (eventName: string): string | null => instance.subscribe(eventName) }) },
+    'events.subscribe@1': { projection: (_service, caller) => ({ subscribe: (eventName: string, options?: EventsSubscribeOptions): string | null => instance.subscribeAs(caller, eventName, options) }) },
   };
 }
 

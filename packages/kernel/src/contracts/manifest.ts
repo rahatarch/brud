@@ -53,6 +53,12 @@ export interface EventDeclaration {
 
   /** Declarative Layer 1 policy for this event. */
   readonly policy?: Readonly<Record<string, unknown>>;
+
+  /**
+   * JSON Schema subset the emitted payload must satisfy. Admission checks only
+   * that it is an object; the schema itself is compiled and enforced at emit.
+   */
+  readonly payloadSchema?: Readonly<Record<string, unknown>>;
 }
 
 /** A participant's manifest. */
@@ -96,7 +102,7 @@ export class ParticipantManifestError extends Error {
 const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events']);
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
-const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy']);
+const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy', 'payloadSchema']);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -293,6 +299,10 @@ export function admitParticipantManifest(
 
       if (event.policy !== undefined && !isPlainObject(event.policy)) {
         throw new ParticipantManifestError(participant, `${path}.policy must be an object`);
+      }
+
+      if (event.payloadSchema !== undefined && !isPlainObject(event.payloadSchema)) {
+        throw new ParticipantManifestError(participant, `${path}.payloadSchema must be an object`);
       }
 
       events.push(event as unknown as EventDeclaration);
