@@ -294,4 +294,49 @@ describe('Events Step 3: manifest.events surface and catalogue', () => {
     assert.deepEqual(consumerReport?.events, ['test.event.pinged@1']);
     assert.equal(consumerReport?.eventAsExposure, null);
   });
+  it('Step 4: a participant subscription API calls events.subscribe and returns the events-hardcore-assigned identity', async (t) => {
+    resetFixtureReports();
+
+    const kernel = await bootComposition(await writeComposition(t, [
+      {
+        token: 'events.subscription.giver',
+        events: [{ name: 'test.settings.changed', version: 1, scope: 'runtime' }],
+        exposures: [
+          { name: 'test.settings.subscribe', version: 1, scope: 'any' },
+          { name: 'test.settings.subscribeUnknown', version: 1, scope: 'any' },
+        ],
+        bindings: `{
+          'test.settings.subscribe@1': { subscribe: () => {
+            const handle = report.registry.resolve('events.subscribe');
+            return handle ? handle.subscribe('test.settings.changed') : null;
+          } },
+          'test.settings.subscribeUnknown@1': { subscribe: () => {
+            const handle = report.registry.resolve('events.subscribe');
+            return handle ? handle.subscribe('test.settings.absent') : null;
+          } },
+        }`,
+        onRunning: 'report.registry = registry;',
+      },
+      {
+        token: 'events.subscription.subscriber',
+        onRunning: `
+          const api = registry.resolve('test.settings.subscribe');
+          const unknownApi = registry.resolve('test.settings.subscribeUnknown');
+          report.mechanismResolvable = registry.resolve('events.subscribe') !== null;
+          report.first = api ? api.subscribe() : 'unresolved';
+          report.second = api ? api.subscribe() : 'unresolved';
+          report.unknown = unknownApi ? unknownApi.subscribe() : 'unresolved';
+        `,
+      },
+    ]));
+
+    assert.equal(kernel.lifecycleState, 'RUNNING');
+
+    const report = fixtureReports()['events.subscription.subscriber'];
+
+    assert.equal(report?.mechanismResolvable, true);
+    assert.equal(report?.first, 'test.settings.changed@1#1');
+    assert.equal(report?.second, 'test.settings.changed@1#2');
+    assert.equal(report?.unknown, null);
+  });
 });

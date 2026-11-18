@@ -525,7 +525,7 @@ describe('six real hardcore services through one generic mechanism', () => {
     assert.deepEqual(wasmCage.contractInterface, ['resolve']);
     assert.equal(wasmCage.contractVersion, '1.0.0');
     assert.equal(wasmCage.boot.length, 2);
-    assert.deepEqual(events.contractInterface, ['emit', 'pull', 'close', 'list']);
+    assert.deepEqual(events.contractInterface, ['emit', 'pull', 'close', 'list', 'subscribe']);
     assert.equal(events.contractVersion, '1.0.0');
     assert.equal(events.boot.length, 2);
     assert.equal(events.mechanism, true);
@@ -952,6 +952,7 @@ describe('hardcore persistence independence (BC-6)', () => {
       { name: 'events.emit', version: 1, scope: 'runtime' },
       { name: 'events.list', version: 1, scope: 'runtime' },
       { name: 'events.pull', version: 1, scope: 'runtime' },
+      { name: 'events.subscribe', version: 1, scope: 'runtime' },
       { name: 'test.persistence.api', version: 1, scope: 'runtime' },
     ]);
     assert.equal(rawScope.format, EXPOSED_API_SCOPE_RECORD_FORMAT);

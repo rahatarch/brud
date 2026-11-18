@@ -68,9 +68,9 @@ const WASM_CAGE_BUILT_HASH =
  * placeholder that a kernel build replaces.
  */
 const EVENTS_SOURCE_HASH =
-  '42fe5513297202b9fc5fb0d9f76b3e5c852bb16679f4ffcd6aa8eeb9f53da785';
+  '9e23d11bd0fb6c02293ad05fb8f5ebae2fc34355b1cd558297563135391d5aca';
 const EVENTS_BUILT_HASH =
-  'f4cf6e88dd3845966835ff8640956a8ce9ab309f909afcbc1dc069baa52f73c2';
+  '3d4c8b4fa1c33c94969bba6c58bc352c874e93155f421d4aff69abd0387249c5';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
@@ -246,7 +246,7 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     expectedContentHash: EVENTS_SOURCE_HASH,
     expectedBuiltContentHash: EVENTS_BUILT_HASH,
     contractVersion: '1.0.0',
-    contractInterface: ['emit', 'pull', 'close', 'list'],
+    contractInterface: ['emit', 'pull', 'close', 'list', 'subscribe'],
     // Events are a mechanism, not an official participant: the events hardcore
     // holds the declared events and carries deliveries; the participant that
     // declares an event is the giver. The identity-to-official mapping reads

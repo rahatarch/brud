@@ -8,7 +8,7 @@ import { EventsToken } from './tokens.js';
 
 export const EVENTS_SERVICE_TIER: ServiceTier = 'core';
 export const EVENTS_CONTRACT_VERSION = '1.0.0';
-export const EVENTS_CONTRACT_METHODS = ['emit', 'pull', 'close', 'list'] as const;
+export const EVENTS_CONTRACT_METHODS = ['emit', 'pull', 'close', 'list', 'subscribe'] as const;
 
 /**
  * Per-exposure projection bindings.
@@ -26,6 +26,7 @@ function eventsExposureBindings(instance: EventsService): Record<string, Exposed
     'events.pull@1': { projection: () => ({ pull: (subscriptionId: string): readonly unknown[] => instance.pull(subscriptionId) }) },
     'events.close@1': { projection: () => ({ close: (subscriptionId: string): void => instance.close(subscriptionId) }) },
     'events.list@1': { projection: () => ({ list: (): readonly string[] => instance.list() }) },
+    'events.subscribe@1': { projection: () => ({ subscribe: (eventName: string): string | null => instance.subscribe(eventName) }) },
   };
 }
 
@@ -47,6 +48,7 @@ export function createEventsDescriptor(): ServiceDescriptor<IEventsService, Even
         { name: 'events.pull', version: 1, scope: 'runtime' },
         { name: 'events.close', version: 1, scope: 'runtime' },
         { name: 'events.list', version: 1, scope: 'runtime' },
+        { name: 'events.subscribe', version: 1, scope: 'runtime' },
       ],
     },
     factory: (): EventsService => {

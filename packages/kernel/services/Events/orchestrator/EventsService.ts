@@ -42,6 +42,11 @@ export class EventsService implements IEventsService {
 
   readonly #owners = new Map<string, string>();
 
+  /** Step 4 placeholder subscriptions: identity -> catalogue key and subscriber. No delivery state (Step 5). */
+  readonly #subscriptions = new Map<string, { readonly event: string; readonly subscriber: string | null | undefined }>();
+
+  #nextSubscription = 1;
+
   public bindAuthority(value: KernelCallAuthority): void {
     this.authority = value;
   }
@@ -98,5 +103,37 @@ export class EventsService implements IEventsService {
 
   public list(): readonly string[] {
     return Array.from(this.#catalogue.keys());
+  }
+
+  /**
+   * Creates a placeholder subscription to the highest declared major of
+   * `eventName` for the caller in the current kernel call context.
+   *
+   * Returns the assigned subscription identity (`name@major#n`), or the
+   * uniform `null` when the event is not in the catalogue (E-08).
+   */
+  public subscribe(eventName: string): string | null {
+    let event: CatalogueEntry | undefined;
+
+    for (const entry of this.#catalogue.values()) {
+      if (entry.name === eventName && (event === undefined || entry.major > event.major)) {
+        event = entry;
+      }
+    }
+
+    if (event === undefined) {
+      return null;
+    }
+
+    const key = catalogueKey(event.name, event.major);
+    const subscriptionId = `${key}#${String(this.#nextSubscription)}`;
+
+    this.#nextSubscription += 1;
+    this.#subscriptions.set(subscriptionId, Object.freeze({
+      event: key,
+      subscriber: this.authority?.current()?.caller.identity,
+    }));
+
+    return subscriptionId;
   }
 }
