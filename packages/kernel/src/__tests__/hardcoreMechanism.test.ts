@@ -946,7 +946,14 @@ describe('hardcore persistence independence (BC-6)', () => {
     };
 
     assert.equal(firstIdentity.records.length, services.length);
-    assert.deepEqual(firstScope, [{ name: 'test.persistence.api', version: 1, scope: 'runtime' }]);
+    // The events hardcore's four Step 2 mechanism exposures are recorded too.
+    assert.deepEqual(firstScope, [
+      { name: 'events.close', version: 1, scope: 'runtime' },
+      { name: 'events.emit', version: 1, scope: 'runtime' },
+      { name: 'events.list', version: 1, scope: 'runtime' },
+      { name: 'events.pull', version: 1, scope: 'runtime' },
+      { name: 'test.persistence.api', version: 1, scope: 'runtime' },
+    ]);
     assert.equal(rawScope.format, EXPOSED_API_SCOPE_RECORD_FORMAT);
     assert.equal(rawScope.version, EXPOSED_API_SCOPE_RECORD_VERSION);
 

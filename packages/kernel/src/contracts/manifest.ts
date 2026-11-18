@@ -34,6 +34,27 @@ export interface ExposureDeclaration {
   readonly policy?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * One event a participant declares.
+ *
+ * A separate type from {@link ExposureDeclaration}: events are a push-model
+ * observable, not a pull-model callable. For Step 3 the field set matches the
+ * exposure declaration; the payload schema is deferred to the delivery step.
+ */
+export interface EventDeclaration {
+  /** Stable event name. */
+  readonly name: string;
+
+  /** Version: a positive integer major version or a semantic version. */
+  readonly version?: number | string;
+
+  /** Reachability scope. */
+  readonly scope?: string;
+
+  /** Declarative Layer 1 policy for this event. */
+  readonly policy?: Readonly<Record<string, unknown>>;
+}
+
 /** A participant's manifest. */
 export interface ParticipantManifest {
   /** What the participant requests. */
@@ -41,6 +62,9 @@ export interface ParticipantManifest {
 
   /** Exposures the participant gives. */
   readonly exposures?: readonly ExposureDeclaration[];
+
+  /** Events the participant declares. */
+  readonly events?: readonly EventDeclaration[];
 }
 
 /** A manifest after the kernel has validated and frozen it. */
@@ -50,6 +74,9 @@ export interface AdmittedManifest {
 
   /** Declared exposures, deep-copied and frozen. */
   readonly exposures: readonly ExposureDeclaration[];
+
+  /** Declared events, deep-copied and frozen. */
+  readonly events: readonly EventDeclaration[];
 }
 
 /** Raised when a manifest is not valid declarative data. */
@@ -66,9 +93,10 @@ export class ParticipantManifestError extends Error {
   }
 }
 
-const MANIFEST_KEYS = new Set(['requests', 'exposures']);
+const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events']);
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
+const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy']);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -139,7 +167,11 @@ export function admitParticipantManifest(
   manifest: unknown,
 ): AdmittedManifest {
   if (manifest === undefined) {
-    return Object.freeze({ capabilities: Object.freeze([]), exposures: Object.freeze([]) });
+    return Object.freeze({
+      capabilities: Object.freeze([]),
+      exposures: Object.freeze([]),
+      events: Object.freeze([]),
+    });
   }
 
   const data = cloneData(manifest, 'manifest', participant);
@@ -226,8 +258,50 @@ export function admitParticipantManifest(
     });
   }
 
+  const events: EventDeclaration[] = [];
+  const declaredEvents = data.events;
+
+  if (declaredEvents !== undefined) {
+    if (!Array.isArray(declaredEvents)) {
+      throw new ParticipantManifestError(participant, 'manifest.events must be an array');
+    }
+
+    declaredEvents.forEach((event: unknown, index) => {
+      const path = `manifest.events[${String(index)}]`;
+
+      if (!isPlainObject(event)) {
+        throw new ParticipantManifestError(participant, `${path} must be an object`);
+      }
+
+      assertKnownKeys(event, EVENT_KEYS, path, participant);
+
+      if (typeof event.name !== 'string' || event.name.length === 0) {
+        throw new ParticipantManifestError(participant, `${path}.name must be a non-empty string`);
+      }
+
+      if (
+        event.version !== undefined
+        && typeof event.version !== 'number'
+        && typeof event.version !== 'string'
+      ) {
+        throw new ParticipantManifestError(participant, `${path}.version must be a number or string`);
+      }
+
+      if (event.scope !== undefined && typeof event.scope !== 'string') {
+        throw new ParticipantManifestError(participant, `${path}.scope must be a string`);
+      }
+
+      if (event.policy !== undefined && !isPlainObject(event.policy)) {
+        throw new ParticipantManifestError(participant, `${path}.policy must be an object`);
+      }
+
+      events.push(event as unknown as EventDeclaration);
+    });
+  }
+
   return Object.freeze({
     capabilities: Object.freeze(capabilities),
     exposures: Object.freeze(exposures),
+    events: Object.freeze(events),
   });
 }

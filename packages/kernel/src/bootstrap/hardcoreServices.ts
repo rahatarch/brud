@@ -1,5 +1,5 @@
 import type { KernelCallAuthority } from '../contracts/callChain.js';
-import type { ExposureDeclaration } from '../contracts/manifest.js';
+import type { EventDeclaration, ExposureDeclaration } from '../contracts/manifest.js';
 import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /**
@@ -23,25 +23,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  'b0368e85f16e05b5470c0bcce129364a9bd4af02f58e654df3cfa78da48a1b70';
+  'bbe3980fd10059f951aa647315d1431ef19c967eef51ba7a640132046592e811';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '523fcbfa4828344974d9ec5db88f58edd24003790cd27fe34267a9287fe3729d';
+  'd498400a73929999c742431d00a3fbb2438587719a229ab2c3fb034b4fc7a97a';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '47f283d3b7fc1bc5c5343e4bf029560822e77f28f58122c2693b98e0d8d0c38a';
+  '213895118ac32e77391dc1613a175463a8ec7dfa440838431a32bf29983ed98e';
 const PARSER_BUILT_HASH =
   'b38c009b141eb7b15c8a0fd59529f75396c63f1a71f5eff264430dbf11998c6e';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '8a3addc9379350ee6405657f193088ac7fdc60ba9cd3bdd17a5ad2a845171a87';
+  '996581577f4018ba265817acbc17f7acd0832f4c879dacebc395ef7ac8cb87b6';
 const ROUTER_BUILT_HASH =
   'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
 
@@ -55,7 +55,7 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '9b7664499fd0ad62563f617990ea2a032b9b37051d68067acf83eabe183819fa';
+  '0c19f9d4c98a38594abcfd411effd3d2e9b52b01f71b09c4ad72a75648d4bc3d';
 const WASM_CAGE_BUILT_HASH =
   '0000000000000000000000000000000000000000000000000000000000000000';
 
@@ -68,9 +68,9 @@ const WASM_CAGE_BUILT_HASH =
  * placeholder that a kernel build replaces.
  */
 const EVENTS_SOURCE_HASH =
-  'dd3f2d31aa533df86da633be96b377dda114214812a8c0225becdd409f45df2e';
+  '42fe5513297202b9fc5fb0d9f76b3e5c852bb16679f4ffcd6aa8eeb9f53da785';
 const EVENTS_BUILT_HASH =
-  '0c865aeee5907bbd0de3f3616191728c203ecdfc9a515fce91a5213d0ce99842';
+  'f4cf6e88dd3845966835ff8640956a8ce9ab309f909afcbc1dc069baa52f73c2';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
@@ -252,12 +252,33 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     // declares an event is the giver. The identity-to-official mapping reads
     // this and maps the events hardcore to non-official.
     mechanism: true,
-    // The events hardcore's boot hook binds the kernel's call authority so
-    // later steps can reach `admitCall`/`observe`. It opens no participant-
-    // facing registration.
+    // The events hardcore's boot hook binds the kernel's call authority and
+    // populates its boot-time catalogue from each participant's
+    // `manifest.events`.
     boot: (instance: unknown, context: HardcoreBootContext): void => {
-      const events = instance as { bindAuthority(value: KernelCallAuthority): void };
+      const events = instance as {
+        bindAuthority(value: KernelCallAuthority): void;
+        registerDeclaration(owner: string, declaration: EventDeclaration): void;
+      };
       events.bindAuthority(context.authority);
+
+      for (const entry of context.composition) {
+        if (entry.manifest.events.length === 0) {
+          continue;
+        }
+
+        const owner = context.identityOf(entry.token);
+
+        if (owner === undefined) {
+          throw new TypeError(
+            `Participant "${entry.token}" declares events but has no kernel identity`,
+          );
+        }
+
+        for (const declaration of entry.manifest.events) {
+          events.registerDeclaration(owner, declaration);
+        }
+      }
     },
   },
 ];

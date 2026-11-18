@@ -42,6 +42,7 @@ export {
 
 export type {
   AdmittedManifest,
+  EventDeclaration,
   ExposureDeclaration,
   ParticipantManifest,
   ParticipantRequests,

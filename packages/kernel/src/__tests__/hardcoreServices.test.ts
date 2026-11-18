@@ -42,6 +42,12 @@ const IDENTITY_METHODS = ['issue', 'resolve', 'retire', 'revoke'] as const;
 
 const EXPOSED_API_METHODS = ['register', 'resolve'] as const;
 
+/** Hardcores declared `mechanism: true`; the kernel maps them to non-official. */
+const MECHANISM_PATHS = new Set([
+  'kernel:serviceModules/wasmCage.js',
+  'kernel:serviceModules/events.js',
+]);
+
 let baseServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
 
 function baseServices(): Promise<readonly BrudConfigEntry[]> {
@@ -67,6 +73,8 @@ interface HardcoreWorkspace {
   readonly workspaceRoot: string;
   readonly registryPath: string;
   readonly configPath: string;
+  /** Kernel shutdowns to run before the workspace is removed. */
+  readonly shutdowns: (() => Promise<void>)[];
 }
 
 async function createWorkspace(context: TestContext): Promise<HardcoreWorkspace> {
@@ -80,7 +88,13 @@ async function createWorkspace(context: TestContext): Promise<HardcoreWorkspace>
   const registryPath = join(operatorRoot, 'registry.json');
   provisionIdentityRegistryStorage(registryPath);
 
+  const shutdowns: (() => Promise<void>)[] = [];
+
   context.after(async () => {
+    for (const shutdown of shutdowns) {
+      await shutdown();
+    }
+
     await rm(root, { recursive: true, force: true });
   });
 
@@ -89,6 +103,7 @@ async function createWorkspace(context: TestContext): Promise<HardcoreWorkspace>
     workspaceRoot,
     registryPath,
     configPath: join(root, 'brud.config.json'),
+    shutdowns,
   };
 }
 
@@ -122,7 +137,7 @@ async function boot(
     options: optionsFor(workspace),
   });
 
-  context.after(async () => {
+  workspace.shutdowns.push(async () => {
     if (kernel.lifecycleState === 'RUNNING') {
       await kernel.shutdown().catch(() => undefined);
     }
@@ -390,7 +405,11 @@ describe('hardcore service enforcement production mirror', () => {
 
       assert.ok(record !== undefined, `no identity was issued for ${service.path}`);
       assert.equal(record.metadata['source'], 'kernel.composition');
-      assert.equal(record.metadata['official'], service.official === true);
+      // Mechanism hardcores (cage, events) are non-official by design.
+      assert.equal(
+        record.metadata['official'],
+        service.official === true && !MECHANISM_PATHS.has(service.path),
+      );
       assert.equal(record.metadata['provisional'], true);
     }
 
