@@ -25,25 +25,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 const IDENTITY_REGISTRY_SOURCE_HASH =
   '96e8271e63000b5b3d624ced3e9dc10c03d6df3016a89c966dced448dddceb07';
 const IDENTITY_REGISTRY_BUILT_HASH =
-  'dc3e3bb5b69dbe221d997ba6a0858ef43c12a97a9c1684203c3dd155b1021e1b';
+  'e169f2b42cfdc6d277bb01a164f569d29c03687bcfc50ccdce9f6ebf4f7f1895';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
   '32d9f049eb7a1d4dbefbd22f9c3f5020c49f2e87231eea6252c3cbeb8527d9e0';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
-  '47a9c141c6586d081a08093b31f54d99676fdac6d8663759d2cd8bd16c97f2d2';
+  '1be233d60e6ae4d136531be3198bf5033f8b34b0cd4d8af9ca8a2563420b793f';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
   'df9808275d8d9cede6da94fd19407409ad6dd7505a9eaba0df164b3a12f781c8';
 const PARSER_BUILT_HASH =
-  'b38c009b141eb7b15c8a0fd59529f75396c63f1a71f5eff264430dbf11998c6e';
+  '00e6d1a17a64e9e9aeb4ea2b88e7520c942fe19126c62dde94c31c296388d985';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
   'a3ed4d9cda9997a5dac33729090b8cc9f7f996461df173db5c13b03942da63c6';
 const ROUTER_BUILT_HASH =
-  'aafb6ecec238a88341c21b42edc5a1d837938d81b986bb072b0ed8345c99308b';
+  '3a79fa292a5d89ec67bc9c7cfa6e939487b37dfec998bc0084f7ce4d98d3ed18';
 
 /**
  * Pinned digests of the WASM cage package.
@@ -55,9 +55,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '7d506406b0d8476500fbcc6a509af4dad73ae549a6d647a2b0ba086445cf953f';
+  '18e02467a66bcfc84fb49aa86d86be4d868c437e917f3c406297d9198d232dfd';
 const WASM_CAGE_BUILT_HASH =
-  '0000000000000000000000000000000000000000000000000000000000000000';
+  '3174202d246a7b719f1a688fcb783f1c3c0ac82bc4bedce4eb986a79f0aacfe6';
 
 /**
  * Pinned digests of the events hardcore package.

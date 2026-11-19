@@ -20,7 +20,9 @@
     "build": "node scripts/clean.mjs && tsc",
     "test": "node scripts/run-tests.mjs",
     "clean": "node scripts/clean.mjs",
-    "prepack": "npm run build && node scripts/verify-dist.mjs"
+    "prepack": "npm run build && node scripts/verify-dist.mjs && node --import tsx scripts/repin.ts --check && node scripts/smoke-dist.mjs",
+    "repin": "node --import tsx scripts/repin.ts",
+    "smoke:dist": "node scripts/smoke-dist.mjs"
   },
   "dependencies": {},
   "devDependencies": {

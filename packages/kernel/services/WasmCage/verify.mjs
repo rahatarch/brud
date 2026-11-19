@@ -35,7 +35,7 @@ console.log(`VERIFY 1 PASS: trivial module returned ${answer}`);
 
 // 2. Module declaring an ungranted import must fail to instantiate.
 const importedWat = `(module
-  (import "kernel" "call" (func $call (param i32 i32 i32) (result i32)))
+  (import "kernel" "call" (func $call (param i32 i32) (result i64)))
   (func (export "answer") (param i32) (result i32) i32.const 7))`;
 const importedModule = binding.CageModule.compile(engine, Buffer.from(importedWat));
 
@@ -79,7 +79,7 @@ console.log('VERIFY 3 PASS: Node globals unreachable — every Node-named import
 // 4. A granted import of a known kind instantiates; its call returns the
 //    cage's stable capability-denial code (0) at this layer.
 const grantedWat = `(module
-  (import "kernel" "call" (func $call (param i32 i32 i32) (result i32)))
+  (import "kernel" "call" (func $call (param i32 i32) (result i64)))
   (func (export "answer") (param i32) (result i32) i32.const 99))`;
 const grantedModule = binding.CageModule.compile(engine, Buffer.from(grantedWat));
 const granted = binding.CageInstance.instantiate(

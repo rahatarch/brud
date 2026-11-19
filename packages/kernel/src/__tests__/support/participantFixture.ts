@@ -27,6 +27,8 @@ export interface FixtureParticipant {
   readonly interceptionPoints?: readonly Readonly<Record<string, unknown>>[];
   /** Source of an `intercept(call)` function, attached non-enumerably like `provideExposure`. */
   readonly intercept?: string;
+  /** A complete participant module source; when set, it replaces the generated module. */
+  readonly source?: string;
 }
 
 export function fixtureModule(participant: FixtureParticipant): string {
@@ -111,7 +113,7 @@ export async function writeComposition(
   for (const [index, participant] of participants.entries()) {
     const modulePath = join(root, `participant-${String(index)}.mjs`);
 
-    await writeFile(modulePath, fixtureModule(participant), 'utf8');
+    await writeFile(modulePath, participant.source ?? fixtureModule(participant), 'utf8');
     services.push(participant.official === undefined
       ? { path: modulePath }
       : { path: modulePath, official: participant.official });

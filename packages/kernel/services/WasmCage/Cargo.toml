@@ -15,6 +15,7 @@ wasmtime = { version = "=50.0.0", default-features = false, features = [
   "runtime",
   "std",
   "wat",
+  "async",
   "parallel-compilation",
   "pooling-allocator",
 ] }

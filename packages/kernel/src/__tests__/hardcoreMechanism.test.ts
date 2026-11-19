@@ -2,10 +2,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, extname, join, relative as relativePath, resolve as resolvePath, sep } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import * as ts from 'typescript';
+import { nativePlatformKey } from '../../services/WasmCage/src/native.js';
 import {
   HARDCORE_SERVICES,
   bootKernel,
@@ -1008,14 +1011,16 @@ describe('hardcore persistence independence (BC-6)', () => {
 
 
 /**
- * BC-WASM-PIN — the cage's compiled pin covers its main `.node` binary.
+ * BC-WASM-PIN — the cage's compiled pin covers every shipped `.node` binary.
  *
- * Reads the compiled list's cage entry and the cage's package on disk. Fails
- * if the pinned source hash is not the hash of the package graph that contains
- * the binary, which is what proves the pin covers the `.node` and not only the
- * cage's TypeScript.
+ * Per-platform binaries cannot share one package hash, so the pin covers them
+ * through the cage's digest table (`src/nativeDigests.ts`), which is in the
+ * cage's package graph; the loader hashes the running platform's binary and
+ * refuses it unless the digest is listed. Fails if the pin does not cover the
+ * table, if the table and the binaries on disk disagree, or if a tampered
+ * binary would still load.
  */
-describe('BC-WASM-PIN: the cage pin covers its main .node binary', () => {
+describe('BC-WASM-PIN: the cage pin covers every shipped .node binary through its digest table', () => {
   const CAGE_ROOT = resolvePath(
     dirname(fileURLToPath(import.meta.url)),
     '..',
@@ -1023,11 +1028,12 @@ describe('BC-WASM-PIN: the cage pin covers its main .node binary', () => {
     'services',
     'WasmCage',
   );
-  const CAGE_ENTRY = join(CAGE_ROOT, 'serviceModule.ts');
   const CAGE_SHIM = join(CAGE_ROOT, '..', '..', 'serviceModules', 'wasmCage.ts');
-  const CAGE_BINARY = join(CAGE_ROOT, 'native', 'brud-wasm-cage.linux-x64-gnu.node');
+  const CAGE_DIGESTS = join(CAGE_ROOT, 'src', 'nativeDigests.ts');
+  const CAGE_NATIVE = join(CAGE_ROOT, 'native');
+  const sha256 = (bytes: Buffer): string => createHash('sha256').update(bytes).digest('hex');
 
-  it('pins the cage source hash to the graph that contains the .node', () => {
+  it('pins the cage source hash to the graph that contains the digest table, and the table lists exactly the binaries on disk', async () => {
     const cage = HARDCORE_SERVICES.find((entry) => entry.token === 'brud.core.wasmCage');
 
     assert.ok(cage, 'the compiled list carries the cage');
@@ -1035,25 +1041,53 @@ describe('BC-WASM-PIN: the cage pin covers its main .node binary', () => {
     assert.deepEqual([...cage.contractInterface], ['resolve']);
     assert.equal(typeof cage.boot, 'function');
     assert.equal(cage.boot.length, 2, 'the boot hook has the uniform two-argument signature');
-
-    assert.ok(existsSync(CAGE_BINARY), 'the cage binary exists on disk');
     assert.equal(computePackageContentHash(CAGE_SHIM), cage.expectedContentHash);
+
+    const { WASM_CAGE_NATIVE_DIGESTS } = await import('../../services/WasmCage/src/nativeDigests.js');
+    const onDisk = readdirSync(CAGE_NATIVE)
+      .filter((name) => /^brud-wasm-cage\..+\.node$/u.test(name))
+      .map((name) => [name.slice('brud-wasm-cage.'.length, -'.node'.length), sha256(readFileSync(join(CAGE_NATIVE, name)))]);
+
+    assert.ok(onDisk.length > 0, 'at least one cage binary exists on disk');
+    assert.deepEqual([...WASM_CAGE_NATIVE_DIGESTS].map((entry) => [...entry]).sort(), onDisk.sort());
   });
 
-  it('changes the pin when the .node bytes change (guard canary)', () => {
+  it('changes the pin when the digest table changes, and the loader refuses a tampered binary (guard canary)', () => {
     const original = computePackageContentHash(CAGE_SHIM);
-    const originalBytes = readFileSync(CAGE_BINARY);
-    const tampered = Buffer.concat([originalBytes, Buffer.from([0x00])]);
+    const table = readFileSync(CAGE_DIGESTS);
 
     try {
-      writeFileSync(CAGE_BINARY, tampered);
-      const afterTamper = computePackageContentHash(CAGE_SHIM);
-      assert.notEqual(afterTamper, original, 'the pin must cover the binary bytes');
+      writeFileSync(CAGE_DIGESTS, Buffer.concat([table, Buffer.from('\n')]));
+      assert.notEqual(computePackageContentHash(CAGE_SHIM), original, 'the pin must cover the digest table');
     } finally {
-      writeFileSync(CAGE_BINARY, originalBytes);
+      writeFileSync(CAGE_DIGESTS, table);
     }
 
     assert.equal(computePackageContentHash(CAGE_SHIM), original, 'restored byte-identically');
+
+    const probe = `import('${pathToFileURL(join(CAGE_ROOT, 'src', 'native.ts')).href}').then((m) => {
+      try { m.loadVerifiedNative(); console.log('LOADED'); } catch (error) { console.log(error.code); }
+    });`;
+    const run = (): string => spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e', probe], { encoding: 'utf8' }).stdout.trim();
+    const binary = readdirSync(CAGE_NATIVE).find((name) => name === `brud-wasm-cage.${nativePlatformKey()}.node`);
+
+    if (binary === undefined) {
+      return;
+    }
+
+    const path = join(CAGE_NATIVE, binary);
+    const bytes = readFileSync(path);
+
+    assert.equal(run(), 'LOADED', 'the pinned binary loads');
+
+    try {
+      writeFileSync(path, Buffer.concat([bytes, Buffer.from([0x00])]));
+      assert.equal(run(), 'WASM_CAGE_NATIVE_TAMPERED', 'a tampered binary is refused');
+    } finally {
+      writeFileSync(path, bytes);
+    }
+
+    assert.equal(sha256(readFileSync(path)), sha256(bytes), 'restored byte-identically');
   });
 });
 

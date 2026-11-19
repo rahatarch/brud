@@ -8,5 +8,5 @@ set -euo pipefail
 cd "$(dirname "$0")"
 cargo build --release --locked
 mkdir -p native
-cp target/release/libbrud_wasm_cage.so native/brud-wasm-cage.linux-x64-gnu.node
-echo "built: native/brud-wasm-cage.linux-x64-gnu.node"
+cp "${CARGO_TARGET_DIR:-target}/release/libbrud_wasm_cage.so" native/brud-wasm-cage.linux-x64-gnu.node
+echo "built: native/brud-wasm-cage.linux-x64-gnu.node"echo "now run: npm run repin --workspace @brud/kernel"

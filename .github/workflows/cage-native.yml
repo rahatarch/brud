@@ -1,0 +1,146 @@
+name: WASM Cage Native Binaries
+
+# Builds the cage's native binary for every supported platform with the locked
+# Rust toolchain, regenerates the pinned digest table and the hardcore pins,
+# proves the built kernel boots and runs a caged participant on each OS, and
+# opens a pull request with the binaries and pins. Nobody hand-copies a hash.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'feat/**', 'feature/**']
+    paths:
+      - 'packages/kernel/services/WasmCage/src/lib.rs'
+      - 'packages/kernel/services/WasmCage/Cargo.toml'
+      - 'packages/kernel/services/WasmCage/Cargo.lock'
+      - 'packages/kernel/services/WasmCage/build.rs'
+      - '.github/workflows/cage-native.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUST_TOOLCHAIN: 1.99.1
+  CAGE_DIR: packages/kernel/services/WasmCage
+
+jobs:
+  build:
+    name: build ${{ matrix.key }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          # ubuntu-22.04 keeps the glibc floor at 2.35.
+          - { key: linux-x64-gnu, os: ubuntu-22.04, target: x86_64-unknown-linux-gnu, lib: libbrud_wasm_cage.so }
+          - { key: linux-arm64-gnu, os: ubuntu-22.04, target: aarch64-unknown-linux-gnu, lib: libbrud_wasm_cage.so, cross: true }
+          - { key: darwin-x64, os: macos-latest, target: x86_64-apple-darwin, lib: libbrud_wasm_cage.dylib }
+          - { key: darwin-arm64, os: macos-latest, target: aarch64-apple-darwin, lib: libbrud_wasm_cage.dylib }
+          - { key: win32-x64-msvc, os: windows-latest, target: x86_64-pc-windows-msvc, lib: brud_wasm_cage.dll }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_TOOLCHAIN }}
+          targets: ${{ matrix.target }}
+      - name: Install the aarch64 linker
+        if: matrix.cross
+        run: sudo apt-get update && sudo apt-get install -y gcc-aarch64-linux-gnu
+      - name: Build
+        shell: bash
+        working-directory: ${{ env.CAGE_DIR }}
+        env:
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        run: |
+          cargo build --release --locked --target ${{ matrix.target }}
+          mkdir -p out
+          cp target/${{ matrix.target }}/release/${{ matrix.lib }} out/brud-wasm-cage.${{ matrix.key }}.node
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cage-${{ matrix.key }}
+          path: ${{ env.CAGE_DIR }}/out/brud-wasm-cage.${{ matrix.key }}.node
+          if-no-files-found: error
+
+  repin:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: cage-*
+          merge-multiple: true
+          path: ${{ env.CAGE_DIR }}/native
+      - name: Regenerate digests and pins
+        run: npm run repin --workspace @brud/kernel
+      - name: Pins are consistent
+        run: node --import tsx packages/kernel/scripts/repin.ts --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: repinned
+          path: |
+            ${{ env.CAGE_DIR }}/native/*.node
+            ${{ env.CAGE_DIR }}/src/nativeDigests.ts
+            packages/kernel/src/bootstrap/hardcoreServices.ts
+
+  verify:
+    needs: repin
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: repinned
+          # The upload is rooted at the paths' common folder, packages/kernel.
+          path: packages/kernel
+      - name: Build the kernel
+        run: npm run build:kernel
+      - name: Built kernel boots and runs a caged participant on this platform
+        run: node packages/kernel/scripts/smoke-dist.mjs
+      - name: Caged participant tests (from source)
+        working-directory: packages/kernel
+        run: node --import tsx --test src/__tests__/cagedParticipant.test.ts
+
+  pull-request:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: repinned
+          # The upload is rooted at the paths' common folder, packages/kernel.
+          path: packages/kernel
+      - name: Open a pull request with the binaries and pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$CAGE_DIR/native" "$CAGE_DIR/src/nativeDigests.ts" packages/kernel/src/bootstrap/hardcoreServices.ts
+          if git diff --cached --quiet; then echo "binaries and pins unchanged"; exit 0; fi
+          branch="ci/cage-native-${{ github.run_id }}"
+          git switch -c "$branch"
+          git commit -m "chore(kernel): rebuild WASM cage binaries and re-pin"
+          git push origin "$branch"
+          gh pr create --base "${{ github.ref_name }}" --head "$branch" \
+            --title "chore(kernel): rebuild WASM cage binaries and re-pin" \
+            --body "Built by run ${{ github.run_id }} with Rust ${{ env.RUST_TOOLCHAIN }}: native binaries for every platform, regenerated digest table, re-pinned hardcores. Verified on Linux x64/arm64, macOS arm64 and Windows x64."
