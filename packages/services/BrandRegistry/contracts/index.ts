@@ -7,3 +7,4 @@ export {
   BrandTargetError,
   DuplicateBrandScopeError,
 } from './errors.js';
+export * from './exposure.js';

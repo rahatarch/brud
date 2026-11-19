@@ -1,7 +1,7 @@
-import type { ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import type { ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
 import type { IUtilityService } from '../contracts/IUtilityService.js';
+import { UTILITY_EXPOSURE, type IUtilityApi } from '../contracts/exposure.js';
 import { UtilityService } from '../orchestrator/UtilityService.js';
 import { UtilityToken } from './tokens.js';
 
@@ -9,43 +9,29 @@ import { UtilityToken } from './tokens.js';
 export const UTILITY_SERVICE_TIER: ServiceTier = 'core';
 
 /**
- * Public-exposure preset declared by this giver.
+ * Builds the `brud.core.utils` descriptor with the BrudOS SDK: one public,
+ * zero-authority exposure, `brud.utilities@1`.
  *
- * The kernel provides the capability mechanism but ships no public preset.
- * This service decides that its utility API is genuinely public and
- * zero-authority, so it owns the marker.
- */
-export const UTILITY_PUBLIC_API_CAPABILITY = '*';
-
-/**
- * Builds the `brud.core.utils` service descriptor.
- *
- * The descriptor declares no dependencies, and the factory receives neither a
- * broker nor any other service token. That is deliberate: D-20 requires a
- * utility to depend only on its own code, other utilities, and native language
- * features. The service therefore boots as a standalone, extractable unit.
- *
- * Boot position is before the plugin manager. The manager declares this token
- * as a dependency, so the service is RUNNING before any plugin activates and
- * can call `context.getUtilities()`.
+ * The participant requests no capabilities and resolves nothing (D-20: a
+ * utility depends only on its own code and native language features), so it
+ * boots as a standalone, extractable unit.
  *
  * @returns A core-tier descriptor for `brud.core.utils`.
  */
 export function createUtilityDescriptor(): ServiceDescriptor<IUtilityService, UtilityService> {
-  return {
-    token: UtilityToken,
+  return defineParticipant<UtilityService>({
+    id: UtilityToken.id,
+    description: UtilityToken.description,
     tier: UTILITY_SERVICE_TIER,
-    dependencies: [],
-    factory: (): UtilityService => withExposedApis(
-      new UtilityService(),
-      (registry) => {
-        registry.registerApi(CORE_API_NAME.utilities, UtilityToken, {
-          capability: UTILITY_PUBLIC_API_CAPABILITY,
-          scope: 'runtime',
-        });
+    exposes: {
+      [UTILITY_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (_caller, ctx): IUtilityApi => ctx.instance,
       },
-    ),
-  };
+    },
+    create: () => new UtilityService(),
+  })() as unknown as ServiceDescriptor<IUtilityService, UtilityService>;
 }
 
 /** Standard utility descriptor with no configuration. */

@@ -1,6 +1,7 @@
-import type { ServiceDescriptor } from '@brud/kernel';
-import type { ServiceTier } from '@brud/kernel';
+import type { ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
 import type { IBrandRegistry } from '../contracts/IBrandRegistry.js';
+import { BRAND_REGISTRY_EXPOSURE, type IBrandRegistryApi } from '../contracts/exposure.js';
 import { BrandRegistryToken } from '../contracts/tokens.js';
 import { BrandRegistryService } from '../orchestrator/BrandRegistryService.js';
 
@@ -14,23 +15,29 @@ export interface BrandRegistryDescriptorOptions {
 }
 
 /**
- * Builds the brand registry descriptor.
- *
- * The registry has no dependencies: it must be constructible before any
- * service that wants to create a scope during boot.
+ * Builds the brand registry descriptor with the BrudOS SDK: one exposure,
+ * `brud.brands@1`. The registry has no dependencies and resolves nothing, so
+ * it is constructible before any service that creates a scope during boot.
  */
 export function createBrandRegistryDescriptor(
   options?: BrandRegistryDescriptorOptions,
 ): ServiceDescriptor<IBrandRegistry, BrandRegistryService> {
-  return {
-    token: BrandRegistryToken,
+  return defineParticipant<BrandRegistryService>({
+    id: BrandRegistryToken.id,
+    description: BrandRegistryToken.description,
     tier: BRAND_REGISTRY_SERVICE_TIER,
-    dependencies: [],
-    factory: (): BrandRegistryService => {
+    exposes: {
+      [BRAND_REGISTRY_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (_caller, ctx): IBrandRegistryApi => ctx.instance,
+      },
+    },
+    create: () => {
       const service = new BrandRegistryService();
       options?.onConstruct?.(service);
 
       return service;
     },
-  };
+  })() as unknown as ServiceDescriptor<IBrandRegistry, BrandRegistryService>;
 }
