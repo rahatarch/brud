@@ -11,5 +11,5 @@ export const WASM_CAGE_NATIVE_DIGESTS: readonly (readonly [string, string])[] = 
   ['darwin-x64', '166123bf656caec62b96c3edff9efc024f4a9e17a866a8c8cba8098d79db2456'],
   ['linux-arm64-gnu', 'bc57be8ce648c88cba8e1fa703c8ce74fc65d5bafa2dc70713389f31353fba73'],
   ['linux-x64-gnu', '05b3ac5e3e616873419bd805d52ee5fb11746f5b9b681f767e28c47b181313a6'],
-  ['win32-x64-msvc', 'f3040c1233215f6ccfd2f767c9d1586aff2efe02a4cc1d5971e431277c0e4b10'],
+  ['win32-x64-msvc', '3141f68efd77532ccd0669981ef1398669c5f4c094b77ca07e2ae07530a4ad8f'],
 ]);
