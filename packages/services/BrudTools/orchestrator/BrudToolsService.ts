@@ -1,7 +1,7 @@
-import { BRUD_KIND_TOOL } from '@brud/kernel';
 import type { OperationResult } from '@brud/kernel';
 import type { IServiceLifecycle } from '@brud/kernel';
-import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
+import type { IToolDisposable } from '../contracts/IBrudToolsService.js';
+import { BRUD_KIND_TOOL } from '../contracts/exposure.js';
 import type { IRouterService } from '@brud/kernel/services/Router/contracts/IRouterService.js';
 import {
   ToolDisposedError,
@@ -19,7 +19,7 @@ import type {
 } from '../contracts/IBrudToolsService.js';
 import { BrudToolsToken } from '../descriptor/tokens.js';
 import { ToolRegistry, type RegisteredToolEntry } from '../registry/ToolRegistry.js';
-import type { JsonSchemaViolation } from '../../ValidationService/engine/jsonSchema/index.js';
+import type { JsonSchemaViolation } from '../schema/jsonSchema.js';
 import { compiledSchemaFor } from './schemaValidator.js';
 import type { BrudToolsDependencies } from './types.js';
 
@@ -78,7 +78,7 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
     pluginId: string,
     isOfficial: boolean,
     options: ToolRegistrationOptions,
-  ): IPluginDisposable {
+  ): IToolDisposable {
     this.assertLive();
 
     return this.registry.registerTool(pluginId, isOfficial, options);

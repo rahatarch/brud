@@ -1,9 +1,9 @@
-import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
-import { deepFreeze } from '../../SettingsService/model/deepFreeze.js';
+import type { IToolDisposable } from '../contracts/IBrudToolsService.js';
+import { deepFreeze } from '../schema/deepFreeze.js';
 import {
   compileJsonSchema,
   type JsonSchemaDefinitionError,
-} from '../../ValidationService/engine/jsonSchema/index.js';
+} from '../schema/jsonSchema.js';
 import {
   ToolDuplicateError,
   ToolNotFoundError,
@@ -62,7 +62,7 @@ export class ToolRegistry {
     pluginId: string,
     isOfficial: boolean,
     options: ToolRegistrationOptions,
-  ): IPluginDisposable {
+  ): IToolDisposable {
     if (this.countByOwner(pluginId) >= maxToolsPerPlugin) {
       throw new ToolQuotaExceededError(pluginId, maxToolsPerPlugin);
     }

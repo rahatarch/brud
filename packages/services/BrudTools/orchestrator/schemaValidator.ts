@@ -1,7 +1,7 @@
 import {
   compileJsonSchema,
   type JsonSchemaCompileResult,
-} from '../../ValidationService/engine/jsonSchema/index.js';
+} from '../schema/jsonSchema.js';
 
 const compiled = new WeakMap<object, JsonSchemaCompileResult>();
 

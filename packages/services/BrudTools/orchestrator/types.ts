@@ -1,4 +1,7 @@
-import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext.js';
+/** The logging BrudTools needs; any logger with `warn` fits. */
+export interface IToolsLogger {
+  warn(message: string, meta?: Record<string, unknown>): void;
+}
 
 /**
  * Injected collaborators of {@link BrudToolsService}.
@@ -12,7 +15,7 @@ import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext
  */
 export interface BrudToolsDependencies {
   /** Diagnostic sink for registry and dispatch warnings. */
-  readonly logger?: IPluginLogger;
+  readonly logger?: IToolsLogger;
 
   /**
    * Lazily reads the current tool allow-list.

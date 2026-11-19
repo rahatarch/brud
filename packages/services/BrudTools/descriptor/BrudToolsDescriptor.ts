@@ -1,39 +1,42 @@
-import type { ServiceContext, ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
-import type { IPluginLogger } from '../../PluginManager/contracts/IPluginContext.js';
-import type { ISettingsReader } from '../../SettingsService/contracts/ISettingsService.js';
-import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
-import type { IBrudToolsService } from '../contracts/IBrudToolsService.js';
 import {
-  BrudToolsService,
-  type BrudToolsDependencies,
-} from '../orchestrator/index.js';
+  ExposedApiRegistryToken,
+  withExposureBindings,
+  type IExposedApiRegistry,
+  type IKernelAccessBroker,
+  type ServiceDescriptor,
+  type ServiceTier,
+} from '@brud/kernel';
+import type { IBrudToolsService } from '../contracts/IBrudToolsService.js';
+import { BRUD_TOOLS_EXPOSURE, SETTINGS_READER_EXPOSURE } from '../contracts/exposure.js';
+import { BrudToolsService, type IToolsLogger } from '../orchestrator/index.js';
 import { BrudToolsToken } from './tokens.js';
+import { toolsFacade } from './toolsExposure.js';
 
 /** Tier assigned to the BrudTools descriptor. */
 export const BRUD_TOOLS_SERVICE_TIER: ServiceTier = 'core';
 
-/** Configuration for {@link createBrudToolsDescriptor}. */
+/** Options for {@link createBrudToolsDescriptor}. */
 export interface BrudToolsDescriptorOptions {
-  /** Optional diagnostic sink override. */
-  readonly logger?: IPluginLogger;
+  /** Receives non-fatal warnings. */
+  readonly logger?: IToolsLogger;
+}
+
+/** The slice of the settings exposure BrudTools reads. */
+interface SettingsReaderView {
+  getSnapshot(): { readonly toolAllowList?: Readonly<Record<string, boolean>> };
 }
 
 /**
- * Builds the BrudTools service descriptor.
+ * Builds the BrudTools descriptor: a participant like any other.
  *
- * The service validates every payload against the target tool's registered
- * `parametersSchema` through the kernel's zero-dependency JSON Schema
- * compiler. It therefore declares no validation-service dependency: the
- * compiler is a pure module, and no operation-kind gate is involved.
+ * It declares one exposure, `brud.tools@1` (scope `runtime`), bound to a
+ * projection shaped by the real caller (see `toolsFacade`). It reaches other
+ * participants only through the exposed-API registry, as itself: the tool
+ * allow-list is read by resolving `brud.settings.reader`; when that does not
+ * resolve, every tool is allowed (fail open, unchanged).
  *
- * Boot position is before the plugin manager (rollout plan §2.3.4): the
- * routing table must exist before any plugin activates, so a plugin's tools
- * become routable the moment its `activate()` returns.
- *
- * @param options - Optional logger override.
- * @returns A core-tier descriptor for `brud.core.tools`.
+ * @param options - Descriptor options.
+ * @returns The descriptor.
  */
 export function createBrudToolsDescriptor(
   options?: BrudToolsDescriptorOptions,
@@ -42,46 +45,44 @@ export function createBrudToolsDescriptor(
     token: BrudToolsToken,
     tier: BRUD_TOOLS_SERVICE_TIER,
     dependencies: [],
-    accessPolicy: { deniedCallers: [] },
-    factory: (context: ServiceContext, broker): BrudToolsService => {
-      // The allow-list is read lazily, on the first dispatch, so the service's
-      // declared dependency graph stays empty and standalone construction keeps
-      // working. The access broker only serves requests while the kernel is
-      // RUNNING, and dispatch is a runtime operation, so this is safe. The
-      // reader token carries no access policy; by the time dispatch runs the
-      // settings service registered before tools (boot order) is available.
-      let reader: ISettingsReader | undefined;
-      const getToolAllowList = (): Readonly<Record<string, boolean>> => {
-        reader ??= broker.requestAccess(
-          {
-            callerId: 'kernel',
-            tier: 'kernel',
-            options: context.options,
-          },
-          SettingsReaderToken,
-        );
+    manifest: {
+      requests: { capabilities: [] },
+      exposures: [{ name: BRUD_TOOLS_EXPOSURE, version: 1, scope: 'runtime' }],
+      events: [],
+    },
+    factory: (): BrudToolsService => {
+      let registry: IExposedApiRegistry | undefined;
+      let settings: SettingsReaderView | null = null;
 
-        return reader.getSnapshot().toolAllowList;
+      const getToolAllowList = (): Readonly<Record<string, boolean>> => {
+        if (registry === undefined) {
+          return {};
+        }
+
+        settings ??= registry.resolve<SettingsReaderView>(SETTINGS_READER_EXPOSURE);
+
+        return settings?.getSnapshot().toolAllowList ?? {};
       };
 
-      const dependencies: BrudToolsDependencies = {
+      const service = new BrudToolsService({
         ...(options?.logger === undefined ? {} : { logger: options.logger }),
         getToolAllowList,
-      };
+      });
 
-      const service = new BrudToolsService(dependencies);
+      Object.defineProperty(service, 'onRunning', {
+        value: (broker: IKernelAccessBroker): void => {
+          registry = broker.requestAccess(
+            { callerId: BrudToolsToken.id, tier: BRUD_TOOLS_SERVICE_TIER, options: {} },
+            ExposedApiRegistryToken,
+          );
+        },
+        enumerable: false,
+      });
 
-      return withExposedApis(service, (registry) => {
-        registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
-          capability: 'tools:register',
-          scope: 'runtime',
-          combine: lastProjectionWins,
-        });
-        registry.registerApi(CORE_API_NAME.brudTools, BrudToolsToken, {
-          capability: 'tools:execute',
-          scope: 'runtime',
-          combine: lastProjectionWins,
-        });
+      return withExposureBindings(service, {
+        [`${BRUD_TOOLS_EXPOSURE}@1`]: {
+          projection: (_service: unknown, caller) => toolsFacade(service, caller),
+        },
       });
     },
   };

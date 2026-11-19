@@ -1,5 +1,9 @@
 import type { OperationResult } from '@brud/kernel';
-import type { IPluginDisposable } from '../../PluginManager/contracts/IPluginContext.js';
+
+/** Handle returned by `registerTool`; disposing it unregisters the tool. */
+export interface IToolDisposable {
+  dispose(): void | Promise<void>;
+}
 
 /**
  * Caller context handed to a tool handler at dispatch time.
@@ -105,7 +109,7 @@ export interface IBrudToolsService {
     pluginId: string,
     isOfficial: boolean,
     options: ToolRegistrationOptions,
-  ): IPluginDisposable;
+  ): IToolDisposable;
 
   /**
    * Resolves a registered tool by name.
