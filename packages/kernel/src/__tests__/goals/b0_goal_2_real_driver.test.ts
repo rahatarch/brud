@@ -11,7 +11,9 @@ import {
 } from './_support.js';
 
 /**
- * The 33 kernel test files the B0 execution artifact records as rewritten.
+ * The 32 kernel test files the B0 execution artifact records as rewritten.
+ * (BrudTools' descriptor test was retired in the v1 migration: BrudTools owns no
+ * storage driver, and its tests now boot the real kernel through the public API.)
  *
  * Keep this list in lockstep with Section 4 of the artifact. The first test in
  * this file fails if the artifact no longer names a file.
@@ -34,7 +36,6 @@ const REWRITTEN_TESTS: readonly string[] = [
   'packages/services/BrudFileSystem/__tests__/scopedDriver.test.ts',
   'packages/services/BrudFileSystem/__tests__/stagingSecurity.test.ts',
   'packages/services/BrudFileSystem/__tests__/workspaceContainment.test.ts',
-  'packages/services/BrudTools/__tests__/descriptor.test.ts',
   'packages/services/PluginManager/descriptor/PluginManagerDescriptor.test.ts',
   'packages/services/TerminalService/__tests__/descriptor.test.ts',
   'packages/services/UniversalHistory/unified/__tests__/unifiedCarryOver.test.ts',
@@ -96,8 +97,8 @@ function runTestFile(relativePath: string): { readonly status: number | null; re
 }
 
 describe('B0 Goal 2 — every rewritten filesystem test exercises the real driver', () => {
-  it('lists exactly 33 rewritten test files that all exist and use a real driver', async () => {
-    assert.equal(REWRITTEN_TESTS.length, 33);
+  it('lists exactly 32 rewritten test files that all exist and use a real driver', async () => {
+    assert.equal(REWRITTEN_TESTS.length, 32);
 
     for (const relativePath of REWRITTEN_TESTS) {
       const source = await readFile(join(REPO_ROOT, relativePath), 'utf8');

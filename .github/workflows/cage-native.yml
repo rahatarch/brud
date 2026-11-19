@@ -39,7 +39,7 @@ jobs:
           - { key: win32-x64-msvc, os: windows-latest, target: x86_64-pc-windows-msvc, lib: brud_wasm_cage.dll }
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_TOOLCHAIN }}
@@ -56,7 +56,7 @@ jobs:
           cargo build --release --locked --target ${{ matrix.target }}
           mkdir -p out
           cp target/${{ matrix.target }}/release/${{ matrix.lib }} out/brud-wasm-cage.${{ matrix.key }}.node
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: cage-${{ matrix.key }}
           path: ${{ env.CAGE_DIR }}/out/brud-wasm-cage.${{ matrix.key }}.node
@@ -66,13 +66,13 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: cage-*
           merge-multiple: true
@@ -81,7 +81,7 @@ jobs:
         run: npm run repin --workspace @brud/kernel
       - name: Pins are consistent
         run: node --import tsx packages/kernel/scripts/repin.ts --check
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: repinned
           path: |
@@ -97,13 +97,13 @@ jobs:
         os: [ubuntu-22.04, ubuntu-24.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: repinned
           # The upload is rooted at the paths' common folder, packages/kernel.
@@ -123,8 +123,8 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
         with:
           name: repinned
           # The upload is rooted at the paths' common folder, packages/kernel.
