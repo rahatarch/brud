@@ -33,7 +33,8 @@
     "@brud/kernel": "*",
     "@brud/service-plugin-manager": "*",
     "@brud/service-settings": "*",
-    "@brud/service-validation": "*"
+    "@brud/service-validation": "*",
+    "@brud/sdk": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"
