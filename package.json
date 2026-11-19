@@ -32,7 +32,8 @@
     "stage:daemon": "node scripts/stage-daemon.mjs",
     "build:all": "npm run build:protocol && npm run build:kernel && npm run build:services && npm run build:daemon && npm run build:ui",
     "ci": "npm run build:all && npm run test:kernel && npm run check:boundaries && npm run lint",
-    "build:services": "node scripts/build-services.mjs"
+    "build:services": "node scripts/build-services.mjs",
+    "docs:api": "cd docs/kernel-api && typedoc --options typedoc.json && node --import tsx tools/generate-catalogue.ts"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",
@@ -53,6 +54,8 @@
     "gitarmor": "^1.0.0",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.13",
+    "typedoc": "^0.28.20",
+    "typedoc-plugin-markdown": "^4.14.1",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.56.1",
     "vite": "^8.2.2"

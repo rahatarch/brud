@@ -1,0 +1,29 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "BrudOS Kernel API",
+  "tsconfig": "../../packages/kernel/tsconfig.json",
+  "entryPoints": [
+    "../../packages/kernel/src/contracts/index.ts",
+    "../../packages/kernel/services/IdentityRegistry/contracts/index.ts",
+    "../../packages/kernel/services/ExposedApiRegistry/contracts/index.ts",
+    "../../packages/kernel/services/Parser/contracts/index.ts",
+    "../../packages/kernel/services/Router/contracts/index.ts",
+    "../../packages/kernel/services/WasmCage/index.ts",
+    "../../packages/kernel/services/Events/contracts/index.ts",
+    "../../packages/kernel/services/Interception/contracts/index.ts"
+  ],
+  "entryPointStrategy": "resolve",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "reference",
+  "readme": "none",
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "excludeExternals": true,
+  "hideGenerator": true,
+  "disableSources": true,
+  "outputFileStrategy": "modules",
+  "useCodeBlocks": true,
+  "parametersFormat": "table",
+  "interfacePropertiesFormat": "table",
+  "validation": { "notExported": false, "invalidLink": true, "notDocumented": false }
+}
