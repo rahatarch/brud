@@ -1,17 +1,22 @@
-import type { IServiceLifecycle, ServiceContext, ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import type { ServiceContext, ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import { byCapability, defineParticipant, type Surface } from '@brud/sdk/participant';
+import {
+  SETTINGS_EXPOSURE,
+  SETTINGS_READER_EXPOSURE,
+  SETTINGS_READ_CAPABILITY,
+  SETTINGS_WRITE_CAPABILITY,
+  type ISettingsReaderApi,
+} from '../contracts/exposure.js';
+import { DEFAULT_SETTINGS } from '../model/defaults.js';
 import type { IConfigStore } from '../contracts/IConfigStore.js';
 import type {
+  ConfigScope,
   ISettingsReader,
   ISettingsService,
   SettingsSnapshot,
   SettingsWarning,
 } from '../contracts/ISettingsService.js';
-import {
-  SettingsService,
-  createSettingsReader,
-} from '../orchestrator/SettingsService.js';
+import { SettingsService } from '../orchestrator/SettingsService.js';
 import { ConfigStore } from '../storage/ConfigStore.js';
 import { requireContextString } from '@brud/kernel';
 import { SettingsReaderToken, SettingsToken } from './tokens.js';
@@ -63,98 +68,104 @@ export interface SettingsDescriptorOptions {
  * @param options - Optional store, defaults, and warning overrides.
  * @returns A core-tier descriptor for `brud.core.settings`.
  */
+/** Read surface shared by both capabilities of `brud.settings`. */
+const readSurface: Surface<SettingsService> = (ctx) => ({
+  getSnapshot: () => ctx.instance.getSnapshot(),
+  onChange: (listener: (snapshot: SettingsSnapshot) => void) => ctx.instance.onChange(listener),
+});
+
+/**
+ * Builds the `brud.core.settings` descriptor with the BrudOS SDK: one exposure,
+ * `brud.settings@1`. `settings:read` gets `getSnapshot`/`onChange`;
+ * `settings:write` adds `update`/`reload`; callers with neither get `null`
+ * (open read access is `brud.settings.reader`). The token-level `accessPolicy`
+ * is kept for hosts that still take the token directly.
+ *
+ * `create` does not receive the boot `ServiceContext` (SDK gap), so the factory
+ * is wrapped to capture it for the `settings.root` context field.
+ */
 export function createSettingsDescriptor(
   options?: SettingsDescriptorOptions,
 ): ServiceDescriptor<ISettingsService, SettingsService> {
-  return {
-    token: SettingsToken,
+  let bootContext: ServiceContext | undefined;
+
+  const base = defineParticipant<SettingsService>({
+    id: SettingsToken.id,
+    description: SettingsToken.description,
     tier: SETTINGS_SERVICE_TIER,
-    dependencies: [],
-    accessPolicy: {
-      allowedCallers: [...SETTINGS_MUTATOR_CALLERS],
+    exposes: {
+      [SETTINGS_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: byCapability<SettingsService>({
+          [SETTINGS_READ_CAPABILITY]: readSurface,
+          [SETTINGS_WRITE_CAPABILITY]: (ctx, caller) => ({
+            ...readSurface(ctx, caller),
+            reload: () => ctx.instance.reload(),
+            update: (scope: ConfigScope, patch: Partial<SettingsSnapshot>) => ctx.instance.update(scope, patch),
+          }),
+        }),
+      },
     },
-    factory: (context: ServiceContext): SettingsService => {
+    create: () => {
       const store = options?.store ?? new ConfigStore({
         workspaceRoot: requireContextString(
-          context.options,
+          bootContext?.options ?? {},
           SETTINGS_ROOT_CONTEXT_FIELD,
           SettingsToken.id,
         ),
         ...(options?.homeDirectory === undefined ? {} : { homeDirectory: options.homeDirectory }),
       });
 
-      const service = new SettingsService({
+      return new SettingsService({
         store,
         ...(options?.defaults === undefined ? {} : { defaults: options.defaults }),
         ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
       });
-
-      return withExposedApis(service, (registry) => {
-        registry.registerApi(CORE_API_NAME.settings, SettingsToken, {
-          capability: 'settings:write',
-          scope: 'runtime',
-        });
-      });
     },
-    project: (instance: SettingsService, caller: ServiceContext): ISettingsService => {
-      if (caller.tier === 'userland') {
-        const reader: ISettingsReader = createSettingsReader(instance);
+  })();
 
-        // The token carries the host contract; the projection is the runtime
-        // capability boundary and deliberately omits `update`/`reload`.
-        return reader as unknown as ISettingsService;
-      }
+  return {
+    ...base,
+    token: SettingsToken,
+    accessPolicy: { allowedCallers: [...SETTINGS_MUTATOR_CALLERS] },
+    factory: (context: ServiceContext, ...rest: unknown[]) => {
+      bootContext = context;
 
-      return instance;
+      return (base.factory as (...args: unknown[]) => SettingsService)(context, ...rest);
     },
-  };
+  } as unknown as ServiceDescriptor<ISettingsService, SettingsService>;
 }
 
 /**
- * Builds the read-only reader descriptor.
- *
- * The reader token carries no access policy, so every caller may resolve it.
- * The kernel guarantees the settings instance is initialized first through the
- * declared dependency, and resolution is deferred until the first use because
- * the access broker only serves requests while the kernel is `RUNNING`.
- *
- * @returns A core-tier descriptor for `brud.core.settings.reader`.
+ * Builds the `brud.core.settings.reader` descriptor: one exposure,
+ * `brud.settings.reader@1`, open to every caller. It reads through
+ * `ctx.resolve('brud.settings')` at call time; until that resolves it serves
+ * the defaults and a no-op subscription.
  */
 export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsReader> {
-  return {
-    token: SettingsReaderToken,
+  const base = defineParticipant<ISettingsReaderApi>({
+    id: SettingsReaderToken.id,
+    description: SettingsReaderToken.description,
     tier: SETTINGS_SERVICE_TIER,
-    dependencies: [SettingsToken],
-    factory: (context: ServiceContext, broker) => {
-      let resolved: ISettingsReader | undefined;
-
-      const resolve = (): ISettingsReader => {
-        resolved ??= broker.requestAccess(
-          {
-            callerId: 'kernel',
-            tier: 'kernel',
-            options: context.options,
-          },
-          SettingsToken,
-        );
-
-        return resolved;
-      };
-
-      const reader: ISettingsReader & IServiceLifecycle = {
-        getSnapshot: (): SettingsSnapshot => resolve().getSnapshot(),
-        onChange: (listener: (snapshot: SettingsSnapshot) => void): (() => void) =>
-          resolve().onChange(listener),
-        initialize: async (): Promise<void> => undefined,
-        dispose: async (): Promise<void> => undefined,
-      };
-
-      return withExposedApis(reader, (registry) => {
-        registry.registerApi(CORE_API_NAME.settingsReader, SettingsReaderToken, {
-          capability: 'settings:read',
-          scope: 'runtime',
-        });
-      });
+    requests: [SETTINGS_READ_CAPABILITY],
+    exposes: {
+      [SETTINGS_READER_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (_caller, ctx): ISettingsReaderApi => ctx.instance,
+      },
     },
-  };
+    create: (ctx) => {
+      const source = (): ISettingsReaderApi | null => ctx.resolve<ISettingsReaderApi>(SETTINGS_EXPOSURE);
+
+      return {
+        getSnapshot: (): SettingsSnapshot => source()?.getSnapshot() ?? DEFAULT_SETTINGS,
+        onChange: (listener: (snapshot: SettingsSnapshot) => void): (() => void) =>
+          source()?.onChange(listener) ?? ((): void => undefined),
+      };
+    },
+  })();
+
+  return { ...base, token: SettingsReaderToken, dependencies: [SettingsToken] } as unknown as ServiceDescriptor<ISettingsReader>;
 }

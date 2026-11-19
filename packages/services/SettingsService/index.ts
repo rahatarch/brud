@@ -1,4 +1,5 @@
 export * from './contracts/ISettingsService.js';
+export * from './contracts/exposure.js';
 export * from './contracts/IConfigStore.js';
 export * from './contracts/errors.js';
 export * from './model/defaults.js';

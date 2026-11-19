@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ServiceContext } from '@brud/kernel';
 import { AccessDeniedError } from '@brud/kernel';
-import { BrudKernel } from '@brud/kernel';
+import { BrudKernel, createExposedApiRegistryDescriptor } from '@brud/kernel';
 import { DEFAULT_SETTINGS } from '../model/defaults.js';
 import { InMemoryConfigStore } from '../storage/InMemoryConfigStore.js';
 import {
@@ -23,6 +23,7 @@ function caller(overrides: Partial<ServiceContext>): ServiceContext {
 
 function createKernel(): BrudKernel {
   const kernel = new BrudKernel();
+  kernel.register(createExposedApiRegistryDescriptor());
   kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
   kernel.register(createSettingsReaderDescriptor());
   return kernel;
@@ -109,6 +110,13 @@ describe('createSettingsDescriptor', () => {
   });
 });
 
+describe('settings exposures (v1)', () => {
+  it('declares brud.settings@1 and brud.settings.reader@1', () => {
+    assert.deepEqual(createSettingsDescriptor().manifest?.exposures, [{ name: 'brud.settings', version: 1, scope: 'runtime' }]);
+    assert.deepEqual(createSettingsReaderDescriptor().manifest?.exposures, [{ name: 'brud.settings.reader', version: 1, scope: 'runtime' }]);
+  });
+});
+
 describe('createSettingsReaderDescriptor', () => {
   it('is a core-tier dependency of the settings service with no access policy', () => {
     const descriptor = createSettingsReaderDescriptor();
@@ -120,7 +128,7 @@ describe('createSettingsReaderDescriptor', () => {
     assert.equal(descriptor.accessPolicy, undefined);
   });
 
-  it('serves the same frozen snapshot as the mutating service', async () => {
+  it('serves the same frozen snapshot as the mutating service (defaults before resolve)', async () => {
     const kernel = createKernel();
 
     await kernel.boot({ options: { 'settings.root': '/workspace' } });
@@ -135,29 +143,21 @@ describe('createSettingsReaderDescriptor', () => {
       assert.deepEqual(reader.getSnapshot(), DEFAULT_SETTINGS);
       assert.deepEqual(reader.getSnapshot(), settings.getSnapshot());
 
-      let notifications = 0;
-      const unsubscribe = reader.onChange(() => {
-        notifications += 1;
-      });
-
-      await settings.update('user', { readConcurrency: 4 });
-
-      assert.equal(notifications, 1);
-      assert.equal(reader.getSnapshot().readConcurrency, 4);
-
-      unsubscribe();
+      // Live onChange through brud.settings is covered by __tests__/exposures.test.ts (real bootKernel).
     } finally {
       await kernel.shutdown();
     }
   });
 
-  it('keeps the settings service first in the standard boot order', async () => {
+  it('boots the settings service before its reader', async () => {
     const kernel = createKernel();
 
     await kernel.boot({ options: { 'settings.root': '/workspace' } });
 
     try {
-      assert.equal(kernel.listServices()[0]?.id, 'brud.core.settings');
+      const ids = kernel.listServices().map((service) => service.id);
+
+      assert.ok(ids.indexOf('brud.core.settings') < ids.indexOf('brud.core.settings.reader'));
     } finally {
       await kernel.shutdown();
     }
