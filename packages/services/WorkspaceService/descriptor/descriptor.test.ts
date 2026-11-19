@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
 import type { ServiceContext } from '@brud/kernel';
-import { BrudKernel } from '@brud/kernel';
+import { BrudKernel, createExposedApiRegistryDescriptor } from '@brud/kernel';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import { createSettingsReaderDescriptor, createSettingsDescriptor } from '../../SettingsService/descriptor/descriptor.js';
 import { InMemoryConfigStore } from '../../SettingsService/storage/InMemoryConfigStore.js';
@@ -46,6 +46,7 @@ function caller(overrides?: Partial<ServiceContext>): ServiceContext {
 
 function createKernel(): BrudKernel {
   const kernel = new BrudKernel();
+  kernel.register(createExposedApiRegistryDescriptor());
   kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
   kernel.register(createSettingsReaderDescriptor());
   kernel.register(createWorkspaceDescriptor({ port: realPort() }));
@@ -131,6 +132,7 @@ describe('createWorkspaceDescriptor', () => {
 
   it('honors a declared root registry and primary root', async () => {
     const kernel = new BrudKernel();
+    kernel.register(createExposedApiRegistryDescriptor());
     kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
     kernel.register(createSettingsReaderDescriptor());
     kernel.register(createWorkspaceDescriptor({
@@ -153,6 +155,7 @@ describe('createWorkspaceDescriptor', () => {
 
   it('surfaces an invalid root registry as a boot failure', async () => {
     const kernel = new BrudKernel();
+    kernel.register(createExposedApiRegistryDescriptor());
     kernel.register(createSettingsDescriptor({ store: new InMemoryConfigStore() }));
     kernel.register(createSettingsReaderDescriptor());
     kernel.register(createWorkspaceDescriptor({

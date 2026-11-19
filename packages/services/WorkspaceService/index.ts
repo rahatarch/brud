@@ -1,3 +1,4 @@
+export * from './contracts/exposure.js';
 export * from './contracts/IWorkspaceService.js';
 export * from './contracts/errors.js';
 export * from './bootOptions.js';

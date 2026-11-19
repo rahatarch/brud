@@ -1,8 +1,8 @@
-import type { ServiceContext, ServiceTier } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
+import type { ServiceContext, ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
 import type { IStorageDriver } from '../../BrudFileSystem/contracts/index.js';
-import { NodeStorageDriver } from '../../BrudFileSystem/drivers/index.js';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import { WORKSPACE_EXPOSURE, WORKSPACE_READ_CAPABILITY } from '../contracts/exposure.js';
+import { createNodePathPort } from '../ports/NodePathPort.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type {
   IWorkspacePathPort,
@@ -72,32 +72,47 @@ export function createWorkspaceDescriptor(
   options?: WorkspaceDescriptorOptions,
 ): ServiceDescriptor<IWorkspaceService, WorkspaceService> {
   const port = options?.port
-    ?? createStorageDriverPathPort(options?.driver ?? new NodeStorageDriver());
+    ?? (options?.driver === undefined ? createNodePathPort() : createStorageDriverPathPort(options.driver));
+  let bootContext: ServiceContext | undefined;
 
-  return {
-    token: WorkspaceToken,
+  const base = defineParticipant<WorkspaceService>({
+    id: WorkspaceToken.id,
+    description: WorkspaceToken.description,
     tier: WORKSPACE_SERVICE_TIER,
-    dependencies: [SettingsReaderToken],
-    factory: (context: ServiceContext): WorkspaceService => withExposedApis(
-      new WorkspaceService({
+    exposes: {
+      [WORKSPACE_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (caller, ctx) => (caller.capabilities.has(WORKSPACE_READ_CAPABILITY) ? ctx.instance : null),
+      },
+    },
+    create: () => {
+      const bootOptions = bootContext?.options ?? {};
+
+      return new WorkspaceService({
         roots: options?.roots !== undefined && options.roots.length > 0
           ? options.roots
-          : [requireNamespacedWorkspaceRoot(context.options, WorkspaceToken.id)],
+          : [requireNamespacedWorkspaceRoot(bootOptions, WorkspaceToken.id)],
         primaryRoot: options?.primaryRoot
-          ?? requireNamespacedWorkspaceRoot(context.options, WorkspaceToken.id),
+          ?? requireNamespacedWorkspaceRoot(bootOptions, WorkspaceToken.id),
         port,
         ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
         ...(options?.allowFilesystemRoot === undefined
           ? {}
           : { allowFilesystemRoot: options.allowFilesystemRoot }),
         ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
-      }),
-      (registry) => {
-        registry.registerApi(CORE_API_NAME.workspace, WorkspaceToken, {
-          capability: 'workspace:read',
-          scope: 'runtime',
-        });
-      },
-    ),
-  };
+      });
+    },
+  })();
+
+  return {
+    ...base,
+    token: WorkspaceToken,
+    dependencies: [SettingsReaderToken],
+    factory: (context: ServiceContext, ...rest: unknown[]) => {
+      bootContext = context;
+
+      return (base.factory as (...args: unknown[]) => WorkspaceService)(context, ...rest);
+    },
+  } as unknown as ServiceDescriptor<IWorkspaceService, WorkspaceService>;
 }

@@ -1,3 +1,4 @@
+export * from './contracts/exposure.js';
 export * from './contracts/IValidationService.js';
 export * from './contracts/rules.js';
 export * from './contracts/errors.js';

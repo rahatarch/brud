@@ -1,7 +1,9 @@
 import type { IStorageDriver } from '../contracts/index.js';
 import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
+import type { ExposedApiCaller } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
+import { FILESYSTEM_EXPOSURE, FS_READ_CAPABILITY, FS_WRITE_CAPABILITY } from '../contracts/exposure.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type { WorkspacePathFlavor } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
@@ -102,17 +104,32 @@ export function createFileSystemDescriptor(
 
   const authorizedScopesByCaller = { ...options?.authorizedWriteScopesByCaller };
 
-  return {
-    token: FileSystemToken,
+  let bootContext: ServiceContext | undefined;
+
+  const handle = (caller: ExposedApiCaller, instance: BrudFileSystem): IBrudFileSystem | null => {
+    if (caller.capabilities.has(FS_WRITE_CAPABILITY)) {
+      const scopes = caller.identity == null ? [] : authorizedScopesByCaller[caller.identity] ?? [];
+
+      return scopes.length > 0 ? instance.createAuthorizedProjection(scopes) : instance;
+    }
+
+    return caller.capabilities.has(FS_READ_CAPABILITY) ? new ReadOnlyFacade(instance) : null;
+  };
+
+  const base = defineParticipant<BrudFileSystem>({
+    id: FileSystemToken.id,
+    description: FileSystemToken.description,
     tier: 'core',
-    dependencies: [WorkspaceToken, SettingsReaderToken],
-    // Explicit policy: every tier may resolve the token, but mutating
-    // authority is enforced by `project`. No caller is globally denied, so a
-    // userland plugin can still receive a read-only projection.
-    accessPolicy: { deniedCallers: [] },
-    factory: (context: ServiceContext): BrudFileSystem => {
+    exposes: {
+      [FILESYSTEM_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (caller, ctx) => handle(caller, ctx.instance),
+      },
+    },
+    create: () => {
       const root = options?.root ?? requireContextString(
-        context.options,
+        bootContext?.options ?? {},
         FILESYSTEM_ROOT_CONTEXT_FIELD,
         FileSystemToken.id,
       );
@@ -125,24 +142,24 @@ export function createFileSystemDescriptor(
         ...(options?.validation === undefined ? {} : { validation: options.validation }),
       };
 
-      const instance = options?.workspace !== undefined
+      return options?.workspace !== undefined
         ? new BrudFileSystem(options.workspace, driver, serviceOptions)
         : new BrudFileSystem(root, driver, serviceOptions);
-
-      return withExposedApis(instance, (registry) => {
-        registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
-          capability: 'fs:read',
-          scope: 'runtime',
-          projection: (service) => new ReadOnlyFacade(service as IBrudFileSystem),
-          combine: lastProjectionWins,
-        });
-        registry.registerApi(CORE_API_NAME.fileSystem, FileSystemToken, {
-          capability: 'fs:write',
-          scope: 'runtime',
-          combine: lastProjectionWins,
-        });
-      });
     },
+  })();
+
+  return {
+    ...base,
+    token: FileSystemToken,
+    tier: 'core',
+    dependencies: [WorkspaceToken, SettingsReaderToken],
+    accessPolicy: { deniedCallers: [] },
+    factory: (context: ServiceContext, ...rest: unknown[]) => {
+      bootContext = context;
+
+      return (base.factory as (...args: unknown[]) => BrudFileSystem)(context, ...rest);
+    },
+    // Token-level projection, kept for hosts that take the token directly.
     project: (instance: BrudFileSystem, caller: ServiceContext): IBrudFileSystem => {
       const authorizedScopes = authorizedScopesByCaller[caller.callerId] ?? [];
       let projection: IBrudFileSystem = caller.tier === 'core' && authorizedScopes.length > 0
@@ -167,7 +184,7 @@ export function createFileSystemDescriptor(
 
       return projection;
     },
-  };
+  } as unknown as ServiceDescriptor<IBrudFileSystem, BrudFileSystem>;
 }
 
 export const FileSystemDescriptor: ServiceDescriptor<IBrudFileSystem, BrudFileSystem> =

@@ -1,14 +1,19 @@
-import type { ServiceContext, ServiceTier } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import type { ServiceTier } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
 import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
+import {
+  VALIDATION_EXPOSURE,
+  VALIDATION_READ_CAPABILITY,
+  VALIDATION_SETTINGS_EXPOSURE,
+  VALIDATION_WORKSPACE_EXPOSURE,
+} from '../contracts/exposure.js';
 import {
   READ_CONCURRENCY_MAX,
   READ_MAX_AGGREGATE_BYTES_MAX,
   READ_MAX_BATCH_FILES_MAX,
 } from '../../SettingsService/model/defaults.js';
-import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import type {
   IValidationService,
   ValidationEnvironment,
@@ -88,43 +93,33 @@ export function toValidationPolicy(snapshot: SettingsSnapshot): ValidationPolicy
 export function createValidationDescriptor(
   options?: ValidationDescriptorOptions,
 ): ServiceDescriptor<IValidationService, ValidationService> {
-  return {
-    token: ValidationToken,
+  let service: ValidationService | undefined;
+
+  const base = defineParticipant<ValidationService>({
+    id: ValidationToken.id,
+    description: ValidationToken.description,
     tier: VALIDATION_SERVICE_TIER,
-    dependencies: [SettingsToken, WorkspaceToken],
-    accessPolicy: { deniedCallers: [] },
-    factory: (context: ServiceContext, broker): ValidationService => {
-      const kernelCaller: ServiceContext = {
-        callerId: 'kernel',
-        tier: 'kernel',
-        options: context.options,
-      };
-      // The access broker only serves requests while the kernel is RUNNING and
-      // service factories run during BOOTING, so the dependencies are resolved
-      // through this forwarding proxy and touched only on first use. Policy is
-      // read exactly once, on that first use: no accessor is evaluated before
-      // the kernel is RUNNING, and the boot snapshot cannot change afterwards
-      // because the service never subscribes to `onChange`.
-      let policy: ValidationPolicy | undefined = options?.policy;
+    requests: ['settings:read', 'workspace:read'],
+    exposes: {
+      [VALIDATION_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        handle: (caller, ctx) => (caller.capabilities.has(VALIDATION_READ_CAPABILITY) ? ctx.instance : null),
+      },
+    },
+    create: (ctx) => {
       let workspace: ValidationWorkspacePort | undefined = options?.workspace;
-
-      const resolvePolicy = (): ValidationPolicy => {
-        policy ??= toValidationPolicy(broker.requestAccess(kernelCaller, SettingsToken).getSnapshot());
-
-        return policy;
-      };
       const resolveWorkspace = (): ValidationWorkspacePort => {
-        workspace ??= broker.requestAccess(kernelCaller, WorkspaceToken);
+        workspace ??= ctx.resolve<ValidationWorkspacePort>(VALIDATION_WORKSPACE_EXPOSURE) ?? undefined;
+
+        if (workspace === undefined) {
+          throw new Error(`${ValidationToken.id}: ${VALIDATION_WORKSPACE_EXPOSURE} is not resolvable`);
+        }
 
         return workspace;
       };
 
-      // Boot-time pinning: the access broker only serves while the kernel is
-      // RUNNING, so the first freeze uses a placeholder and the real snapshot
-      // is ingested once `pinBootPolicy` runs, which still happens before the
-      // kernel announces RUNNING. Policy is read exactly once and never
-      // subscribed to, so it cannot move during an operation.
-      const service = new ValidationService({
+      service = new ValidationService({
         policy: BOOT_PLACEHOLDER_POLICY,
         workspace: lazyWorkspace(resolveWorkspace),
         environment: {
@@ -137,26 +132,43 @@ export function createValidationDescriptor(
           : { ignoreFileReader: options.ignoreFileReader }),
       });
 
-      registerBootPinner(service, async (): Promise<void> => {
-        await service.pinBootPolicy({
-          policy: resolvePolicy(),
-          workspace: resolveWorkspace(),
+      const pinned = service;
+      let done = false;
+      registerBootPinner(pinned, async (): Promise<void> => {
+        // Pre-RUNNING (module pinBootPolicies hook) resolve is not live: wait for onRunning.
+        if (!ctx.running || done) {
+          return;
+        }
+
+        done = true;
+        const snapshot = ctx.resolve<{ getSnapshot(): SettingsSnapshot }>(VALIDATION_SETTINGS_EXPOSURE)?.getSnapshot();
+        const policy = options?.policy ?? (snapshot === undefined ? undefined : toValidationPolicy(snapshot));
+
+        await pinned.pinBootPolicy({
+          policy: policy ?? BOOT_PLACEHOLDER_POLICY,
+          workspace: lazyWorkspace(resolveWorkspace),
         });
       });
 
-      return withExposedApis(service, (registry) => {
-        registry.registerApi(CORE_API_NAME.validation, ValidationToken, {
-          capability: 'validation:read',
-          scope: 'runtime',
-        });
-      });
+      return pinned;
     },
-  };
+    // resolve is live only once RUNNING, so the boot pin runs here rather than
+    // in the pre-RUNNING pinBootPolicies module hook.
+    onRunning: async () => {
+      if (service !== undefined) {
+        await pinBootPolicies([service]);
+      }
+    },
+  })();
+
+  return {
+    ...base,
+    token: ValidationToken,
+    dependencies: [SettingsToken],
+    accessPolicy: { deniedCallers: [] },
+  } as unknown as ServiceDescriptor<IValidationService, ValidationService>;
 }
 
-/**
- * Resolves the default path flavor from the host platform.
- */
 export function defaultValidationFlavor(): ValidationFlavor {
   return process.platform === 'win32' ? 'win32' : 'posix';
 }
