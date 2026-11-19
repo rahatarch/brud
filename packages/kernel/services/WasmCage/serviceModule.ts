@@ -5,6 +5,10 @@ import { createWasmCageDescriptor } from './src/descriptor.js';
 // graph, so the hardcore content pins cover the digests the loader trusts.
 export { nativePlatformKey } from './src/native.js';
 
+// W-01: participants not declared official reach the kernel as packages, and
+// this hardcore is the one that loads them (the kernel's loader asks for it).
+export { loadParticipantPackage } from './src/package.js';
+
 /**
  * Composes the WASM cage through the standard service-module contract.
  *

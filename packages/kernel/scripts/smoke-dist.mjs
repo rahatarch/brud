@@ -1,17 +1,17 @@
 // Boots the BUILT kernel (dist/) the way an npm consumer does: the seven
-// hardcores, a native user service and a caged user service written in a
-// separate folder, then calls the caged service from the native one.
+// hardcores, an official native user service and a caged user service shipped
+// as a participant package, then calls the caged service from the native one.
 //
 //   node scripts/smoke-dist.mjs [path-to-kernel-package]   (defaults to this package)
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const pkg = resolve(process.argv[2] ?? join(dirname(fileURLToPath(import.meta.url)), '..'));
 const kernel = await import(pathToFileURL(join(pkg, 'dist/index.js')).href);
-const cageIndex = pathToFileURL(join(pkg, 'dist/services/WasmCage/index.js')).href;
 const work = mkdtempSync(join(tmpdir(), 'brud-smoke-dist-'));
 const POINT = 'smoke.caged.echo';
 const ECHO = `(module
@@ -26,15 +26,15 @@ const ECHO = `(module
       (i64.extend_i32_u (i32.add (local.get $l) (i32.const 20))))))`;
 
 try {
-  writeFileSync(join(work, 'caged.mjs'), `import { createCagedParticipant } from ${JSON.stringify(cageIndex)};
-export function createService() {
-  return createCagedParticipant({
-    token: 'smoke.caged',
-    manifest: { requests: { capabilities: [] }, exposures: [{ name: '${POINT}', version: 1, scope: 'any' }], events: [] },
-    wasm: new TextEncoder().encode(${JSON.stringify(ECHO)}),
-  });
-}
-`);
+  // The caged user service ships as a participant package (W-01): no author JS.
+  mkdirSync(join(work, 'caged'));
+  writeFileSync(join(work, 'caged', 'participant.wasm'), ECHO);
+  writeFileSync(join(work, 'caged', 'brud.participant.json'), JSON.stringify({
+    format: 1,
+    id: 'smoke.caged',
+    manifest: { requests: { capabilities: [] }, exposures: [{ name: POINT, version: 1, scope: 'any' }], events: [] },
+    cage: { module: 'participant.wasm', sha256: createHash('sha256').update(ECHO).digest('hex') },
+  }));
   writeFileSync(join(work, 'user.mjs'), `const token = { id: 'smoke.user', description: 'smoke user', _brand: undefined };
 const REGISTRY = { id: ${JSON.stringify(kernel.ExposedApiRegistryToken.id)}, description: 'registry', _brand: undefined };
 export function createService() {
@@ -53,7 +53,7 @@ export function createService() {
   const services = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']
     .map((name) => ({ path: `kernel:serviceModules/${name}.js`, official: true }));
 
-  services.push({ path: join(work, 'caged.mjs') }, { path: join(work, 'user.mjs') });
+  services.push({ path: join(work, 'caged', 'brud.participant.json') }, { path: join(work, 'user.mjs'), official: true });
   writeFileSync(join(work, 'brud.config.json'), JSON.stringify({ services }));
   kernel.provisionIdentityRegistryStorage(join(work, 'id.json'));
 

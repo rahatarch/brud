@@ -1,7 +1,5 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
 import { BrudToolsToken } from '../descriptor/tokens.js';
 import { BRUD_TOOLS_SERVICE_TIER, createBrudToolsDescriptor } from '../descriptor/BrudToolsDescriptor.js';
 import { bootWithBrudTools, reports, type TestParticipant } from './support/kernelHarness.js';
@@ -71,10 +69,10 @@ describe('BrudTools on the v1 kernel (brud.tools@1)', () => {
     assert.deepEqual(run?.surface, ['executeTool', 'validateTool']);
     assert.equal(r['acme.nobody']?.handle, null);
 
-    // The owner and officialness are the real caller's, not claimed.
+    // The owner and officialness are the real caller's (the composition's), not claimed.
     const listed = smith?.listed as { name: string; owner: string; official: boolean }[];
     assert.equal(listed.length, 3);
-    assert.ok(listed.every((tool) => tool.official === false && typeof tool.owner === 'string' && tool.owner !== 'acme.toolsmith'));
+    assert.ok(listed.every((tool) => tool.official === true && typeof tool.owner === 'string' && tool.owner !== 'acme.toolsmith'));
 
     // Execution: the tool sees the runner's kernel identity and capabilities.
     assert.equal(ok.status, 'success');
@@ -100,7 +98,6 @@ describe('BrudTools on the v1 kernel (brud.tools@1)', () => {
   });
 
   it('lets a caged participant list and execute tools through brud.call, as itself', async (t) => {
-    const cageIndex = pathToFileURL(createRequire(import.meta.url).resolve('@brud/kernel/services/WasmCage/index.js')).href;
     const request = JSON.stringify({ name: 'brud.tools', method: 'executeTool', args: ['acme.echo', { text: 'from-wasm' }, { workspaceRoot: '/tmp/brud-tools-test' }] });
     const wat = `(module
       (import "brud" "call" (func $call (param i32 i32) (result i64)))
@@ -110,15 +107,10 @@ describe('BrudTools on the v1 kernel (brud.tools@1)', () => {
       (func (export "brud_invoke") (param i32 i32) (result i64) (call $call (i32.const 0) (i32.const ${String(Buffer.byteLength(request))}))))`;
     const caged: TestParticipant = {
       token: 'acme.caged',
-      source: `import { createCagedParticipant } from ${JSON.stringify(cageIndex)};
-export function createService() {
-  return createCagedParticipant({
-    token: 'acme.caged',
-    manifest: { requests: { capabilities: ['tools:execute'] }, exposures: [{ name: 'acme.caged.tools', version: 1, scope: 'any' }], events: [] },
-    wasm: new TextEncoder().encode(${JSON.stringify(wat)}),
-  });
-}
-`,
+      package: {
+        wat,
+        manifest: { requests: { capabilities: ['tools:execute'] }, exposures: [{ name: 'acme.caged.tools', version: 1, scope: 'any' }], events: [] },
+      },
     };
 
     await bootWithBrudTools(t, [toolsmith, caged, { token: 'acme.asker', onRunning: "report.result = await registry.resolve('acme.caged.tools').run();" }]);

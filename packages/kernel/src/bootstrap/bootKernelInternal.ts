@@ -1,6 +1,6 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, resolve as resolvePath } from 'node:path';
+import { dirname, isAbsolute, relative as relativePath, resolve as resolvePath } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import type { ServiceDescriptor } from '../contracts/serviceDescriptor.js';
 import {
@@ -457,26 +457,115 @@ async function readConfig(configPath: string): Promise<string> {
   }
 }
 
+/** A loader a hardcore service module exports for participant packages (W-01). */
+type ParticipantPackageLoader = (manifestPath: string) => Promise<unknown>;
+
+const isParticipantPackage = (id: string): boolean => id.endsWith('.json');
+
+/** Reads the optional `native` entry of a participant package declared official. */
+function nativeEntryOf(manifestPath: string, configPath: string, label: string, line: number | undefined): string | undefined {
+  let pkg: unknown;
+
+  try {
+    pkg = JSON.parse(readFileSync(manifestPath, 'utf8')) as unknown;
+  } catch (error: unknown) {
+    throw new BrudConfigError('MODULE_RESOLVE', `Cannot read participant package "${manifestPath}" (${label}): ${error instanceof Error ? error.message : String(error)}`, configPath, line);
+  }
+
+  const native = (pkg as { native?: unknown } | null)?.native;
+
+  if (native === undefined) {
+    return undefined;
+  }
+
+  const resolvedNative = resolvePath(dirname(manifestPath), String(native));
+  const inside = relativePath(dirname(manifestPath), resolvedNative);
+
+  if (typeof native !== 'string' || inside.startsWith('..') || isAbsolute(inside)) {
+    throw new BrudConfigError('MODULE_RESOLVE', `Participant package "${manifestPath}" (${label}): native must be a path inside the package`, configPath, line);
+  }
+
+  return resolvedNative;
+}
+
+/**
+ * Loads every composition entry, enforcing the tier rule (W-01): an entry
+ * declared `official: true` runs as Node; every other entry must be a
+ * participant package, loaded by the package loader a hardcore provides, so
+ * none of its author code runs as Node. A non-official native module is
+ * refused at boot.
+ */
 async function loadServiceModules(
   entries: readonly BrudConfigEntry[],
   configPath: string,
   raw: string,
 ): Promise<readonly LoadedService[]> {
-  return Promise.all(entries.map(async (entry, index) => {
-    const resolvedId = resolveModuleId(entry.path, configPath);
+  const resolved = entries.map((entry, index) => ({
+    index,
+    entry,
+    resolvedId: resolveModuleId(entry.path, configPath),
+    label: `services[${String(index)}]`,
+    line: lineOf(raw, entry.path),
+  }));
+  const official = new Map<number, unknown>();
 
-    return {
-      index,
-      entry,
-      resolvedId,
-      module: await importModule(
-        resolvedId,
+  await Promise.all(resolved.map(async (item) => {
+    if (item.entry.official === true && !isParticipantPackage(item.resolvedId)) {
+      official.set(item.index, await importModule(item.resolvedId, configPath, item.entry.path, item.label, item.line));
+    }
+  }));
+
+  const loaders = [...official.values()].flatMap((module) => {
+    const loader = (module as { loadParticipantPackage?: unknown } | null)?.loadParticipantPackage;
+
+    return typeof loader === 'function' ? [loader as ParticipantPackageLoader] : [];
+  });
+
+  return Promise.all(resolved.map(async (item) => {
+    const { index, entry, resolvedId, label, line } = item;
+
+    if (official.has(index)) {
+      return { index, entry, resolvedId, module: official.get(index) };
+    }
+
+    if (!isParticipantPackage(resolvedId)) {
+      throw new BrudConfigError(
+        'PARTICIPANT_TIER',
+        `"${entry.path}" (${label}) is not declared official, so it cannot run as native code (W-01): ship it as a participant package (brud.participant.json) or declare it "official": true`,
         configPath,
-        entry.path,
-        `services[${String(index)}]`,
-        lineOf(raw, entry.path),
-      ),
-    };
+        line,
+      );
+    }
+
+    if (entry.official === true) {
+      const native = nativeEntryOf(resolvedId, configPath, label, line);
+
+      if (native !== undefined) {
+        return { index, entry, resolvedId, module: await importModule(native, configPath, entry.path, label, line) };
+      }
+    }
+
+    const loader = loaders.length === 1 ? loaders[0] : undefined;
+
+    if (loader === undefined) {
+      throw new BrudConfigError(
+        'PARTICIPANT_TIER',
+        `"${entry.path}" (${label}) is a participant package, but the composition provides ${loaders.length === 0 ? 'no' : 'more than one'} participant package loader`,
+        configPath,
+        line,
+      );
+    }
+
+    try {
+      return { index, entry, resolvedId, module: await loader(resolvedId) };
+    } catch (error: unknown) {
+      throw new BrudConfigError(
+        'MODULE_RESOLVE',
+        `Cannot load participant package "${entry.path}" (${label}): ${error instanceof Error ? error.message : String(error)}`,
+        configPath,
+        line,
+      );
+    }
   }));
 }
 

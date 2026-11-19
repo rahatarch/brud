@@ -117,7 +117,7 @@ async function writeIdentityConfig(workspace: IdentityWorkspace): Promise<string
     services.push({ path: 'kernel:serviceModules/identityRegistry.js', official: true });
   }
 
-  services.push({ path: BOOT_ISSUER_MODULE_PATH });
+  services.push({ path: BOOT_ISSUER_MODULE_PATH, official: true });
 
   const config = {
     services,

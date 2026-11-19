@@ -1,3 +1,4 @@
+import { probeGuest, writeParticipantPackage } from '../../../src/__tests__/support/participantFixture.js';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { appendFile, mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -44,6 +45,8 @@ interface Participant {
   readonly bindings?: string;
   /** JavaScript run in `onRunning` with `registry` and `report` in scope. */
   readonly onRunning?: string;
+  /** A caged (non-official) participant as a participant package (W-01). */
+  readonly package?: { readonly wat: string };
 }
 
 interface Workspace {
@@ -157,12 +160,16 @@ async function compose(
   compositionCount += 1;
 
   for (const participant of participants) {
+    if (participant.package !== undefined) {
+      services.push({ path: await writeParticipantPackage(join(workspace.root, `${participant.token}.${String(compositionCount)}`), participant.token, { requests: { capabilities: [] }, exposures: [], events: [] }, participant.package.wat) });
+      continue;
+    }
+
     const modulePath = join(workspace.root, `${participant.token}.${String(compositionCount)}.mjs`);
 
     await writeFile(modulePath, participantModule(participant), 'utf8');
-    services.push(participant.official === undefined
-      ? { path: modulePath }
-      : { path: modulePath, official: participant.official });
+    // Native participants run only when declared official (W-01).
+    services.push({ path: modulePath, official: participant.official ?? true });
   }
 
   const configPath = join(workspace.operatorRoot, `brud.config.${String(compositionCount)}.json`);
@@ -250,6 +257,9 @@ function identityOf(token: string): string {
 
   return record.token;
 }
+
+/** Ping bindings that also record each ping made by a non-official caller. */
+const RECORDING_PING_BINDINGS = (names: readonly string[]): string => `{ ${names.map((name) => `'${name}@1': { projection: (_service, caller) => ({ ping: () => { if (!caller.official) (report['pinged-by-non-official'] ??= []).push('${name}'); return '${name}@1'; } }) }`).join(', ')} }`;
 
 const RUNTIME_PROBE = (names: readonly string[]): string => `
   for (const name of ${JSON.stringify(names)}) {
@@ -387,11 +397,12 @@ describe('universal exposed API scope model', () => {
           { name: 'model.capable', scope: 'any', policy: { policyVersion: 2, capabilities: ['model:read'] } },
           { name: 'model.official', scope: 'any', policy: { policyVersion: 2, official: true } },
         ],
-        bindings: PING_BINDINGS,
+        bindings: RECORDING_PING_BINDINGS(['model.hostClass', 'model.runtimeOrigin', 'model.capable', 'model.official']),
       },
+      // A non-official caller is caged (W-01): it probes through brud.call.
       {
         token: 'model.plain',
-        onRunning: RUNTIME_PROBE(['model.hostClass', 'model.runtimeOrigin', 'model.capable', 'model.official']),
+        package: { wat: probeGuest(['model.hostClass', 'model.runtimeOrigin', 'model.capable', 'model.official'].map((name) => ({ name, method: 'ping', args: [] }))) },
       },
       {
         token: 'model.entitled',
@@ -401,12 +412,8 @@ describe('universal exposed API scope model', () => {
       },
     ]);
 
-    assert.deepEqual(reports()['model.plain'], {
-      'model.hostClass': 'refused',
-      'model.runtimeOrigin': 'model.runtimeOrigin@1',
-      'model.capable': 'refused',
-      'model.official': 'refused',
-    });
+    // The caged, non-official caller reached only the runtime-origin exposure.
+    assert.deepEqual(reports()['model.layer1']?.['pinged-by-non-official'], ['model.runtimeOrigin']);
     assert.deepEqual(reports()['model.entitled'], {
       'model.capable': 'model.capable@1',
       'model.official': 'model.official@1',

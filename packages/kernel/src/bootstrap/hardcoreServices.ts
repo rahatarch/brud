@@ -23,7 +23,7 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '96e8271e63000b5b3d624ced3e9dc10c03d6df3016a89c966dced448dddceb07';
+  'eaf6756fd104e2f388bd976fa98a3f8a88cc39fa31390e5a741cd62886e6d7f7';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'e169f2b42cfdc6d277bb01a164f569d29c03687bcfc50ccdce9f6ebf4f7f1895';
 
@@ -55,9 +55,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  'b3e99b325e33dfeb9e8710cb01359af6a3c668773823bd8dd6393faec9b37737';
+  '31ef67681dab3df007dab8be41b518f5a6cc91ed0f78834e1f73fc9eb1347018';
 const WASM_CAGE_BUILT_HASH =
-  '74b495f6ff347b81a3b2cfe5094400881ec212e226d6d994fd00abfb1db567a6';
+  'dc7bb987e0fcede6b618ac5d36d04e3a89adf55e617519aa16fd84aa9a450901';
 
 /**
  * Pinned digests of the events hardcore package.

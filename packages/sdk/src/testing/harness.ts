@@ -16,7 +16,10 @@ export interface TestEntry {
   readonly path?: string;
   /** Full source of an ES module exporting `createService` (written to a temp file). */
   readonly source?: string;
-  /** Composition officialness (W-01). */
+  /**
+   * Composition officialness (W-01). Native modules run only when official, so
+   * native test entries default to `true`.
+   */
   readonly official?: boolean;
 }
 
@@ -64,7 +67,7 @@ export async function bootTestKernel(
       throw new TypeError(`test entry ${String(index)} needs an absolute path or a source`);
     }
 
-    services.push(entry.official === undefined ? { path } : { path, official: entry.official });
+    services.push({ path, official: entry.official ?? true });
   }
 
   const identityPath = join(root, 'identity.json');

@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
-import assert from 'node:assert/strict';
+import { readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import assert from 'node:assert/strict';
 import { bootKernel } from '../../index.js';
 import {
   bootComposition,
@@ -11,7 +11,6 @@ import {
   type FixtureParticipant,
 } from './support/participantFixture.js';
 
-const CAGE_MODULE = pathToFileURL(join(dirname(fileURLToPath(import.meta.url)), '../../services/WasmCage/index.ts')).href;
 const POINT = 'test.caged.echo';
 
 /** WAT string literal for `text`. */
@@ -60,23 +59,11 @@ function caged(
   token: string,
   manifest: Readonly<Record<string, unknown>>,
   wat: string,
-  limits?: { fuel: number; maxMemoryBytes: number },
+  limits?: { fuel: number; maxMemoryBytes: number; deadlineMs?: number },
 ): FixtureParticipant {
   const full = { requests: { capabilities: [] }, exposures: [], events: [], ...manifest };
 
-  return {
-    token,
-    source: `import { createCagedParticipant } from ${JSON.stringify(CAGE_MODULE)};
-export function createService() {
-  return createCagedParticipant({
-    token: ${JSON.stringify(token)},
-    manifest: ${JSON.stringify(full)},
-    wasm: new TextEncoder().encode(${JSON.stringify(wat)}),
-    ${limits === undefined ? '' : `limits: ${JSON.stringify(limits)},`}
-  });
-}
-`,
-  };
+  return { token, package: { wat, manifest: full, ...(limits === undefined ? {} : { limits }) } };
 }
 
 const exposure = { exposures: [{ name: POINT, version: 1, scope: 'any' }] };
@@ -312,6 +299,28 @@ describe('Caged participants (I-07 parity)', () => {
       ]));
 
       assert.match(String((fixtureReports()['caged.caller']?.blocked as { error: string }).error), /^INTERCEPTION_BLOCKED: interceptor-failed: invalid verdict$/u);
+    });
+  });
+
+  describe('tier rule (W-01)', () => {
+    it('refuses a non-official native module at boot', async (t) => {
+      const composition = await writeComposition(t, [{ token: 'w01.native', official: false }]);
+
+      await assert.rejects(
+        bootKernel(composition.configPath, { options: composition.options }),
+        (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_TIER',
+      );
+    });
+
+    it('refuses a participant package whose module fails its digest check', async (t) => {
+      const composition = await writeComposition(t, [caged('w01.tampered', exposure, ECHO_GUEST)]);
+      const module = join(dirname(composition.configPath), 'participant-0', 'participant.wasm');
+
+      await writeFile(module, `${await readFile(module, 'utf8')} `, 'utf8');
+      await assert.rejects(
+        bootKernel(composition.configPath, { options: composition.options }),
+        (error: unknown) => /digest check/u.test(String((error as Error).message)),
+      );
     });
   });
 });

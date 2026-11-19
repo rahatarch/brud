@@ -3,7 +3,8 @@
  * participants, using only `@brud/kernel`'s public API — what a third-party
  * developer has.
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +26,8 @@ export interface TestParticipant {
   readonly onRunning?: string;
   /** A complete module source, replacing the generated one. */
   readonly source?: string;
+  /** A caged participant as a participant package (W-01): module text and manifest. */
+  readonly package?: { readonly wat: string; readonly manifest: Readonly<Record<string, unknown>> };
 }
 
 /** Shared report object participants write to. */
@@ -94,10 +97,28 @@ export async function bootWithBrudTools(t: TestContext, participants: readonly T
   ];
 
   for (const [index, participant] of participants.entries()) {
+    if (participant.package !== undefined) {
+      const directory = join(root, `participant-${String(index)}`);
+      const module = Buffer.from(participant.package.wat, 'utf8');
+      const path = join(directory, 'brud.participant.json');
+
+      await mkdir(directory);
+      await writeFile(join(directory, 'participant.wasm'), module);
+      await writeFile(path, JSON.stringify({
+        format: 1,
+        id: participant.token,
+        manifest: participant.package.manifest,
+        cage: { module: 'participant.wasm', sha256: createHash('sha256').update(module).digest('hex') },
+      }), 'utf8');
+      services.push(participant.official === undefined ? { path } : { path, official: participant.official });
+      continue;
+    }
+
     const path = join(root, `participant-${String(index)}.mjs`);
 
+    // Native participants run only when declared official (W-01).
     await writeFile(path, participant.source ?? moduleSource(participant), 'utf8');
-    services.push(participant.official === undefined ? { path } : { path, official: participant.official });
+    services.push({ path, official: participant.official ?? true });
   }
 
   const config = join(root, 'brud.config.json');

@@ -1,3 +1,4 @@
+import { probeGuest, writeParticipantPackage } from './support/participantFixture.js';
 import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -1728,6 +1729,8 @@ interface FixtureParticipant {
   readonly bindings?: string;
   /** JavaScript run in `onRunning` with `registry` and `report` in scope. */
   readonly onRunning?: string;
+  /** A caged (non-official) participant as a participant package (W-01). */
+  readonly package?: { readonly wat: string };
 }
 
 /** Writes one real participant module: plain data plus real lifecycle code. */
@@ -1807,12 +1810,16 @@ async function writeComposition(
   ];
 
   for (const [index, participant] of participants.entries()) {
+    if (participant.package !== undefined) {
+      services.push({ path: await writeParticipantPackage(join(root, `participant-${String(index)}`), participant.token, { requests: { capabilities: [] }, exposures: [], events: [] }, participant.package.wat) });
+      continue;
+    }
+
     const modulePath = join(root, `participant-${String(index)}.mjs`);
 
     await writeFile(modulePath, fixtureModule(participant), 'utf8');
-    services.push(participant.official === undefined
-      ? { path: modulePath }
-      : { path: modulePath, official: participant.official });
+    // Native participants run only when declared official (W-01).
+    services.push({ path: modulePath, official: participant.official ?? true });
   }
 
   const configPath = join(root, 'brud.config.json');
@@ -1853,6 +1860,8 @@ describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ru
       for (const name of ['impostor.kernelOnly', 'impostor.officialOnly', 'impostor.hostOnly', 'impostor.open', 'impostor.absent']) {
         report[name] = registry.resolve(name) === null ? 'refused' : 'granted';
       }`;
+    const cagedProbe = probeGuest(['impostor.kernelOnly', 'impostor.officialOnly', 'impostor.hostOnly', 'impostor.open', 'impostor.absent']
+      .map((name) => ({ name, method: 'ping', args: [] })));
     const kernel = await bootComposition(await writeComposition(t, [
       {
         token: 'impostor.giver',
@@ -1862,10 +1871,11 @@ describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ru
           { name: 'impostor.hostOnly', scope: 'host' },
           { name: 'impostor.open', scope: 'runtime' },
         ],
-        bindings: PING_BINDINGS,
+        bindings: `{ ${['impostor.kernelOnly', 'impostor.officialOnly', 'impostor.hostOnly', 'impostor.open'].map((name) => `'${name}@1': { projection: (_service, caller) => ({ ping: () => { if (!caller.official) (report.nonOfficial ??= []).push('${name}'); return '${name}@1'; } }) }`).join(', ')} }`,
       },
-      { token: 'PluginManager', onRunning: probe },
-      { token: 'brud.host.daemon', onRunning: probe },
+      // Non-official callers are caged (W-01): they probe through brud.call.
+      { token: 'PluginManager', package: { wat: cagedProbe } },
+      { token: 'brud.host.daemon', package: { wat: cagedProbe } },
       { token: 'impostor.official', official: true, onRunning: probe },
     ]));
     const reports = fixtureReports();
@@ -1878,8 +1888,9 @@ describe('BC-12: resolution is identity-keyed, origin-bound, and non-leaking (Ru
     };
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
-    assert.deepEqual(reports['PluginManager'], nothingSpecial);
-    assert.deepEqual(reports['brud.host.daemon'], nothingSpecial);
+    // The caged impostors reached only the open exposure — nothing special.
+    assert.deepEqual(reports['impostor.giver']?.nonOfficial, ['impostor.open', 'impostor.open']);
+    assert.deepEqual(reports['impostor.official'], { ...nothingSpecial, 'impostor.officialOnly': 'granted' });
     // The composition's own official declaration, not a name, is what grants.
     assert.equal(reports['impostor.official']?.['impostor.officialOnly'], 'granted');
   });

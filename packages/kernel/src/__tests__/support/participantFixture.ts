@@ -4,7 +4,8 @@
  * hardcores plus the participants, real on-disk identity provisioning, and the
  * real `bootKernel`.
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
@@ -29,6 +30,77 @@ export interface FixtureParticipant {
   readonly intercept?: string;
   /** A complete participant module source; when set, it replaces the generated module. */
   readonly source?: string;
+  /**
+   * A caged participant, written as a participant package (W-01): the module
+   * text (WAT or WASM) and its manifest. Not official unless `official` says so.
+   */
+  readonly package?: {
+    readonly wat: string;
+    readonly manifest: Readonly<Record<string, unknown>>;
+    readonly limits?: Readonly<Record<string, number>>;
+  };
+}
+
+/** WAT string literal for `text`. */
+const watString = (text: string): string => `"${text.replace(/\\/gu, '\\\\').replace(/"/gu, '\\"')}"`;
+
+/**
+ * Writes a participant package (W-01) — the module text and a
+ * `brud.participant.json` with its digest — and returns the package path.
+ */
+export async function writeParticipantPackage(
+  directory: string,
+  id: string,
+  manifest: Readonly<Record<string, unknown>>,
+  wat: string,
+  limits?: Readonly<Record<string, number>>,
+): Promise<string> {
+  const module = Buffer.from(wat, 'utf8');
+  const packagePath = join(directory, 'brud.participant.json');
+
+  await mkdir(directory, { recursive: true });
+  await writeFile(join(directory, 'participant.wasm'), module);
+  await writeFile(packagePath, JSON.stringify({
+    format: 1,
+    id,
+    manifest,
+    cage: {
+      module: 'participant.wasm',
+      sha256: createHash('sha256').update(module).digest('hex'),
+      ...(limits === undefined ? {} : { limits }),
+    },
+  }), 'utf8');
+
+  return packagePath;
+}
+
+/**
+ * A caged probe: on start, makes each routed call (`{ name, method, args }`)
+ * through `brud.call` and ignores the answers. What a non-official caller can
+ * reach is observed on the giver's side.
+ */
+export function probeGuest(requests: readonly Readonly<Record<string, unknown>>[]): string {
+  let offset = 0;
+  const data: string[] = [];
+  const calls: string[] = [];
+
+  for (const request of requests) {
+    const text = JSON.stringify(request);
+
+    data.push(`(data (i32.const ${String(offset)}) ${watString(text)})`);
+    calls.push(`(drop (call $call (i32.const ${String(offset)}) (i32.const ${String(Buffer.byteLength(text))})))`);
+    offset += Buffer.byteLength(text) + 8;
+  }
+
+  return `(module
+  (import "brud" "call" (func $call (param i32 i32) (result i64)))
+  (memory (export "memory") 1)
+  ${data.join('\n  ')}
+  (data (i32.const 60000) ${watString('{"ok":true}')})
+  (func (export "brud_alloc") (param i32) (result i32) (i32.const 32768))
+  (func (export "brud_start") (param i32 i32) (result i64)
+    ${calls.join('\n    ')}
+    (i64.or (i64.shl (i64.const 60000) (i64.const 32)) (i64.const 11))))`;
 }
 
 export function fixtureModule(participant: FixtureParticipant): string {
@@ -111,12 +183,25 @@ export async function writeComposition(
   ];
 
   for (const [index, participant] of participants.entries()) {
+    if (participant.package !== undefined) {
+      const packagePath = await writeParticipantPackage(
+        join(root, `participant-${String(index)}`),
+        participant.token,
+        participant.package.manifest,
+        participant.package.wat,
+        participant.package.limits,
+      );
+
+      services.push(participant.official === undefined ? { path: packagePath } : { path: packagePath, official: participant.official });
+      continue;
+    }
+
     const modulePath = join(root, `participant-${String(index)}.mjs`);
 
+    // Native participants run only when declared official (W-01); test
+    // participants are trusted test code, so they default to official.
     await writeFile(modulePath, participant.source ?? fixtureModule(participant), 'utf8');
-    services.push(participant.official === undefined
-      ? { path: modulePath }
-      : { path: modulePath, official: participant.official });
+    services.push({ path: modulePath, official: participant.official ?? true });
   }
 
   const configPath = join(root, 'brud.config.json');

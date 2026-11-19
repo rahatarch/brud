@@ -38,7 +38,7 @@ async function bootWith(
     configPath,
     JSON.stringify({
       services: [
-        { path: FIXTURE_PATH },
+        { path: FIXTURE_PATH, official: true },
         { path: 'kernel:serviceModules/identityRegistry.js', official: true },
         { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
         { path: 'kernel:serviceModules/parser.js', official: true },

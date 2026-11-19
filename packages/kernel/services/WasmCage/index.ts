@@ -14,3 +14,4 @@ export {
 export type { CagedParticipantLimits, CagedParticipantOptions } from './src/caged.js';
 export { CageNativeError, nativePlatformKey } from './src/native.js';
 export type { CageNativeErrorCode } from './src/native.js';
+export { PARTICIPANT_PACKAGE_FORMAT, ParticipantPackageError, loadParticipantPackage } from './src/package.js';

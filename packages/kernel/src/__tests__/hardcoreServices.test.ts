@@ -511,7 +511,7 @@ describe('hardcore service enforcement production mirror', () => {
       ...(await baseServices()).filter(
         (service) => service.path !== REGISTRY_MODULE_PATH,
       ),
-      { path: marker.modulePath },
+      { path: marker.modulePath, official: true },
     ];
 
     await writeConfig(workspace, services);
@@ -554,7 +554,7 @@ describe('hardcore service enforcement production mirror', () => {
     const workspace = await createWorkspace(t);
     const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
     const composed = await daemonServices();
-    const services = [{ path: observer.modulePath }, ...composed];
+    const services = [{ path: observer.modulePath, official: true }, ...composed];
 
     await writeConfig(workspace, services);
 
@@ -596,7 +596,7 @@ describe('hardcore service enforcement production mirror', () => {
       ...(await baseServices()).filter(
         (service) => service.path !== EXPOSED_API_MODULE_PATH,
       ),
-      { path: marker.modulePath },
+      { path: marker.modulePath, official: true },
     ];
 
     assert.ok(services.some((service) => service.path === REGISTRY_MODULE_PATH));
@@ -714,9 +714,9 @@ describe('hardcore service enforcement production mirror', () => {
     const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
     const failingPath = await writeFailingModule(workspace.root);
     const services = [
-      { path: observer.modulePath },
+      { path: observer.modulePath, official: true },
       ...(await baseServices()),
-      { path: failingPath },
+      { path: failingPath, official: true },
     ];
 
     await writeConfig(workspace, services);

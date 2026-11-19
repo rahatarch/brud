@@ -42,6 +42,7 @@ export type BrudConfigErrorCode =
   | 'CONFIG_INTEGRITY'
   | 'MODULE_RESOLVE'
   | 'MODULE_CONTRACT'
+  | 'PARTICIPANT_TIER'
   | 'HARDCORE_VERIFICATION';
 
 /** Config or module-resolution failure with optional source line. */

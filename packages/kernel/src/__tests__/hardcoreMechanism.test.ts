@@ -925,7 +925,7 @@ describe('hardcore persistence independence (BC-6)', () => {
     const registrantPath = await writeRegistrantModule(root);
     const services: BrudConfigEntry[] = [
       ...readKernelConfig().services,
-      { path: registrantPath },
+      { path: registrantPath, official: true },
     ];
 
     assert.deepEqual(
