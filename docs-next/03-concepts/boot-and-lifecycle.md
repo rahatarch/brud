@@ -126,7 +126,25 @@ kernel warnings:    yes
 
 When the required field is missing, the participant is pruned: its exposure does not exist, so `resolve` returns `null`, and the kernel logs a warning. The kernel refuses the boot instead only if the pruned participant is a hardcore or something else depends on it.
 
-Field types are `string`, `number`, `boolean` or `object`. A participant may only declare fields in its own dotted namespace, and only before the kernel reaches `RUNNING`.
+Field types are `string`, `number`, `boolean` or `object`. A participant may only declare fields in its own namespace, and only before the kernel reaches `RUNNING`. The namespace is a single segment (letters, digits, `_` or `-`, starting with a letter), such as `acme`. Each field name is that namespace followed by a dot and a key, such as `acme.greeting`.
+
+```js
+context.declareContextFields('acme', [{ name: 'acme.greeting', type: 'string', required: false, description: 'Greeting text' }]);
+```
+
+`declareContextFields('acme.notes', …)` is rejected with `CONTEXT_CONTRACT_VIOLATION`.
+
+### Raw descriptors
+
+`defineParticipant` hands the values to you as `ctx.bootOptions`. A raw descriptor's `createService(context)` receives the same bag as `context.options`, and `context.declareContextFields` is available there too:
+
+```js
+export function createService(context) {
+  context.declareContextFields('acme', [{ name: 'acme.limit', type: 'number', required: false, description: 'Limit' }]);
+  const limit = context.options['acme.limit'] ?? 100;
+  // …
+}
+```
 
 ## `onRunning` and `resolve`
 

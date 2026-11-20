@@ -10,6 +10,10 @@ Mocks hide the bugs that matter here: scope, policy and caller identity. So test
 
 Each entry is `{ path }`, an absolute path to your participant module.
 
+The harness boots the real kernel and the real hardcores, so these are integration tests, not mocks. Each test takes tens of milliseconds, not microseconds.
+
+An optional third argument is the startup-options bag itself, for example `bootTestKernel(t, entries, { 'acme.greeting': 'howdy' })`. Unlike `bootKernel`, do not wrap it in `{ options }`.
+
 ## A test with two callers
 
 First a participant whose API changes with the caller's capabilities:
@@ -71,6 +75,8 @@ Run it:
 ```bash
 node --test vault.test.mjs
 ```
+
+To run every test file, pass a glob such as `node --test "test/*.test.mjs"`. On Node 22, `node --test test/` treats the directory as a module and fails.
 
 What this checks:
 

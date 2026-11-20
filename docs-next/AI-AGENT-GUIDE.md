@@ -16,7 +16,7 @@ You are about to write code on BrudOS. Read this first, it is short.
 - Use handles inside the call that produced them.
 - Never mark something `official` on your own initiative. Only the owner decides.
 - Do not invent exposure names or manifest keys. The valid keys are `requests`, `exposures`, `events`, `interceptions`, `interceptionPoints`, `kinds`.
-- Startup options belong in your own dotted namespace.
+- Startup options belong in your own single-segment namespace (`acme`), with dotted field names (`acme.greeting`). Raw descriptors read them from `context.options`.
 - The composed services are separate packages and out of scope. This guide covers `@brud/kernel`, `@brud/protocol`, `@brud/sdk` and `@brud/daemon`.
 
 ## Verified examples

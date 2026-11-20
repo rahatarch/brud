@@ -8,7 +8,7 @@ Read [Boot and lifecycle](../03-concepts/boot-and-lifecycle.md) for how pruning 
 
 ## Steps
 
-1. **Declare the field.** Do this before the kernel reaches `RUNNING`, and use your own dotted namespace.
+1. **Declare the field.** Do this before the kernel reaches `RUNNING`, and use your own namespace: one segment such as `acme`, with field names like `acme.greeting` (`acme.notes` is not a valid namespace). A raw descriptor declares with `context.declareContextFields` and reads `context.options`; see [Raw descriptors](../03-concepts/boot-and-lifecycle.md#raw-descriptors).
 
 ```js
 // configurable-greeter.mjs
@@ -97,7 +97,7 @@ console.log('without the option:', without.answer);
 console.log('kernel warnings:   ', without.warnings.length > 0 ? 'yes' : 'none');
 ```
 
-3. **Read it at startup.** Use `ctx.bootOptions['acme.greeting']`.
+3. **Read it at startup.** Use `ctx.bootOptions['acme.greeting']`, or `context.options['acme.greeting']` in a raw descriptor.
 
 ## Verify
 

@@ -17,7 +17,7 @@ Every call the kernel mediates runs inside a **call chain**. The chain carries:
 | `caller.identity` | The caller's kernel identity. `null` for the kernel itself and for a host session |
 | `caller.callerClass` | `participant`, `kernel`, or `host` |
 | `caller.official` | Whether the composition owner declared this caller official |
-| `caller.capabilities` | The capabilities the caller requested |
+| `caller.capabilities` | The capabilities the caller requested. The type is `ReadonlySet<string>`, but a kind dispatcher currently receives an array, so write `new Set(caller.capabilities)` before calling `.has` |
 | `caller.parentIdentity` | For a caged child, the identity of the participant that loaded it |
 | `origin` | Where the chain began: `kernel`, `runtime`, or `host` |
 
