@@ -10,9 +10,9 @@ Branch on `code`, never on the message. The complete generated list, with defini
 | `CONFIG_PARSE` | Not valid JSON | Validate the file |
 | `CONFIG_SCHEMA` | Wrong shape or unknown key | Keep only `services` and `exposureOwners` where documented |
 | `CONFIG_INTEGRITY` | A protected path was touched | Shut the kernel down first |
-| `MODULE_RESOLVE` | Module missing, unimportable or not official | Use an absolute path, mark `official: true` |
+| `MODULE_RESOLVE` | Module missing or unimportable, or a participant package failed its digest check | Use an absolute path; rebuild the package digest |
 | `MODULE_CONTRACT` | No valid `createService` | Export what the loader expects |
-| `PARTICIPANT_TIER` | Tier not allowed | Remove the tier claim |
+| `PARTICIPANT_TIER` | A plain module (or any hardcore) is not declared `official: true`, or the composition has no single participant-package loader | Mark it official, or ship it as a participant package (not for hardcores) |
 | `HARDCORE_VERIFICATION` | Hardcore failed its pin | Reinstall the matching release |
 | `PARTICIPANT_MANIFEST_INVALID` | Manifest malformed | Check against [the manifest page](../03-concepts/manifest.md) |
 
@@ -26,6 +26,13 @@ Branch on `code`, never on the message. The complete generated list, with defini
 | `EXPOSED_API_SCOPE_NARROWED` | A minor change narrowed scope. Publish a new major version |
 | `EXPOSED_API_INVALID_NAME` / `_SCOPE` / `_POLICY` / `_VERSION` | The declaration is malformed |
 | `EXPOSED_API_REGISTRATION_CLOSED` | Registration after boot admission |
+
+## The cage
+
+| Code | Meaning |
+|---|---|
+| `WASM_CAGE_GUEST_FAILED` | The guest trapped, ran out of fuel, broke a limit, or returned a malformed or oversized response |
+| `WASM_CAGE_NATIVE_UNAVAILABLE` | No cage binary for this platform. The kernel boots, but caged participants are unavailable |
 
 ## Kinds and syntax
 

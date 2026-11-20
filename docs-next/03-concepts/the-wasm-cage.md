@@ -42,8 +42,51 @@ Participant code that is not official cannot be a plain JavaScript module. It mu
 
 Behavior you can rely on: a valid package boots and its exposures resolve like any other. A module that is not a working guest fails at call time with `WASM_CAGE_GUEST_FAILED`.
 
-> **Not yet available**
-> This beta does not document the guest interface (the exports a `.wasm` must provide, such as `brud_invoke` and linear memory, and how it calls `brud.call`), and it ships no toolchain or template for building a guest. You can load and verify a package today, but you cannot yet author a useful caged participant from these docs. Treat caged authoring as not available in this beta.
+## Write a guest
+
+A guest is a WebAssembly module with a small, fixed interface. This beta ships no compiler or template for it: you produce the `.wasm` with your own toolchain (or by hand, as below).
+
+| Export or import | Signature | Role |
+|---|---|---|
+| `memory` (export) | linear memory | Where requests and responses are exchanged |
+| `brud_alloc` (export) | `(len: i32) -> ptr: i32` | Returns where the host may write a request of `len` bytes |
+| `brud_invoke` (export) | `(ptr: i32, len: i32) -> i64` | Serves a call to one of the participant's exposures |
+| `brud_intercept` (export, optional) | `(ptr: i32, len: i32) -> i64` | Serves an intercepted call; answers a verdict |
+| `brud_start` (export, optional) | `(ptr: i32, len: i32) -> i64` | Runs once when the participant starts, with `{ "kind": "start", "token": … }` |
+| `brud.call` (import, optional) | `(ptr: i32, len: i32) -> i64` | The guest's only call out |
+
+The host writes a UTF-8 JSON request at the pointer from `brud_alloc`. An export answers with `(ptr << 32) | len`, the location of a UTF-8 JSON response in `memory`.
+
+`brud_invoke` receives `{ "kind": "invoke", "exposure", "method", "args", "caller": { "identity", "callerClass", "official", "capabilities", "origin" } }` and answers `{ "ok": true, "value": … }` or `{ "ok": false, "error": { "code", "message" } }`.
+
+`brud.call` takes `{ "name", "version"?, "method", "args" }` and returns the same `{ ok, value }` or `{ ok, error }` shape. The kernel resolves the name as the caged participant, so the participant gets only what its manifest requested and the giver allows. A `null` resolve comes back as `exposure "<name>" did not resolve`.
+
+A complete guest, in WebAssembly text format, that answers every call by asking `trial.tasks.read` for its stats:
+
+```wat
+(module
+  (import "brud" "call" (func $call (param i32 i32) (result i64)))
+  (memory (export "memory") 1)
+  ;; the request {"name":"trial.tasks.read","method":"stats","args":[]}, 54 bytes
+  (data (i32.const 1024) "{\"name\":\"trial.tasks.read\",\"method\":\"stats\",\"args\":[]}")
+  (func (export "brud_alloc") (param i32) (result i32) (i32.const 4096))
+  (func (export "brud_invoke") (param i32 i32) (result i64)
+    (call $call (i32.const 1024) (i32.const 54))))
+```
+
+Compile it with `wat2wasm` (from `wabt`), set `cage.sha256` to the SHA-256 of the result, and list the package as `"official": false`. The package's `manifest.requests.capabilities` must include `tasks:read` for the call out to succeed.
+
+What the kernel enforces, tested with hostile guests:
+
+| Guest behavior | Outcome |
+|---|---|
+| Infinite loop | Stopped when its fuel runs out (`WASM_CAGE_GUEST_FAILED`) |
+| Trap | `WASM_CAGE_GUEST_FAILED` |
+| Memory past `maxMemoryBytes` | Refused (`WASM_CAGE_GUEST_FAILED`) |
+| Response over 1 MiB | Refused, "exceeds the size limit" |
+| Response that is not JSON | Refused, "malformed JSON" |
+
+Calls into one guest instance run one at a time. Up to 64 more may wait in line, and a call made from inside the same instance's own call is refused. In every case the kernel stays running.
 
 ## What the cage gives caged code
 
