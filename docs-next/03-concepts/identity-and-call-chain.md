@@ -22,7 +22,7 @@ Every call the kernel mediates runs inside a **call chain**. The chain carries:
 | `origin` | Where the chain began: `kernel`, `runtime`, or `host` |
 
 > **Set or array?**
-> The kernel's own caller (`KernelCaller`, what policies and projections see) holds `capabilities` as a `ReadonlySet<string>`. A kind owner's `dispatch(operation, context)` receives a different, plain view, `BrudDispatchCaller`, whose `capabilities` is a frozen, sorted `string[]`, so that it is serializable and identical for every transport. Use `context.caller.capabilities.includes('tasks:write')` there, not `.has`. Both types are exported from `@brud/kernel`: `import type { BrudDispatchContext } from '@brud/kernel'`.
+> The kernel's own caller (`KernelCaller`, what policies and projections see) holds `capabilities` as a `ReadonlySet<string>`. A kind owner's `dispatch(operation, context)` receives a different, plain view, `DispatchCallerView`, whose `capabilities` is a frozen, sorted `string[]`, so that it is serializable and identical for every transport. Use `context.caller.capabilities.includes('tasks:write')` there, not `.has`. Both types are exported from `@brud/kernel`: `import type { DispatchContextView } from '@brud/kernel'`.
 
 These are fixed when the participant is admitted (or, for a host, when the host call starts). A participant cannot change them mid-flight.
 
