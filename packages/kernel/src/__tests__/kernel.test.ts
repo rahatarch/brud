@@ -346,7 +346,7 @@ describe('BrudKernel runtime options bag', () => {
     const handler: OperationHandler<void, string> = {
       kind: 'test_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.options['workspace.root'] as string };
+        return { status: 'success', data: ctx.options['test.root'] as string };
       },
     };
     kernel.operations.register(handler);
@@ -361,7 +361,7 @@ describe('BrudKernel runtime options bag', () => {
     const inner: OperationHandler<void, string> = {
       kind: 'inner_workspace',
       execute: async (ctx) => {
-        return { status: 'success', data: ctx.options['workspace.root'] as string };
+        return { status: 'success', data: ctx.options['test.root'] as string };
       },
     };
     const outer: OperationHandler<void, string> = {
@@ -497,7 +497,7 @@ describe('BrudKernel lifecycle orchestrator', () => {
       onFactory: (context) => {
         assert.strictEqual(context.callerId, 'kernel');
         assert.strictEqual(context.tier, 'core');
-        assert.strictEqual(context.options['workspace.root'], workspaceRoot);
+        assert.strictEqual(context.options['test.root'], workspaceRoot);
         events.push('factory:alpha');
       },
       onInitialize: () => events.push('init:alpha'),

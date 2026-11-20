@@ -26,10 +26,6 @@ const KERNEL_CONFIG_PATH = fileURLToPath(
   new URL('../../brud.config.json', import.meta.url),
 );
 
-const DAEMON_CONFIG_PATH = fileURLToPath(
-  new URL('../../../daemon/brud.config.json', import.meta.url),
-);
-
 const REGISTRY_MODULE_PATH = 'kernel:serviceModules/identityRegistry.js';
 
 const EXPOSED_API_MODULE_PATH = 'kernel:serviceModules/exposedApiRegistry.js';
@@ -57,16 +53,6 @@ function baseServices(): Promise<readonly BrudConfigEntry[]> {
   );
 
   return baseServicesCache;
-}
-
-let daemonServicesCache: Promise<readonly BrudConfigEntry[]> | undefined;
-
-function daemonServices(): Promise<readonly BrudConfigEntry[]> {
-  daemonServicesCache ??= readFile(DAEMON_CONFIG_PATH, 'utf8').then(
-    (raw) => (JSON.parse(raw) as BrudConfig).services,
-  );
-
-  return daemonServicesCache;
 }
 
 interface HardcoreWorkspace {
@@ -550,10 +536,20 @@ describe('hardcore service enforcement production mirror', () => {
     await assert.rejects(readFile(plugin.markerPath, 'utf8'));
   });
 
-  it('initializes every hardcore service before every composed service in the full daemon composition', async (t) => {
+  it('initializes every hardcore service before every composed service, whatever the config order', async (t) => {
     const workspace = await createWorkspace(t);
     const observer = await writeOrderObserverModule(workspace.root, workspace.registryPath);
-    const composed = await daemonServices();
+    // The kernel's own hardcores, with the exposed API registry listed before
+    // the identity registry so config order differs from dependency order.
+    const hardcores = [...await baseServices()];
+    const exposedApiEntry = hardcores.splice(
+      hardcores.findIndex((service) => service.path === EXPOSED_API_MODULE_PATH),
+      1,
+    );
+
+    hardcores.unshift(...exposedApiEntry);
+
+    const composed = hardcores;
     const services = [{ path: observer.modulePath, official: true }, ...composed];
 
     await writeConfig(workspace, services);
@@ -561,7 +557,7 @@ describe('hardcore service enforcement production mirror', () => {
     const kernel = await boot(t, workspace);
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
-    assert.ok(composed.length > 1, 'the daemon config must compose real services');
+    assert.ok(composed.length > 1, 'the composition must hold the hardcore services');
 
     const exposedApiConfigIndex = services.findIndex(
       (service) => service.path === EXPOSED_API_MODULE_PATH,
@@ -573,7 +569,7 @@ describe('hardcore service enforcement production mirror', () => {
     assert.ok(exposedApiConfigIndex > 0 && identityConfigIndex > 0);
     assert.ok(
       exposedApiConfigIndex < identityConfigIndex,
-      'the daemon config lists the exposed API registry before the identity registry',
+      'the config lists the exposed API registry before the identity registry',
     );
 
     const observed = (await readFile(observer.logPath, 'utf8')).trim().split('\n');

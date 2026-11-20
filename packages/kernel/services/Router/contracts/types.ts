@@ -83,9 +83,9 @@ export interface BrudRouteResult {
 }
 
 /**
- * A kind and the exposure that dispatches it, registered at boot. Per
- * operation the Router resolves the exposure on the kernel call chain and
- * calls `dispatch`.
+ * A kind and the exposure that dispatches it, registered at boot. Each
+ * operation is dispatched through that exposure, which is looked up on the
+ * kernel call chain.
  */
 export interface BrudRouteRegistration {
   readonly kind: BrudOperationKind;

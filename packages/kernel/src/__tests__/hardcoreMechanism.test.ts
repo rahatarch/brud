@@ -758,8 +758,7 @@ describe('six real hardcore services through one generic mechanism', () => {
     const kernel = await bootKernel(configPath, {
       options: {
         'identity.registry.path': storagePath,
-        'router.root': root,
-      },
+        },
     });
 
     try {
@@ -949,7 +948,6 @@ describe('hardcore persistence independence (BC-6)', () => {
     const options = {
       'identity.registry.path': identityPath,
       'exposedApi.scopeRecord.path': scopeRecordPath,
-      'router.root': root,
     };
 
     const bootOnce = async (): Promise<BrudKernel> => {
@@ -981,6 +979,8 @@ describe('hardcore persistence independence (BC-6)', () => {
       { name: 'events.subscribe', version: 1, scope: 'runtime' },
       { name: 'interception.evaluate', version: 1, scope: 'any' },
       { name: 'interception.list', version: 1, scope: 'runtime' },
+      { name: 'syntax.parse', version: 1, scope: 'any' },
+      { name: 'syntax.route', version: 1, scope: 'any' },
       { name: 'test.persistence.api', version: 1, scope: 'runtime' },
     ]);
     assert.equal(rawScope.format, EXPOSED_API_SCOPE_RECORD_FORMAT);

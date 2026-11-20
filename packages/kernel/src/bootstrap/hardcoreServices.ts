@@ -42,9 +42,9 @@ const PARSER_BUILT_HASH =
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '1eb8ed3c57428e07aaf44b01d76610b02d54958ea6c27e7b67191963cf8f98f0';
+  '4050d73a4bc998f6f38c51524b801b1dca2ed27881d944b9d08daab95afa6a5c';
 const ROUTER_BUILT_HASH =
-  '0453bacf688eacac1a3c6092c09bfd2f62ac4db2a15235c6ba0416d9f72bbdc5';
+  '502d309405265145cfb2cf39e28f044b088e36e6ac917ffa477a241454d253c4';
 
 /**
  * Pinned digests of the WASM cage package.
@@ -218,6 +218,7 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
       'closeRegistration',
       'isRegistrationOpen',
       'registeredKinds',
+      'kinds',
       'route',
       'dispatch',
     ],

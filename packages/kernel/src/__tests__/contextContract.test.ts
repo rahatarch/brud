@@ -29,9 +29,16 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+/** Boot warnings the kernel reports (participant pruning is reported here). */
+interface Warning {
+  readonly message: string;
+  readonly meta: Readonly<Record<string, unknown>> | undefined;
+}
+
 async function bootWith(
   declarations: readonly ContextScopeDeclaration[],
   options: Readonly<Record<string, unknown>> = {},
+  warnings: Warning[] = [],
 ) {
   const configPath = join(root, 'brud.config.json');
   await writeFile(
@@ -56,9 +63,16 @@ async function bootWith(
     options: {
       __contractDeclarations: declarations,
       ...identityRegistryContextOptions(root),
-      'router.root': root,
       ...options,
     },
+    logger: {
+      debug: (): void => undefined,
+      info: (): void => undefined,
+      error: (): void => undefined,
+      warn: (message: string, meta?: Readonly<Record<string, unknown>>): void => {
+        warnings.push({ message, meta });
+      },
+    } as never,
   });
 }
 
@@ -112,18 +126,33 @@ describe('dynamic context contract', () => {
     }
   });
 
-  it('rejects boot when a required field is missing and names it', async () => {
+  it('prunes a participant whose required field is missing, reports it, and still boots', async () => {
+    const warnings: Warning[] = [];
+    const kernel = await bootWith([workspaceRootDeclaration()], {}, warnings);
+
+    try {
+      assert.equal(kernel.lifecycleState, 'RUNNING');
+
+      const pruned = warnings.find((warning) => Array.isArray(warning.meta?.['missingFields']));
+
+      assert.ok(pruned !== undefined, 'the pruning is reported to the host');
+      assert.deepEqual(pruned.meta?.['missingFields'], ['workspace.root']);
+      // The pruned participant's field is withdrawn from the schema.
+      assert.equal(kernel.getContextSchema().fields.some((field) => field.name === 'workspace.root'), false);
+    } finally {
+      await kernel.shutdown();
+    }
+  });
+
+  it('refuses boot when a hardcore service\'s required field is missing and names it', async () => {
     await assert.rejects(
-      bootWith([workspaceRootDeclaration()]),
+      bootWith([], { 'identity.registry.path': undefined }),
       (error: unknown) => {
         assert.ok(error instanceof ContextContractError);
-        assert.equal(error.field, 'workspace.root');
-        assert.equal(error.service, 'workspace');
-        assert.equal(error.expectedType, 'string');
-        assert.equal(error.actualType, 'missing');
-        assert.match(error.message, /workspace\.root/u);
-        assert.match(error.message, /"workspace"/u);
-        assert.match(error.message, /Expected string/u);
+        assert.equal(error.field, 'identity.registry.path');
+        assert.match(error.service ?? '', /identityRegistry/u);
+        assert.match(error.message, /identity\.registry\.path/u);
+        assert.match(error.message, /boot refused|missing/iu);
         return true;
       },
     );
@@ -240,8 +269,18 @@ describe('dynamic context contract', () => {
       }],
     };
 
+    // Without the field the third-party participant is pruned, never run.
+    const withoutField = await bootWith([declaration]);
+
+    try {
+      assert.equal(withoutField.getContextSchema().fields.some((field) => field.name === 'photoshop.licenseKey'), false);
+    } finally {
+      await withoutField.shutdown();
+    }
+
+    // A wrong type is enforced for a declared field.
     await assert.rejects(
-      bootWith([declaration]),
+      bootWith([declaration], { 'photoshop.licenseKey': 42 }),
       (error: unknown) => {
         assert.ok(error instanceof ContextContractError);
         assert.equal(error.field, 'photoshop.licenseKey');

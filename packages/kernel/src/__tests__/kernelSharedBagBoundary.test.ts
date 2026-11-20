@@ -6,11 +6,10 @@ import { describe, it, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { bootKernel } from '../bootstrap/index.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import { NodeStorageDriver } from '../../../services/BrudFileSystem/drivers/index.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
-const DAEMON_CONFIG_PATH = join(REPO_ROOT, 'packages', 'daemon', 'brud.config.json');
+const KERNEL_CONFIG_PATH = join(REPO_ROOT, 'packages', 'kernel', 'brud.config.json');
 
 interface BagReport {
   readonly options: readonly string[];
@@ -29,7 +28,7 @@ export function createService(context) {
     options: Object.keys(context.options).sort(),
     shared: Object.keys(context.shared).sort(),
     storageDriverPresent: 'storageDriver' in context.options,
-    storageDriverIsHost: context.options['storageDriver'] === globalThis.__bc3HostDriver,
+    storageDriverIsHost: false,
     mutationJournalPresent: 'mutationJournal' in context.options,
   };
 
@@ -73,9 +72,9 @@ async function bootWithObservers(
     configPath,
     JSON.stringify({
       services: [
-        { path: firstModule },
+        { path: firstModule, official: true },
         ...services,
-        { path: lastModule },
+        { path: lastModule, official: true },
       ],
       plugins: [],
     }, null, 2),
@@ -99,20 +98,12 @@ async function bootWithObservers(
 }
 
 describe('BC-3: no shared context key used across two owners', () => {
-  it('the real standard composition forwards no storageDriver or mutationJournal key and no cross-owner shared slot', async (t) => {
-    const standardConfigPath = process.env['BRUD_STANDARD_CONFIG'];
-
-    assert.ok(standardConfigPath, 'the kernel test runner supplies the standard composition');
-
-    const standard = JSON.parse(
-      await readFile(standardConfigPath, 'utf8'),
+  it('the kernel composition forwards no storageDriver or mutationJournal key and no cross-owner shared slot', async (t) => {
+    const kernelComposition = JSON.parse(
+      await readFile(KERNEL_CONFIG_PATH, 'utf8'),
     ) as { readonly services: readonly unknown[] };
 
-    const { kernel, first, last } = await bootWithObservers(
-      t,
-      standard.services,
-      { history: { inMemory: true } },
-    );
+    const { kernel, first, last } = await bootWithObservers(t, kernelComposition.services, {});
 
     try {
       assert.equal(kernel.lifecycleState, 'RUNNING');
@@ -126,63 +117,8 @@ describe('BC-3: no shared context key used across two owners', () => {
     }
   });
 
-  it('the real daemon composition keeps the host storageDriver and adds no journal key', async (t) => {
-    const daemon = JSON.parse(
-      await readFile(DAEMON_CONFIG_PATH, 'utf8'),
-    ) as { readonly services: readonly unknown[] };
-    const hostDriver = new NodeStorageDriver();
-
-    (globalThis as { __bc3HostDriver?: unknown }).__bc3HostDriver = hostDriver;
-
-    const { kernel, first, last } = await bootWithObservers(
-      t,
-      daemon.services,
-      { storageDriver: hostDriver, history: { inMemory: true } },
-    );
-
-    try {
-      assert.equal(kernel.lifecycleState, 'RUNNING');
-      assert.equal(first.storageDriverPresent, true);
-      assert.equal(first.storageDriverIsHost, true);
-      assert.equal(last.storageDriverPresent, true);
-      assert.equal(last.storageDriverIsHost, true);
-      assert.equal(last.mutationJournalPresent, false);
-      assert.equal(last.shared.includes('storageDriver'), false);
-      assert.equal(last.shared.includes('mutationJournal'), false);
-    } finally {
-      delete (globalThis as { __bc3HostDriver?: unknown }).__bc3HostDriver;
-      await kernel.shutdown();
-    }
-  });
-
-  it('the filesystem and history modules exchange no boot-bag or shared-bag key', async () => {
-    const filesystemModule = await readFile(
-      join(REPO_ROOT, 'packages', 'services', 'BrudFileSystem', 'serviceModule.ts'),
-      'utf8',
-    );
-    const historyModule = await readFile(
-      join(REPO_ROOT, 'packages', 'services', 'UniversalHistory', 'serviceModule.ts'),
-      'utf8',
-    );
-
-    // The filesystem still reads a host-supplied driver, but never publishes
-    // one back into the bag and never publishes a journal.
-    assert.doesNotMatch(filesystemModule, /options\[['"](?:storageDriver|mutationJournal)['"]\]\s*=/u);
-    assert.doesNotMatch(filesystemModule, /context\.shared\[['"]brud\.core\.history/u);
-
-    // History resolves both through the filesystem's exposed API.
-    assert.doesNotMatch(historyModule, /options\[['"](?:storageDriver|mutationJournal)['"]\]/u);
-    assert.doesNotMatch(historyModule, /context\.shared\[['"]brud\.core\.filesystem/u);
-
-    assert.match(historyModule, /FileMutationJournalToken/u);
-    assert.match(filesystemModule, /FileMutationJournalToken/u);
-  });
-
   it('no production module reads a shared-bag key outside its own namespace, except the two documented boot-instance slots', async () => {
-    const files = [
-      ...await moduleFiles(join(REPO_ROOT, 'packages', 'kernel', 'services')),
-      ...await moduleFiles(join(REPO_ROOT, 'packages', 'services')),
-    ];
+    const files = await moduleFiles(join(REPO_ROOT, 'packages', 'kernel', 'services'));
     const crossOwner = new Set<string>();
     const handoffKeys = new Set<string>();
     const violations: string[] = [];

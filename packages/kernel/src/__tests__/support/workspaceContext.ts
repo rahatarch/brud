@@ -1,8 +1,21 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { provisionIdentityRegistryStorage } from '../../../services/IdentityRegistry/storage/registryDocument.js';
+
+/**
+ * One private state directory per test process. A fixed, shared directory name
+ * under the system temp directory breaks when another user (or an earlier
+ * run under another account) owns it, and lets two processes collide.
+ */
+let processStateRoot: string | undefined;
+
+function stateRoot(): string {
+  processStateRoot ??= realpathSync(mkdtempSync(join(tmpdir(), 'brud-kernel-test-state-')));
+
+  return processStateRoot;
+}
 
 /** Registry paths already provisioned in this process, keyed by workspace root. */
 const REGISTRY_PATHS = new Map<string, string>();
@@ -27,11 +40,7 @@ export function identityRegistryContextOptions(
       .update(workspaceRoot)
       .digest('hex')
       .slice(0, 16);
-    const directory = join(
-      tmpdir(),
-      'brud-test-identity-registries',
-      `${String(process.pid)}-${digest}`,
-    );
+    const directory = join(stateRoot(), 'identity-registries', digest);
 
     mkdirSync(directory, { recursive: true });
     registryPath = join(directory, 'registry.json');
@@ -78,11 +87,7 @@ export function exposedApiScopeRecordContextOptions(
       .update(workspaceRoot)
       .digest('hex')
       .slice(0, 16);
-    const directory = join(
-      tmpdir(),
-      'brud-test-exposed-api-scopes',
-      `${String(process.pid)}-${digest}`,
-    );
+    const directory = join(stateRoot(), 'exposed-api-scopes', digest);
 
     mkdirSync(directory, { recursive: true });
     recordPath = join(directory, 'scope-record.json');
@@ -93,22 +98,19 @@ export function exposedApiScopeRecordContextOptions(
 }
 
 /**
- * Builds the strict namespaced context bag used by kernel tests.
- *
- * Every service owns one root field. Tests that boot more than one service can
- * use the full bag; extra declared fields are harmless.
+ * Builds the context bag for kernel tests: only the fields the kernel's own
+ * hardcore services declare (the identity registry file and the scope record).
+ * The kernel knows no domain, so no workspace, settings, filesystem, terminal
+ * or history field belongs here (`test.root` is opaque); a test that needs a participant's field
+ * supplies it from that participant's own fixture.
  */
 export function workspaceContextOptions(
   workspaceRoot: string,
 ): Record<string, unknown> {
   return {
-    'workspace.root': workspaceRoot,
-    'settings.root': workspaceRoot,
-    'filesystem.root': workspaceRoot,
-    'terminal.root': workspaceRoot,
-    'pluginManager.root': workspaceRoot,
-    'history.root': workspaceRoot,
-    'router.root': workspaceRoot,
+    // An opaque option the kernel passes through untouched; tests use it to
+    // prove the bag reaches a participant, with no meaning to the kernel.
+    'test.root': workspaceRoot,
     ...identityRegistryContextOptions(workspaceRoot),
     ...exposedApiScopeRecordContextOptions(workspaceRoot),
   };

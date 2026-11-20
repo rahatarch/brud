@@ -450,7 +450,14 @@ function isValidOperationResult(value: unknown): value is OperationResult {
     readonly durationMs?: unknown;
   };
 
-  if (candidate.status !== 'success' && candidate.status !== 'failed') {
+  // The OperationResult contract allows all four statuses; a cancelled
+  // operation reports `aborted`, and that status is passed through unchanged.
+  if (
+    candidate.status !== 'success'
+    && candidate.status !== 'failed'
+    && candidate.status !== 'aborted'
+    && candidate.status !== 'skipped'
+  ) {
     return false;
   }
 

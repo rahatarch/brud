@@ -8,31 +8,39 @@ import { bootKernel, BrudConfigError } from '../bootstrap/index.js';
 import type { BrudConfig } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
-import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
-import type { IUtilityService } from '../../../services/UtilityService/contracts/IUtilityService.js';
-import { UtilityToken } from '../../../services/UtilityService/descriptor/tokens.js';
 import { workspaceContextOptions } from './support/workspaceContext.js';
 
-const KERNEL_CONFIG_PATH = fileURLToPath(
-  new URL('../../../services/standard.config.json', import.meta.url),
-);
-const DAEMON_CONFIG_PATH = fileURLToPath(
-  new URL('../../../daemon/brud.config.json', import.meta.url),
-);
+/** The kernel package's own composition: the seven hardcore services and nothing else. */
+const KERNEL_CONFIG_PATH = fileURLToPath(new URL('../../brud.config.json', import.meta.url));
+
+const HARDCORES = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']
+  .map((name) => ({ path: `kernel:serviceModules/${name}.js`, official: true }));
 
 function caller(root: string): ServiceContext {
   return { callerId: 'kernel', tier: 'core', options: {...workspaceContextOptions(root)} };
 }
 
+/** Kernels to stop before their workspace is removed (the root config is protected while running). */
+const running = new WeakMap<TestContext, BrudKernel[]>();
+
 async function workspace(t: TestContext): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'brud-boot-config-'));
 
   t.after(async () => {
+    for (const kernel of running.get(t) ?? []) {
+      if (kernel.lifecycleState === 'RUNNING') {
+        await kernel.shutdown().catch(() => undefined);
+      }
+    }
+
     await rm(root, { recursive: true, force: true });
   });
 
   return root;
+}
+
+function track(t: TestContext, kernel: BrudKernel): void {
+  running.set(t, [...(running.get(t) ?? []), kernel]);
 }
 
 async function writeConfig(root: string, config: unknown): Promise<string> {
@@ -49,61 +57,24 @@ async function boot(
 ): Promise<{ kernel: BrudKernel; root: string }> {
   const root = await workspace(t);
   const configPath = await writeConfig(root, config);
-  const kernel = await bootKernel(configPath, {
-    options: {...workspaceContextOptions(root),
-      'pluginManager.configPath': configPath,
-      history: { inMemory: true },
-    },
-  });
+  const kernel = await bootKernel(configPath, { options: { ...workspaceContextOptions(root) } });
 
-  t.after(async () => {
-    if (kernel.lifecycleState === 'RUNNING') {
-      await kernel.shutdown().catch(() => undefined);
-    }
-  });
+  track(t, kernel);
 
   return { kernel, root };
 }
 
-function writePluginModule(
-  root: string,
-  id: string,
-): Promise<string> {
-  const modulePath = join(root, `${id}.mjs`);
-
-  return writeFile(modulePath, `export const plugin = {
-  manifest: { id: '${id}', name: '${id}', version: '1.0.0', permissions: [] },
-  activate() {},
-};
-`).then(() => modulePath);
-}
-
 describe('bootKernel config composition', () => {
-  it('boots a minimal config with one service and no plugins', async (t) => {
-    const { kernel, root } = await boot(t, {
-      services: [
-        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
-        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
-        { path: 'kernel:serviceModules/parser.js', official: true },
-        { path: 'kernel:serviceModules/router.js', official: true },
-        { path: 'kernel:serviceModules/wasmCage.js', official: true },
-        { path: 'kernel:serviceModules/events.js', official: true },
-        { path: 'kernel:serviceModules/interception.js', official: true },
-        { path: '@brud/service-utility/serviceModule.js', official: true },
-      ],
-      plugins: [],
-    });
+  it('boots a composition of only the hardcore services', async (t) => {
+    const { kernel } = await boot(t, { services: HARDCORES, plugins: [] });
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
-    assert.ok(
-      kernel.requestAccess<IUtilityService>(caller(root), UtilityToken),
-    );
   });
 
   it('fails with the missing module and config position', async (t) => {
     const root = await workspace(t);
     const configPath = await writeConfig(root, {
-      services: [{ path: 'kernel:serviceModules/doesNotExist.js' }],
+      services: [{ path: 'kernel:serviceModules/doesNotExist.js', official: true }],
       plugins: [],
     });
 
@@ -138,45 +109,46 @@ describe('bootKernel config composition', () => {
     );
   });
 
-  it('boots the daemon default config with the same services and plugins', async (t) => {
+  it('boots the kernel package\'s own composition to RUNNING', async (t) => {
     const root = await workspace(t);
-    const kernel = await bootKernel(DAEMON_CONFIG_PATH, {
-      options: {...workspaceContextOptions(root),
-        'pluginManager.configPath': DAEMON_CONFIG_PATH,
-        history: { inMemory: true },
-      },
-    });
+    const kernel = await bootKernel(KERNEL_CONFIG_PATH, { options: { ...workspaceContextOptions(root) } });
 
-    t.after(async () => {
-      if (kernel.lifecycleState === 'RUNNING') {
-        await kernel.shutdown().catch(() => undefined);
-      }
-    });
+    track(t, kernel);
 
     assert.equal(kernel.lifecycleState, 'RUNNING');
-
-    const tools = kernel.requestAccess<IBrudToolsService>(caller(root), BrudToolsToken);
-
-    assert.ok(tools.listTools().length > 0);
   });
 
-  it('does not load a service omitted from the config and fails its dependents', async (t) => {
+  it('refuses a composition that omits a hardcore service, naming it', async (t) => {
     const root = await workspace(t);
     const configPath = await writeConfig(root, {
-      services: [
-        { path: 'kernel:serviceModules/identityRegistry.js', official: true },
-        { path: 'kernel:serviceModules/exposedApiRegistry.js', official: true },
-        { path: 'kernel:serviceModules/router.js' },
-      ],
+      services: HARDCORES.filter((entry) => !entry.path.endsWith('/parser.js')),
       plugins: [],
     });
 
     await assert.rejects(
-      bootKernel(configPath, { options: {...workspaceContextOptions(root)} }),
+      bootKernel(configPath, { options: { ...workspaceContextOptions(root) } }),
       (error: unknown) => {
         const message = error instanceof Error ? error.message : String(error);
 
         assert.match(message, /parser|brud\.core\.parser/iu);
+        return true;
+      },
+    );
+  });
+
+  it('refuses a native module that is not declared official', async (t) => {
+    const root = await workspace(t);
+    const configPath = await writeConfig(root, {
+      services: [{ path: 'kernel:serviceModules/router.js' }],
+      plugins: [],
+    });
+
+    await assert.rejects(
+      bootKernel(configPath, { options: { ...workspaceContextOptions(root) } }),
+      (error: unknown) => {
+        assert.ok(error instanceof BrudConfigError);
+        assert.equal(error.code, 'PARTICIPANT_TIER');
+        assert.match(error.message, /not declared official/u);
         return true;
       },
     );
