@@ -1,5 +1,7 @@
 # Brud Core to Microkernel: Internal Architectural Rollout Specification
 
+> **Status: historical.** This document describes an earlier design (plugin manager, tool registry, MCP). The current architecture is in `ARCHITECTURE.md`, `docs/daemon/README.md` and the kernel API reference. It is kept as history and is not updated.
+
 ## Document control
 
 | Field | Value |

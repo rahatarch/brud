@@ -1,5 +1,7 @@
 # Brud Code Engine: Microkernel Architecture Specification
 
+> **Status: historical.** This document describes an earlier design (plugin manager, tool registry, MCP). The current architecture is in `ARCHITECTURE.md`, `docs/daemon/README.md` and the kernel API reference. It is kept as history and is not updated.
+
 ## 1. Core Philosophy & Product Hierarchy
 
 Brud Code is an extensible orchestration engine supporting multiple host targets (VS Code extension, CLI, standalone desktop IDE, headless runtime) across three product tiers:

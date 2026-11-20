@@ -115,7 +115,7 @@ Brud OS uses a layered architecture in which the host application, daemon, core 
 The architecture follows a separation-of-responsibility model:
 
 - The host application initiates and manages interactions with the runtime.
-- The daemon provides process supervision and the communication boundary when deployed out of process.
+- The daemon is a pure host: it supervises kernel instances and provides the authenticated communication boundary when deployed out of process. It knows no domain concept; the operator's `daemon.json` and composition supply everything else (see `docs/daemon/README.md`).
 - The core runtime enforces essential execution and authorization rules.
 - System services provide functionality required by the runtime's baseline operation.
 - Domain services provide optional or application-specific capabilities.

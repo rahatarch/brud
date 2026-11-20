@@ -93,3 +93,7 @@ Public interfaces, capability contracts, and configuration schemas are stabilizi
 ## License
 
 Brud OS is open-source software licensed under the [Apache License 2.0](LICENSE).
+
+## Running as a daemon
+
+A daemon can host kernels out of process. Copy `examples/daemon/` (operator `daemon.json` plus the Foundation composition) into the daemon home. See `docs/daemon/README.md` for the protocol and `DaemonClient` usage.
