@@ -27,7 +27,10 @@ A call passes three gates, in order.
 2. **Policy.** Does the caller satisfy the giver's declared rules?
 3. **Projection.** Your `handle` runs with the real caller's view. It may return `null` to refuse, or a handle shaped for that caller.
 
-A refusal at any gate makes `resolve` return `null`. The caller cannot tell which gate said no, and that is deliberate.
+A refusal at any gate makes `resolve` return `null`.
+
+> **Note**
+> The caller cannot tell which gate refused. This is deliberate: it stops callers from probing what exists.
 
 ## Scope
 
@@ -84,6 +87,9 @@ A caller with only `vault:read` gets `{ read }`. One with both gets both. One wi
 ## Re-authorization
 
 Resolving does not end the checking. **Every call through a handle is authorized again** against the chain making it. A handle held past the end of its chain is refused with `EXPOSED_API_UNAVAILABLE`.
+
+> **Important**
+> Resolve and use a handle inside the same call. Do not store it for later.
 
 ## Names and versions
 

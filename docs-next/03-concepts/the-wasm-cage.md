@@ -8,7 +8,7 @@ Be clear about what ships. A module not declared official is refused as native c
 
 ## What the cage gives caged code
 
-- **A single door.** The only surface is `resolve(participantIdentity, name, options?)`, run on a `runtime` chain as that participant. Caged code reaches exposures this way, like any participant.
+- **A single entry point.** The only surface is `resolve(participantIdentity, name, options?)`, run on a `runtime` chain as that participant. Caged code reaches exposures this way, like any participant.
 - **Plain JSON.** Only plain values cross the boundary.
 - **A fuel deadline** per call.
 - **A memory limit**, enforced.

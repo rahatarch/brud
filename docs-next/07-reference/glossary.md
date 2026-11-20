@@ -1,5 +1,7 @@
 # Glossary
 
+Definitions of the terms used across the BrudOS documentation.
+
 | Term | Meaning |
 |---|---|
 | **BrudOS** | The kernel plus the tools to build systems of participants on it |
@@ -15,7 +17,7 @@
 | **Call chain** | The record of who called whom, starting at an origin |
 | **Origin** | Where a chain began: `kernel`, `runtime` or `host` |
 | **Host** | The program that boots and drives the kernel |
-| **Host call** | The door a host uses to enter the kernel |
+| **Host call** | The entry point a host uses to call into the kernel |
 | **Composition** | One kernel, one config, one owner |
 | **Hardcore** | One of the seven core services, pinned by content hash |
 | **Official** | The owner's declaration of trust in a participant |

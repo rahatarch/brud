@@ -40,7 +40,8 @@ These are independent, and the difference is important.
 - **Hardcore** is decided by the BrudOS release. The seven hardcore services are compiled into the kernel and pinned by content hash. Every composition gets the same set. You cannot remove, replace or re-pin one, and the kernel will not boot without them.
 - **Official** is decided by *you*, the owner of the composition, in your own config. It says "I trust this participant in my system."
 
-A package never gets to call itself official. No naming convention, scope or manifest field confers it. The `@brud` npm scope tells you who wrote a package. It does not make the package official in your system.
+> **Important**
+> A package never gets to call itself official. No naming convention, scope or manifest field confers it. The `@brud` npm scope tells you who wrote a package. It does not make the package official in your system.
 
 ## What official changes
 

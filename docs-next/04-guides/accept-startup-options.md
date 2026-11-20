@@ -1,8 +1,14 @@
 # Accept startup options
 
-**Goal:** let the host pass `acme.greeting` when booting.
+Let the host configure your participant at boot, for example with an `acme.greeting` value.
 
-1. Declare the field, in your own namespace, before `RUNNING`:
+## Before you begin
+
+Read [Boot and lifecycle](../03-concepts/boot-and-lifecycle.md) for how pruning works.
+
+## Steps
+
+1. **Declare the field.** Do this before the kernel reaches `RUNNING`, and use your own dotted namespace.
 
 ```js
 // configurable-greeter.mjs
@@ -39,7 +45,10 @@ export function createService(context) {
 }
 ```
 
-2. The host passes it in `bootKernel(configPath, { options })`:
+   - `required: true` means the participant is pruned if the host does not supply the value.
+   - Field types are `string`, `number`, `boolean` and `object`.
+
+2. **Pass the value at boot.** The host sets it in the `options` bag of `bootKernel`.
 
 ```js
 // startup-options.mjs
@@ -88,4 +97,20 @@ console.log('without the option:', without.answer);
 console.log('kernel warnings:   ', without.warnings.length > 0 ? 'yes' : 'none');
 ```
 
-If a required field is missing, the participant is pruned (warning logged) unless a hardcore or another participant depends on it. Details: [Boot and lifecycle](../03-concepts/boot-and-lifecycle.md).
+3. **Read it at startup.** Use `ctx.bootOptions['acme.greeting']`.
+
+## Verify
+
+Run `node startup-options.mjs`. The output is:
+
+```text
+with the option:    howdy, world
+without the option: not available
+kernel warnings:    yes
+```
+
+When the required value is missing, the kernel logs a warning and the participant's exposure does not exist. The kernel refuses to boot only if a hardcore or another participant depends on the pruned one.
+
+## Next steps
+
+- [Run the daemon](../05-daemon/run-the-daemon.md), where `clientOptions` controls which fields clients may set

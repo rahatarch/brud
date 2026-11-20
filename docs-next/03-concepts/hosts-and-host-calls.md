@@ -1,6 +1,6 @@
 # Hosts and host calls
 
-A **host** is the program that boots the kernel and drives it: a CLI, a server, a desktop app, a test. The host is not a participant. It has no manifest and no identity in the registry. It enters the kernel through one door, the **host call**.
+A **host** is the program that boots the kernel and drives it: a CLI, a server, a desktop app, a test. The host is not a participant. It has no manifest and no identity in the registry. It enters the kernel through one entry point, the **host call**.
 
 ## The host call
 

@@ -2,7 +2,7 @@
 
 BrudOS is a small, domain-neutral kernel for building software out of independent pieces called **participants**. The kernel gives every piece an identity, lets each piece decide who may use its APIs, and refuses everything else. It does not know what your software does. You decide that.
 
-This folder is the human-written documentation. It is written to be read from the top by a person who has never seen BrudOS, and to be read by an AI agent that needs to build on it without guessing.
+This folder is the human-written documentation. Read it from the top if you have never seen BrudOS. AI agents can use it to build on BrudOS without guessing.
 
 > **Status.** These docs describe the V1-Beta of the core packages: `@brud/kernel`, `@brud/protocol`, `@brud/sdk` and `@brud/daemon`. The composed services (filesystem, workspace, terminal and so on) are separate packages with their own docs. They are not covered here.
 

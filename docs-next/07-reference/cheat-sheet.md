@@ -1,5 +1,7 @@
 # Cheat sheet
 
+One-page summary of the APIs and rules used most often. Each section links to the full explanation in the Concepts pages.
+
 ## Define a participant
 
 ```js

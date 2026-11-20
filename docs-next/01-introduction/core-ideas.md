@@ -1,6 +1,6 @@
 # Core ideas
 
-Eight ideas explain almost everything in BrudOS. Read them once and the rest of the docs will feel obvious. Each has a longer page in [Concepts](../03-concepts/README.md).
+Eight ideas explain almost everything in BrudOS. Read them once before the rest of the docs. Each has a longer page in [Concepts](../03-concepts/README.md).
 
 ## 1. Everything is a participant
 

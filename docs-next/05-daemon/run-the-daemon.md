@@ -1,5 +1,7 @@
 # Run the daemon
 
+This page shows how to start the daemon and configure it with `daemon.json`.
+
 ## Start it
 
 ```bash

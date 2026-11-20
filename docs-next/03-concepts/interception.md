@@ -39,6 +39,11 @@ if (!outcome.allowed) throw new InterceptionBlockedError('acme.greet@1', outcome
 
 ## Boot refusals
 
-`INTERCEPTION_DECLARATION_INVALID` is raised for an interception no giver admits, an admitted participant that did not declare it, a point on an exposure the declarer does not give, or an attempt to intercept a hardcore's exposure.
+The kernel refuses to boot with `INTERCEPTION_DECLARATION_INVALID` in these cases:
+
+- An interception that no giver admits.
+- An admitted participant that did not declare the interception.
+- A point on an exposure the declarer does not give.
+- An attempt to intercept a hardcore's exposure.
 
 **Next:** [The WASM cage](the-wasm-cage.md)

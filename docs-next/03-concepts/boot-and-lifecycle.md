@@ -1,5 +1,7 @@
 # Boot and lifecycle
 
+Boot is how a kernel goes from a config file to a running set of participants. This page describes the sequence, the lifecycle states, and how startup options reach your code.
+
 ## One sequence
 
 Boot is a single, ordered sequence.
@@ -130,7 +132,7 @@ Field types are `string`, `number`, `boolean` or `object`. A participant may onl
 
 A participant cannot resolve other participants' APIs while it is being constructed. The kernel is not running yet. When the kernel reaches `RUNNING`, each participant's `onRunning` hook fires and `ctx.resolve` becomes live. Before that, `ctx.resolve` returns `null`.
 
-The simple pattern is to call `ctx.resolve` lazily, when a method needs it, as in [Use another participant's API](../04-guides/use-another-participants-api.md).
+Call `ctx.resolve` lazily, when a method needs it, as in [Use another participant's API](../04-guides/use-another-participants-api.md).
 
 ## Shutdown
 

@@ -1,5 +1,7 @@
 # Install
 
+This page installs the BrudOS core packages and checks that they work.
+
 ## What you need
 
 - **Node.js 22 or newer.** The project is built and tested on Node 22.

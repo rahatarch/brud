@@ -78,7 +78,7 @@ What this checks:
 - A host with `vault:read` sees exactly one method.
 - A host with both can write then read.
 
-The host's capabilities are the ones you pass to `runHostCall`. In a test you choose them freely, which makes it easy to try every case.
+The host's capabilities are the ones you pass to `runHostCall`. In a test you choose them freely, so you can test every case.
 
 ## Habits that pay off
 

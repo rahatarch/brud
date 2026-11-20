@@ -1,5 +1,7 @@
 # Identity and the call chain
 
+The kernel decides who is calling, so a participant never has to trust a caller's claim. This page explains kernel identity, the call chain, and delegation by the owner.
+
 ## Kernel identity
 
 When a participant is admitted at boot, the kernel issues it a **kernel identity**: an opaque token recorded in the Identity Registry. Identity answers one question: *who is this?* It never answers *what may they do?* That is the giver's job.
@@ -31,13 +33,13 @@ These are fixed when the participant is admitted (or, for a host, when the host 
 
 ## The giver runs as itself
 
-This is the rule that surprises people. When a caller uses a giver's handle, **the giver's code runs as the giver.** If the giver calls a third participant, the kernel sees the giver as the caller, not the original caller.
+When a caller uses a giver's handle, **the giver's code runs as the giver.** If the giver calls a third participant, the kernel sees the giver as the caller. It does not see the original caller.
 
-So how does a giver know who really asked? The kernel hands it the real caller's view **once, when the handle is created**: the `caller` argument of your `handle` function (or projection factory). Capture what you need there. This is called **delegation by the owner**: you, the owner, decide how to use the real caller's identity when you act on their behalf.
+To learn who really asked, use the `caller` argument. The kernel hands it the real caller's view **once, when the handle is created**: the `caller` argument of your `handle` function (or projection factory). Capture what you need there. This is called **delegation by the owner**: you, the owner, decide how to use the real caller's identity when you act on their behalf.
 
 ```js
 handle: (caller, ctx) => ({
-  // `caller` is the REAL caller. Inside this method the kernel sees *us*.
+  // `caller` is the REAL caller. Inside this method, the kernel sees the giver as the caller.
   whoAsked: () => caller.identity,
 }),
 ```

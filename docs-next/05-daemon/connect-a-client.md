@@ -1,5 +1,9 @@
 # Connect a client
 
+This page shows how to connect to a running daemon, boot a kernel, and route Brud text through it.
+
+Connect, boot, route, then close:
+
 ```js
 import { connectToDaemon } from '@brud/daemon';
 

@@ -1,8 +1,42 @@
 # Intercept calls
 
-**Goal:** log or block calls to `acme.greet`.
+Log, change or block calls to another participant's exposure, such as `acme.greet`.
 
-1. **Giver:** add `interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken] }]`, and call `evaluate.evaluate(...)` in the projection before running the real method.
-2. **Interceptor:** add `interceptions: [{ target: 'acme.greet', version: 1 }]` and an `intercept(call)` method returning `allow`, `block` (with `reason`) or `modify` (with `args`).
+## Before you begin
 
-Remember: a thrown error blocks, the first block wins, and a giver that opens no point cannot be intercepted. Full semantics: [Interception](../03-concepts/interception.md).
+Read [Interception](../03-concepts/interception.md). Interception needs two participants: a giver and an interceptor.
+
+## Steps
+
+1. **Open an interception point on the giver.** List the interceptors it admits. The order is the run order.
+
+   ```js
+   interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken] }]
+   ```
+
+2. **Call the evaluator in the giver's projection**, before running the real method. Without this call, nothing is intercepted.
+
+3. **Declare the interception on the interceptor.**
+
+   ```js
+   interceptions: [{ target: 'acme.greet', version: 1 }]
+   ```
+
+4. **Implement `intercept(call)`** on the interceptor's instance. Return one of:
+
+   - `{ verdict: 'allow' }`
+   - `{ verdict: 'block', reason }`
+   - `{ verdict: 'modify', args }`
+
+## Behavior to know
+
+- The first `block` wins.
+- A thrown error counts as a block.
+- `modify` changes arguments only, and the new arguments must be plain JSON.
+
+> **Important**
+> Interception is cooperative. A giver that opens no point cannot be intercepted.
+
+## Next steps
+
+- [Handle errors](handle-errors.md)

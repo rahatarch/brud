@@ -1,5 +1,7 @@
 # Participants and givers
 
+Every piece of software in BrudOS is a participant, and every API it offers is controlled by that participant, the giver. This page defines both terms.
+
 ## Participants
 
 A **participant** is any piece of software the kernel hosts. A filesystem service, an agent tool, a settings store, your own app logic: all participants. The kernel treats them identically. There is no special class for "built-in" services beyond the seven hardcores.
