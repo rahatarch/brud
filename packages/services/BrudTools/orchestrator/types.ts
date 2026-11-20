@@ -14,6 +14,12 @@ export interface IToolsLogger {
  * Schema compiler, so there is no operation-kind gate to inject.
  */
 export interface BrudToolsDependencies {
+  /**
+   * Resolves a tool owner's exposure on the current call chain (pinned to the
+   * owner's kernel identity when known). Absent → exposure tools are unavailable.
+   */
+  readonly resolveToolExposure?: (name: string, version: number, owner: string | undefined) => unknown;
+
   /** Diagnostic sink for registry and dispatch warnings. */
   readonly logger?: IToolsLogger;
 

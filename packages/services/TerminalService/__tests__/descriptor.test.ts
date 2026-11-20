@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../kernel/src/__tests__/support/standardKernel.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { ITerminalService, TerminalChunkCallback } from '../contracts/ITerminalService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';

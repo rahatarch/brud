@@ -9,16 +9,24 @@
  */
 import { join } from 'node:path';
 import type { IStorageDriver } from '../../../BrudFileSystem/contracts/index.js';
-import type { IKernelAccessBroker } from '@brud/kernel';
-import type { ServiceContext } from '@brud/kernel';
-import type { ServiceDescriptor } from '@brud/kernel';
+import type { ExposedApiCaller } from '@brud/kernel';
+import { kernelParticipant } from './kernelParticipant.js';
+import type { ServiceDescriptor, ServiceToken } from '@brud/kernel';
 import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
-import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
-import { SettingsReaderToken } from '../../../SettingsService/descriptor/tokens.js';
+import { FILESYSTEM_JOURNAL_EXPOSURE } from '../../../BrudFileSystem/contracts/exposure.js';
+import type { SettingsSnapshot } from '../../../SettingsService/contracts/ISettingsService.js';
 import type { IFileMutationJournal } from '../../../BrudFileSystem/events/types.js';
 import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
-import { CORE_API_NAME, lastProjectionWins, withExposedApis } from '@brud/kernel';
+import {
+  HISTORY_FILESYSTEM_EXPOSURE,
+  HISTORY_JOURNAL_EXPOSURE,
+  HISTORY_READ_CAPABILITY,
+  HISTORY_SETTINGS_READER_EXPOSURE,
+  HISTORY_WRITE_CAPABILITY,
+  NAMESPACE_HISTORY_EXPOSURE,
+  UNIVERSAL_HISTORY_EXPOSURE,
+} from '../../contracts/exposure.js';
 import { ReadOnlyHistoryFacade } from '../../descriptor/ReadOnlyHistoryFacade.js';
 import { ReadOnlyUniversalHistoryFacade } from '../../descriptor/ReadOnlyUniversalHistoryFacade.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
@@ -61,6 +69,12 @@ export interface UnifiedHistoryDescriptorOptions {
    * `initialize()`.
    */
   readonly deferStart?: boolean;
+
+  /**
+   * Subscribe to the filesystem's `brud.filesystem.journal` exposure once
+   * running (replaces `journal`), then start a deferred facade.
+   */
+  readonly resolveJournal?: boolean;
 }
 
 interface Runtime {
@@ -74,23 +88,91 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
 } {
   let runtime: Runtime | undefined;
 
-  const session: ServiceDescriptor<IUniversalHistoryService, PluginHistoryFacade> = {
-    token: UniversalHistoryToken,
+  let facadeRef: PluginHistoryFacade | undefined;
+  // A deferred store starts in onRunning; retention waits for it.
+  let started = options.deferStart !== true;
+  let warmFileSystem: (() => void) | undefined;
+  let resolvedJournal: { subscribe: IFileMutationJournal['subscribe'] } | undefined;
+  const listeners = new Set<Parameters<IFileMutationJournal['subscribe']>[0]>();
+  const replayed = new Map<Parameters<IFileMutationJournal['subscribe']>[0], () => void>();
+  // Lazy journal over the resolved exposure: subscriptions made before RUNNING
+  // are replayed onto the exposure once it resolves.
+  const exposureJournal: IFileMutationJournal = {
+    get enabled(): boolean {
+      return resolvedJournal !== undefined;
+    },
+    publish(): void {
+      throw new Error('brud.core.universalHistory never publishes file mutations');
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      const off = resolvedJournal?.subscribe(listener);
+
+      return (): void => {
+        listeners.delete(listener);
+        off?.();
+        replayed.get(listener)?.();
+        replayed.delete(listener);
+      };
+    },
+  };
+  const journalOption = options.resolveJournal === true ? exposureJournal : options.journal;
+  let retain: (() => Promise<void>) | undefined;
+  let retentionPending = false;
+
+  const fullOrReadOnly = (instance: PluginHistoryFacade, caller: ExposedApiCaller): IUniversalHistoryService => (
+    caller.capabilities.has(HISTORY_WRITE_CAPABILITY) && caller.official
+      ? instance
+      : new ReadOnlyUniversalHistoryFacade(instance)
+  );
+  const namespaceFor = (instance: PluginHistoryFacade, caller: ExposedApiCaller): object => {
+    const subject = caller.identity ?? caller.callerClass;
+    const handle = namespaceHistoryFor(instance, subject, { official: caller.official });
+
+    if (handle === undefined) {
+      throw new Error(`Namespace history requires the unified history engine (participant "${subject}")`);
+    }
+
+    return (caller.capabilities.has(HISTORY_WRITE_CAPABILITY) ? handle : createReadOnlyNamespaceHandle(handle)) as object;
+  };
+  const historyPolicy = { policyVersion: 2, capabilities: [HISTORY_READ_CAPABILITY] };
+
+  const sessionBase = kernelParticipant<PluginHistoryFacade>({
+    token: UniversalHistoryToken as unknown as ServiceToken<PluginHistoryFacade>,
     tier: 'core',
-    dependencies: [FileSystemToken],
-    factory: (context: ServiceContext, broker: IKernelAccessBroker): PluginHistoryFacade => {
+    requests: ['fs:read', 'fs:write'],
+    exposes: {
+      [UNIVERSAL_HISTORY_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        policy: historyPolicy,
+        handle: (caller, ctx) => fullOrReadOnly(ctx.instance, caller),
+      },
+      [NAMESPACE_HISTORY_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        policy: historyPolicy,
+        handle: (caller, ctx) => namespaceFor(ctx.instance, caller),
+      },
+    },
+    create: (ctx) => {
       const workspaceRoot = requireContextString(
-        context.options,
+        ctx.bootOptions,
         HISTORY_ROOT_CONTEXT_FIELD,
         UniversalHistoryToken.id,
       );
       const historyRoot = join(workspaceRoot, '.brud', 'history');
       let fileSystem: IBrudFileSystem | undefined;
+      warmFileSystem = (): void => {
+        fileSystem ??= ctx.resolve<IBrudFileSystem>(HISTORY_FILESYSTEM_EXPOSURE) ?? undefined;
+      };
       const resolveFileSystem = (): IBrudFileSystem => {
-        fileSystem ??= broker.requestAccess(
-          { callerId: UniversalHistoryToken.id, tier: 'core', options: context.options },
-          FileSystemToken,
-        );
+        fileSystem ??= ctx.resolve<IBrudFileSystem>(HISTORY_FILESYSTEM_EXPOSURE) ?? undefined;
+
+        if (fileSystem === undefined) {
+          throw new Error(`${UniversalHistoryToken.id}: ${HISTORY_FILESYSTEM_EXPOSURE} is not resolvable`);
+        }
+
         return fileSystem;
       };
       const store = new UnifiedHistoryStore({
@@ -98,13 +180,13 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
         historyRoot,
         driver: options.driver,
         onWarning: (warning) => {
-          context.logger?.warn(warning.message, { code: warning.code, reason: warning.reason });
+          ctx.logger?.warn(warning.message, { code: warning.code, reason: warning.reason });
         },
       });
       const service = new UnifiedHistoryService({
         store,
         fileSystem: resolveFileSystem,
-        journal: options.journal,
+        journal: journalOption,
         driver: options.driver,
         importPreviousHistory: options.inMemory !== true && options.dbPath === undefined,
         onError: (error, details) => {
@@ -112,7 +194,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
           // a recording failure; it gets its own code so a genuine recording
           // failure stays unambiguous (and R2 can assert its absence).
           if (details.phase === 'session-recovered') {
-            context.logger?.warn('Universal history replaced a lost implicit session', {
+            ctx.logger?.warn('Universal history replaced a lost implicit session', {
               code: 'HISTORY_SESSION_RECOVERED',
               error: error instanceof Error ? error.message : String(error),
               ...details,
@@ -120,7 +202,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
             return;
           }
           const importing = details.phase === 'history-import';
-          context.logger?.warn(importing ? 'Previous history import did not complete' : 'Universal history could not record a mutation', {
+          ctx.logger?.warn(importing ? 'Previous history import did not complete' : 'Universal history could not record a mutation', {
             code: importing ? 'HISTORY_IMPORT_FAILED' : 'HISTORY_RECORDING_FAILED',
             error: error instanceof Error ? error.message : String(error),
             ...details,
@@ -136,15 +218,18 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
       // Retention runs once per boot, after RUNNING (the settings snapshot is
       // only readable then) and before plugins activate. It never fails boot:
       // without readable settings, nothing is removed.
-      const retain = async (): Promise<void> => {
-        if (!broker.hasService(SettingsReaderToken)) {
+      retain = async (): Promise<void> => {
+        // resolve is live only once RUNNING: a pre-RUNNING start defers retention to onRunning.
+        if (!ctx.running || !started) {
+          retentionPending = true;
+          return;
+        }
+        const reader = ctx.resolve<{ getSnapshot(): SettingsSnapshot }>(HISTORY_SETTINGS_READER_EXPOSURE);
+        if (reader === null) {
           return;
         }
         try {
-          const settings = broker.requestAccess(
-            { callerId: UniversalHistoryToken.id, tier: 'core', options: context.options },
-            SettingsReaderToken,
-          ).getSnapshot();
+          const settings = reader.getSnapshot();
           const report = await service.runRetention({
             retentionDays: settings.historyRetentionDays,
             minUndoEntries: settings.historyMinUndoEntries,
@@ -152,7 +237,7 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
           });
           options.onRetention?.(report);
         } catch (error) {
-          context.logger?.warn('History retention did not complete', {
+          ctx.logger?.warn('History retention did not complete', {
             code: 'HISTORY_RETENTION_FAILED',
             error: error instanceof Error ? error.message : String(error),
           });
@@ -165,80 +250,76 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
         options.deferStart === true,
       );
 
-      return withExposedApis(facade, (registry) => {
-        registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
-          capability: 'history:read',
-          scope: 'runtime',
-          projection: (resolved, caller) => (
-            caller.capabilities.has('history:write') && caller.official
-              ? resolved
-              : new ReadOnlyUniversalHistoryFacade(resolved as IUniversalHistoryService)
-          ),
-          combine: lastProjectionWins,
-        });
-        registry.registerApi(CORE_API_NAME.universalHistory, UniversalHistoryToken, {
-          capability: 'history:write',
-          scope: 'runtime',
-          projection: (resolved, caller) => (
-            caller.official
-              ? resolved
-              : new ReadOnlyUniversalHistoryFacade(resolved as IUniversalHistoryService)
-          ),
-          combine: lastProjectionWins,
-        });
+      facadeRef = facade;
 
-        const namespaceProjection = (resolved: unknown, caller: {
-          readonly capabilities: ReadonlySet<string>;
-          readonly official: boolean;
-          readonly subjectId: string;
-        }): unknown => {
-          const handle = namespaceHistoryFor(
-            resolved as IUniversalHistoryService,
-            caller.subjectId,
-            { official: caller.official },
-          );
+      return facade;
+    },
+    onRunning: async (ctx) => {
+      warmFileSystem?.();
 
-          if (handle === undefined) {
-            throw new Error(
-              `Namespace history requires the unified history engine (plugin "${caller.subjectId}")`,
-            );
+      if (options.resolveJournal === true && resolvedJournal === undefined) {
+        // Resolved on this participant's runtime chain; official-only exposure.
+        resolvedJournal = ctx.resolve<{ subscribe: IFileMutationJournal['subscribe'] }>(FILESYSTEM_JOURNAL_EXPOSURE) ?? undefined;
+
+        if (resolvedJournal === undefined) {
+          ctx.logger?.warn('Universal history cannot record mutations: brud.filesystem.journal is not resolvable', {
+            code: 'HISTORY_JOURNAL_UNAVAILABLE',
+          });
+        } else {
+          for (const listener of listeners) {
+            replayed.set(listener, resolvedJournal.subscribe(listener));
           }
-
-          return caller.capabilities.has('history:write')
-            ? handle
-            : createReadOnlyNamespaceHandle(handle);
-        };
-
-        registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
-          capability: 'history:read',
-          scope: 'runtime',
-          projection: namespaceProjection,
-          combine: lastProjectionWins,
-        });
-        registry.registerApi(CORE_API_NAME.namespaceHistory, UniversalHistoryToken, {
-          capability: 'history:write',
-          scope: 'runtime',
-          projection: namespaceProjection,
-          combine: lastProjectionWins,
-        });
-      });
-    },
-  };
-
-  const journal: ServiceDescriptor<IUniversalHistory, JournalAdapter> = {
-    token: HistoryToken,
-    tier: 'core',
-    dependencies: [UniversalHistoryToken],
-    accessPolicy: { deniedCallers: [] },
-    factory: (): JournalAdapter => {
-      if (runtime === undefined) {
-        throw new Error('brud.core.universalHistory must be constructed before brud.core.history');
+        }
       }
-      return new JournalAdapter(runtime.service, runtime.engine);
+
+      if (options.deferStart === true && facadeRef !== undefined && !started) {
+        await facadeRef.start();
+        started = true;
+      }
+
+      if (retentionPending && retain !== undefined) {
+        retentionPending = false;
+        await retain();
+      }
     },
-    project: (instance: JournalAdapter, caller: ServiceContext): IUniversalHistory =>
-      caller.tier === 'core' ? instance : new ReadOnlyHistoryFacade(instance),
+  });
+
+  const session = sessionBase as unknown as ServiceDescriptor<IUniversalHistoryService, PluginHistoryFacade>;
+
+  let adapter: JournalAdapter | undefined;
+  const adapterOf = (): JournalAdapter => {
+    if (runtime === undefined) {
+      throw new Error('brud.core.history used before brud.core.universalHistory was constructed');
+    }
+
+    adapter ??= new JournalAdapter(runtime.service, runtime.engine);
+
+    return adapter;
   };
+  // Lazy: the session participant may be constructed after this one.
+  const lazyAdapter = new Proxy({} as JournalAdapter, {
+    get: (_target, property): unknown => {
+      const real = adapterOf();
+      const value = Reflect.get(real, property, real) as unknown;
+
+      return typeof value === 'function' ? (value as (...args: unknown[]) => unknown).bind(real) : value;
+    },
+  });
+  const journal = kernelParticipant<JournalAdapter>({
+    token: HistoryToken as unknown as ServiceToken<JournalAdapter>,
+    tier: 'core',
+    exposes: {
+      [HISTORY_JOURNAL_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        policy: historyPolicy,
+        handle: (caller) => (caller.official && caller.capabilities.has(HISTORY_WRITE_CAPABILITY)
+          ? lazyAdapter
+          : new ReadOnlyHistoryFacade(lazyAdapter)),
+      },
+    },
+    create: () => lazyAdapter,
+  }) as unknown as ServiceDescriptor<IUniversalHistory, JournalAdapter>;
 
   return { session, journal };
 }

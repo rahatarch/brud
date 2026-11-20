@@ -46,7 +46,7 @@ describe('SettingsService on the v1 kernel (brud.settings@1, brud.settings.reade
         report.reader = surface(registry.resolve('brud.settings.reader'));
         report.settings = surface(registry.resolve('brud.settings'));
       `) },
-      { source: probe('acme.writer', ['settings:write'], `
+      { source: probe('acme.writer', ['settings:read', 'settings:write'], `
         const surface = ${SURFACE};
         const settings = registry.resolve('brud.settings');
         const reader = registry.resolve('brud.settings.reader');

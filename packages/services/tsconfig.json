@@ -11,10 +11,8 @@
   },
   "include": [
     "ActionManager",
-    "BrandRegistry",
     "BrudFileSystem",
     "BrudTools",
-    "PluginManager",
     "SettingsService",
     "TerminalService",
     "UniversalHistory",

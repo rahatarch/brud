@@ -11,17 +11,16 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, normalize } from 'node:path';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../kernel/src/__tests__/support/standardKernel.js';
 import type { IKernelAccessBroker, ServiceInfo } from '@brud/kernel';
 import type { KernelLogger, ServiceContext } from '@brud/kernel';
 import type { ServiceToken } from '@brud/kernel';
-import type { ISettingsReader, SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
-import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
+import { ExposedApiRegistryToken } from '@brud/kernel';
+import type { SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
 import { InMemoryConfigStore } from '../../SettingsService/storage/InMemoryConfigStore.js';
 import type { TerminalDecision } from '../contracts/errors.js';
 import type { TerminalRunOutcome } from '../contracts/ITerminalService.js';
-import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
-import { createTerminalDescriptor, pinTerminalPolicies } from '../descriptor/TerminalDescriptor.js';
+import { createTerminalDescriptor } from '../descriptor/TerminalDescriptor.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { TerminalValidatorPort } from '../orchestrator/TerminalService.js';
 import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
@@ -88,7 +87,11 @@ async function runInStandardKernel(
   try {
     const caller: ServiceContext = { callerId: 'test.terminal', tier: 'core', options: { 'terminal.root': workspace } };
     const terminal = kernel.requestAccess(caller, TerminalToken);
-    const decision = await terminal.run({ command, ...(cwd === undefined ? {} : { cwd }) });
+    // Production mirror: a host reaches the terminal inside a host call chain.
+    const decision = await kernel.runHostCall(
+      { capabilities: ['validation:read', 'workspace:read'] },
+      () => terminal.run({ command, ...(cwd === undefined ? {} : { cwd }) }),
+    );
 
     return { decision, warnings: logger.warnings };
   } finally {
@@ -108,27 +111,29 @@ class GatedSettingsBroker implements IKernelAccessBroker {
   constructor(private readonly snapshot: (() => SettingsSnapshot) | undefined) {}
 
   requestAccess<TService>(_caller: ServiceContext, token: ServiceToken<TService>): TService {
-    if (token.id === WorkspaceToken.id) {
-      return { primaryRoot: '/workspace' } as TService;
-    }
-
-    if (token.id !== SettingsToken.id) {
+    if (token.id !== ExposedApiRegistryToken.id) {
       throw new Error(`unexpected token ${token.id}`);
     }
 
-    if (!this.open || this.snapshot === undefined) {
-      throw new Error('settings unavailable');
-    }
+    // The participant reaches settings only through the exposed-API registry.
+    const registry = {
+      resolve: (name: string): unknown => {
+        if (name !== 'brud.settings.reader' || !this.open || this.snapshot === undefined) {
+          return null;
+        }
 
-    const snapshot = this.snapshot;
-    const reader = {
-      getSnapshot: (): SettingsSnapshot => {
-        this.reads += 1;
-        return snapshot();
+        const snapshot = this.snapshot;
+
+        return {
+          getSnapshot: (): SettingsSnapshot => {
+            this.reads += 1;
+            return snapshot();
+          },
+        };
       },
-    } as unknown as ISettingsReader;
+    };
 
-    return reader as TService;
+    return registry as TService;
   }
 
   hasService(): boolean {
@@ -186,7 +191,7 @@ describe('TerminalService boot policy', () => {
     const service = createTerminalDescriptor({ validator: allowAll }).factory(bootContext('/workspace'), broker);
 
     broker.open = true;
-    pinTerminalPolicies([service]);
+    await (service as unknown as { onRunning(b: IKernelAccessBroker): Promise<void> }).onRunning(broker);
 
     assert.equal(broker.reads, 1);
     assert.equal(service.getPolicy().maxTimeoutMs, 1234);
@@ -208,7 +213,7 @@ describe('TerminalService boot policy', () => {
       );
 
       broker.open = true;
-      pinTerminalPolicies([service]);
+      await (service as unknown as { onRunning(b: IKernelAccessBroker): Promise<void> }).onRunning(broker);
 
       const decision = await service.run({ command: 'echo should-not-run', cwd: workspace });
 

@@ -1,8 +1,10 @@
 import type { OperationResult } from '@brud/kernel';
 import type { IServiceLifecycle } from '@brud/kernel';
-import type { IToolDisposable } from '../contracts/IBrudToolsService.js';
-import { BRUD_KIND_TOOL } from '../contracts/exposure.js';
+import type { IToolDisposable, IToolExposure } from '../contracts/IBrudToolsService.js';
+import { BRUD_KIND_TOOL, BRUD_TOOLS_DISPATCH_EXPOSURE } from '../contracts/exposure.js';
 import type { IRouterService } from '@brud/kernel/services/Router/contracts/IRouterService.js';
+import type { BrudDispatchContext } from '@brud/kernel/services/Router/contracts/types.js';
+import type { BrudOperation } from '@brud/kernel/services/Parser/contracts/types.js';
 import {
   ToolDisposedError,
   ToolNotFoundError,
@@ -78,10 +80,11 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
     pluginId: string,
     isOfficial: boolean,
     options: ToolRegistrationOptions,
+    ownerIdentity?: string,
   ): IToolDisposable {
     this.assertLive();
 
-    return this.registry.registerTool(pluginId, isOfficial, options);
+    return this.registry.registerTool(pluginId, isOfficial, options, ownerIdentity);
   }
 
   getTool(name: string): RegisteredToolInfo | undefined {
@@ -112,6 +115,28 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
     }
 
     try {
+      const exposure = prepared.entry.ownerExposure;
+
+      if (exposure !== undefined) {
+        // The tool runs as its owner: the kernel executes the owner's exposure
+        // with the owner's identity and capabilities.
+        const handle = this.dependencies.resolveToolExposure?.(exposure.name, exposure.version, exposure.owner) as IToolExposure | null | undefined;
+
+        if (handle === null || handle === undefined || typeof handle.execute !== 'function') {
+          return failed(`TOOL_UNAVAILABLE: tool "${name}" owner exposure "${exposure.name}" is not resolvable`);
+        }
+
+        // Plain JSON only (caged owners): the signal does not cross.
+        const { signal: _signal, ...plain } = callerContext;
+        void _signal;
+
+        return await handle.execute(prepared.input, plain);
+      }
+
+      if (prepared.entry.execute === undefined) {
+        return failed(`TOOL_UNAVAILABLE: tool "${name}" has no handler`);
+      }
+
       return await prepared.entry.execute(prepared.input, callerContext);
     } catch (error) {
       // Normalize handler faults before they reach the Router so the stable
@@ -149,28 +174,31 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
    *
    * @param router - Router accepting boot-time registrations.
    */
+  /**
+   * Claims the `${BRUD_KIND_TOOL}` kind. The Router resolves the dispatch exposure
+   * on the kernel call chain and passes the kernel-derived caller.
+   */
   registerWithRouter(router: IRouterService): void {
-    router.register<IBrudToolsService>({
-      kind: BRUD_KIND_TOOL,
-      token: BrudToolsToken,
-      dispatch: (service, operation, context) => {
-        const callerContext: IPluginExecutionContext = {
-          workspaceRoot: context.workspaceRoot,
-          callerId: context.callerId,
-          ...(context.permissions === undefined ? {} : { permissions: context.permissions }),
-          ...(context.signal === undefined ? {} : { signal: context.signal }),
-          ...(context.origin === undefined ? {} : { origin: context.origin }),
-        };
+    router.register({ kind: BRUD_KIND_TOOL, exposure: BRUD_TOOLS_DISPATCH_EXPOSURE, version: 1 });
+  }
 
-        // A shallow copy keeps a handler's mutations away from the frozen
-        // parsed operation. The protocol index is never injected.
-        const input = { ...operation.parameters };
+  /**
+   * Runs one routed operation for the real caller the Router captured.
+   * Identity and permissions come from the kernel, never from the request.
+   */
+  dispatchRouted(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> {
+    const callerContext: IPluginExecutionContext = {
+      workspaceRoot: context.workspaceRoot,
+      callerId: context.caller.identity ?? context.caller.callerClass,
+      ...{ permissions: context.caller.capabilities },
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+      origin: context.caller.origin,
+    } as IPluginExecutionContext;
+    const input = { ...operation.parameters };
 
-        return context.dryRun === true
-          ? Promise.resolve(service.validateTool(operation.name, input, callerContext))
-          : service.executeTool(operation.name, input, callerContext);
-      },
-    });
+    return context.dryRun === true
+      ? Promise.resolve(this.validateTool(operation.name, input, callerContext))
+      : this.executeTool(operation.name, input, callerContext);
   }
 
   /**

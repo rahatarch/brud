@@ -20,6 +20,9 @@ export const SETTINGS_READER_EXPOSURE = 'brud.settings.reader';
 /** Router operation kind BrudTools registers its dispatch under. */
 export const BRUD_KIND_TOOL = 'tool' as const;
 
+/** Dispatch exposure the Router resolves for the `tool` kind (kernel callers only). */
+export const BRUD_TOOLS_DISPATCH_EXPOSURE = 'brud.tools.dispatch';
+
 /** What a caller supplies per call; identity, permissions and origin come from the kernel. */
 export interface ToolCallOptions {
   /** Workspace root the tool runs against. */

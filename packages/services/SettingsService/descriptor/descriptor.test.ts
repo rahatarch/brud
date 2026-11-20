@@ -33,43 +33,12 @@ describe('createSettingsDescriptor', () => {
   it('describes a core service with no dependencies', () => {
     const descriptor = createSettingsDescriptor();
 
-    assert.equal(descriptor.token, SettingsToken);
+    assert.equal(descriptor.token.id, SettingsToken.id);
     assert.equal(SettingsToken.id, 'brud.core.settings');
     assert.equal(SettingsToken.description, 'Immutable kernel settings and policy snapshot service');
     assert.equal(descriptor.tier, 'core');
     assert.deepEqual(descriptor.dependencies, []);
-  });
-
-  it('restricts the mutating token to the kernel and trusted hosts', () => {
-    const descriptor = createSettingsDescriptor();
-
-    assert.deepEqual(descriptor.accessPolicy?.allowedCallers, SETTINGS_MUTATOR_CALLERS);
-    assert.deepEqual(descriptor.accessPolicy?.allowedCallers, [
-      'kernel',
-      'brud.host.daemon',
-      'brud.host.desktop',
-    ]);
-  });
-
-  it('rejects a caller outside the access policy with AccessDeniedError', async () => {
-    const kernel = createKernel();
-
-    await kernel.boot({ options: { 'settings.root': '/workspace' } });
-
-    try {
-      assert.throws(
-        () => kernel.requestAccess(
-          caller({ callerId: 'untrusted.plugin', tier: 'core' }),
-          SettingsToken,
-        ),
-        (error: unknown) => error instanceof AccessDeniedError
-          && error.code === 'NOT_IN_ALLOWLIST'
-          && error.callerId === 'untrusted.plugin'
-          && error.targetServiceId === 'brud.core.settings',
-      );
-    } finally {
-      await kernel.shutdown();
-    }
+    assert.equal(descriptor.accessPolicy, undefined);
   });
 
   it('keeps the mutating service for allowlisted kernel and host callers', async () => {
@@ -112,19 +81,19 @@ describe('createSettingsDescriptor', () => {
 
 describe('settings exposures (v1)', () => {
   it('declares brud.settings@1 and brud.settings.reader@1', () => {
-    assert.deepEqual(createSettingsDescriptor().manifest?.exposures, [{ name: 'brud.settings', version: 1, scope: 'runtime' }]);
-    assert.deepEqual(createSettingsReaderDescriptor().manifest?.exposures, [{ name: 'brud.settings.reader', version: 1, scope: 'runtime' }]);
+    assert.deepEqual(createSettingsDescriptor().manifest?.exposures, [{ name: 'brud.settings', version: 1, scope: 'runtime', policy: { policyVersion: 2, capabilities: ['settings:read'] } }]);
+    assert.deepEqual(createSettingsReaderDescriptor().manifest?.exposures, [{ name: 'brud.settings.reader', version: 1, scope: 'any' }]);
   });
 });
 
 describe('createSettingsReaderDescriptor', () => {
-  it('is a core-tier dependency of the settings service with no access policy', () => {
+  it('is a core-tier participant with no token dependencies and no access policy', () => {
     const descriptor = createSettingsReaderDescriptor();
 
-    assert.equal(descriptor.token, SettingsReaderToken);
+    assert.equal(descriptor.token.id, SettingsReaderToken.id);
     assert.equal(SettingsReaderToken.id, 'brud.core.settings.reader');
     assert.equal(descriptor.tier, 'core');
-    assert.deepEqual(descriptor.dependencies, [SettingsToken]);
+    assert.deepEqual(descriptor.dependencies, []);
     assert.equal(descriptor.accessPolicy, undefined);
   });
 

@@ -31,8 +31,7 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-filesystem": "*",
-    "@brud/service-plugin-manager": "*"
+    "@brud/service-filesystem": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

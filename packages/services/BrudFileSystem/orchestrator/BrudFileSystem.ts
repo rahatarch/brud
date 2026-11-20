@@ -68,6 +68,13 @@ export type ValidationAuthority = IValidationService | (() => IValidationService
 
 /** Configuration for {@link BrudFileSystem}. */
 export interface BrudFileSystemOptions {
+  /**
+   * The workspace authority is another participant reached at call time; boot
+   * initialization uses `root` and never touches the workspace (the kernel
+   * initializes that participant itself).
+   */
+  readonly deferWorkspace?: boolean;
+
   /** Path flavor used when a workspace root string is supplied. */
   readonly flavor?: WorkspacePathFlavor;
 
@@ -181,6 +188,8 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
 
   private rootHint: string;
 
+  private readonly deferWorkspace: boolean;
+
   /**
    * @param workspaceOrRoot - Canonical workspace authority, a probe returning
    * one, or a workspace root string for standalone construction.
@@ -198,6 +207,7 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
     this.authorizedWriteScopes = options?.authorizedWriteScopes ?? [];
     this.onCleanupError = options?.onCleanupError;
     this.logger = options?.logger ?? DEFAULT_LOGGER;
+    this.deferWorkspace = options?.deferWorkspace === true;
 
     if (typeof workspaceOrRoot === 'string') {
       this.rootHint = workspaceOrRoot;
@@ -215,7 +225,9 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
 
   /** Canonical workspace root this instance is bound to. */
   get workspaceRoot(): string {
-    return this.workspaceInstance?.primaryRoot ?? this.rootHint;
+    // A deferred authority is a giver's handle; its canonical root was adopted
+    // into rootHint on the participant's own chain (bindDeferredWorkspace).
+    return this.deferWorkspace ? this.rootHint : this.workspaceInstance?.primaryRoot ?? this.rootHint;
   }
 
   /** Mutation journal bound to this instance. */
@@ -246,16 +258,33 @@ export class BrudFileSystem implements IBrudFileSystem, IServiceLifecycle {
   }
 
   async initialize(): Promise<void> {
-    const workspace = await this.resolveWorkspace();
-    const lifecycle = workspace as { initialize?: () => Promise<void> | void };
+    if (!this.deferWorkspace) {
+      const workspace = await this.resolveWorkspace();
+      const lifecycle = workspace as { initialize?: () => Promise<void> | void };
 
-    await lifecycle.initialize?.();
+      await lifecycle.initialize?.();
 
-    this.rootHint = workspace.primaryRoot;
+      this.rootHint = workspace.primaryRoot;
+    }
+
     await this.driver.mkdir(this.rootHint, { recursive: true });
     await sweepStaleStagingFiles(this.driver, this.rootHint, {
       onError: (error, absolutePath) => this.reportCleanupError(error, absolutePath),
     });
+  }
+
+  /**
+   * Binds a deferred workspace authority once the participant is running, on
+   * its own runtime chain, and adopts the canonical root.
+   */
+  async bindDeferredWorkspace(): Promise<void> {
+    if (!this.deferWorkspace) {
+      return;
+    }
+
+    const workspace = await this.resolveWorkspace();
+
+    this.rootHint = workspace.primaryRoot;
   }
 
   async dispose(): Promise<void> {

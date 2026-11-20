@@ -1,3 +1,4 @@
+import { hostAccess } from './support/hostAccess.js';
 /**
  * Legacy import gate (D-15, U-5 / G-U5). The fixture is a frozen workspace
  * produced by the legacy engines themselves (see `legacyFixture`), imported by
@@ -14,7 +15,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import { safeRm } from '../../../../kernel/src/__tests__/support/cleanup.js';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../../kernel/src/__tests__/support/standardKernel.js';
 import type { KernelLogger, ServiceContext } from '@brud/kernel';
 import type { BrudKernel } from '@brud/kernel';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
@@ -45,9 +46,9 @@ async function boot(root: string): Promise<Booted> {
   const caller: ServiceContext = { callerId: 'import.test', tier: 'core', options: {...workspaceContextOptions(root)} };
   return {
     kernel,
-    fs: kernel.requestAccess(caller, FileSystemToken),
-    sessions: kernel.requestAccess(caller, UniversalHistoryToken),
-    journal: kernel.requestAccess(caller, HistoryToken),
+    fs: hostAccess(kernel, caller, FileSystemToken),
+    sessions: hostAccess(kernel, caller, UniversalHistoryToken),
+    journal: hostAccess(kernel, caller, HistoryToken),
     warnings,
   };
 }

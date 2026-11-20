@@ -27,6 +27,8 @@ import type { OperationResult } from '@brud/kernel';
 export interface RegisteredToolEntry extends RegisteredToolInfo {
   /** Raw handler, dispatchable only through the owning service. */
   readonly execute: ToolRegistrationOptions['execute'];
+  /** Owner exposure serving the tool, with the owner's kernel identity when known. */
+  readonly ownerExposure?: { readonly name: string; readonly version: number; readonly owner?: string };
 }
 
 /**
@@ -62,7 +64,16 @@ export class ToolRegistry {
     pluginId: string,
     isOfficial: boolean,
     options: ToolRegistrationOptions,
+    ownerIdentity?: string,
   ): IToolDisposable {
+    if ((options.exposure === undefined) === (typeof options.execute !== 'function')) {
+      throw new ToolRegistrationError(options.name, 'TOOL_HANDLER_SOURCE', `tool "${options.name}" must give exactly one of exposure or execute`);
+    }
+
+    if (options.exposure !== undefined && (typeof options.exposure !== 'string' || options.exposure.length === 0)) {
+      throw new ToolRegistrationError(options.name, 'TOOL_EXPOSURE_INVALID', `tool "${options.name}" exposure must be a non-empty string`);
+    }
+
     if (this.countByOwner(pluginId) >= maxToolsPerPlugin) {
       throw new ToolQuotaExceededError(pluginId, maxToolsPerPlugin);
     }
@@ -89,6 +100,14 @@ export class ToolRegistry {
       ownerPluginId: pluginId,
       isOfficial,
       execute: options.execute,
+      ...(options.exposure === undefined ? {} : { exposure: options.exposure, exposureVersion: options.exposureVersion ?? 1 }),
+      ...(options.exposure === undefined ? {} : {
+        ownerExposure: Object.freeze({
+          name: options.exposure,
+          version: options.exposureVersion ?? 1,
+          ...(ownerIdentity === undefined ? {} : { owner: ownerIdentity }),
+        }),
+      }),
     });
     this.entries.set(entry.name, entry);
 
@@ -294,6 +313,7 @@ function project(entry: RegisteredToolEntry): RegisteredToolInfo {
       ...(entry.requiredPermissions === undefined
         ? {}
         : { requiredPermissions: entry.requiredPermissions }),
+      ...(entry.exposure === undefined ? {} : { exposure: entry.exposure, exposureVersion: entry.exposureVersion ?? 1 }),
       ownerPluginId: entry.ownerPluginId,
       isOfficial: entry.isOfficial,
     });

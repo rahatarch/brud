@@ -1,9 +1,8 @@
-import type { ServiceContext, ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import type { ServiceDescriptor, ServiceTier } from '@brud/kernel';
 import { defineParticipant } from '@brud/sdk/participant';
 import type { IStorageDriver } from '../../BrudFileSystem/contracts/index.js';
 import { WORKSPACE_EXPOSURE, WORKSPACE_READ_CAPABILITY } from '../contracts/exposure.js';
 import { createNodePathPort } from '../ports/NodePathPort.js';
-import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
 import type {
   IWorkspacePathPort,
   IWorkspaceService,
@@ -73,21 +72,22 @@ export function createWorkspaceDescriptor(
 ): ServiceDescriptor<IWorkspaceService, WorkspaceService> {
   const port = options?.port
     ?? (options?.driver === undefined ? createNodePathPort() : createStorageDriverPathPort(options.driver));
-  let bootContext: ServiceContext | undefined;
-
-  const base = defineParticipant<WorkspaceService>({
+  return defineParticipant<WorkspaceService>({
     id: WorkspaceToken.id,
     description: WorkspaceToken.description,
     tier: WORKSPACE_SERVICE_TIER,
     exposes: {
       [WORKSPACE_EXPOSURE]: {
         version: 1,
-        scope: 'runtime',
-        handle: (caller, ctx) => (caller.capabilities.has(WORKSPACE_READ_CAPABILITY) ? ctx.instance : null),
+        // Widened from runtime (2026-11-20): the filesystem reaches this giver while
+        // serving host-started calls; the capability policy still gates access.
+        scope: 'any',
+        policy: { policyVersion: 2, capabilities: [WORKSPACE_READ_CAPABILITY] },
+        handle: (_caller, ctx) => ctx.instance,
       },
     },
-    create: () => {
-      const bootOptions = bootContext?.options ?? {};
+    create: (ctx) => {
+      const bootOptions = ctx.bootOptions;
 
       return new WorkspaceService({
         roots: options?.roots !== undefined && options.roots.length > 0
@@ -103,16 +103,5 @@ export function createWorkspaceDescriptor(
         ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
       });
     },
-  })();
-
-  return {
-    ...base,
-    token: WorkspaceToken,
-    dependencies: [SettingsReaderToken],
-    factory: (context: ServiceContext, ...rest: unknown[]) => {
-      bootContext = context;
-
-      return (base.factory as (...args: unknown[]) => WorkspaceService)(context, ...rest);
-    },
-  } as unknown as ServiceDescriptor<IWorkspaceService, WorkspaceService>;
+  })() as unknown as ServiceDescriptor<IWorkspaceService, WorkspaceService>;
 }

@@ -20,4 +20,4 @@ export {
   ActionRegistrationError,
   ActionValidationError,
   actionFailureMessage,
-} from './errors.js';
+} from './errors.js';export * from './exposure.js';

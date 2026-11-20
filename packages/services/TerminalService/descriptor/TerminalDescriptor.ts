@@ -1,17 +1,14 @@
-import type { KernelLogger, ServiceContext, ServiceTier } from '@brud/kernel';
+import type { KernelLogger, ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
+import { defineParticipant } from '@brud/sdk/participant';
 import type {
   ISettingsReader,
   SettingsSnapshot,
 } from '../../SettingsService/contracts/ISettingsService.js';
-import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import type {
   IValidationService,
   ValidationWorkspacePort,
 } from '../../ValidationService/contracts/IValidationService.js';
-import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
-import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { requireContextString } from '@brud/kernel';
 import type { ITerminalService } from '../contracts/ITerminalService.js';
 import {
@@ -22,6 +19,13 @@ import { ProcessManager } from '../engine/ProcessManager.js';
 import { ShellAdapter } from '../engine/ShellAdapter.js';
 import { TerminalService, type TerminalValidatorPort } from '../orchestrator/TerminalService.js';
 import { TerminalToken } from './tokens.js';
+import {
+  TERMINAL_EXECUTE_CAPABILITY,
+  TERMINAL_EXPOSURE,
+  TERMINAL_SETTINGS_READER_EXPOSURE,
+  TERMINAL_VALIDATION_EXPOSURE,
+  TERMINAL_WORKSPACE_EXPOSURE,
+} from '../contracts/exposure.js';
 
 /** Namespace owned by the terminal service in the context contract. */
 export const TERMINAL_CONTEXT_SCOPE = 'terminal';
@@ -117,76 +121,74 @@ function positiveOr(value: unknown, fallback: number): number {
 export function createTerminalDescriptor(
   options?: TerminalDescriptorOptions,
 ): ServiceDescriptor<ITerminalService, TerminalService> {
-  return {
-    token: TerminalToken,
+  let created: TerminalService | undefined;
+
+  const base = defineParticipant<TerminalService>({
+    id: TerminalToken.id,
+    description: TerminalToken.description,
     tier: TERMINAL_SERVICE_TIER,
-    dependencies: [SettingsToken, WorkspaceToken, ValidationToken],
-    accessPolicy: { deniedCallers: [] },
-    factory: (context: ServiceContext, broker): TerminalService => {
-      const kernelCaller: ServiceContext = {
-        callerId: 'kernel',
-        tier: 'kernel',
-        options: context.options,
-      };
-      // The broker only serves requests while the kernel is RUNNING and
-      // factories run during BOOTING, so dependencies are resolved lazily and
-      // touched on first use. The workspace root comes from the boot context,
-      // which is already canonical by the time any factory runs.
-      const injectedValidator = options?.validator;
-      let validator: TerminalValidatorPort | undefined = injectedValidator;
+    requests: ['validation:read', 'workspace:read'],
+    exposes: {
+      [TERMINAL_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        policy: { policyVersion: 2, capabilities: [TERMINAL_EXECUTE_CAPABILITY] },
+        handle: (_caller, ctx) => ctx.instance,
+      },
+    },
+    create: (ctx) => {
+      const logger = ctx.logger;
+      let validator: TerminalValidatorPort | undefined = options?.validator;
       let workspace: ValidationWorkspacePort | undefined;
 
       const resolveValidator = (): TerminalValidatorPort | undefined => {
-        if (validator === undefined) {
-          validator = broker.requestAccess<IValidationService>(kernelCaller, ValidationToken);
-        }
+        validator ??= ctx.resolve<IValidationService>(TERMINAL_VALIDATION_EXPOSURE) ?? undefined;
 
         return validator;
       };
-      const resolveWorkspace = (): ValidationWorkspacePort => {
-        workspace ??= broker.requestAccess<ValidationWorkspacePort>(kernelCaller, WorkspaceToken);
+      const resolveWorkspace = (): ValidationWorkspacePort | undefined => {
+        workspace ??= ctx.resolve<ValidationWorkspacePort>(TERMINAL_WORKSPACE_EXPOSURE) ?? undefined;
 
         return workspace;
       };
-      // The frozen policy is derived once from the boot snapshot, inside the
-      // boot pinner (the broker serves, no caller holds the token yet), so an
-      // in-flight session cannot observe a settings change between admission
-      // and spawn. An explicit override skips the read. There is no default
-      // fallback: an unreadable snapshot denies execution (fail closed).
       const readPolicy = (): TerminalPolicy => {
         if (options?.policy !== undefined) {
           return options.policy;
         }
 
-        const settings = broker.requestAccess<ISettingsReader>(kernelCaller, SettingsToken);
+        const settings = ctx.resolve<ISettingsReader>(TERMINAL_SETTINGS_READER_EXPOSURE);
+
+        if (settings === null) {
+          throw new Error(`${TERMINAL_SETTINGS_READER_EXPOSURE} is not resolvable`);
+        }
 
         return toTerminalPolicy(settings.getSnapshot());
       };
 
-      // Construction runs while the kernel is BOOTING, when the broker refuses
-      // every request, so the service starts on a placeholder policy and stays
-      // unbound (fail closed) until the boot pinner binds it.
       const service = new TerminalService({
         policy: options?.policy ?? DEFAULT_TERMINAL_POLICY,
         ...(options?.validator === undefined ? {} : { validator: options.validator }),
         workspaceRoot: options?.workspaceRoot
-          ?? requireContextString(
-            context.options,
-            TERMINAL_ROOT_CONTEXT_FIELD,
-            TerminalToken.id,
-          ),
+          ?? requireContextString(ctx.bootOptions, TERMINAL_ROOT_CONTEXT_FIELD, TerminalToken.id),
         processes: new ProcessManager(new ShellAdapter()),
-        ...(context.logger === undefined ? {} : { logger: context.logger }),
+        ...(logger === undefined ? {} : { logger }),
       });
 
+      let pinned = false;
       registerTerminalBootPinner(service, (): void => {
+        // resolve is live only once RUNNING; the pre-RUNNING module hook is a no-op.
+        if (!ctx.running || pinned) {
+          return;
+        }
+
+        pinned = true;
         let policy: TerminalPolicy;
 
         try {
           policy = readPolicy();
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
-          context.logger?.warn(
+          logger?.warn(
             `TerminalService: settings snapshot could not be read (${message}); terminal execution is denied.`,
           );
           service.pinBootPolicy({ policyError: message });
@@ -194,18 +196,12 @@ export function createTerminalDescriptor(
           return;
         }
 
-        // An unresolvable authority leaves the service unbound, so every
-        // execution fails closed with `TERMINAL_UNAVAILABLE` instead of
-        // hanging on a boot pin or admitting an unvalidated command.
-        const boundValidator = resolveBoundValidator(resolveValidator, context.logger);
+        const boundValidator = resolveBoundValidator(resolveValidator, logger);
 
         if (boundValidator !== undefined) {
-          // Touching the workspace authority proves the containment
-          // dependency is resolved; the validation gate already runs every
-          // command through it.
-          void resolveWorkspace().primaryRoot;
+          void resolveWorkspace()?.primaryRoot;
         } else {
-          context.logger?.warn(
+          logger?.warn(
             'TerminalService: validation authority could not be resolved; terminal execution will fail closed.',
           );
         }
@@ -216,28 +212,20 @@ export function createTerminalDescriptor(
           ...(options?.workspaceRoot === undefined ? {} : { workspaceRoot: options.workspaceRoot }),
         });
       });
+      created = service;
 
-      return withExposedApis(service, (registry) => {
-        registry.registerApi(CORE_API_NAME.terminal, TerminalToken, {
-          capability: 'terminal:execute',
-          scope: 'runtime',
-        });
-      });
+      return service;
     },
-  };
+    onRunning: () => {
+      if (created !== undefined) {
+        pinTerminalPolicies([created]);
+      }
+    },
+  })();
+
+  return base as unknown as ServiceDescriptor<ITerminalService, TerminalService>;
 }
 
-/**
- * Resolves the boot validation authority, returning `undefined` when it cannot
- * be bound.
- *
- * The descriptor records the service as unvalidated rather than propagating
- * the failure: a terminal that cannot prove a command is safe must refuse it,
- * not stall the boot sequence.
- *
- * @param resolve - Thunk that requests the authority from the broker.
- * @param logger - Diagnostic sink.
- */
 function resolveBoundValidator(
   resolve: () => TerminalValidatorPort | undefined,
   logger: KernelLogger | undefined,

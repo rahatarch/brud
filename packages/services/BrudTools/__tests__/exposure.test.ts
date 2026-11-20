@@ -54,7 +54,10 @@ describe('BrudTools on the v1 kernel (brud.tools@1)', () => {
 
     assert.equal(descriptor.token.id, BrudToolsToken.id);
     assert.equal(descriptor.tier, BRUD_TOOLS_SERVICE_TIER);
-    assert.deepEqual(descriptor.manifest?.exposures, [{ name: 'brud.tools', version: 1, scope: 'runtime' }]);
+    assert.deepEqual(descriptor.manifest?.exposures, [
+      { name: 'brud.tools', version: 1, scope: 'runtime' },
+      { name: 'brud.tools.dispatch', version: 1, scope: 'any', policy: { policyVersion: 2, official: true } },
+    ]);
   });
 
   it('shapes the handle by capability, takes identity from the kernel, and enforces schema, permissions and the allow-list', async (t) => {

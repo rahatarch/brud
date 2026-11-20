@@ -8,6 +8,7 @@ import {
   type IExposedApiRegistry,
   type IKernelAccessBroker,
   type KernelServiceModuleContext,
+  type ServiceContext,
   type ServiceDescriptor,
   type ServiceTier,
 } from '@brud/kernel';
@@ -23,6 +24,10 @@ export interface ParticipantContext<TInstance extends object> {
   readonly id: string;
   /** Composition options passed to the service module. */
   readonly options: Readonly<Record<string, unknown>>;
+  /** Boot options the kernel hands this participant (e.g. `settings.root`). */
+  readonly bootOptions: Readonly<Record<string, unknown>>;
+  /** Boot logger the kernel hands this participant, when one is configured. */
+  readonly logger: ServiceContext['logger'];
   /** The instance `create` returned. */
   readonly instance: TInstance;
   /** True once the kernel is running and `resolve` is live. */
@@ -122,12 +127,14 @@ export function defineParticipant<TInstance extends object>(
     tier,
     dependencies: [],
     manifest,
-    factory: (): TInstance => {
+    factory: (bootContext?: ServiceContext): TInstance => {
       let registry: IExposedApiRegistry | undefined;
       let instance: TInstance | undefined;
       const ctx: ParticipantContext<TInstance> = {
         id,
         options: moduleContext?.options ?? {},
+        bootOptions: bootContext?.options ?? {},
+        logger: bootContext?.logger,
         get instance(): TInstance {
           if (instance === undefined) {
             throw new SdkError('SDK_INSTANCE_NOT_READY', `participant ${id}: the instance is not created yet`);

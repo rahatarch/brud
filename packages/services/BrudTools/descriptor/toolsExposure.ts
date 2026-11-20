@@ -34,7 +34,7 @@ function contextFor(caller: ExposedApiCaller, options: ToolCallOptions): IPlugin
 export const toolsHandle = byCapability<BrudToolsService>(
   {
     [TOOLS_REGISTER_CAPABILITY]: (ctx, caller) => ({
-      registerTool: (options: ToolRegistrationOptions) => ctx.instance.registerTool(callerIdOf(caller), caller.official, options),
+      registerTool: (options: ToolRegistrationOptions) => ctx.instance.registerTool(callerIdOf(caller), caller.official, options, caller.identity ?? undefined),
     }),
     [TOOLS_EXECUTE_CAPABILITY]: (ctx, caller) => ({
       executeTool: (name: string, input: unknown, options: ToolCallOptions) => ctx.instance.executeTool(name, input, contextFor(caller, options)),

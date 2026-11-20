@@ -2,7 +2,6 @@ import type { ServiceTier } from '@brud/kernel';
 import { defineParticipant } from '@brud/sdk/participant';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { SettingsSnapshot } from '../../SettingsService/contracts/ISettingsService.js';
-import { SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import {
   VALIDATION_EXPOSURE,
   VALIDATION_READ_CAPABILITY,
@@ -95,6 +94,7 @@ export function createValidationDescriptor(
 ): ServiceDescriptor<IValidationService, ValidationService> {
   let service: ValidationService | undefined;
 
+  let warmWorkspace: (() => void) | undefined;
   const base = defineParticipant<ValidationService>({
     id: ValidationToken.id,
     description: ValidationToken.description,
@@ -103,8 +103,11 @@ export function createValidationDescriptor(
     exposes: {
       [VALIDATION_EXPOSURE]: {
         version: 1,
-        scope: 'runtime',
-        handle: (caller, ctx) => (caller.capabilities.has(VALIDATION_READ_CAPABILITY) ? ctx.instance : null),
+        // Widened from runtime (2026-11-20): the filesystem reaches this giver while
+        // serving host-started calls; the capability policy still gates access.
+        scope: 'any',
+        policy: { policyVersion: 2, capabilities: [VALIDATION_READ_CAPABILITY] },
+        handle: (_caller, ctx) => ctx.instance,
       },
     },
     create: (ctx) => {
@@ -117,6 +120,10 @@ export function createValidationDescriptor(
         }
 
         return workspace;
+      };
+
+      warmWorkspace = (): void => {
+        workspace ??= ctx.resolve<ValidationWorkspacePort>(VALIDATION_WORKSPACE_EXPOSURE) ?? undefined;
       };
 
       service = new ValidationService({
@@ -155,18 +162,16 @@ export function createValidationDescriptor(
     // resolve is live only once RUNNING, so the boot pin runs here rather than
     // in the pre-RUNNING pinBootPolicies module hook.
     onRunning: async () => {
+      // Resolve on this participant's runtime chain; host-started calls reuse it.
+      warmWorkspace?.();
+
       if (service !== undefined) {
         await pinBootPolicies([service]);
       }
     },
   })();
 
-  return {
-    ...base,
-    token: ValidationToken,
-    dependencies: [SettingsToken],
-    accessPolicy: { deniedCallers: [] },
-  } as unknown as ServiceDescriptor<IValidationService, ValidationService>;
+  return base as unknown as ServiceDescriptor<IValidationService, ValidationService>;
 }
 
 export function defaultValidationFlavor(): ValidationFlavor {

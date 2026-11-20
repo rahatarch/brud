@@ -66,14 +66,14 @@ async function createInstance(): Promise<BrudFileSystem> {
 }
 
 describe('FileSystemDescriptor', () => {
-  it('describes a core service depending on the workspace and settings reader', () => {
-    assert.equal(FileSystemDescriptor.token, FileSystemToken);
+  it('describes a core participant with no token dependencies', () => {
+    assert.equal(FileSystemDescriptor.token.id, FileSystemToken.id);
     assert.equal(FileSystemToken.id, 'brud.core.filesystem');
     assert.equal(FileSystemToken.description, 'Centralized atomic filesystem service');
     assert.equal(FileSystemDescriptor.tier, 'core');
     assert.deepEqual(
       FileSystemDescriptor.dependencies.map((token) => token.id),
-      ['brud.core.workspace', 'brud.core.settings.reader'],
+      [],
     );
   });
 

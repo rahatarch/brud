@@ -1,15 +1,11 @@
 import type { IStorageDriver } from '../BrudFileSystem/contracts/index.js';
 import type { KernelServiceModuleContext } from '@brud/kernel';
-import type { IKernelAccessBroker } from '@brud/kernel';
-import type { ServiceContext } from '@brud/kernel';
 import type { WorkspaceDescriptorOptions } from './descriptor/descriptor.js';
 import { createWorkspaceDescriptor } from './descriptor/descriptor.js';
 import {
   WORKSPACE_CONTEXT_SCOPE,
   WORKSPACE_ROOT_CONTEXT_FIELD,
 } from './bootOptions.js';
-
-const WORKSPACE_SLOT = 'brud.core.workspace.instance';
 
 export function createService(context: KernelServiceModuleContext) {
   context.declareContextFields(WORKSPACE_CONTEXT_SCOPE, [
@@ -34,14 +30,5 @@ export function createService(context: KernelServiceModuleContext) {
     ...(driver === undefined ? {} : { driver }),
   });
 
-  return {
-    ...descriptor,
-    factory: (serviceContext: ServiceContext, broker: IKernelAccessBroker) => {
-      const instance = descriptor.factory(serviceContext, broker);
-
-      context.shared[WORKSPACE_SLOT] = instance;
-
-      return instance;
-    },
-  };
+  return descriptor;
 }

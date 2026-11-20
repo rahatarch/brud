@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../kernel/src/__tests__/support/standardKernel.js';
 import type { ServiceContext } from '@brud/kernel';
 import type { BrudKernel } from '@brud/kernel';
 import type { BrudFileSystem } from '../../BrudFileSystem/orchestrator/BrudFileSystem.js';

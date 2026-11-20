@@ -1,7 +1,9 @@
 import type { ServiceDescriptor, ServiceTier } from '@brud/kernel';
 import { defineParticipant } from '@brud/sdk/participant';
 import type { IBrudToolsService } from '../contracts/IBrudToolsService.js';
-import { BRUD_TOOLS_EXPOSURE, SETTINGS_READER_EXPOSURE } from '../contracts/exposure.js';
+import { BRUD_TOOLS_DISPATCH_EXPOSURE, BRUD_TOOLS_EXPOSURE, SETTINGS_READER_EXPOSURE } from '../contracts/exposure.js';
+import type { BrudDispatchContext } from '@brud/kernel/services/Router/contracts/types.js';
+import type { BrudOperation } from '@brud/kernel/services/Parser/contracts/types.js';
 import { BrudToolsService, type IToolsLogger } from '../orchestrator/index.js';
 import { BrudToolsToken } from './tokens.js';
 import { toolsHandle } from './toolsExposure.js';
@@ -36,8 +38,22 @@ export function createBrudToolsDescriptor(
     id: BrudToolsToken.id,
     description: 'Live tool registry, certification status, schema gate and dispatch table',
     tier: BRUD_TOOLS_SERVICE_TIER,
-    exposes: { [BRUD_TOOLS_EXPOSURE]: { version: 1, scope: 'runtime', handle: toolsHandle } },
+    exposes: {
+      [BRUD_TOOLS_EXPOSURE]: { version: 1, scope: 'runtime', handle: toolsHandle },
+      // Official callers only (the Router is one): it trusts the caller view in
+      // its context, which non-official (caged) code can never supply.
+      [BRUD_TOOLS_DISPATCH_EXPOSURE]: {
+        version: 1,
+        scope: 'any',
+        policy: { policyVersion: 2, official: true },
+        handle: (_caller, ctx) => ({ dispatch: (operation: BrudOperation, context: BrudDispatchContext) => ctx.instance.dispatchRouted(operation, context) }),
+      },
+    },
     create: (ctx) => new BrudToolsService({
+      resolveToolExposure: (name, version, owner) => ctx.resolve(name, {
+        version,
+        ...(owner === undefined ? {} : { expectedOwner: owner }),
+      }),
       ...(options?.logger === undefined ? {} : { logger: options.logger }),
       getToolAllowList: () =>
         ctx.resolve<SettingsReaderView>(SETTINGS_READER_EXPOSURE)?.getSnapshot().toolAllowList ?? {},

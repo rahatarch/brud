@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm, realpath } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../kernel/src/__tests__/support/standardKernel.js';
 import type { ServiceContext } from '@brud/kernel';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
 import type { IWorkspaceService } from '../../WorkspaceService/contracts/IWorkspaceService.js';
@@ -45,7 +45,20 @@ async function bootKernel(): Promise<{
   await kernel.boot({ options: {...workspaceContextOptions(root)} });
 
   const workspace = kernel.requestAccess(caller(), WorkspaceToken);
-  const fileSystem = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;
+  const raw = kernel.requestAccess(caller(), FileSystemToken) as unknown as BrudFileSystem;
+  // Production mirror: a host reaches the filesystem inside a host call chain.
+  const fileSystem = new Proxy(raw, {
+    get: (target, property) => {
+      const member = Reflect.get(target, property, target) as unknown;
+
+      return typeof member === 'function'
+        ? (...args: unknown[]) => kernel.runHostCall(
+          { capabilities: ['workspace:read', 'validation:read'] },
+          () => Reflect.apply(member, target, args),
+        )
+        : member;
+    },
+  });
 
   return {
     kernel,
@@ -56,15 +69,12 @@ async function bootKernel(): Promise<{
 }
 
 describe('BrudFileSystem descriptor and kernel bootstrap', () => {
-  it('declares the workspace and settings reader dependencies', () => {
+  it('declares no token dependencies (givers are resolved through exposures)', () => {
     const descriptor = createFileSystemDescriptor();
 
-    assert.equal(descriptor.token, FileSystemToken);
+    assert.equal(descriptor.token.id, FileSystemToken.id);
     assert.equal(descriptor.tier, 'core');
-    assert.deepEqual(
-      descriptor.dependencies.map((token) => token.id),
-      ['brud.core.workspace', 'brud.core.settings.reader'],
-    );
+    assert.deepEqual(descriptor.dependencies, []);
   });
 
   it('injects the canonical workspace instance into the filesystem service', async () => {

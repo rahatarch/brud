@@ -59,11 +59,30 @@ export interface ToolRegistrationOptions {
   /** Permissions the tool requires from its caller. */
   readonly requiredPermissions?: readonly string[];
 
-  /** Handler invoked after the schema gate admits the payload. */
-  readonly execute: (
+  /**
+   * The owner's own exposure that runs the tool (`execute(input, context)`).
+   * Preferred: the kernel then runs the tool as its owner, with the owner's
+   * capabilities, and caged participants can provide tools. Give exactly one
+   * of `exposure` or `execute`.
+   */
+  readonly exposure?: string;
+
+  /** Major version of {@link exposure}; defaults to 1. */
+  readonly exposureVersion?: number;
+
+  /**
+   * In-process handler (native owners only). It runs as BrudTools, so it
+   * cannot use the owner's capabilities; prefer {@link exposure}.
+   */
+  readonly execute?: (
     input: Record<string, unknown>,
     context: IPluginExecutionContext,
   ) => Promise<OperationResult>;
+}
+
+/** The surface a tool owner's exposure must provide. */
+export interface IToolExposure {
+  execute(input: Record<string, unknown>, context: IPluginExecutionContext): Promise<OperationResult> | OperationResult;
 }
 
 /**

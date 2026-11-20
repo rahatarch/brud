@@ -1,7 +1,9 @@
-import { BRUD_KIND_ACTION } from '@brud/kernel';
+import { BRUD_KIND_ACTION, ACTION_MANAGER_DISPATCH_EXPOSURE } from '../contracts/exposure.js';
 import type { OperationResult } from '@brud/kernel';
 import type { IServiceLifecycle } from '@brud/kernel';
 import type { IRouterService } from '@brud/kernel/services/Router/contracts/IRouterService.js';
+import type { BrudDispatchContext } from '@brud/kernel/services/Router/contracts/types.js';
+import type { BrudOperation } from '@brud/kernel/services/Parser/contracts/types.js';
 import {
   ActionDisposedError,
   ActionNotFoundError,
@@ -130,25 +132,31 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
    *
    * @param router - Router accepting boot-time registrations.
    */
+  /**
+   * Claims the `${BRUD_KIND_ACTION}` kind. The Router resolves the dispatch exposure
+   * on the kernel call chain and passes the kernel-derived caller.
+   */
   registerWithRouter(router: IRouterService): void {
-    router.register<IActionManager>({
-      kind: BRUD_KIND_ACTION,
-      token: ActionManagerToken,
-      dispatch: (service, operation, context) => {
-        const callerContext: IActionExecutionContext = {
-          workspaceRoot: context.workspaceRoot,
-          callerId: context.callerId,
-          ...(context.signal === undefined ? {} : { signal: context.signal }),
-          ...(context.origin === undefined ? {} : { origin: context.origin }),
-        };
+    router.register({ kind: BRUD_KIND_ACTION, exposure: ACTION_MANAGER_DISPATCH_EXPOSURE, version: 1 });
+  }
 
-        const input = { ...operation.parameters };
+  /**
+   * Runs one routed operation for the real caller the Router captured.
+   * Identity and permissions come from the kernel, never from the request.
+   */
+  dispatchRouted(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> {
+    const callerContext: IActionExecutionContext = {
+      workspaceRoot: context.workspaceRoot,
+      callerId: context.caller.identity ?? context.caller.callerClass,
+      ...{ permissions: context.caller.capabilities },
+      ...(context.signal === undefined ? {} : { signal: context.signal }),
+      origin: context.caller.origin,
+    } as IActionExecutionContext;
+    const input = { ...operation.parameters };
 
-        return context.dryRun === true
-          ? Promise.resolve(service.validateAction(operation.name, input))
-          : service.executeAction(operation.name, input, callerContext);
-      },
-    });
+    return context.dryRun === true
+      ? Promise.resolve(this.validateAction(operation.name, input))
+      : this.executeAction(operation.name, input, callerContext);
   }
 
   /**

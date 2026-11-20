@@ -1,8 +1,9 @@
 import type { ServiceTier } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
-import { BrudToolsToken } from '../../BrudTools/descriptor/tokens.js';
-import { CORE_API_NAME, withExposedApis } from '@brud/kernel';
-import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
+import { defineParticipant } from '@brud/sdk/participant';
+import { ACTION_MANAGER_DISPATCH_EXPOSURE, ACTION_MANAGER_EXPOSURE, ACTIONS_REGISTER_CAPABILITY } from '../contracts/exposure.js';
+import type { BrudDispatchContext } from '@brud/kernel/services/Router/contracts/types.js';
+import type { BrudOperation } from '@brud/kernel/services/Parser/contracts/types.js';
 import type { IActionManager } from '../contracts/IActionManager.js';
 import { ACTION_MANAGER_ALLOWED_CALLERS } from '../contracts/IActionManager.js';
 import { ActionManagerService } from '../orchestrator/index.js';
@@ -36,29 +37,38 @@ export interface ActionManagerDescriptorOptions {
 export function createActionManagerDescriptor(
   options?: ActionManagerDescriptorOptions,
 ): ServiceDescriptor<IActionManager, ActionManagerService> {
-  return {
-    token: ActionManagerToken,
+  const base = defineParticipant<ActionManagerService>({
+    id: ActionManagerToken.id,
+    description: ActionManagerToken.description,
     tier: ACTION_MANAGER_SERVICE_TIER,
-    dependencies: [ValidationToken, BrudToolsToken],
-    accessPolicy: { allowedCallers: ACTION_MANAGER_ALLOWED_CALLERS },
-    factory: (): ActionManagerService => {
-      const dependencies: ActionManagerDependencies = {
-        ...(options?.logger === undefined ? {} : { logger: options.logger }),
-      };
-
-      const service = new ActionManagerService(dependencies);
-
-      return withExposedApis(service, (registry) => {
-        registry.registerApi(CORE_API_NAME.actionManager, ActionManagerToken, {
-          capability: 'actions:register',
-          scope: 'runtime',
-        });
-      });
+    exposes: {
+      [ACTION_MANAGER_EXPOSURE]: {
+        version: 1,
+        scope: 'runtime',
+        policy: { policyVersion: 2, capabilities: [ACTIONS_REGISTER_CAPABILITY] },
+        handle: (_caller, ctx) => ctx.instance,
+      },
+      // Official callers only (the Router is one): it trusts the caller view in
+      // its context, which non-official (caged) code can never supply.
+      [ACTION_MANAGER_DISPATCH_EXPOSURE]: {
+        version: 1,
+        scope: 'any',
+        policy: { policyVersion: 2, official: true },
+        handle: (_caller, ctx) => ({ dispatch: (operation: BrudOperation, context: BrudDispatchContext) => ctx.instance.dispatchRouted(operation, context) }),
+      },
     },
-  };
+    create: () => new ActionManagerService({
+      ...(options?.logger === undefined ? {} : { logger: options.logger }),
+    }),
+  })();
+
+  return {
+    ...base,
+    token: ActionManagerToken,
+    accessPolicy: { allowedCallers: ACTION_MANAGER_ALLOWED_CALLERS },
+  } as unknown as ServiceDescriptor<IActionManager, ActionManagerService>;
 }
 
-/** Standard ActionManager descriptor with no overrides. */
 export const ActionManagerDescriptor: ServiceDescriptor<
   IActionManager,
   ActionManagerService

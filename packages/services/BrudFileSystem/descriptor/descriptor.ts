@@ -3,10 +3,12 @@ import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { ExposedApiCaller } from '@brud/kernel';
 import { defineParticipant } from '@brud/sdk/participant';
-import { FILESYSTEM_EXPOSURE, FS_READ_CAPABILITY, FS_WRITE_CAPABILITY } from '../contracts/exposure.js';
-import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
+import { FILESYSTEM_EXPOSURE, FILESYSTEM_JOURNAL_EXPOSURE, FS_READ_CAPABILITY, FS_WRITE_CAPABILITY } from '../contracts/exposure.js';
+import { VALIDATION_EXPOSURE, VALIDATION_READ_CAPABILITY } from '../../ValidationService/contracts/exposure.js';
+import type { IValidationService } from '../../ValidationService/contracts/IValidationService.js';
+import { WORKSPACE_EXPOSURE, WORKSPACE_READ_CAPABILITY } from '../../WorkspaceService/contracts/exposure.js';
+import type { IWorkspaceService } from '../../WorkspaceService/contracts/IWorkspaceService.js';
 import type { WorkspacePathFlavor } from '../../WorkspaceService/contracts/IWorkspaceService.js';
-import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { requireContextString } from '@brud/kernel';
 import type { IBrudFileSystem } from '../contracts/IBrudFileSystem/IBrudFileSystem.js';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
@@ -59,6 +61,13 @@ export interface FileSystemDescriptorOptions {
   readonly validation?: ValidationAuthority;
 
   /**
+   * Reach the workspace and validation givers through their exposures
+   * (`brud.workspace`, `brud.validation`) at call time. Used by the service
+   * module when no explicit authority is supplied.
+   */
+  readonly resolveGivers?: boolean;
+
+  /**
    * Canonical workspace root the service binds to when no workspace authority
    * is injected. Defaults to the declared `filesystem.root` context field.
    */
@@ -104,8 +113,6 @@ export function createFileSystemDescriptor(
 
   const authorizedScopesByCaller = { ...options?.authorizedWriteScopesByCaller };
 
-  let bootContext: ServiceContext | undefined;
-
   const handle = (caller: ExposedApiCaller, instance: BrudFileSystem): IBrudFileSystem | null => {
     if (caller.capabilities.has(FS_WRITE_CAPABILITY)) {
       const scopes = caller.identity == null ? [] : authorizedScopesByCaller[caller.identity] ?? [];
@@ -116,20 +123,71 @@ export function createFileSystemDescriptor(
     return caller.capabilities.has(FS_READ_CAPABILITY) ? new ReadOnlyFacade(instance) : null;
   };
 
+  const warmups: (() => void)[] = [];
+
   const base = defineParticipant<BrudFileSystem>({
     id: FileSystemToken.id,
     description: FileSystemToken.description,
     tier: 'core',
+    ...(options?.resolveGivers === true ? { requests: [WORKSPACE_READ_CAPABILITY, VALIDATION_READ_CAPABILITY] } : {}),
+    // Givers are resolved on this participant's own runtime chain, so a later
+    // host-origin call reuses the handle instead of resolving under the host.
+    onRunning: async (ctx) => {
+      for (const warm of warmups) {
+        warm();
+      }
+
+      await ctx.instance.bindDeferredWorkspace();
+    },
     exposes: {
+      // The mutation feed: official participants subscribe; only the
+      // filesystem publishes.
+      [FILESYSTEM_JOURNAL_EXPOSURE]: {
+        version: 1,
+        scope: 'any',
+        policy: { policyVersion: 2, official: true },
+        handle: (_caller, ctx) => {
+          const journal = ctx.instance.mutationJournal;
+
+          return {
+            subscribe: (listener: Parameters<IFileMutationJournal['subscribe']>[0]) => journal.subscribe(listener),
+          };
+        },
+      },
       [FILESYSTEM_EXPOSURE]: {
         version: 1,
-        scope: 'runtime',
+        // Widened from runtime (2026-11-20): history reaches this giver while
+        // serving host-started calls; the capability policy still gates access.
+        scope: 'any',
+        policy: { policyVersion: 2, capabilities: [FS_READ_CAPABILITY] },
         handle: (caller, ctx) => handle(caller, ctx.instance),
       },
     },
-    create: () => {
+    create: (ctx) => {
+      warmups.length = 0;
+      const giver = <T>(name: string): (() => T) => {
+        let cached: T | null = null;
+
+        warmups.push(() => {
+          cached ??= ctx.resolve<T>(name);
+        });
+
+        return (): T => {
+          cached ??= ctx.resolve<T>(name);
+
+          if (cached === null) {
+            throw new Error(`${FileSystemToken.id}: ${name} is not resolvable`);
+          }
+
+          return cached;
+        };
+      };
+      const workspace = options?.workspace
+        ?? (options?.resolveGivers === true ? giver<IWorkspaceService>(WORKSPACE_EXPOSURE) : undefined);
+      const validation = options?.validation
+        ?? (options?.resolveGivers === true ? giver<IValidationService>(VALIDATION_EXPOSURE) : undefined);
       const root = options?.root ?? requireContextString(
-        bootContext?.options ?? {},
+        ctx.bootOptions,
         FILESYSTEM_ROOT_CONTEXT_FIELD,
         FileSystemToken.id,
       );
@@ -139,11 +197,12 @@ export function createFileSystemDescriptor(
           ? {}
           : { mutationJournal: options.mutationJournal }),
         ...(options?.flavor === undefined ? {} : { flavor: options.flavor }),
-        ...(options?.validation === undefined ? {} : { validation: options.validation }),
+        ...(validation === undefined ? {} : { validation }),
+        ...(options?.resolveGivers === true && options.workspace === undefined ? { deferWorkspace: true } : {}),
       };
 
-      return options?.workspace !== undefined
-        ? new BrudFileSystem(options.workspace, driver, serviceOptions)
+      return workspace !== undefined
+        ? new BrudFileSystem(workspace, driver, serviceOptions)
         : new BrudFileSystem(root, driver, serviceOptions);
     },
   })();
@@ -151,14 +210,6 @@ export function createFileSystemDescriptor(
   return {
     ...base,
     token: FileSystemToken,
-    tier: 'core',
-    dependencies: [WorkspaceToken, SettingsReaderToken],
-    accessPolicy: { deniedCallers: [] },
-    factory: (context: ServiceContext, ...rest: unknown[]) => {
-      bootContext = context;
-
-      return (base.factory as (...args: unknown[]) => BrudFileSystem)(context, ...rest);
-    },
     // Token-level projection, kept for hosts that take the token directly.
     project: (instance: BrudFileSystem, caller: ServiceContext): IBrudFileSystem => {
       const authorizedScopes = authorizedScopesByCaller[caller.callerId] ?? [];

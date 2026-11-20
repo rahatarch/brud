@@ -1,3 +1,4 @@
+import { hostAccess } from './support/hostAccess.js';
 /**
  * Behaviour carried over from the previous history test suites (D-15 U-7).
  *
@@ -11,7 +12,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../../kernel/src/__tests__/support/standardKernel.js';
 import type { BrudKernel } from '@brud/kernel';
 import type { KernelLogger, ServiceContext } from '@brud/kernel';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
@@ -48,8 +49,8 @@ describe('unified history — carried-over behaviour', () => {
     const root = await workspace(context);
     const kernel = await boot(root);
     try {
-      const fs = kernel.requestAccess(caller(root), FileSystemToken);
-      const history = kernel.requestAccess(caller(root), UniversalHistoryToken);
+      const fs = hostAccess(kernel, caller(root), FileSystemToken);
+      const history = hostAccess(kernel, caller(root), UniversalHistoryToken);
       await fs.writeAtomic('empty.txt', '');
       const session = await history.beginSession('fill an empty file', ['empty.txt']);
       await fs.writeAtomic('empty.txt', 'now has text\n');
@@ -87,7 +88,7 @@ describe('unified history — carried-over behaviour', () => {
     const root = await workspace(context);
     const kernel = await boot(root);
     try {
-      const history = kernel.requestAccess(caller(root), UniversalHistoryToken);
+      const history = hostAccess(kernel, caller(root), UniversalHistoryToken);
       const before = await history.listSessions({ limit: 100 });
       for (const bad of ['/etc/passwd', '../escape', '']) {
         await assert.rejects(() => history.beginSession('unsafe', [bad]), UnifiedInvalidTargetPathError);
@@ -106,8 +107,8 @@ describe('unified history — carried-over behaviour', () => {
     const first = await boot(root);
     let session: string;
     try {
-      const fs = first.requestAccess(caller(root), FileSystemToken);
-      const history = first.requestAccess(caller(root), UniversalHistoryToken);
+      const fs = hostAccess(first, caller(root), FileSystemToken);
+      const history = hostAccess(first, caller(root), UniversalHistoryToken);
       await fs.writeAtomic('kept.txt', 'before\n');
       session = await history.beginSession('spans a restart', ['kept.txt']);
       await fs.writeAtomic('kept.txt', 'during first boot\n');
@@ -117,8 +118,8 @@ describe('unified history — carried-over behaviour', () => {
 
     const second = await boot(root);
     try {
-      const fs = second.requestAccess(caller(root), FileSystemToken);
-      const history = second.requestAccess(caller(root), UniversalHistoryToken);
+      const fs = hostAccess(second, caller(root), FileSystemToken);
+      const history = hostAccess(second, caller(root), UniversalHistoryToken);
       assert.equal((await history.getSession(session))?.status, 'active');
       await fs.writeAtomic('kept.txt', 'after restart\n');
       const receipt = await history.commitSession(session, 'completed');
@@ -137,7 +138,7 @@ describe('unified history — carried-over behaviour', () => {
     const root = await workspace(context);
     const kernel = await boot(root);
     try {
-      const history = kernel.requestAccess(caller(root), UniversalHistoryToken);
+      const history = hostAccess(kernel, caller(root), UniversalHistoryToken);
       const ids: string[] = [];
       for (let index = 0; index < 5; index += 1) {
         ids.push(await history.beginSession(`session ${index}`, []));
@@ -154,21 +155,21 @@ describe('unified history — carried-over behaviour', () => {
     }
   });
 
-  it('declares core-tier descriptors with their boot dependencies (descriptor and bootstrap tests)', () => {
+  it('declares core-tier participants with no token dependencies (descriptor and bootstrap tests)', () => {
     const descriptors = createUnifiedHistoryDescriptors({
       driver: new DurableNodeStorageDriver(),
       journal: createFileMutationJournal(),
       inMemory: true,
     });
-    assert.equal(descriptors.session.token, UniversalHistoryToken);
+    assert.equal(descriptors.session.token.id, UniversalHistoryToken.id);
     assert.equal(descriptors.session.tier, 'core');
     assert.deepEqual(
       descriptors.session.dependencies.map((token) => token.id),
-      [FileSystemToken.id],
+      [],
     );
-    assert.equal(descriptors.journal.token, HistoryToken);
+    assert.equal(descriptors.journal.token.id, HistoryToken.id);
     assert.equal(descriptors.journal.tier, 'core');
-    assert.deepEqual(descriptors.journal.dependencies.map((token) => token.id), [UniversalHistoryToken.id]);
+    assert.deepEqual(descriptors.journal.dependencies.map((token) => token.id), []);
   });
 
   it('boots with a malformed previous seq.json, reports it, and still allocates ids (id allocator: malformed counter)', async (context) => {
@@ -187,7 +188,7 @@ describe('unified history — carried-over behaviour', () => {
 
     const kernel = await boot(root, logger);
     try {
-      const history = kernel.requestAccess(caller(root), UniversalHistoryToken);
+      const history = hostAccess(kernel, caller(root), UniversalHistoryToken);
       const session = await history.beginSession('after a bad counter', []);
       assert.match(session, /^BR-\d{8}-\d{3,}$/u);
       assert.ok(

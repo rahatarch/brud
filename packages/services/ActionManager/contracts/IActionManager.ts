@@ -153,13 +153,12 @@ export const ACTION_MANAGER_DAEMON_CALLER_ID = 'brud.host.daemon';
 /**
  * Callers allowed to resolve the ActionManager token.
  *
- * `kernel` covers boot/composition probes, `PluginManager` is the only path a
- * plugin has (registration), and `brud.host.daemon` is the UI RPC path.
- * Plugins never hold the broker, so a plugin caller id is never in this list.
+ * Token-level access only: `kernel` covers boot/composition probes and
+ * `brud.host.daemon` is the UI RPC path. Participants register through the
+ * `brud.actions` exposure (policy `actions:register`), not the token.
  */
 export const ACTION_MANAGER_ALLOWED_CALLERS: readonly string[] = Object.freeze([
   'kernel',
-  'PluginManager',
   ACTION_MANAGER_DAEMON_CALLER_ID,
   'brud.core.router',
 ]);

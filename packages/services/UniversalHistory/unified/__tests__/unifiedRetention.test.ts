@@ -1,3 +1,4 @@
+import { hostAccess } from './support/hostAccess.js';
 /**
  * Retention and garbage collection (D-15 U-8, gate G-U8).
  *
@@ -13,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../../kernel/src/__tests__/support/standardKernel.js';
 import { waitForChildClose, waitForChildData } from '../../../../kernel/src/__tests__/support/childWithTimeout.js';
 import { safeRm } from '../../../../kernel/src/__tests__/support/cleanup.js';
 import type { ServiceContext } from '@brud/kernel';
@@ -368,10 +369,10 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
     };
 
     const first = await boot(null);
-    const history = first.requestAccess(caller, UniversalHistoryToken);
+    const history = hostAccess(first, caller, UniversalHistoryToken);
     const aborted = await history.beginSession('abandoned long ago', []);
     await history.commitSession(aborted, 'aborted');
-    await first.requestAccess(caller, FileSystemToken).writeAtomic('keep.txt', 'kept\n');
+    await hostAccess(first, caller, FileSystemToken).writeAtomic('keep.txt', 'kept\n');
     await first.shutdown();
 
     // Age the aborted session by 100 days.
@@ -382,12 +383,12 @@ describe('history retention at boot through settings (D-15 U-8)', () => {
     db.close();
 
     const kept = await boot({ historyRetentionDays: 365 });
-    assert.equal((await kept.requestAccess(caller, UniversalHistoryToken).getSession(aborted))?.status, 'aborted');
+    assert.equal((await hostAccess(kept, caller, UniversalHistoryToken).getSession(aborted))?.status, 'aborted');
     await kept.shutdown();
 
     const pruned = await boot(null);
-    assert.equal(await pruned.requestAccess(caller, UniversalHistoryToken).getSession(aborted), null);
-    assert.equal(await pruned.requestAccess(caller, FileSystemToken).readText('keep.txt'), 'kept\n');
+    assert.equal(await hostAccess(pruned, caller, UniversalHistoryToken).getSession(aborted), null);
+    assert.equal(await hostAccess(pruned, caller, FileSystemToken).readText('keep.txt'), 'kept\n');
     await pruned.shutdown();
     assert.equal(existsSync(dbPath), true);
     assert.ok((await readFile(dbPath)).byteLength > 0);
@@ -562,7 +563,7 @@ describe('history retention — live-row claims (U-8 corrective, RL)', () => {
     // A real process that boots a kernel, leaves an unclaimed-entry row behind,
     // and is killed without disposing.
     const script = `
-const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../kernel/src/bootstrap/index.ts', import.meta.url).href)});
+const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../kernel/src/__tests__/support/standardKernel.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
 await kernel.boot({ options: { 'workspace.root': process.argv[2], 'settings.root': process.argv[2], 'filesystem.root': process.argv[2], 'terminal.root': process.argv[2], 'pluginManager.root': process.argv[2], 'history.root': process.argv[2], 'router.root': process.argv[2], 'identity.registry.path': process.argv[3] } });
 process.stdout.write('ready');
@@ -660,7 +661,7 @@ await new Promise(() => {});
     // killed without disposing. No later boot of that owner ever happens, so
     // the boot sweep is not available to the assertion below.
     const script = `
-const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../kernel/src/bootstrap/index.ts', import.meta.url).href)});
+const { createStandardKernel } = await import(${JSON.stringify(new URL('../../../../kernel/src/__tests__/support/standardKernel.ts', import.meta.url).href)});
 const kernel = createStandardKernel();
 await kernel.boot({ options: { 'workspace.root': process.argv[2], 'settings.root': process.argv[2], 'filesystem.root': process.argv[2], 'terminal.root': process.argv[2], 'pluginManager.root': process.argv[2], 'history.root': process.argv[2], 'router.root': process.argv[2], 'identity.registry.path': process.argv[3] } });
 process.stdout.write('ready');

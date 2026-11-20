@@ -15,7 +15,7 @@ import { ALL_VALIDATION_RULES, VALIDATION_RULE_COUNT, ruleCategory } from '../co
 import { ValidationService } from '../orchestrator/ValidationService.js';
 import { KIND_CONSTRAINTS } from '../engine/kindMatrix.js';
 import { externalMessages } from '../engine/errorCatalog.js';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../kernel/src/__tests__/support/standardKernel.js';
 import { ValidationToken } from '../descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
@@ -742,7 +742,7 @@ describe('errorCatalog — baseline message parity', () => {
 });
 
 describe('ValidationService — standard kernel registration', () => {
-  it('registers after workspace and before history, with both dependencies', async (context) => {
+  it('registers after workspace and before history', async (context) => {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'brud-validation-kernel-')));
     context.after(() => rm(root, { recursive: true, force: true }));
     const kernel = createStandardKernel({
@@ -759,10 +759,20 @@ describe('ValidationService — standard kernel registration', () => {
       assert.ok(ids.indexOf('brud.core.validation') > ids.indexOf('brud.core.settings'));
       assert.ok(ids.indexOf('brud.core.validation') < ids.indexOf('brud.core.history'));
 
-      const validation = kernel.requestAccess(
+      const rawValidation = kernel.requestAccess(
         { callerId: 'test.runner', tier: 'core', options: {...workspaceContextOptions(root)} },
         ValidationToken,
       );
+      // Production mirror: a host reaches validation inside a host call chain.
+      const validation = new Proxy(rawValidation, {
+        get: (target, property) => {
+          const member = Reflect.get(target, property, target) as unknown;
+
+          return typeof member === 'function'
+            ? (...args: unknown[]) => kernel.runHostCall({ capabilities: ['workspace:read'] }, () => Reflect.apply(member, target, args))
+            : member;
+        },
+      });
 
       assert.equal(validation.getPolicy().workspaceBoundaryEnabled, true);
       assert.equal(validation.getPolicy().commandValidationEnabled, true);

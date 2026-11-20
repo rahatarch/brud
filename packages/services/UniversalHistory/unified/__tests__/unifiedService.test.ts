@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../../kernel/src/__tests__/support/standardKernel.js';
 import { safeRm } from '../../../../kernel/src/__tests__/support/cleanup.js';
 import type { ServiceContext } from '@brud/kernel';
 import type { IBrudFileSystem } from '../../../BrudFileSystem/contracts/IBrudFileSystem/IBrudFileSystem.js';
@@ -12,9 +12,11 @@ import { BrudFileSystem } from '../../../BrudFileSystem/orchestrator/BrudFileSys
 import { createFileMutationJournal } from '../../../BrudFileSystem/events/FileMutationJournal.js';
 import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
-import { FileMutationJournalToken } from '../../../BrudFileSystem/descriptor/journalTokens.js';
+import { DurableNodeStorageDriver } from '../../../BrudFileSystem/drivers/DurableNodeStorageDriver.js';
+import type { IFileMutationJournal } from '../../../BrudFileSystem/events/types.js';
 import { UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
+import { hostAccess } from './support/hostAccess.js';
 import {
   CORE_NAMESPACE,
   UnifiedEntrySchemaError,
@@ -124,13 +126,13 @@ async function boot(ws: Workspace): Promise<KernelHandle> {
   };
   await kernel.boot({ options: bootOptions });
   const caller: ServiceContext = { callerId: 'test.d15.service', tier: 'core', options: bootOptions };
-  const fs = kernel.requestAccess(caller, FileSystemToken);
-  // The filesystem owns the journal. The second service resolves it through
-  // the same exposed API the history service uses, not through a boot key.
-  const mutation = kernel.requestAccess(
-    { callerId: UniversalHistoryToken.id, tier: 'core', options: bootOptions },
-    FileMutationJournalToken,
-  );
+  const fs = hostAccess(kernel, caller, FileSystemToken);
+  // The filesystem owns the journal; this second service subscribes to the
+  // same instance's feed and uses its own storage driver (as history does).
+  const mutation = {
+    journal: (kernel.requestAccess(caller, FileSystemToken) as unknown as { mutationJournal: IFileMutationJournal }).mutationJournal,
+    driver: new DurableNodeStorageDriver(),
+  };
 
   const historyRoot = join(ws.root, '.brud', 'history');
   const store = new UnifiedHistoryStore({

@@ -45,3 +45,4 @@ export type {
   RollbackReport,
   RollbackStatus,
 } from './models.js';
+export * from './exposure.js';

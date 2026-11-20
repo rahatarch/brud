@@ -55,10 +55,10 @@ function createKernel(): BrudKernel {
 }
 
 describe('createWorkspaceDescriptor', () => {
-  it('describes a core service that depends on the settings reader', () => {
+  it('describes a core participant with no token dependencies', () => {
     const descriptor = createWorkspaceDescriptor();
 
-    assert.equal(descriptor.token, WorkspaceToken);
+    assert.equal(descriptor.token.id, WorkspaceToken.id);
     assert.equal(WorkspaceToken.id, 'brud.core.workspace');
     assert.equal(
       WorkspaceToken.description,
@@ -68,13 +68,13 @@ describe('createWorkspaceDescriptor', () => {
     assert.equal(descriptor.tier, WORKSPACE_SERVICE_TIER);
     assert.deepEqual(
       descriptor.dependencies.map((token) => token.id),
-      ['brud.core.settings.reader'],
+      [],
     );
     assert.equal(descriptor.accessPolicy, undefined);
   });
 
   it('boots after settings and before the filesystem in the standard kernel', async () => {
-    const { createStandardKernel } = await import('@brud/kernel');
+    const { createStandardKernel } = await import('../../../kernel/src/__tests__/support/standardKernel.js');
     const kernel = createStandardKernel({
       history: { inMemory: true },
       workspace: { port: realPort() },

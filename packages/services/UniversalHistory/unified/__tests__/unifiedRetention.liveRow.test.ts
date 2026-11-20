@@ -1,3 +1,4 @@
+import { hostAccess } from './support/hostAccess.js';
 /**
  * Retention must not delete a live process's implicit session row
  * (U-8 corrective, RL — plan §5.2).
@@ -24,7 +25,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { TestContext } from 'node:test';
 import type { ServiceContext } from '@brud/kernel';
-import { createStandardKernel } from '@brud/kernel';
+import { createStandardKernel } from '../../../../kernel/src/__tests__/support/standardKernel.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
 import { provisionIdentityRegistryStorage } from '@brud/kernel';
@@ -94,7 +95,7 @@ function sleep(ms: number): Promise<void> {
 
 // ── worker process ────────────────────────────────────────────────────
 
-const BOOTSTRAP_URL = new URL('../../../../kernel/src/bootstrap/index.ts', import.meta.url).href;
+const BOOTSTRAP_URL = new URL('../../../../kernel/src/__tests__/support/standardKernel.ts', import.meta.url).href;
 const HISTORY_TOKENS_URL = new URL('../../descriptor/tokens.js', import.meta.url).href;
 const FILE_TOKENS_URL = new URL('../../../BrudFileSystem/descriptor/tokens.js', import.meta.url).href;
 
@@ -110,9 +111,17 @@ const emit = (payload) => appendFileSync(outbox, JSON.stringify(payload) + Strin
 const kernel = createStandardKernel();
 await kernel.boot({ options: { 'workspace.root': root, 'settings.root': root, 'filesystem.root': root, 'terminal.root': root, 'pluginManager.root': root, 'history.root': root, 'router.root': root, 'identity.registry.path': identityRegistryPath } });
 const caller = { callerId: 'retention.liveRow.worker', tier: 'core', workspaceRoot: root };
-const journal = kernel.requestAccess(caller, HistoryToken);
-const fileSystem = kernel.requestAccess(caller, FileSystemToken);
-const history = kernel.requestAccess(caller, UniversalHistoryToken);
+const HOST_CAPS = ['fs:read', 'fs:write', 'workspace:read', 'validation:read', 'history:read', 'history:write'];
+const hostAccess = (k, c, t) => {
+  const raw = k.requestAccess(c, t);
+  return new Proxy(raw, { get: (target, p) => {
+    const m = Reflect.get(target, p, target);
+    return typeof m === 'function' ? (...a) => k.runHostCall({ capabilities: HOST_CAPS }, () => Reflect.apply(m, target, a)) : m;
+  } });
+};
+const journal = hostAccess(kernel, caller, HistoryToken);
+const fileSystem = hostAccess(kernel, caller, FileSystemToken);
+const history = hostAccess(kernel, caller, UniversalHistoryToken);
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const commands = {
@@ -332,7 +341,7 @@ async function bootParent(context: TestContext, workspaceRoot: string): Promise<
     kernel,
     caller,
     run(policy = {}): void {
-      const history = kernel.requestAccess(caller, UniversalHistoryToken) as unknown as {
+      const history = hostAccess(kernel, caller, UniversalHistoryToken) as unknown as {
         readonly service?: { readonly store: { applyRetention: (p: Record<string, unknown>) => unknown } };
         readonly store?: { applyRetention: (p: Record<string, unknown>) => unknown };
       };

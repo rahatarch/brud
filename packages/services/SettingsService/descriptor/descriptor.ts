@@ -1,4 +1,4 @@
-import type { ServiceContext, ServiceDescriptor, ServiceTier } from '@brud/kernel';
+import type { ServiceDescriptor, ServiceTier } from '@brud/kernel';
 import { byCapability, defineParticipant, type Surface } from '@brud/sdk/participant';
 import {
   SETTINGS_EXPOSURE,
@@ -57,17 +57,6 @@ export interface SettingsDescriptorOptions {
   readonly onWarning?: (warning: SettingsWarning) => void;
 }
 
-/**
- * Builds the settings service descriptor.
- *
- * The descriptor has no dependencies so it boots first in the standard
- * kernel. `accessPolicy` restricts the mutating token to the kernel and the
- * trusted hosts. `project` still degrades a userland caller to a
- * mutation-free reader as defence in depth.
- *
- * @param options - Optional store, defaults, and warning overrides.
- * @returns A core-tier descriptor for `brud.core.settings`.
- */
 /** Read surface shared by both capabilities of `brud.settings`. */
 const readSurface: Surface<SettingsService> = (ctx) => ({
   getSnapshot: () => ctx.instance.getSnapshot(),
@@ -78,18 +67,13 @@ const readSurface: Surface<SettingsService> = (ctx) => ({
  * Builds the `brud.core.settings` descriptor with the BrudOS SDK: one exposure,
  * `brud.settings@1`. `settings:read` gets `getSnapshot`/`onChange`;
  * `settings:write` adds `update`/`reload`; callers with neither get `null`
- * (open read access is `brud.settings.reader`). The token-level `accessPolicy`
- * is kept for hosts that still take the token directly.
+ * (open read access is `brud.settings.reader`).
  *
- * `create` does not receive the boot `ServiceContext` (SDK gap), so the factory
- * is wrapped to capture it for the `settings.root` context field.
  */
 export function createSettingsDescriptor(
   options?: SettingsDescriptorOptions,
 ): ServiceDescriptor<ISettingsService, SettingsService> {
-  let bootContext: ServiceContext | undefined;
-
-  const base = defineParticipant<SettingsService>({
+  return defineParticipant<SettingsService>({
     id: SettingsToken.id,
     description: SettingsToken.description,
     tier: SETTINGS_SERVICE_TIER,
@@ -97,6 +81,7 @@ export function createSettingsDescriptor(
       [SETTINGS_EXPOSURE]: {
         version: 1,
         scope: 'runtime',
+        policy: { policyVersion: 2, capabilities: [SETTINGS_READ_CAPABILITY] },
         handle: byCapability<SettingsService>({
           [SETTINGS_READ_CAPABILITY]: readSurface,
           [SETTINGS_WRITE_CAPABILITY]: (ctx, caller) => ({
@@ -107,10 +92,10 @@ export function createSettingsDescriptor(
         }),
       },
     },
-    create: () => {
+    create: (ctx) => {
       const store = options?.store ?? new ConfigStore({
         workspaceRoot: requireContextString(
-          bootContext?.options ?? {},
+          ctx.bootOptions,
           SETTINGS_ROOT_CONTEXT_FIELD,
           SettingsToken.id,
         ),
@@ -123,18 +108,7 @@ export function createSettingsDescriptor(
         ...(options?.onWarning === undefined ? {} : { onWarning: options.onWarning }),
       });
     },
-  })();
-
-  return {
-    ...base,
-    token: SettingsToken,
-    accessPolicy: { allowedCallers: [...SETTINGS_MUTATOR_CALLERS] },
-    factory: (context: ServiceContext, ...rest: unknown[]) => {
-      bootContext = context;
-
-      return (base.factory as (...args: unknown[]) => SettingsService)(context, ...rest);
-    },
-  } as unknown as ServiceDescriptor<ISettingsService, SettingsService>;
+  })() as unknown as ServiceDescriptor<ISettingsService, SettingsService>;
 }
 
 /**
@@ -144,7 +118,7 @@ export function createSettingsDescriptor(
  * the defaults and a no-op subscription.
  */
 export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsReader> {
-  const base = defineParticipant<ISettingsReaderApi>({
+  return defineParticipant<ISettingsReaderApi>({
     id: SettingsReaderToken.id,
     description: SettingsReaderToken.description,
     tier: SETTINGS_SERVICE_TIER,
@@ -152,7 +126,9 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
     exposes: {
       [SETTINGS_READER_EXPOSURE]: {
         version: 1,
-        scope: 'runtime',
+        // Open read: admits host-rooted chains so kind owners (e.g. the tool
+        // allow-list) can read settings while serving a routed request.
+        scope: 'any',
         handle: (_caller, ctx): ISettingsReaderApi => ctx.instance,
       },
     },
@@ -165,7 +141,5 @@ export function createSettingsReaderDescriptor(): ServiceDescriptor<ISettingsRea
           source()?.onChange(listener) ?? ((): void => undefined),
       };
     },
-  })();
-
-  return { ...base, token: SettingsReaderToken, dependencies: [SettingsToken] } as unknown as ServiceDescriptor<ISettingsReader>;
+  })() as unknown as ServiceDescriptor<ISettingsReader>;
 }
