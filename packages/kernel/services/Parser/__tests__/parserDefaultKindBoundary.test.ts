@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,7 +27,8 @@ async function productionSources(): Promise<readonly {
   const sources: { readonly path: string; readonly source: string }[] = [];
 
   for (const entry of entries) {
-    const relativePath = relative(PACKAGE_ROOT, join(PACKAGE_ROOT, entry));
+    // `/` on every OS, so the `__tests__/` prefix check below also holds on Windows.
+    const relativePath = relative(PACKAGE_ROOT, join(PACKAGE_ROOT, entry)).split(sep).join('/');
 
     if (!relativePath.endsWith('.ts') || relativePath.startsWith(TEST_DIRECTORY)) {
       continue;

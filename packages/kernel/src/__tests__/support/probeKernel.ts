@@ -3,11 +3,12 @@
  * participants, each owning one operation kind. Nothing here names a
  * Foundation service, plugin, or tool.
  */
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { TestContext } from 'node:test';
 import { ExposedApiRegistryToken, bootKernel, type BrudKernel } from '../../../index.js';
+import { safeRm } from './cleanup.js';
 import { workspaceContextOptions } from './workspaceContext.js';
 
 const HARDCORES = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']
@@ -89,7 +90,7 @@ export async function probeRoot(
 
   t.after(async () => {
     await beforeRemove?.();
-    await rm(root, { recursive: true, force: true });
+    await safeRm(root);
   });
 
   return root;

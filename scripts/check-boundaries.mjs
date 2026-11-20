@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const REPO_ROOT = resolve(new URL('../', import.meta.url).pathname);
+const REPO_ROOT = resolve(fileURLToPath(new URL('../', import.meta.url)));
 const PLUGINS_ROOT = join(REPO_ROOT, 'packages', 'plugins');
 
 /**
@@ -45,6 +46,11 @@ function pluginDirectories() {
     .sort();
 }
 
+/** True when `candidate` is `directory` or lies inside it, with the platform's own separator. */
+function isInside(directory, candidate) {
+  return candidate === directory || candidate.startsWith(directory + sep);
+}
+
 function isForbidden(specifier, file, packageRoot) {
   if (FORBIDDEN_SPECIFIERS.has(specifier)) {
     return true;
@@ -60,11 +66,11 @@ function isForbidden(specifier, file, packageRoot) {
 
   const resolvedImport = resolve(dirname(file), specifier);
 
-  if (FORBIDDEN_ROOTS.some((root) => resolvedImport === root || resolvedImport.startsWith(root + '/'))) {
+  if (FORBIDDEN_ROOTS.some((root) => isInside(root, resolvedImport))) {
     return true;
   }
 
-  return !(resolvedImport === packageRoot || resolvedImport.startsWith(packageRoot + '/'));
+  return !isInside(packageRoot, resolvedImport);
 }
 
 const violations = [];
@@ -80,7 +86,7 @@ for (const packageRoot of plugins) {
 
     while ((match = pattern.exec(contents)) !== null) {
       if (isForbidden(match[1], file, packageRoot)) {
-        violations.push(`${relative(REPO_ROOT, file)} imports "${match[1]}"`);
+        violations.push(`${relative(REPO_ROOT, file).split(sep).join('/')} imports "${match[1]}"`);
       }
     }
   }

@@ -38,6 +38,11 @@ import { ROUTER_CONTEXT_SCOPE } from '../../services/Router/bootOptions.js';
  */
 
 const KERNEL_ROOT = fileURLToPath(new URL('../../', import.meta.url));
+
+/** Path of `file` under the kernel package, always with `/` so it matches the recorded allowlists on every OS. */
+function kernelRelative(file: string): string {
+  return relative(KERNEL_ROOT, file).split(sep).join('/');
+}
 const BOOT_TYPES = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootTypes.ts');
 const KERNEL_CONTRACT = join(KERNEL_ROOT, 'src', 'contracts', 'kernel.ts');
 const BOOT_LOADER = join(KERNEL_ROOT, 'src', 'bootstrap', 'bootKernelInternal.ts');
@@ -904,7 +909,7 @@ describe('BC-1: no plugin, partition, or storage-driver concept in the kernel', 
       const source = await readFile(file, 'utf8');
 
       for (const violation of conceptViolations(source)) {
-        violations.push(`${relative(KERNEL_ROOT, file)}: ${violation}`);
+        violations.push(`${kernelRelative(file)}: ${violation}`);
       }
     }
 
@@ -923,7 +928,7 @@ describe('BC-1: no plugin, partition, or storage-driver concept in the kernel', 
 
       for (const name of names) {
         if (BANNED_EXPORT_NAMES.includes(name)) {
-          violations.push(`${relative(KERNEL_ROOT, file)}: ${name}`);
+          violations.push(`${kernelRelative(file)}: ${name}`);
         }
       }
     }
@@ -1081,7 +1086,7 @@ describe('BC-5: kernel source carries no plugin-manager key', () => {
       const source = await readFile(file, 'utf8');
 
       for (const violation of pluginManagerKeyViolations(source)) {
-        violations.push(`${relative(KERNEL_ROOT, file)}: ${violation}`);
+        violations.push(`${kernelRelative(file)}: ${violation}`);
       }
     }
 
@@ -1118,7 +1123,7 @@ describe('BC-6: kernel comments describe the kernel, not a specific participant'
       const source = await readFile(file, 'utf8');
 
       for (const violation of participantShapingCommentViolations(source)) {
-        violations.push(`${relative(KERNEL_ROOT, file)}: ${violation}`);
+        violations.push(`${kernelRelative(file)}: ${violation}`);
       }
     }
 
@@ -1150,7 +1155,7 @@ describe('BC-7: kernel root exports no participant-shaped declaration', () => {
 
     for (const file of files) {
       declarations.push(...exportedDeclarationsWithComments(
-        relative(KERNEL_ROOT, file),
+        kernelRelative(file),
         await readFile(file, 'utf8'),
       ));
     }
@@ -1358,7 +1363,7 @@ async function kernelSources(): Promise<readonly { readonly file: string; readon
 
   for (const absolute of files) {
     sources.push({
-      file: relative(KERNEL_ROOT, absolute),
+      file: kernelRelative(absolute),
       absolute,
       source: await readFile(absolute, 'utf8'),
     });
