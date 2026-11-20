@@ -1,23 +1,21 @@
 #!/usr/bin/env node
-import { format } from 'node:util';
-import { createDaemon, createStdioDaemon } from './server/createDaemon.js';
-import type { RunningDaemon, RunningStdioDaemon } from './server/createDaemon.js';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { createDaemon } from './server/createDaemon.js';
+import type { RunningDaemon } from './server/createDaemon.js';
 
 interface CliOptions {
-  readonly workspaceRoot: string;
+  readonly home: string;
+  readonly operatorConfigPath: string | undefined;
   readonly idleTimeoutMs: number | undefined;
-  readonly workspaceIdleTimeoutMs: number | undefined;
+  readonly instanceIdleTimeoutMs: number | undefined;
   readonly foreground: boolean;
-  readonly stdio: boolean;
 }
 
-const KNOWN_FLAGS = new Set([
-  '--workspace',
-  '--idle-ms',
-  '--workspace-idle-ms',
-  '--foreground',
-  '--stdio',
-]);
+const KNOWN_FLAGS = new Set(['--home', '--config', '--idle-ms', '--instance-idle-ms', '--foreground']);
+
+/** Default daemon home when neither `--home` nor `BRUD_DAEMON_HOME` is set. */
+export const DEFAULT_DAEMON_HOME = join(homedir(), '.brud');
 
 function readArgument(args: readonly string[], flag: string): string | undefined {
   const index = args.indexOf(flag);
@@ -27,44 +25,37 @@ function readArgument(args: readonly string[], flag: string): string | undefined
   }
 
   const value = args[index + 1];
+
   return value === undefined || value.length === 0 || value.startsWith('--') ? undefined : value;
 }
 
-function parseIdleTimeout(raw: string | undefined): number | undefined {
+function parseTimeout(raw: string | undefined, flag: string): number | undefined {
   if (raw === undefined) {
     return undefined;
   }
 
   const parsed = Number.parseInt(raw, 10);
 
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error(`Invalid --idle-ms value "${raw}"`);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error(`Invalid ${flag} value "${raw}"`);
   }
 
   return parsed;
 }
 
-function assertKnownFlags(argv: readonly string[]): void {
+function parseOptions(argv: readonly string[]): CliOptions {
   for (const argument of argv) {
     if (argument.startsWith('--') && !KNOWN_FLAGS.has(argument)) {
       throw new Error(`Unknown daemon option "${argument}"`);
     }
   }
-}
-
-function parseOptions(argv: readonly string[]): CliOptions {
-  assertKnownFlags(argv);
-
-  const workspaceRoot = readArgument(argv, '--workspace')
-    ?? process.env.BRUD_DAEMON_WORKSPACE
-    ?? process.cwd();
 
   return {
-    workspaceRoot,
-    idleTimeoutMs: parseIdleTimeout(readArgument(argv, '--idle-ms')),
-    workspaceIdleTimeoutMs: parseIdleTimeout(readArgument(argv, '--workspace-idle-ms')),
+    home: readArgument(argv, '--home') ?? process.env.BRUD_DAEMON_HOME ?? DEFAULT_DAEMON_HOME,
+    operatorConfigPath: readArgument(argv, '--config') ?? process.env.BRUD_DAEMON_CONFIG,
+    idleTimeoutMs: parseTimeout(readArgument(argv, '--idle-ms'), '--idle-ms'),
+    instanceIdleTimeoutMs: parseTimeout(readArgument(argv, '--instance-idle-ms'), '--instance-idle-ms'),
     foreground: argv.includes('--foreground'),
-    stdio: argv.includes('--stdio'),
   };
 }
 
@@ -72,99 +63,26 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-/**
- * Keeps stdout reserved for MCP JSON-RPC.
- *
- * The kernel's plugin manager emits diagnostics through `console.info`, which
- * writes to stdout. In stdio mode that would interleave human-readable lines
- * with protocol frames, so console logging is redirected to stderr for the
- * lifetime of the process.
- */
-function redirectConsoleToStderr(): void {
-  const write = (...args: unknown[]): void => {
-    process.stderr.write(`${format(...args)}\n`);
-  };
-
-  console.log = write;
-  console.info = write;
-  console.debug = write;
-}
-
-async function runStdio(options: CliOptions): Promise<void> {
-  redirectConsoleToStderr();
-
-  const daemon: RunningStdioDaemon = await createStdioDaemon({
-    workspaceRoot: options.workspaceRoot,
-    ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: options.idleTimeoutMs }),
-    ...(options.workspaceIdleTimeoutMs === undefined
-      ? {}
-      : { workspaceIdleTimeoutMs: options.workspaceIdleTimeoutMs }),
-    stdio: true,
-  });
-
-  process.stderr.write(
-    `brud-daemon stdio mode ready (workspace: ${daemon.workspaceRoot})\n`,
-  );
-
-  let terminating = false;
-
-  const terminate = async (reason: string): Promise<void> => {
-    if (terminating) {
-      return;
-    }
-
-    terminating = true;
-
-    try {
-      await daemon.shutdown();
-      process.stderr.write(`brud-daemon stopped (${reason})\n`);
-      process.exit(0);
-    } catch (error: unknown) {
-      process.stderr.write(`brud-daemon shutdown failed: ${describeError(error)}\n`);
-      process.exit(1);
-    }
-  };
-
-  process.once('SIGINT', () => {
-    void terminate('SIGINT');
-  });
-  process.once('SIGTERM', () => {
-    void terminate('SIGTERM');
-  });
-
-  await daemon.clientClosed;
-  await terminate('stdin closed');
-}
-
 async function main(): Promise<void> {
   // The host that spawned this process is the only socket peer admitted.
   const expectedPeerPid = process.ppid;
   const options = parseOptions(process.argv.slice(2));
-
-  if (options.stdio) {
-    await runStdio(options);
-    return;
-  }
 
   if (!options.foreground) {
     process.stdout.write('brud-daemon runs in the foreground; pass --foreground to silence this notice\n');
   }
 
   const daemon: RunningDaemon = await createDaemon({
-    workspaceRoot: options.workspaceRoot,
+    home: options.home,
+    ...(options.operatorConfigPath === undefined ? {} : { operatorConfigPath: options.operatorConfigPath }),
     ...(options.idleTimeoutMs === undefined ? {} : { idleTimeoutMs: options.idleTimeoutMs }),
-    ...(options.workspaceIdleTimeoutMs === undefined
-      ? {}
-      : { workspaceIdleTimeoutMs: options.workspaceIdleTimeoutMs }),
+    ...(options.instanceIdleTimeoutMs === undefined ? {} : { instanceIdleTimeoutMs: options.instanceIdleTimeoutMs }),
     expectedPeerPid,
   });
 
-  process.stdout.write(
-    `brud-daemon listening on ${daemon.endpoint.socketPath} (workspace: ${daemon.endpoint.workspaceRoot})\n`,
-  );
+  process.stdout.write(`brud-daemon listening on ${daemon.endpoint.socketPath} (home: ${daemon.endpoint.home})\n`);
 
   let terminating = false;
-
   const terminate = async (signal: NodeJS.Signals): Promise<void> => {
     if (terminating) {
       return;

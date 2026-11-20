@@ -5,29 +5,17 @@ export const DAEMON_CONNECT = 'daemon.connect';
 export const DAEMON_PING = 'daemon.ping';
 export const DAEMON_INFO = 'daemon.info';
 
-export const WORKSPACE_LIST = 'workspace.list';
-export const WORKSPACE_STATUS = 'workspace.status';
-export const WORKSPACE_DISPOSE = 'workspace.dispose';
+/** Kernel-instance methods: the daemon is a neutral host for kernels. */
+export const KERNEL_REQUIREMENTS = 'kernel.requirements';
+export const KERNEL_BOOT = 'kernel.boot';
+export const KERNEL_ATTACH = 'kernel.attach';
+export const KERNEL_LIST = 'kernel.list';
+export const KERNEL_STATUS = 'kernel.status';
+export const KERNEL_DISPOSE = 'kernel.dispose';
+export const KERNEL_KINDS = 'kernel.kinds';
+export const KERNEL_ROUTE = 'kernel.route';
 
-export const TOOLS_LIST = 'tools.list';
-export const TOOLS_EXECUTE = 'tools.execute';
-
-export const ACTIONS_LIST = 'actions.list';
-export const ACTIONS_EXECUTE = 'actions.execute';
-
-/**
- * Client-to-daemon cancellation frame.
- *
- * Retained as a notification for every existing client. A newer client may
- * send it as a request and receive the outcome as that request's result.
- */
 export const REQUEST_CANCEL = 'request.cancel';
-
-/**
- * Daemon-to-client acknowledgment for a cancellation notification.
- *
- * Additive: existing clients that ignore unknown notifications are unaffected.
- */
 export const REQUEST_CANCELLED = 'request.cancelled';
 
 export const REQUEST_METHODS = [REQUEST_CANCEL] as const;
@@ -36,18 +24,17 @@ export type RequestMethod = (typeof REQUEST_METHODS)[number];
 export const DAEMON_METHODS = [DAEMON_CONNECT, DAEMON_PING, DAEMON_INFO] as const;
 export type DaemonMethod = (typeof DAEMON_METHODS)[number];
 
-export const WORKSPACE_METHODS = [
-  WORKSPACE_LIST,
-  WORKSPACE_STATUS,
-  WORKSPACE_DISPOSE,
+export const KERNEL_METHODS = [
+  KERNEL_REQUIREMENTS,
+  KERNEL_BOOT,
+  KERNEL_ATTACH,
+  KERNEL_LIST,
+  KERNEL_STATUS,
+  KERNEL_DISPOSE,
+  KERNEL_KINDS,
+  KERNEL_ROUTE,
 ] as const;
-export type WorkspaceMethod = (typeof WORKSPACE_METHODS)[number];
-
-export const TOOLS_METHODS = [TOOLS_LIST, TOOLS_EXECUTE] as const;
-export type ToolsMethod = (typeof TOOLS_METHODS)[number];
-
-export const ACTIONS_METHODS = [ACTIONS_LIST, ACTIONS_EXECUTE] as const;
-export type ActionsMethod = (typeof ACTIONS_METHODS)[number];
+export type KernelMethod = (typeof KERNEL_METHODS)[number];
 
 export interface DaemonClientIdentity {
   readonly name: string;
@@ -58,18 +45,18 @@ export interface DaemonClientIdentity {
  * Caller capability tier presented during `daemon.connect`.
  *
  * `ui` identifies a human-facing client (for example the editor UI) and `ai`
- * identifies an autonomous caller (for example an MCP bridge). UI-only RPC
- * families are gated on this value.
+ * identifies an autonomous caller. Each maps to host-session capabilities in
+ * the operator's daemon config.
  */
 export type DaemonCallerTier = 'ui' | 'ai';
 
 /**
  * Post-handshake connect parameters.
  *
- * Authentication, the caller principal, and the workspace scope are fixed by
+ * Authentication, the caller principal, and the daemon home are fixed by
  * the authenticated Noise session before this request is accepted. They are
  * deliberately absent from this payload: a caller cannot re-assert or override
- * its tier or scope here.
+ * its tier here.
  */
 export interface DaemonConnectParams {
   readonly protocolVersion: string;
@@ -88,136 +75,105 @@ export interface DaemonServerIdentity {
 
 export interface DaemonCapabilities {
   readonly protocolVersion: DaemonProtocolVersion;
-  readonly workspaceRoot: string;
+  /** Methods this daemon serves. */
+  readonly methods: readonly string[];
 }
 
 export interface DaemonHandshakeResult {
   readonly connectionId: string;
   readonly protocolVersion: DaemonProtocolVersion;
-  readonly workspaceRoot: string;
   /** Validated caller tier recorded on the daemon session. */
   readonly tier: DaemonCallerTier;
-  /** Canonical workspace root the connection is attached to. */
-  readonly workspaceId: string;
-  /** Kernel lifecycle state for the attached workspace. */
-  readonly kernelState: 'running';
   readonly capabilities: DaemonCapabilities;
   readonly server: DaemonServerIdentity;
 }
 
-/** Lifecycle state of a daemon-managed workspace kernel. */
-export type WorkspaceKernelState =
-  | 'uninitialized'
-  | 'booting'
-  | 'running'
-  | 'shutting-down'
-  | 'disposed';
+/** Lifecycle state of a daemon-hosted kernel instance. */
+export type KernelInstanceState = 'booting' | 'running' | 'shutting-down' | 'disposed';
 
-/** Wire projection of one workspace managed by the daemon registry. */
-export interface WorkspaceDescriptor {
-  readonly root: string;
+/** One startup field a composition requires, as declared by a participant. */
+export interface KernelRequirementField {
+  readonly name: string;
+  readonly type: string;
+  readonly required: boolean;
+  readonly description?: string;
+  /** Participant (module) that declared the field. */
+  readonly service: string;
+  /** Whether a client may set it (operator allowlist). */
+  readonly clientSettable: boolean;
+}
+
+export interface KernelRequirementsResult {
+  readonly fields: readonly KernelRequirementField[];
+}
+
+export interface KernelBootParams {
+  /** Startup options; only fields the operator allows clients to set. */
+  readonly options?: Readonly<Record<string, unknown>>;
+}
+
+export interface KernelInstanceParams {
+  readonly instanceId: string;
+}
+
+export interface KernelInstanceDescriptor {
+  readonly instanceId: string;
+  readonly state: KernelInstanceState;
   readonly clientCount: number;
-  readonly kernelState: WorkspaceKernelState;
   readonly lastUsedAt: string;
 }
 
-export interface WorkspaceListResult {
-  readonly workspaces: readonly WorkspaceDescriptor[];
+export interface KernelBootResult {
+  readonly instance: KernelInstanceDescriptor;
+  /** True when an existing kernel with identical options was reused. */
+  readonly reused: boolean;
+  /**
+   * Participants the kernel left out because required startup fields were
+   * missing. The kernel prunes them instead of refusing the boot (it refuses
+   * only for hardcore services or participants others depend on).
+   */
+  readonly pruned: readonly { readonly participants: readonly string[]; readonly path: string; readonly missingFields: readonly string[] }[];
 }
 
-export interface WorkspaceStatusParams {
-  /** Workspace to describe. Defaults to the caller's attached workspace. */
-  readonly workspaceRoot?: string;
+export interface KernelListResult {
+  /** Instances this connection is attached to. */
+  readonly instances: readonly KernelInstanceDescriptor[];
 }
 
-export interface WorkspaceStatusResult {
-  readonly workspace: WorkspaceDescriptor | null;
+export interface KernelStatusResult {
+  readonly instance: KernelInstanceDescriptor | null;
 }
 
-export interface WorkspaceDisposeParams {
-  readonly workspaceRoot: string;
-}
-
-export interface WorkspaceDisposeResult {
-  readonly root: string;
+export interface KernelDisposeResult {
   readonly disposed: boolean;
 }
 
-/**
- * Handler-free projection of a registered tool.
- *
- * Mirrors the kernel's `RegisteredToolInfo` on the wire without importing the
- * kernel package.
- */
-export interface RegisteredToolInfo {
-  readonly name: string;
-  readonly description: string;
-  readonly parametersSchema: Readonly<Record<string, unknown>>;
-  readonly requiredPermissions?: readonly string[];
-  readonly ownerPluginId: string;
-  readonly isOfficial: boolean;
+/** Public description of one operation of a kind. */
+export interface KernelKindOperation {
+  readonly description?: string;
+  readonly input?: Readonly<Record<string, unknown>>;
 }
 
-export interface ToolsListResult {
-  readonly tools: readonly RegisteredToolInfo[];
+export interface KernelKindInfo {
+  readonly kind: string;
+  readonly description?: string;
+  readonly operations?: Readonly<Record<string, KernelKindOperation>>;
 }
 
-export interface ToolsExecuteParams {
-  readonly name: string;
-  readonly input?: unknown;
+export interface KernelKindsResult {
+  readonly kinds: readonly KernelKindInfo[];
 }
 
-/**
- * JSON-serializable tool result.
- *
- * Mirrors the kernel `OperationResult`; `error` is flattened to text because a
- * thrown `Error` cannot cross the wire.
- */
-export interface ToolOperationResult<TData = unknown> {
-  readonly status: 'success' | 'failed' | 'aborted' | 'skipped';
-  readonly data?: TData;
-  readonly message?: string;
-  readonly error?: string;
-  readonly durationMs?: number;
+export interface KernelRouteParams extends KernelInstanceParams {
+  /** Brud syntax text. */
+  readonly text: string;
+  readonly stopOnFailure?: boolean;
+  readonly dryRun?: boolean;
+  readonly maxOperations?: number;
 }
 
-export interface ToolsExecuteResult {
-  readonly result: ToolOperationResult;
-}
-
-/**
- * Handler-free projection of a registered UI-only action.
- *
- * Mirrors the kernel's `RegisteredActionInfo` on the wire without importing
- * the kernel package. Actions never appear in `tools.list` and carry no
- * execution handle.
- */
-export interface RegisteredActionInfo {
-  readonly name: string;
-  readonly description: string;
-  readonly parametersSchema: Readonly<Record<string, unknown>>;
-  readonly ownerPluginId: string;
-}
-
-/**
- * `actions.list` returns the registered action projections directly.
- *
- * The result is an array, not an envelope, so the UI can render the palette
- * without unwrapping a second object.
- */
-export type ActionsListResult = readonly RegisteredActionInfo[];
-
-export interface ActionsExecuteParams {
-  readonly name: string;
-  readonly input?: unknown;
-}
-
-/**
- * `actions.execute` returns the kernel `OperationResult` directly.
- *
- * `error` is flattened to text because a thrown `Error` cannot cross the wire.
- */
-export type ActionsExecuteResult = ToolOperationResult;
+/** The Router's route result, as JSON. */
+export type KernelRouteResult = Readonly<Record<string, unknown>>;
 
 export interface DaemonPingParams {
   readonly nonce?: string;
@@ -236,7 +192,6 @@ export interface DaemonInfoResult {
   readonly name: string;
   readonly version: string;
   readonly protocolVersion: DaemonProtocolVersion;
-  readonly workspaceRoot: string;
   readonly pid: number;
   readonly uptimeMs: number;
 }
@@ -276,34 +231,14 @@ export interface DaemonMethodMap {
   readonly 'daemon.connect': { readonly params: DaemonConnectParams; readonly result: DaemonHandshakeResult };
   readonly 'daemon.ping': { readonly params: DaemonPingParams; readonly result: DaemonPingResult };
   readonly 'daemon.info': { readonly params: DaemonEmptyParams; readonly result: DaemonInfoResult };
-  readonly 'workspace.list': {
-    readonly params: DaemonEmptyParams;
-    readonly result: WorkspaceListResult;
-  };
-  readonly 'workspace.status': {
-    readonly params: WorkspaceStatusParams;
-    readonly result: WorkspaceStatusResult;
-  };
-  readonly 'workspace.dispose': {
-    readonly params: WorkspaceDisposeParams;
-    readonly result: WorkspaceDisposeResult;
-  };
-  readonly 'tools.list': {
-    readonly params: DaemonEmptyParams;
-    readonly result: ToolsListResult;
-  };
-  readonly 'tools.execute': {
-    readonly params: ToolsExecuteParams;
-    readonly result: ToolsExecuteResult;
-  };
-  readonly 'actions.list': {
-    readonly params: DaemonEmptyParams;
-    readonly result: ActionsListResult;
-  };
-  readonly 'actions.execute': {
-    readonly params: ActionsExecuteParams;
-    readonly result: ActionsExecuteResult;
-  };
+  readonly 'kernel.requirements': { readonly params: DaemonEmptyParams; readonly result: KernelRequirementsResult };
+  readonly 'kernel.boot': { readonly params: KernelBootParams; readonly result: KernelBootResult };
+  readonly 'kernel.attach': { readonly params: KernelInstanceParams; readonly result: KernelStatusResult };
+  readonly 'kernel.list': { readonly params: DaemonEmptyParams; readonly result: KernelListResult };
+  readonly 'kernel.status': { readonly params: KernelInstanceParams; readonly result: KernelStatusResult };
+  readonly 'kernel.dispose': { readonly params: KernelInstanceParams; readonly result: KernelDisposeResult };
+  readonly 'kernel.kinds': { readonly params: KernelInstanceParams; readonly result: KernelKindsResult };
+  readonly 'kernel.route': { readonly params: KernelRouteParams; readonly result: KernelRouteResult };
   readonly 'request.cancel': {
     readonly params: RequestCancelParams;
     readonly result: RequestCancelledParams;

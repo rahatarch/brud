@@ -53,6 +53,10 @@ export interface RpcErrorDetails {
   readonly actual?: string;
   readonly syscall?: string;
   readonly method?: string;
+  /** Request field that was invalid. */
+  readonly field?: string;
+  /** Kernel instance the error refers to. */
+  readonly instanceId?: string;
 }
 
 export interface RpcErrorData {

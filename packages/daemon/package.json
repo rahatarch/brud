@@ -1,7 +1,7 @@
 {
   "name": "@brud/daemon",
   "version": "0.0.1",
-  "description": "Brud daemon transport and JSON-RPC dispatch harness",
+  "description": "Brud daemon: a neutral local host for BrudOS kernels",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -13,12 +13,7 @@
   },
   "dependencies": {
     "@brud/kernel": "^0.1.4",
-    "@brud/plugin-mcp-bridge": "*",
-    "@brud/plugin-terminal": "*",
     "@brud/protocol": "*",
-    "@brud/service-actions": "*",
-    "@brud/service-filesystem": "*",
-    "@brud/service-tools": "*",
     "@cotal-ai/seat": "0.160.4"
   },
   "devDependencies": {

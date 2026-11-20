@@ -84,6 +84,19 @@ function readOperationStatus(response: RpcResponse): string | undefined {
     }
   }
 
+  // A routed Brud request: any aborted operation means the work stopped.
+  const operations = (result as { operations?: unknown }).operations;
+
+  if (Array.isArray(operations)) {
+    for (const operation of operations) {
+      const entry = operation as { status?: unknown; result?: { status?: unknown } } | null;
+
+      if (entry?.status === 'aborted' || entry?.result?.status === 'aborted') {
+        return 'aborted';
+      }
+    }
+  }
+
   const status = (result as { status?: unknown }).status;
 
   return typeof status === 'string' ? status : undefined;
@@ -127,14 +140,12 @@ function cancelAckFor(
 /**
  * One authenticated daemon connection.
  *
- * The principal and workspace are already fixed by the Noise session. This
+ * The principal and daemon home are already fixed by the Noise session. This
  * class enforces the post-handshake JSON-RPC contract, request correlation,
  * the in-flight ceiling, and the per-request deadline.
  */
 export class Connection implements DispatchSession {
   readonly connectionId: string;
-
-  workspaceRoot: string | undefined;
 
   /** Principal fixed by the authenticated handshake. */
   tier: DaemonCallerTier | undefined;
@@ -175,7 +186,6 @@ export class Connection implements DispatchSession {
     this.channel = channel;
     this.dispatcher = dispatcher;
     this.hooks = hooks;
-    this.workspaceRoot = context.workspaceRoot;
     this.tier = context.principal;
     this.maxInFlight = Math.max(
       1,

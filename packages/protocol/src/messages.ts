@@ -41,11 +41,6 @@ export const WEBVIEW_COMMANDS = [
   'revertPrompt',
   'killProcess',
   'copyPrompt',
-  'getMcpStatus',
-  'startMcpServer',
-  'stopMcpServer',
-  'setMcpAutoOn',
-  'copyMcpConfig',
   'getActiveProcessIds',
 ] as const;
 
@@ -87,20 +82,7 @@ export type ExtensionCommand =
   | 'activeProcessIds'
   | 'unifiedResults'
   | 'noPreviewableOps'
-  | 'executeSuccess'
-  | 'mcpStatus'
-  | 'mcpConfigCopied';
-
-export type McpServerPhase = 'stopped' | 'starting' | 'running' | 'stopping';
-
-export interface McpStatusPayload {
-  phase: McpServerPhase;
-  workspaceRoot?: string;
-  url?: string;
-  port?: number;
-  error?: string;
-  autoOn: boolean;
-}
+  | 'executeSuccess';
 
 export interface PromptVersionPayload {
   version: number;
@@ -125,7 +107,6 @@ export interface BrudSettingsPayload {
   workspaceBoundaryEnabled?: boolean;
   commandValidationEnabled?: boolean;
   toolAllowList?: Record<string, boolean>;
-  mcpAutoOn?: boolean;
   readConcurrency?: number;
   readMaxBatchFiles?: number;
   readMaxAggregateBytes?: number;
@@ -182,7 +163,6 @@ export interface UnifiedSessionResults {
 
 export interface ExtensionMessage {
   command: ExtensionCommand;
-  mcpStatus?: McpStatusPayload;
   message?: string;
   fileName?: string;
   fileIndex?: number;

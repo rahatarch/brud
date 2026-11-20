@@ -2,18 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { rm } from 'node:fs/promises';
 import { createServer, Socket } from 'node:net';
 import type { Server } from 'node:net';
-import type { IActionManager } from '@brud/service-actions' with { 'resolution-mode': 'import' };
-import type { IBrudToolsService } from '@brud/service-tools' with { 'resolution-mode': 'import' };
-import type { BrudKernel, ServiceToken } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { DaemonCallerTier } from '@brud/protocol';
 import { Connection } from './Connection.js';
 import { RequestDispatcher } from './dispatch.js';
-import {
-  canonicalizeWorkspaceRoot,
-  validateAuthenticatedWorkspaceRoot,
-} from './handshake.js';
-import { loadKernelModule } from '../kernelRuntime.js';
-import { WorkspaceRegistry } from '../workspaceRegistry.js';
+import type { KernelInstanceRegistry } from '../instanceRegistry.js';
 import {
   channelPrologue,
   SecureChannel,
@@ -48,11 +40,8 @@ function isAbortedAccept(error: unknown): boolean {
 }
 
 export interface DaemonServerConfig {
-  /** Multi-workspace registry. Preferred over `kernel`. */
-  readonly registry?: WorkspaceRegistry;
-
-  /** Single-kernel composition adopted for `workspaceRoot`. */
-  readonly kernel?: BrudKernel;
+  /** The daemon's kernels. */
+  readonly registry: KernelInstanceRegistry;
   readonly socketPath: string;
 
   /**
@@ -62,17 +51,10 @@ export interface DaemonServerConfig {
    */
   readonly principals: Readonly<Record<DaemonCallerTier, string>>;
 
-  readonly workspaceRoot: string;
+  /** Canonical daemon home; a client must name the same home in its handshake. */
+  readonly home: string;
   readonly serverName?: string;
   readonly serverVersion?: string;
-
-  /**
-   * Restricts authenticated handshakes to `workspaceRoot`.
-   *
-   * A registry-backed daemon may serve several workspaces; a daemon bound to a
-   * single workspace endpoint must not be widened by a client handshake.
-   */
-  readonly enforcePrimaryRoot?: boolean;
 
   /** Maximum simultaneously open connections. */
   readonly maxConnections?: number;
@@ -114,9 +96,7 @@ export class DaemonServer {
 
   private readonly principals: Readonly<Record<DaemonCallerTier, string>>;
 
-  private readonly primaryWorkspaceRoot: string;
-
-  private readonly enforcePrimaryRoot: boolean;
+  private readonly home: string;
 
   private readonly maxConnections: number;
 
@@ -141,37 +121,19 @@ export class DaemonServer {
   private closedPromise: Promise<void> | undefined;
 
   static async create(config: DaemonServerConfig): Promise<DaemonServer> {
-    const [{ BrudToolsToken }, { ActionManagerToken }] = await Promise.all([
-      import('@brud/service-tools'),
-      import('@brud/service-actions'),
-    ]);
-
-    return new DaemonServer(
-      config,
-      BrudToolsToken,
-      ActionManagerToken,
-    );
+    return new DaemonServer(config);
   }
 
-  private constructor(
-    config: DaemonServerConfig,
-    toolsToken: ServiceToken<IBrudToolsService>,
-    actionsToken: ServiceToken<IActionManager>,
-  ) {
+  private constructor(config: DaemonServerConfig) {
     this.socketPath = config.socketPath;
     this.principals = config.principals;
-    this.primaryWorkspaceRoot = canonicalizeWorkspaceRoot(config.workspaceRoot);
-    this.enforcePrimaryRoot = config.enforcePrimaryRoot ?? (config.registry === undefined);
+    this.home = config.home;
     this.maxConnections = Math.max(1, Math.trunc(config.maxConnections ?? DEFAULT_MAX_CONNECTIONS));
     this.maxInFlightPerConnection = config.maxInFlightPerConnection;
     this.requestTimeoutMs = config.requestTimeoutMs;
     this.expectedPeerPid = config.expectedPeerPid ?? process.pid;
     this.dispatcher = new RequestDispatcher({
-      ...(config.registry === undefined ? {} : { registry: config.registry }),
-      ...(config.kernel === undefined ? {} : { kernel: config.kernel }),
-      toolsToken,
-      actionsToken,
-      workspaceRoot: config.workspaceRoot,
+      registry: config.registry,
       serverName: config.serverName ?? DaemonVersion.DAEMON_SERVER_NAME,
       serverVersion: config.serverVersion ?? DaemonVersion.DAEMON_SERVER_VERSION,
     });
@@ -478,14 +440,9 @@ export class DaemonServer {
         { principal: 'ai' as const, psk: derivePsk(this.principals.ai) },
       ],
       server: serverInfo,
-      validateWorkspaceRoot: (workspaceRoot: string): void => {
-        const outcome = validateAuthenticatedWorkspaceRoot(workspaceRoot, {
-          primaryRoot: this.primaryWorkspaceRoot,
-          enforcePrimary: this.enforcePrimaryRoot,
-        });
-
-        if (!outcome.ok) {
-          throw new Error(outcome.message);
+      validateHome: (home: string): void => {
+        if (home !== this.home) {
+          throw new Error('Daemon home does not match this daemon');
         }
       },
     }).then(({ channel, context }) => {
@@ -549,6 +506,7 @@ export class DaemonServer {
     this.connections.set(connectionId, connection);
     connection.onClose(() => {
       this.connections.delete(connectionId);
+      this.dispatcher.connectionClosed(connectionId);
       this.notifyActivity();
     });
 
