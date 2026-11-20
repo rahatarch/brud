@@ -6,6 +6,7 @@ export {
   AccessDeniedError,
   BlacklistedAccessViolationError,
   AllowlistViolationError,
+  CallerIdentityMismatchError,
 } from './policy.js';
 
 export type {
@@ -45,6 +46,7 @@ export type {
   EventDeclaration,
   InterceptionDeclaration,
   InterceptionPointDeclaration,
+  KindDeclaration,
   ExposureDeclaration,
   ParticipantManifest,
   ParticipantRequests,

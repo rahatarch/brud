@@ -1,6 +1,5 @@
 import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
-import type { ServiceToken } from '../../../src/contracts/serviceToken.js';
 import type {
   BrudOperation,
   BrudParseFailure,
@@ -14,51 +13,39 @@ export type RoutedOperationStatus =
   | 'aborted'
   | 'kind_not_registered';
 
-/** Context handed to a registered kind dispatcher. */
+/**
+ * The real caller of a routed operation, captured by the Router from the
+ * kernel call chain (delegation by the owner). Never supplied by the caller.
+ */
+export interface BrudDispatchCaller {
+  readonly identity: string | null;
+  readonly callerClass: string;
+  readonly official: boolean;
+  readonly capabilities: readonly string[];
+  readonly origin: string;
+}
+
+/** Context handed to a kind owner's dispatch exposure for one operation. */
 export interface BrudDispatchContext {
-  /** Absolute workspace root for the execution. */
+  /** Workspace root the operation runs against. */
   readonly workspaceRoot: string;
-
-  /** Identity of the original caller that requested routing. */
-  readonly callerId: string;
-
-  /** Permissions the original caller holds, when known. */
-  readonly permissions?: readonly string[];
-
-  /** Cancellation signal of the request, when the transport supplied one. */
+  /** Kernel-derived caller of the route request. */
+  readonly caller: BrudDispatchCaller;
+  /** Cancellation signal, when the transport supplied one. */
   readonly signal?: AbortSignal;
-
-  /** Origin marker of the dispatch surface, when one is known. */
-  readonly origin?: string;
-
-  /** Validate only; the target must not execute its handler. */
+  /** Validate only; do not execute. */
   readonly dryRun?: boolean;
 }
 
-/** Options shared by {@link IRouterService.route} and `dispatch`. */
+/**
+ * Options for one route request. Caller identity and capabilities are not
+ * options: the Router takes them from the kernel call chain.
+ */
 export interface BrudRouteOptions {
-  /** Identity of the original caller. Defaults to the router's caller id. */
-  readonly callerId?: string;
-
-  /** Workspace root for dispatch. Defaults to the router's boot workspace. */
   readonly workspaceRoot?: string;
-
-  /** Permissions the original caller holds. */
-  readonly permissions?: readonly string[];
-
-  /** Cancellation signal. */
   readonly signal?: AbortSignal;
-
-  /** Origin marker of the dispatch surface. */
-  readonly origin?: string;
-
-  /** Stop at the first failed operation. Default `false`. */
   readonly stopOnFailure?: boolean;
-
-  /** Validate only; never invoke a target handler. Default `false`. */
   readonly dryRun?: boolean;
-
-  /** Upper bound on parsed operations. Default 1_000. */
   readonly maxOperations?: number;
 }
 
@@ -99,31 +86,18 @@ export interface BrudRouteResult {
 }
 
 /**
- * Boot-time declaration that a Level-1 service serves an operation kind.
- *
- * The dispatcher receives the broker-projected service instance, the parsed
- * operation, and the caller context. It is registered by the owning service,
- * never by a plugin.
- *
- * @typeParam TService - Public interface carried by {@link token}.
+ * A kind and the exposure that dispatches it, registered at boot. Per
+ * operation the Router resolves the exposure on the kernel call chain and
+ * calls `dispatch`.
  */
-export interface BrudRouteRegistration<TService> {
-  /** Kind this service handles, e.g. `tool` or `action`. */
+export interface BrudRouteRegistration {
   readonly kind: BrudOperationKind;
+  /** Name of the owner's dispatch exposure (`name`, major `version`). */
+  readonly exposure: string;
+  readonly version?: number;
+}
 
-  /** Token resolved through the access broker at dispatch time. */
-  readonly token: ServiceToken<TService>;
-
-  /**
-   * Invokes the service for one operation.
-   *
-   * @param service - Broker-projected service instance.
-   * @param operation - Parsed operation.
-   * @param context - Caller context for this dispatch.
-   */
-  readonly dispatch: (
-    service: TService,
-    operation: BrudOperation,
-    context: BrudDispatchContext,
-  ) => Promise<OperationResult>;
+/** The surface a kind owner's dispatch exposure must provide. */
+export interface BrudKindDispatcher {
+  dispatch(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> | OperationResult;
 }

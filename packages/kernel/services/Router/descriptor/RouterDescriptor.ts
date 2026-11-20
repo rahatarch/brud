@@ -6,12 +6,21 @@ import { ROUTER_CALLER_ID } from '../contracts/caller.js';
 import type { IRouterService } from '../contracts/IRouterService.js';
 import { RouterService } from '../orchestrator/index.js';
 import { RouterToken } from './tokens.js';
+import { withExposureBindings } from '../../ExposedApiRegistry/contracts/registrant.js';
+import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
+import type { ExposedApiCaller, IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/index.js';
+import { requireContextString } from '../../../src/contracts/contextContract.js';
+import { ROUTER_ROOT_CONTEXT_FIELD } from '../bootOptions.js';
+import type { BrudDispatchCaller, BrudKindDispatcher, BrudRouteOptions } from '../contracts/types.js';
+
+/** The Router's v1 entry exposure. */
+export const ROUTER_EXPOSURE = 'syntax.route';
 
 /** Tier assigned to the Router descriptor. */
 export const ROUTER_SERVICE_TIER: ServiceTier = 'core';
 
 /** Contract version declared for the Router interface. */
-export const ROUTER_CONTRACT_VERSION = '1.0.0';
+export const ROUTER_CONTRACT_VERSION = '2.0.0';
 
 /** Methods declared for the Router interface. */
 export const ROUTER_CONTRACT_METHODS = [
@@ -53,8 +62,13 @@ export function createRouterDescriptor(
       version: ROUTER_CONTRACT_VERSION,
       methods: ROUTER_CONTRACT_METHODS,
     },
+    // Token access is kernel-internal. Every other caller enters through the
+    // `syntax.route@1` exposure, where the caller comes from the call chain.
     accessPolicy: {
-      allowedCallers: ['kernel', ROUTER_CALLER_ID, 'brud.host.daemon'],
+      allowedCallers: ['kernel', ROUTER_CALLER_ID],
+    },
+    manifest: {
+      exposures: [{ name: ROUTER_EXPOSURE, version: 1, scope: 'any' }],
     },
     factory: (context, broker): RouterService => {
       const callerContext = {
@@ -62,21 +76,50 @@ export function createRouterDescriptor(
         tier: 'core' as const,
         options: context.options,
       };
-
+      let registry: IExposedApiRegistry | undefined;
       const service = new RouterService({
-        broker,
-        callerContext,
+        resolveOwner: (exposure, version, owner) => {
+          registry ??= broker.requestAccess(callerContext, ExposedApiRegistryToken);
+
+          return registry.resolve<BrudKindDispatcher>(exposure, {
+            ...(version === undefined ? {} : { version }),
+            ...(owner === undefined ? {} : { expectedOwner: owner }),
+          });
+        },
+        defaultWorkspaceRoot: () => requireContextString(
+          context.options,
+          ROUTER_ROOT_CONTEXT_FIELD,
+          ROUTER_CALLER_ID,
+        ),
         getParser: () => options?.parser
           ?? broker.requestAccess(callerContext, ParserToken),
       });
 
       options?.onConstruct?.(service);
 
-      return service;
+      // Delegation by the owner: the real caller is captured here, at resolve
+      // time, and carried to every kind owner the request reaches.
+      return withExposureBindings(service, {
+        [`${ROUTER_EXPOSURE}@1`]: {
+          projection: (_service: unknown, caller: ExposedApiCaller) => {
+            const view: BrudDispatchCaller = Object.freeze({
+              identity: caller.identity,
+              callerClass: caller.callerClass,
+              official: caller.official,
+              capabilities: Object.freeze([...caller.capabilities].sort()),
+              origin: caller.origin,
+            });
+
+            return Object.freeze({
+              route: (rawInput: string, routeOptions?: BrudRouteOptions) => service.route(rawInput, routeOptions, view),
+              registeredKinds: () => service.registeredKinds(),
+            });
+          },
+        },
+      });
     },
   };
 }
 
-/** Standard router descriptor with no overrides. */
 export const RouterDescriptor: ServiceDescriptor<IRouterService, RouterService> =
   createRouterDescriptor();

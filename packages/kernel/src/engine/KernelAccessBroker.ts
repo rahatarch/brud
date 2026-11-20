@@ -1,6 +1,11 @@
 import type { IKernelAccessBroker, ServiceInfo } from '../contracts/accessBroker.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
-import { AllowlistViolationError, BlacklistedAccessViolationError } from '../contracts/policy.js';
+import type { KernelCallContext } from '../contracts/callChain.js';
+import {
+  AllowlistViolationError,
+  BlacklistedAccessViolationError,
+  CallerIdentityMismatchError,
+} from '../contracts/policy.js';
 import type { ServiceToken } from '../contracts/serviceToken.js';
 import type { KernelRegistry } from './KernelRegistry.js';
 import { LifecycleStateError, ServiceNotFoundError } from './errors.js';
@@ -12,6 +17,13 @@ function matchesCaller(entry: string | ServiceToken<unknown>, callerId: string):
   return typeof entry === 'string' ? entry === callerId : entry.id === callerId;
 }
 
+/** The call-chain view the broker binds token access to. */
+export interface KernelAccessAuthority {
+  current(): KernelCallContext | undefined;
+  tokenIdOf(identity: string): string | undefined;
+  callerForToken(tokenId: string): unknown;
+}
+
 export class KernelAccessBroker implements IKernelAccessBroker {
   private readonly registry: KernelRegistry;
 
@@ -19,9 +31,52 @@ export class KernelAccessBroker implements IKernelAccessBroker {
 
   private paused = false;
 
-  constructor(registry: KernelRegistry, readState: KernelStateChecker) {
+  private readonly authority: KernelAccessAuthority | undefined;
+
+  constructor(registry: KernelRegistry, readState: KernelStateChecker, authority?: KernelAccessAuthority) {
     this.registry = registry;
     this.readState = readState;
+    this.authority = authority;
+  }
+
+  /**
+   * Binds the asserted caller id to the active call chain.
+   *
+   * - Kernel frames (hardcores, kernel work): trusted as before.
+   * - Participant frames with a kernel-issued identity: the caller id must be
+   *   the participant's own token id or kernel identity; anything else is
+   *   refused. Unidentified frames (no identity registry) are unchanged.
+   * - Host frames: may not claim `kernel` or a live participant.
+   * - No active chain (host process code outside any chain): unchanged.
+   */
+  private assertCallerBinding(caller: ServiceContext, targetServiceId: string): void {
+    const context = this.authority?.current();
+
+    if (context === undefined || context.caller.callerClass === 'kernel') {
+      return;
+    }
+
+    if (context.caller.callerClass === 'participant') {
+      const identity = context.caller.identity;
+
+      // No kernel-issued identity in this composition (no identity registry):
+      // there is nothing to bind to, so the asserted id is taken as before.
+      if (identity === null) {
+        return;
+      }
+
+      const bound = this.authority?.tokenIdOf(identity);
+
+      if (bound === undefined || (caller.callerId !== bound && caller.callerId !== identity)) {
+        throw new CallerIdentityMismatchError(caller.callerId, targetServiceId, bound);
+      }
+
+      return;
+    }
+
+    if (caller.callerId === 'kernel' || this.authority?.callerForToken(caller.callerId) !== undefined) {
+      throw new CallerIdentityMismatchError(caller.callerId, targetServiceId, undefined);
+    }
   }
 
   /**
@@ -61,6 +116,8 @@ export class KernelAccessBroker implements IKernelAccessBroker {
     if (instance === undefined) {
       throw new ServiceNotFoundError(token.id);
     }
+
+    this.assertCallerBinding(caller, token.id);
 
     const policy = descriptor.accessPolicy;
     if (policy?.deniedCallers?.some((entry) => matchesCaller(entry, caller.callerId))) {

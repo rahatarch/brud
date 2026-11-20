@@ -205,6 +205,15 @@ export class KernelCallChain implements KernelCallAuthority {
     );
   }
 
+  /**
+   * Token id of the live participant holding `identity`, if any.
+   *
+   * @param identity - Kernel-issued identity.
+   */
+  tokenIdOf(identity: string): string | undefined {
+    return this.#byIdentity.get(identity)?.tokenId;
+  }
+
   isLive(identity: string): boolean {
     return this.#byIdentity.has(identity);
   }

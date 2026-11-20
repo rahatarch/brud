@@ -1,15 +1,14 @@
-import { mkdir, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { join } from 'node:path';
-import type {
-  IMcpTransport,
-  IPluginManagerService,
-} from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
-import type { KernelWorkspace } from './workspaceRegistry.js';
+/** One bound MCP transport; the daemon owns this shape. */
+export interface IMcpTransport {
+  readonly kind: 'stdio' | 'mcp-http';
+  readonly address?: string;
+  onMessage(handler: (msg: unknown) => Promise<unknown>): void;
+  sendNotification(msg: unknown): void;
+  close(): Promise<void>;
+}
 
-/** MCP endpoint file written under `.brud/` for HTTP transports. */
-export const MCP_ENDPOINT_RELATIVE_PATH = '.brud/mcp-endpoint.json';
 
 /** Hard ceiling for one HTTP request body. */
 export const MAX_MCP_HTTP_BODY_BYTES = 8 * 1024 * 1024;
@@ -336,126 +335,4 @@ export class HttpMcpTransport implements IMcpTransport {
       });
     });
   }
-}
-
-/** Options for {@link attachMcpTransports}. */
-export interface AttachMcpTransportsOptions {
-  /** Whether the daemon was launched with `--stdio`. */
-  readonly stdio: boolean;
-
-  /** Diagnostic sink for skipped or failed attachments. */
-  readonly logger?: {
-    warn(message: string, meta?: Record<string, unknown>): void;
-  };
-}
-
-async function writeEndpointFile(
-  workspaceRoot: string,
-  pluginId: string,
-  address: string,
-): Promise<void> {
-  const directory = join(workspaceRoot, '.brud');
-  await mkdir(directory, { recursive: true });
-  await writeFile(
-    join(workspaceRoot, MCP_ENDPOINT_RELATIVE_PATH),
-    JSON.stringify({ pluginId, transport: 'mcp-http', url: address }, null, 2),
-    { encoding: 'utf8', mode: 0o600 },
-  );
-}
-
-/**
- * Binds the MCP transports declared by every active plugin.
- *
- * This is deliberately MCP-specific, not a generic transport registry. It
- * resolves the plugin manager, inspects each active manifest, and hands one
- * {@link IMcpTransport} per declared kind to `plugin.onTransportAttach`.
- * The caller (the workspace registry) closes the returned transports before
- * shutting the kernel down.
- *
- * @param workspace - Booted workspace whose plugins may want a transport.
- * @param options - stdio opt-in and diagnostics.
- * @returns Every transport bound for this workspace.
- */
-export async function attachMcpTransports(
-  workspace: KernelWorkspace,
-  options: AttachMcpTransportsOptions,
-): Promise<readonly IMcpTransport[]> {
-  const { PluginManagerToken } = await import('@brud/service-plugin-manager');
-  const manager = workspace.kernel.requestAccess<IPluginManagerService>(
-    {
-      callerId: 'brud.daemon',
-      tier: 'core',
-      options: workspace.options,
-    },
-    PluginManagerToken,
-  );
-  const attached: IMcpTransport[] = [];
-  let stdioClaimed = false;
-
-  for (const record of manager.listPlugins()) {
-    if (record.state !== 'active') {
-      continue;
-    }
-
-    const requested = record.plugin.manifest.transports;
-
-    if (requested === undefined || requested.length === 0) {
-      continue;
-    }
-
-    const hook = record.plugin.onTransportAttach;
-
-    if (typeof hook !== 'function') {
-      options.logger?.warn('Plugin declares transports but has no onTransportAttach hook', {
-        pluginId: record.plugin.manifest.id,
-      });
-      continue;
-    }
-
-    for (const kind of requested) {
-      if (options.stdio && kind !== 'stdio') {
-        options.logger?.warn('Skipping non-stdio MCP transport in --stdio mode', {
-          pluginId: record.plugin.manifest.id,
-          transport: kind,
-        });
-        continue;
-      }
-
-      if (kind === 'stdio') {
-        if (!options.stdio) {
-          options.logger?.warn('Skipping stdio MCP transport; daemon was not launched with --stdio', {
-            pluginId: record.plugin.manifest.id,
-          });
-          continue;
-        }
-
-        if (stdioClaimed) {
-          options.logger?.warn('Skipping additional stdio MCP transport; streams are already claimed', {
-            pluginId: record.plugin.manifest.id,
-          });
-          continue;
-        }
-
-        const transport = new StdioMcpTransport();
-        await hook.call(record.plugin, transport);
-        attached.push(transport);
-        stdioClaimed = true;
-        continue;
-      }
-
-      try {
-        const transport = await HttpMcpTransport.create();
-        await writeEndpointFile(workspace.root, record.plugin.manifest.id, transport.address);
-        await hook.call(record.plugin, transport);
-        attached.push(transport);
-      } catch (error: unknown) {
-        options.logger?.warn('Failed to bind MCP HTTP transport', {
-          pluginId: record.plugin.manifest.id,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    }
-  }
-
-  return attached;
 }

@@ -45,7 +45,7 @@ export function createInterceptionDescriptor(): ServiceDescriptor<IInterceptionS
       methods: INTERCEPTION_CONTRACT_METHODS,
     },
     accessPolicy: {
-      allowedCallers: ['kernel', 'brud.core.router', 'brud.host.daemon'],
+      allowedCallers: ['kernel'],
     },
     manifest: {
       exposures: [

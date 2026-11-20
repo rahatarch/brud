@@ -6,7 +6,172 @@
 
 # WASM Cage (hardcore 5)
 
+## Classes
+
+### CagedGuestError
+
+A caged guest failed: a trap, an exhausted budget, or a refused response.
+
+#### Extends
+
+- `Error`
+
+#### Constructors
+
+##### Constructor
+
+```ts
+new CagedGuestError(
+   message, 
+   guestCode?, 
+   options?
+): CagedGuestError;
+```
+
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `message` | `string` |
+| `guestCode?` | `string` |
+| `options?` | `ErrorOptions` |
+
+###### Returns
+
+[`CagedGuestError`](#cagedguesterror)
+
+###### Overrides
+
+`Error.constructor`
+
+#### Properties
+
+##### code
+
+```ts
+readonly code: "WASM_CAGE_GUEST_FAILED";
+```
+
+##### guestCode
+
+```ts
+readonly guestCode: string | undefined;
+```
+
+The guest-reported error code, when the guest reported one.
+
+***
+
+### CageNativeError
+
+The cage's native binary is unavailable or failed its digest check.
+
+#### Extends
+
+- `Error`
+
+#### Constructors
+
+##### Constructor
+
+```ts
+new CageNativeError(code, message): CageNativeError;
+```
+
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `code` | [`CageNativeErrorCode`](#cagenativeerrorcode-1) |
+| `message` | `string` |
+
+###### Returns
+
+[`CageNativeError`](#cagenativeerror)
+
+###### Overrides
+
+`Error.constructor`
+
+#### Properties
+
+##### code
+
+```ts
+readonly code: CageNativeErrorCode;
+```
+
+***
+
+### ParticipantPackageError
+
+A participant package is malformed or its module failed its digest check.
+
+#### Extends
+
+- `Error`
+
+#### Constructors
+
+##### Constructor
+
+```ts
+new ParticipantPackageError(code, message): ParticipantPackageError;
+```
+
+###### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `code` | `"PARTICIPANT_PACKAGE_INVALID"` \| `"PARTICIPANT_PACKAGE_TAMPERED"` |
+| `message` | `string` |
+
+###### Returns
+
+[`ParticipantPackageError`](#participantpackageerror)
+
+###### Overrides
+
+`Error.constructor`
+
+#### Properties
+
+##### code
+
+```ts
+readonly code: "PARTICIPANT_PACKAGE_INVALID" | "PARTICIPANT_PACKAGE_TAMPERED";
+```
+
 ## Interfaces
+
+### CagedParticipantLimits
+
+Resource limits for one caged participant.
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-deadlinems"></a> `deadlineMs?` | `readonly` | `number` | Wall-clock deadline per call into the guest, in milliseconds (default 30 s). |
+| <a id="property-fuel"></a> `fuel` | `readonly` | `number` | Fuel per call: the call's deadline. |
+| <a id="property-maxmemorybytes"></a> `maxMemoryBytes` | `readonly` | `number` | Maximum linear-memory size in bytes. |
+
+***
+
+### CagedParticipantOptions
+
+Options for [createCagedParticipant](#createcagedparticipant).
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-limits"></a> `limits?` | `readonly` | [`CagedParticipantLimits`](#cagedparticipantlimits) | Resource limits. |
+| <a id="property-manifest"></a> `manifest` | `readonly` | [`ParticipantManifest`](../src/contracts.md#participantmanifest) | The participant's manifest, declared exactly as a native participant's. |
+| <a id="property-token"></a> `token` | `readonly` | `string` | The participant's service token id. |
+| <a id="property-wasm"></a> `wasm` | `readonly` | `Uint8Array` | The guest module: WASM binary or WAT text bytes. |
+
+***
 
 ### IWasmCage
 
@@ -76,7 +241,48 @@ is the door, and `resolve` is the only method on its surface (W-02, W-09).
 
 The resolved handle, or `null`.
 
+## Type Aliases
+
+### CageNativeErrorCode
+
+```ts
+type CageNativeErrorCode = "WASM_CAGE_NATIVE_UNAVAILABLE" | "WASM_CAGE_NATIVE_TAMPERED";
+```
+
+Error codes of the native loader.
+
 ## Variables
+
+### DEFAULT\_CAGED\_LIMITS
+
+```ts
+const DEFAULT_CAGED_LIMITS: CagedParticipantLimits;
+```
+
+Default caged-participant limits.
+
+***
+
+### PARTICIPANT\_PACKAGE\_FORMAT
+
+```ts
+const PARTICIPANT_PACKAGE_FORMAT: 1 = 1;
+```
+
+Participant packages: how a participant that is not declared official reaches
+the kernel (W-01). The package is declarative data plus a WASM module; no
+author JavaScript is loaded. `brud.participant.json`:
+
+```json
+{ "format": 1, "id": "acme.notes", "manifest": { … },
+  "cage": { "module": "participant.wasm", "sha256": "<hex>", "limits": { "fuel": …, "maxMemoryBytes": …, "deadlineMs": … } },
+  "native": "native/index.js" }
+```
+
+`native` is optional and used only when the composition declares the entry
+official; the kernel's loader reads it, never this module.
+
+***
 
 ### WASM\_CAGE\_CONTRACT\_METHODS
 
@@ -122,6 +328,30 @@ Token identifying the cage.
 
 ## Functions
 
+### createCagedParticipant()
+
+```ts
+function createCagedParticipant(options): ServiceDescriptor<object>;
+```
+
+Builds the descriptor of a caged participant: a participant whose code runs
+inside the WASM cage and which may be a giver (exposures and interception
+points) and an interceptor, exactly like a native participant.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options` | [`CagedParticipantOptions`](#cagedparticipantoptions) | Token, manifest, guest module, and limits. |
+
+#### Returns
+
+[`ServiceDescriptor`](../src/contracts.md#servicedescriptor)\<`object`\>
+
+The participant's descriptor.
+
+***
+
 ### createWasmCageDescriptor()
 
 ```ts
@@ -131,3 +361,49 @@ function createWasmCageDescriptor(): ServiceDescriptor<IWasmCage>;
 #### Returns
 
 [`ServiceDescriptor`](../src/contracts.md#servicedescriptor)\<[`IWasmCage`](#iwasmcage)\>
+
+***
+
+### loadParticipantPackage()
+
+```ts
+function loadParticipantPackage(manifestPath): Promise<{
+  createService(): ServiceDescriptor<object>;
+}>;
+```
+
+Loads a participant package into the cage: validates the package, checks
+the module's SHA-256 against the package, and returns a service module whose
+descriptor runs the participant caged.
+
+#### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `manifestPath` | `string` | Absolute path of `brud.participant.json`. |
+
+#### Returns
+
+`Promise`\<\{
+  `createService`(): [`ServiceDescriptor`](../src/contracts.md#servicedescriptor)\<`object`\>;
+\}\>
+
+A service module (`createService`).
+
+#### Throws
+
+For a malformed package or a digest mismatch.
+
+***
+
+### nativePlatformKey()
+
+```ts
+function nativePlatformKey(): string;
+```
+
+The running platform's key, e.g. `linux-x64-gnu`, `darwin-arm64`, `win32-x64-msvc`.
+
+#### Returns
+
+`string`

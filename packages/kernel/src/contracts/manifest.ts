@@ -89,6 +89,21 @@ export interface InterceptionPointDeclaration {
   readonly admit: readonly string[];
 }
 
+/**
+ * One Brud Syntax kind a participant claims, served by one of its own
+ * exposures (which must provide `dispatch(operation, context)`).
+ */
+export interface KindDeclaration {
+  /** The kind word written after `[CALL`, e.g. `tool`. */
+  readonly kind: string;
+
+  /** The participant's own exposure name that dispatches the kind. */
+  readonly exposure: string;
+
+  /** Major version of the exposure; defaults to 1. */
+  readonly version?: number | string;
+}
+
 /** A participant's manifest. */
 export interface ParticipantManifest {
   /** What the participant requests. */
@@ -105,6 +120,7 @@ export interface ParticipantManifest {
 
   /** Interception points the participant opens on its own exposures. */
   readonly interceptionPoints?: readonly InterceptionPointDeclaration[];
+  readonly kinds?: readonly KindDeclaration[];
 }
 
 /** A manifest after the kernel has validated and frozen it. */
@@ -123,6 +139,7 @@ export interface AdmittedManifest {
 
   /** Declared interception points, deep-copied and frozen. */
   readonly interceptionPoints: readonly InterceptionPointDeclaration[];
+  readonly kinds: readonly KindDeclaration[];
 }
 
 /** Raised when a manifest is not valid declarative data. */
@@ -139,7 +156,9 @@ export class ParticipantManifestError extends Error {
   }
 }
 
-const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events', 'interceptions', 'interceptionPoints']);
+const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events', 'interceptions', 'interceptionPoints', 'kinds']);
+const KIND_KEYS = new Set(['kind', 'exposure', 'version']);
+const KIND_PATTERN = /^[a-z][a-z0-9_-]*$/u;
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
 const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy', 'payloadSchema']);
@@ -221,6 +240,7 @@ export function admitParticipantManifest(
       events: Object.freeze([]),
       interceptions: Object.freeze([]),
       interceptionPoints: Object.freeze([]),
+      kinds: Object.freeze([]),
     });
   }
 
@@ -355,6 +375,7 @@ export function admitParticipantManifest(
 
   const interceptions = admitInterceptions(data.interceptions, participant);
   const interceptionPoints = admitInterceptionPoints(data.interceptionPoints, participant);
+  const kinds = admitKinds(data.kinds, exposures, participant);
 
   return Object.freeze({
     capabilities: Object.freeze(capabilities),
@@ -362,6 +383,7 @@ export function admitParticipantManifest(
     events: Object.freeze(events),
     interceptions,
     interceptionPoints,
+    kinds,
   });
 }
 
@@ -396,6 +418,59 @@ function admitInterceptions(value: unknown, participant: string): readonly Inter
     assertVersion(entry.version, path, participant);
 
     return Object.freeze(entry as unknown as InterceptionDeclaration);
+  }));
+}
+
+/**
+ * Admits `manifest.kinds`. Each kind names one of the participant's own
+ * declared exposures; a kind may be claimed once per manifest.
+ */
+function admitKinds(
+  value: unknown,
+  exposures: readonly ExposureDeclaration[],
+  participant: string,
+): readonly KindDeclaration[] {
+  if (value === undefined) {
+    return Object.freeze([]);
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ParticipantManifestError(participant, 'manifest.kinds must be an array');
+  }
+
+  const seen = new Set<string>();
+
+  return Object.freeze(value.map((entry: unknown, index): KindDeclaration => {
+    const path = `manifest.kinds[${String(index)}]`;
+
+    if (!isPlainObject(entry)) {
+      throw new ParticipantManifestError(participant, `${path} must be an object`);
+    }
+
+    assertKnownKeys(entry, KIND_KEYS, path, participant);
+
+    if (typeof entry.kind !== 'string' || !KIND_PATTERN.test(entry.kind)) {
+      throw new ParticipantManifestError(participant, `${path}.kind must be a lower-case kind word`);
+    }
+
+    if (seen.has(entry.kind)) {
+      throw new ParticipantManifestError(participant, `${path}.kind "${entry.kind}" is claimed twice`);
+    }
+
+    seen.add(entry.kind);
+
+    if (typeof entry.exposure !== 'string' || entry.exposure.length === 0) {
+      throw new ParticipantManifestError(participant, `${path}.exposure must be a non-empty string`);
+    }
+
+    assertVersion(entry.version, path, participant);
+    const major = String(entry.version ?? 1);
+
+    if (!exposures.some((exposure) => exposure.name === entry.exposure && String(exposure.version ?? 1) === major)) {
+      throw new ParticipantManifestError(participant, `${path}.exposure must name one of the participant's own declared exposures`);
+    }
+
+    return Object.freeze({ ...(entry as unknown as KindDeclaration) });
   }));
 }
 

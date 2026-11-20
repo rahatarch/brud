@@ -1,6 +1,7 @@
 import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
 import type { BrudOperation } from '../../Parser/contracts/index.js';
 import type {
+  BrudDispatchCaller,
   BrudRouteOptions,
   BrudRouteRegistration,
   BrudRouteResult,
@@ -22,7 +23,7 @@ export interface IRouterService {
    * @throws RouterKindCollisionError when another service already owns it.
    * @throws RouterUnknownServiceError when the token is not registered.
    */
-  register<TService>(registration: BrudRouteRegistration<TService>): void;
+  register(registration: BrudRouteRegistration): void;
 
   /** Seals the registration window. Idempotent. */
   closeRegistration(): void;
@@ -39,7 +40,7 @@ export interface IRouterService {
    * @param rawInput - Raw `[BRUD]` document.
    * @param options - Caller context and routing bounds.
    */
-  route(rawInput: string, options?: BrudRouteOptions): Promise<BrudRouteResult>;
+  route(rawInput: string, options?: BrudRouteOptions, caller?: BrudDispatchCaller): Promise<BrudRouteResult>;
 
   /**
    * Routes an already-parsed operation list.
@@ -50,5 +51,6 @@ export interface IRouterService {
   dispatch(
     operations: readonly BrudOperation[],
     options?: BrudRouteOptions,
+    caller?: BrudDispatchCaller,
   ): Promise<BrudRouteResult>;
 }

@@ -8,12 +8,6 @@ import { bootKernel, BrudConfigError } from '../bootstrap/index.js';
 import type { BrudConfig } from '../bootstrap/index.js';
 import type { ServiceContext } from '../contracts/lifecycle.js';
 import type { BrudKernel } from '../engine/BrudKernel.js';
-import type { IBrudPlugin } from '../../../services/PluginManager/contracts/IBrudPlugin.js';
-import type { IBrandRegistry } from '../../../services/BrandRegistry/contracts/IBrandRegistry.js';
-import { BrandRegistryToken } from '../../../services/BrandRegistry/contracts/tokens.js';
-import { PLUGIN_MANAGER_SCOPE_NAME } from '../../../services/PluginManager/serviceModule.js';
-import type { IPluginManagerService } from '../../../services/PluginManager/contracts/IPluginManager.js';
-import { PluginManagerToken } from '../../../services/PluginManager/contracts/tokens.js';
 import type { IBrudToolsService } from '../../../services/BrudTools/contracts/IBrudToolsService.js';
 import { BrudToolsToken } from '../../../services/BrudTools/descriptor/tokens.js';
 import type { IUtilityService } from '../../../services/UtilityService/contracts/IUtilityService.js';
@@ -164,79 +158,6 @@ describe('bootKernel config composition', () => {
     const tools = kernel.requestAccess<IBrudToolsService>(caller(root), BrudToolsToken);
 
     assert.ok(tools.listTools().length > 0);
-
-    const plugins = kernel.requestAccess<IPluginManagerService>(
-      caller(root),
-      PluginManagerToken,
-    );
-
-    assert.equal(plugins.listPlugins().length, 9);
-  });
-
-  it('certifies a plugin declared official', async (t) => {
-    const root = await workspace(t);
-    const pluginPath = await writePluginModule(root, 'test.config.official');
-    const base = JSON.parse(await readFile(KERNEL_CONFIG_PATH, 'utf8')) as BrudConfig;
-    const configPath = await writeConfig(root, {
-      services: base.services,
-      plugins: [{ path: pluginPath, official: true }],
-    });
-    const kernel = await bootKernel(configPath, {
-      options: {...workspaceContextOptions(root),
-        'pluginManager.configPath': configPath,
-        history: { inMemory: true },
-      },
-    });
-
-    t.after(async () => {
-      if (kernel.lifecycleState === 'RUNNING') {
-        await kernel.shutdown().catch(() => undefined);
-      }
-    });
-
-    const module = await import(pathToFileURL(pluginPath).href) as {
-      readonly plugin: IBrudPlugin;
-    };
-
-    const registry = kernel.requestAccess<IBrandRegistry>(caller(root), BrandRegistryToken);
-
-    assert.equal(
-      registry.getScope(PLUGIN_MANAGER_SCOPE_NAME)?.verify(module.plugin),
-      true,
-    );
-  });
-
-  it('does not certify a plugin without the official flag', async (t) => {
-    const root = await workspace(t);
-    const pluginPath = await writePluginModule(root, 'test.config.unofficial');
-    const base = JSON.parse(await readFile(KERNEL_CONFIG_PATH, 'utf8')) as BrudConfig;
-    const configPath = await writeConfig(root, {
-      services: base.services,
-      plugins: [{ path: pluginPath, official: false }],
-    });
-    const kernel = await bootKernel(configPath, {
-      options: {...workspaceContextOptions(root),
-        'pluginManager.configPath': configPath,
-        history: { inMemory: true },
-      },
-    });
-
-    t.after(async () => {
-      if (kernel.lifecycleState === 'RUNNING') {
-        await kernel.shutdown().catch(() => undefined);
-      }
-    });
-
-    const module = await import(pathToFileURL(pluginPath).href) as {
-      readonly plugin: IBrudPlugin;
-    };
-
-    const registry = kernel.requestAccess<IBrandRegistry>(caller(root), BrandRegistryToken);
-
-    assert.equal(
-      registry.getScope(PLUGIN_MANAGER_SCOPE_NAME)?.verify(module.plugin),
-      false,
-    );
   });
 
   it('does not load a service omitted from the config and fails its dependents', async (t) => {

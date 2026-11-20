@@ -11,10 +11,8 @@ const tsc = join(repositoryRoot, 'node_modules', 'typescript', 'bin', 'tsc');
 
 const dirToPackage = {
   ActionManager: '@brud/service-actions',
-  BrandRegistry: '@brud/service-brand-registry',
   BrudFileSystem: '@brud/service-filesystem',
   BrudTools: '@brud/service-tools',
-  PluginManager: '@brud/service-plugin-manager',
   SettingsService: '@brud/service-settings',
   TerminalService: '@brud/service-terminal',
   UniversalHistory: '@brud/service-history',

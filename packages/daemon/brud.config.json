@@ -17,10 +17,6 @@
       "official": true
     },
     {
-      "path": "@brud/service-brand-registry/serviceModule.js",
-      "official": true
-    },
-    {
       "path": "kernel:serviceModules/identityRegistry.js",
       "official": true
     },
@@ -62,10 +58,6 @@
     },
     {
       "path": "@brud/service-history/historyJournal.js",
-      "official": true
-    },
-    {
-      "path": "@brud/service-plugin-manager/serviceModule.js",
       "official": true
     }
   ],

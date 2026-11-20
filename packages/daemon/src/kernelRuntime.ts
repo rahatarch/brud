@@ -3,7 +3,6 @@ import { basename, dirname, join } from 'node:path';
 import type * as KernelApi from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
-import type { IBrudPlugin } from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
 
 type KernelModule = typeof KernelApi;
 
@@ -19,8 +18,6 @@ export function loadKernelModule(): Promise<KernelModule> {
 
 export interface KernelRuntimeOptions {
   readonly workspaceRoot: string;
-  readonly initialPlugins?: readonly IBrudPlugin[];
-  readonly certifyInitialPlugins?: boolean;
   readonly storageDriver?: IStorageDriver;
 }
 
@@ -77,7 +74,6 @@ export function createWorkspaceContextOptions(
     'settings.root': workspaceRoot,
     'filesystem.root': workspaceRoot,
     'terminal.root': workspaceRoot,
-    'pluginManager.root': workspaceRoot,
     'history.root': workspaceRoot,
     'router.root': workspaceRoot,
     'identity.registry.path': resolveIdentityRegistryPath(workspaceRoot),
@@ -95,9 +91,6 @@ function ensureIdentityRegistry(kernelModule: KernelModule, registryPath: string
 
 /**
  * Boots one kernel from the daemon config.
- *
- * `initialPlugins` is a test/host override; when omitted the config's plugins
- * are used.
  */
 export async function createKernel(options: KernelRuntimeOptions): Promise<BrudKernel> {
   const kernelModule = await loadKernelModule();
@@ -111,14 +104,7 @@ export async function createKernel(options: KernelRuntimeOptions): Promise<BrudK
   return kernelModule.bootKernel(DEFAULT_BRUD_CONFIG_PATH, {
     options: {
       ...workspaceOptions,
-      'pluginManager.configPath': DEFAULT_BRUD_CONFIG_PATH,
       ...(options.storageDriver === undefined ? {} : { storageDriver: options.storageDriver }),
-      ...(options.initialPlugins === undefined
-        ? {}
-        : { 'pluginManager.plugins': { entries: options.initialPlugins } }),
-      ...(options.certifyInitialPlugins === undefined
-        ? {}
-        : { 'pluginManager.certifyPlugins': options.certifyInitialPlugins }),
     },
   });
 }

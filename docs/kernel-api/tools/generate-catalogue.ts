@@ -17,6 +17,8 @@ import { fileURLToPath } from 'node:url';
 import { HARDCORE_SERVICES } from '../../../packages/kernel/src/bootstrap/hardcoreServices.js';
 import { createEventsDescriptor } from '../../../packages/kernel/services/Events/index.js';
 import { createInterceptionDescriptor } from '../../../packages/kernel/services/Interception/index.js';
+import { createParserDescriptor } from '../../../packages/kernel/services/Parser/descriptor/ParserDescriptor.js';
+import { createRouterDescriptor } from '../../../packages/kernel/services/Router/descriptor/RouterDescriptor.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DOCS = join(HERE, '..');
@@ -73,7 +75,7 @@ writeFileSync(join(OUT, 'hardcores.md'), `${BANNER}# The seven hardcores\n\nThe 
 )}\n`);
 
 // Exposures.
-const exposureRows = [createEventsDescriptor(), createInterceptionDescriptor()].flatMap((descriptor) =>
+const exposureRows = [createParserDescriptor(), createRouterDescriptor(), createEventsDescriptor(), createInterceptionDescriptor()].flatMap((descriptor) =>
   (descriptor.manifest?.exposures ?? []).map((exposure) => [
     code(`${exposure.name}@${String(exposure.version ?? 1)}`),
     code(exposure.scope ?? 'kernel'),

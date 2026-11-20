@@ -23,6 +23,7 @@ broker refused access; the concrete subclasses carry the finer reason.
 
 - [`BlacklistedAccessViolationError`](#blacklistedaccessviolationerror)
 - [`AllowlistViolationError`](#allowlistviolationerror)
+- [`CallerIdentityMismatchError`](#calleridentitymismatcherror)
 
 #### Constructors
 
@@ -82,7 +83,10 @@ Identifier of the service that denied access.
 
 ### AllowlistViolationError
 
-Raised when a caller is not present in a service's allow list.
+Base class for every rejection produced by a service access policy.
+
+Callers should branch on this type when they only need to know that the
+broker refused access; the concrete subclasses carry the finer reason.
 
 #### Extends
 
@@ -220,6 +224,84 @@ readonly reason: string;
 ```
 
 Explanation of why the caller was denied.
+
+##### targetServiceId
+
+```ts
+readonly targetServiceId: string;
+```
+
+Identifier of the service that denied access.
+
+###### Inherited from
+
+[`AccessDeniedError`](#abstract-accessdeniederror).[`targetServiceId`](#targetserviceid)
+
+***
+
+### CallerIdentityMismatchError
+
+Raised when a caller inside a kernel call chain asserts a caller id that is
+not the identity the kernel admitted it with. Token access binds to the
+call chain: a participant can only ever be itself.
+
+#### Extends
+
+- [`AccessDeniedError`](#abstract-accessdeniederror)
+
+#### Constructors
+
+##### Constructor
+
+```ts
+new CallerIdentityMismatchError(
+   assertedCallerId, 
+   targetServiceId, 
+   boundCallerId
+): CallerIdentityMismatchError;
+```
+
+###### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `assertedCallerId` | `string` | Caller id the requester supplied. |
+| `targetServiceId` | `string` | Identifier of the service requested. |
+| `boundCallerId` | `string` \| `undefined` | Caller id the call chain binds the requester to, if any. |
+
+###### Returns
+
+[`CallerIdentityMismatchError`](#calleridentitymismatcherror)
+
+###### Overrides
+
+[`AccessDeniedError`](#abstract-accessdeniederror).[`constructor`](#constructor)
+
+#### Properties
+
+##### callerId
+
+```ts
+readonly callerId: string;
+```
+
+Identifier of the caller that attempted access.
+
+###### Inherited from
+
+[`AccessDeniedError`](#abstract-accessdeniederror).[`callerId`](#callerid)
+
+##### code
+
+```ts
+readonly code: "CALLER_IDENTITY_MISMATCH";
+```
+
+Stable, machine-readable error code.
+
+###### Overrides
+
+[`AccessDeniedError`](#abstract-accessdeniederror).[`code`](#code)
 
 ##### targetServiceId
 

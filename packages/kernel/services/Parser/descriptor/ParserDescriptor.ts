@@ -3,6 +3,10 @@ import type { ServiceDescriptor } from '../../../src/contracts/serviceDescriptor
 import type { IBrudParserService } from '../contracts/IParserService.js';
 import { ParserService } from '../orchestrator/index.js';
 import { ParserToken } from './tokens.js';
+import { withExposureBindings } from '../../ExposedApiRegistry/contracts/registrant.js';
+
+/** The Parser's v1 entry exposure. */
+export const PARSER_EXPOSURE = 'syntax.parse';
 
 /** Tier assigned to the Parser descriptor. */
 export const PARSER_SERVICE_TIER: ServiceTier = 'core';
@@ -30,10 +34,25 @@ export function createParserDescriptor(): ServiceDescriptor<IBrudParserService, 
       version: PARSER_CONTRACT_VERSION,
       methods: PARSER_CONTRACT_METHODS,
     },
+    // Token access is kernel-internal (the Router). Every other caller uses the
+    // `syntax.parse@1` exposure; parsing is pure, so it carries no policy.
     accessPolicy: {
-      allowedCallers: ['kernel', 'brud.core.router', 'brud.host.daemon'],
+      allowedCallers: ['kernel', 'brud.core.router'],
     },
-    factory: (): ParserService => new ParserService(),
+    manifest: {
+      exposures: [{ name: PARSER_EXPOSURE, version: 1, scope: 'any' }],
+    },
+    factory: (): ParserService => {
+      const service = new ParserService();
+
+      return withExposureBindings(service, {
+        [`${PARSER_EXPOSURE}@1`]: {
+          projection: () => Object.freeze({
+            parse: (rawInput: string, options?: Parameters<ParserService['parse']>[1]) => service.parse(rawInput, options),
+          }),
+        },
+      });
+    },
   };
 }
 

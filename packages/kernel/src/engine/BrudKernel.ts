@@ -142,11 +142,11 @@ export class BrudKernel implements IBrudKernel {
     this.pipeline = new ExecutionPipeline(this.services);
     this.maxCallDepth = options?.maxCallDepth ?? 5;
     this.registry = new KernelRegistry();
-    this.accessBroker = new KernelAccessBroker(this.registry, () => this.state);
     this.calls = new KernelCallChain(
       (tokenId) => this.registry.getInstance(tokenId),
       options?.callLimits,
     );
+    this.accessBroker = new KernelAccessBroker(this.registry, () => this.state, this.calls);
   }
 
   /**

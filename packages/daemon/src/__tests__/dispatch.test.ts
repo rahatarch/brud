@@ -208,32 +208,15 @@ async function openHandshakenClient(): Promise<TestClient> {
 
 describe('DaemonServer dispatch', () => {
   before(async () => {
-    const kernelModule = await import('@brud/kernel');
     const { NodeStorageDriver } = await import('@brud/service-filesystem');
     const storageDriver = new NodeStorageDriver();
 
     workspaceRoot = await mkdtemp(join(tmpdir(), 'brud-dispatch-test-'));
     tempDirectory = await mkdtemp(join(tmpdir(), 'brud-daemon-test-'));
-    const identityRegistryPath = join(tempDirectory, 'identity-registry.json');
     mkdirSync(tempDirectory, { recursive: true });
-    kernelModule.provisionIdentityRegistryStorage(identityRegistryPath);
-
-    const createdKernel = kernelModule.createStandardKernel({
-      storageDriver,
-      history: { inMemory: true },
-    });
-    await createdKernel.boot({
-      options: {
-        'workspace.root': workspaceRoot,
-        'settings.root': workspaceRoot,
-        'filesystem.root': workspaceRoot,
-        'terminal.root': workspaceRoot,
-        'pluginManager.root': workspaceRoot,
-        'history.root': workspaceRoot,
-        'router.root': workspaceRoot,
-        'identity.registry.path': identityRegistryPath,
-      },
-    });
+    process.env.BRUD_IDENTITY_REGISTRY_PATH = join(tempDirectory, 'identity-registry.json');
+    const { createKernel } = await import('../kernelRuntime.js');
+    const createdKernel = await createKernel({ workspaceRoot, storageDriver });
     kernel = createdKernel;
 
     socketPath = join(tempDirectory, 'daemon.sock');
@@ -248,6 +231,7 @@ describe('DaemonServer dispatch', () => {
   });
 
   after(async () => {
+    delete process.env.BRUD_IDENTITY_REGISTRY_PATH;
     if (server !== undefined) {
       await server.close();
     }

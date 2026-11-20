@@ -7,6 +7,7 @@ Every stable, machine-readable `code` a kernel error class carries. Match on `co
 | Code | Class | Defined in |
 | --- | --- | --- |
 | `BLACKLISTED_ACCESS` | `BlacklistedAccessViolationError` | `packages/kernel/src/contracts/policy.ts` |
+| `CALLER_IDENTITY_MISMATCH` | `CallerIdentityMismatchError` | `packages/kernel/src/contracts/policy.ts` |
 | `CIRCULAR_DEPENDENCY` | `CircularDependencyError` | `packages/kernel/src/engine/errors.ts` |
 | `EVENTS_DUPLICATE_DECLARATION` | `EventDuplicateDeclarationError` | `packages/kernel/services/Events/contracts/errors.ts` |
 | `EVENTS_NAME_COLLISION` | `EventNameCollisionError` | `packages/kernel/services/Events/contracts/errors.ts` |

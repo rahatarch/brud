@@ -1,7 +1,7 @@
-import type { IKernelAccessBroker } from '../../../src/contracts/accessBroker.js';
+import type { KernelCallAuthority } from '../../../src/contracts/callChain.js';
 import { isValidRouterKind } from '../contracts/kind.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
-import type { IServiceLifecycle, ServiceContext } from '../../../src/contracts/lifecycle.js';
+import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
 import type {
   BrudOperation,
   BrudParseFailure,
@@ -12,13 +12,12 @@ import {
   RouterInvalidKindError,
   RouterKindCollisionError,
   RouterRegistrationClosedError,
-  RouterUnknownServiceError,
 } from '../contracts/errors.js';
-import { requireContextString } from '../../../src/contracts/contextContract.js';
-import { ROUTER_ROOT_CONTEXT_FIELD } from '../bootOptions.js';
 import type { IRouterService } from '../contracts/IRouterService.js';
 import type {
+  BrudDispatchCaller,
   BrudDispatchContext,
+  BrudKindDispatcher,
   BrudRouteOptions,
   BrudRouteRegistration,
   BrudRouteResult,
@@ -27,13 +26,10 @@ import type {
 
 /** Collaborators injected into {@link RouterService}. */
 export interface RouterDependencies {
-  /** Mediated access broker used to resolve registered services. */
-  readonly broker: IKernelAccessBroker;
-
-  /** Router identity used for broker requests. */
-  readonly callerContext: ServiceContext;
-
-  /** Lazily resolves `brud.core.parser`. */
+  /** Resolves a kind owner's dispatch exposure on the current kernel call chain. */
+  readonly resolveOwner: (exposure: string, version: number | undefined, owner: string | undefined) => BrudKindDispatcher | null;
+  /** Workspace root used when a request omits one. */
+  readonly defaultWorkspaceRoot: () => string;
   readonly getParser: () => IBrudParserService;
 }
 
@@ -50,7 +46,9 @@ export interface RouterDependencies {
  * never be a routing target.
  */
 export class RouterService implements IRouterService, IServiceLifecycle {
-  private readonly registrations = new Map<string, BrudRouteRegistration<unknown>>();
+  private readonly registrations = new Map<string, BrudRouteRegistration & { readonly owner?: string }>();
+
+  private authority: KernelCallAuthority | undefined;
 
   private readonly dependencies: RouterDependencies;
 
@@ -68,6 +66,28 @@ export class RouterService implements IRouterService, IServiceLifecycle {
   }
 
   /** Lifecycle no-op: registrations arrive from the boot pinner. */
+  /** Binds the kernel call chain (hardcore boot). */
+  bindAuthority(value: KernelCallAuthority): void {
+    this.authority = value;
+  }
+
+  /** The kernel-derived caller of the current chain, if any. */
+  private currentCaller(): BrudDispatchCaller | undefined {
+    const context = this.authority?.current();
+
+    if (context === undefined) {
+      return undefined;
+    }
+
+    return Object.freeze({
+      identity: context.caller.identity,
+      callerClass: context.caller.callerClass,
+      official: context.caller.official,
+      capabilities: Object.freeze([...context.caller.capabilities].sort()),
+      origin: context.origin,
+    });
+  }
+
   async initialize(): Promise<void> {
     return undefined;
   }
@@ -89,7 +109,20 @@ export class RouterService implements IRouterService, IServiceLifecycle {
     return this.disposed;
   }
 
-  register<TService>(registration: BrudRouteRegistration<TService>): void {
+  /**
+   * Registers a kind a participant declared in `manifest.kinds` (hardcore
+   * boot). The owner's kernel identity is pinned, so only that participant's
+   * exposure can serve the kind.
+   */
+  registerDeclared(owner: string, declaration: { readonly kind: string; readonly exposure: string; readonly version?: number | string }): void {
+    this.register({
+      kind: declaration.kind,
+      exposure: declaration.exposure,
+      ...(declaration.version === undefined ? {} : { version: Number(declaration.version) }),
+    }, owner);
+  }
+
+  register(registration: BrudRouteRegistration, owner?: string): void {
     if (this.disposed) {
       throw new RouterDisposedError();
     }
@@ -105,17 +138,14 @@ export class RouterService implements IRouterService, IServiceLifecycle {
     const existing = this.registrations.get(registration.kind);
 
     if (existing !== undefined) {
-      throw new RouterKindCollisionError(registration.kind, existing.token.id);
+      throw new RouterKindCollisionError(registration.kind, existing.exposure);
     }
 
-    if (!this.dependencies.broker.hasService(registration.token)) {
-      throw new RouterUnknownServiceError(registration.token.id);
+    if (typeof registration.exposure !== 'string' || registration.exposure.length === 0) {
+      throw new RouterInvalidKindError(registration.kind);
     }
 
-    this.registrations.set(
-      registration.kind,
-      registration as BrudRouteRegistration<unknown>,
-    );
+    this.registrations.set(registration.kind, Object.freeze({ ...registration, ...(owner === undefined ? {} : { owner }) }));
   }
 
   closeRegistration(): void {
@@ -133,6 +163,7 @@ export class RouterService implements IRouterService, IServiceLifecycle {
   async route(
     rawInput: string,
     options: BrudRouteOptions = {},
+    caller?: BrudDispatchCaller,
   ): Promise<BrudRouteResult> {
     if (this.disposed) {
       return this.failureResult(new RouterDisposedError());
@@ -155,18 +186,31 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       };
     }
 
-    return this.dispatch(parsed.operations, options);
+    return this.dispatch(parsed.operations, options, caller);
   }
 
   async dispatch(
     operations: readonly BrudOperation[],
     options: BrudRouteOptions = {},
+    caller?: BrudDispatchCaller,
   ): Promise<BrudRouteResult> {
     if (this.disposed) {
       return this.failureResult(new RouterDisposedError());
     }
 
-    const context = this.buildDispatchContext(options);
+    const routeCaller = caller ?? this.currentCaller();
+
+    
+
+    if (routeCaller === undefined) {
+
+      return this.failureResult({ code: 'ROUTE_NO_CALL_CONTEXT', message: 'routing requires a kernel call chain' });
+
+    }
+
+    
+
+    const context = this.buildDispatchContext(options, routeCaller);
     const stopOnFailure = options.stopOnFailure === true;
     const outcomes: RoutedOperationOutcome[] = [];
 
@@ -207,12 +251,13 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       try {
         // The access broker is the only resolution path: the registered token
         // decides the target and its access policy still applies.
-        const service = this.dependencies.broker.requestAccess(
-          this.dependencies.callerContext,
-          registration.token,
-        );
+        const owner = this.dependencies.resolveOwner(registration.exposure, registration.version, registration.owner);
 
-        result = await registration.dispatch(service, operation, context);
+        if (owner === null) {
+          throw new Error(`KIND_OWNER_UNAVAILABLE: exposure "${registration.exposure}" for kind "${operation.kind}" is not resolvable`);
+        }
+
+        result = await owner.dispatch(operation, context);
       } catch (error: unknown) {
         failed += 1;
         outcomes.push({
@@ -291,24 +336,18 @@ export class RouterService implements IRouterService, IServiceLifecycle {
     return this.parser;
   }
 
-  private buildDispatchContext(options: BrudRouteOptions): BrudDispatchContext {
-    return {
-      workspaceRoot: options.workspaceRoot ?? requireContextString(
-        this.dependencies.callerContext.options,
-        ROUTER_ROOT_CONTEXT_FIELD,
-        this.dependencies.callerContext.callerId,
-      ),
-      callerId: options.callerId ?? this.dependencies.callerContext.callerId,
-      ...(options.permissions === undefined ? {} : { permissions: options.permissions }),
+  private buildDispatchContext(options: BrudRouteOptions, caller: BrudDispatchCaller): BrudDispatchContext {
+    return Object.freeze({
+      workspaceRoot: options.workspaceRoot ?? this.dependencies.defaultWorkspaceRoot(),
+      caller,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ...(options.origin === undefined ? {} : { origin: options.origin }),
       ...(options.dryRun === true ? { dryRun: true } : {}),
-    };
+    });
   }
 
-  private failureResult(error: RouterDisposedError): BrudRouteResult {
+  private failureResult(error: { readonly code: string; readonly message: string }): BrudRouteResult {
     const parseError: BrudParseFailure = {
-      code: error.code,
+      code: error.code as BrudParseFailure['code'],
       friendly: error.message,
       details: error.message,
     };

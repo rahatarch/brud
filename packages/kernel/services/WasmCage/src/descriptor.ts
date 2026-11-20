@@ -129,12 +129,12 @@ export function createWasmCageDescriptor(): ServiceDescriptor<IWasmCage> {
             tier: context.tier,
             options: context.options,
           };
-          const registry = registryFor(caller);
-
+          // Registry access and the resolve both happen inside the caged
+          // participant's own frame, so the broker binds the request to it.
           return callAuthority.runAsOrigin(
             'runtime',
             participantIdentity,
-            () => registry.resolve<T>(name, options),
+            () => registryFor(caller).resolve<T>(name, options),
           );
         },
       };

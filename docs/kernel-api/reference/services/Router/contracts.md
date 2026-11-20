@@ -326,61 +326,49 @@ Token id that could not be resolved.
 
 ### BrudDispatchContext
 
-Context handed to a registered kind dispatcher.
+Context handed to a kind owner's dispatch exposure for one operation.
 
 #### Properties
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-callerid"></a> `callerId` | `readonly` | `string` | Identity of the original caller that requested routing. |
-| <a id="property-dryrun"></a> `dryRun?` | `readonly` | `boolean` | Validate only; the target must not execute its handler. |
-| <a id="property-origin"></a> `origin?` | `readonly` | `string` | Origin marker of the dispatch surface, when one is known. |
-| <a id="property-permissions"></a> `permissions?` | `readonly` | readonly `string`[] | Permissions the original caller holds, when known. |
-| <a id="property-signal"></a> `signal?` | `readonly` | `AbortSignal` | Cancellation signal of the request, when the transport supplied one. |
-| <a id="property-workspaceroot"></a> `workspaceRoot` | `readonly` | `string` | Absolute workspace root for the execution. |
+| <a id="property-caller"></a> `caller` | `readonly` | `BrudDispatchCaller` | Kernel-derived caller of the route request. |
+| <a id="property-dryrun"></a> `dryRun?` | `readonly` | `boolean` | Validate only; do not execute. |
+| <a id="property-signal"></a> `signal?` | `readonly` | `AbortSignal` | Cancellation signal, when the transport supplied one. |
+| <a id="property-workspaceroot"></a> `workspaceRoot` | `readonly` | `string` | Workspace root the operation runs against. |
 
 ***
 
 ### BrudRouteOptions
 
-Options shared by [IRouterService.route](#route) and `dispatch`.
+Options for one route request. Caller identity and capabilities are not
+options: the Router takes them from the kernel call chain.
 
 #### Properties
 
-| Property | Modifier | Type | Description |
-| ------ | ------ | ------ | ------ |
-| <a id="property-callerid-1"></a> `callerId?` | `readonly` | `string` | Identity of the original caller. Defaults to the router's caller id. |
-| <a id="property-dryrun-1"></a> `dryRun?` | `readonly` | `boolean` | Validate only; never invoke a target handler. Default `false`. |
-| <a id="property-maxoperations"></a> `maxOperations?` | `readonly` | `number` | Upper bound on parsed operations. Default 1_000. |
-| <a id="property-origin-1"></a> `origin?` | `readonly` | `string` | Origin marker of the dispatch surface. |
-| <a id="property-permissions-1"></a> `permissions?` | `readonly` | readonly `string`[] | Permissions the original caller holds. |
-| <a id="property-signal-1"></a> `signal?` | `readonly` | `AbortSignal` | Cancellation signal. |
-| <a id="property-stoponfailure"></a> `stopOnFailure?` | `readonly` | `boolean` | Stop at the first failed operation. Default `false`. |
-| <a id="property-workspaceroot-1"></a> `workspaceRoot?` | `readonly` | `string` | Workspace root for dispatch. Defaults to the router's boot workspace. |
+| Property | Modifier | Type |
+| ------ | ------ | ------ |
+| <a id="property-dryrun-1"></a> `dryRun?` | `readonly` | `boolean` |
+| <a id="property-maxoperations"></a> `maxOperations?` | `readonly` | `number` |
+| <a id="property-signal-1"></a> `signal?` | `readonly` | `AbortSignal` |
+| <a id="property-stoponfailure"></a> `stopOnFailure?` | `readonly` | `boolean` |
+| <a id="property-workspaceroot-1"></a> `workspaceRoot?` | `readonly` | `string` |
 
 ***
 
 ### BrudRouteRegistration
 
-Boot-time declaration that a Level-1 service serves an operation kind.
-
-The dispatcher receives the broker-projected service instance, the parsed
-operation, and the caller context. It is registered by the owning service,
-never by a plugin.
-
-#### Type Parameters
-
-| Type Parameter | Description |
-| ------ | ------ |
-| <a id="type-parameter-tservice"></a> `TService` | Public interface carried by [token](#property-token). |
+Boot-time claim of a kind. The owner names one of its own exposures; the
+Router resolves it per operation on the kernel call chain and calls
+`dispatch`. No service token is involved.
 
 #### Properties
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-dispatch"></a> `dispatch` | `readonly` | (`service`, `operation`, `context`) => `Promise`\<[`OperationResult`](../../src/contracts.md#operationresult)\<`unknown`\>\> | Invokes the service for one operation. |
-| <a id="property-kind"></a> `kind` | `readonly` | `string` | Kind this service handles, e.g. `tool` or `action`. |
-| <a id="property-token"></a> `token` | `readonly` | [`ServiceToken`](../../src/contracts.md#servicetoken)\<`TService`\> | Token resolved through the access broker at dispatch time. |
+| <a id="property-exposure"></a> `exposure` | `readonly` | `string` | Name of the owner's dispatch exposure (`name`, major `version`). |
+| <a id="property-kind"></a> `kind` | `readonly` | `string` | - |
+| <a id="property-version"></a> `version?` | `readonly` | `number` | - |
 
 ***
 
@@ -455,7 +443,11 @@ Seals the registration window. Idempotent.
 ##### dispatch()
 
 ```ts
-dispatch(operations, options?): Promise<BrudRouteResult>;
+dispatch(
+   operations, 
+   options?, 
+   caller?
+): Promise<BrudRouteResult>;
 ```
 
 Routes an already-parsed operation list.
@@ -466,6 +458,7 @@ Routes an already-parsed operation list.
 | ------ | ------ | ------ |
 | `operations` | readonly [`BrudOperation`](../Parser/contracts.md#brudoperation)[] | Operations emitted by the Parser. |
 | `options?` | [`BrudRouteOptions`](#brudrouteoptions) | Caller context and routing bounds. |
+| `caller?` | `BrudDispatchCaller` | - |
 
 ###### Returns
 
@@ -486,22 +479,16 @@ Whether new kinds may still be claimed.
 ##### register()
 
 ```ts
-register<TService>(registration): void;
+register(registration): void;
 ```
 
 Claims a kind on behalf of a Level-1 service.
-
-###### Type Parameters
-
-| Type Parameter |
-| ------ |
-| <a id="type-parameter-tservice-1"></a> `TService` |
 
 ###### Parameters
 
 | Parameter | Type |
 | ------ | ------ |
-| `registration` | [`BrudRouteRegistration`](#brudrouteregistration)\<`TService`\> |
+| `registration` | [`BrudRouteRegistration`](#brudrouteregistration) |
 
 ###### Returns
 
@@ -538,7 +525,11 @@ readonly `string`[]
 ##### route()
 
 ```ts
-route(rawInput, options?): Promise<BrudRouteResult>;
+route(
+   rawInput, 
+   options?, 
+   caller?
+): Promise<BrudRouteResult>;
 ```
 
 Parses a raw document with `brud.core.parser` and routes every operation.
@@ -549,6 +540,7 @@ Parses a raw document with `brud.core.parser` and routes every operation.
 | ------ | ------ | ------ |
 | `rawInput` | `string` | Raw `[BRUD]` document. |
 | `options?` | [`BrudRouteOptions`](#brudrouteoptions) | Caller context and routing bounds. |
+| `caller?` | `BrudDispatchCaller` | - |
 
 ###### Returns
 

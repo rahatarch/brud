@@ -12,7 +12,6 @@ const NAMESPACED_KEYS = [
   'identity.registry.path',
   'pluginManager.configPath',
   'pluginManager.plugins',
-  'pluginManager.root',
   'router.root',
   'settings.root',
   'terminal.root',
@@ -68,7 +67,7 @@ describe('WorkspaceRegistry', () => {
     const registry = new WorkspaceRegistry();
 
     try {
-      const workspace = await registry.spawn(workspaceRoot, []);
+      const workspace = await registry.spawn(workspaceRoot);
 
       assert.equal(workspace.root, workspaceRoot);
       assert.equal(workspace.kernel.lifecycleState, 'RUNNING');
@@ -90,7 +89,7 @@ describe('WorkspaceRegistry', () => {
     const registry = new WorkspaceRegistry();
 
     try {
-      const workspace = await registry.spawn(workspaceRoot, []);
+      const workspace = await registry.spawn(workspaceRoot);
       const spawnedAt = workspace.lastUsedAt.getTime();
 
       await delay(10);
@@ -131,7 +130,7 @@ describe('WorkspaceRegistry', () => {
     const workspaceRoot = await makeWorkspace(join(root, 'ws-a'));
     const registry = new WorkspaceRegistry();
 
-    await registry.spawn(workspaceRoot, []);
+    await registry.spawn(workspaceRoot);
     const kernel = registry.get(workspaceRoot)?.kernel;
     assert.ok(kernel !== undefined);
 
@@ -153,7 +152,7 @@ describe('WorkspaceRegistry', () => {
     });
 
     try {
-      await registry.spawn(workspaceRoot, []);
+      await registry.spawn(workspaceRoot);
       const kernel = registry.get(workspaceRoot)?.kernel;
       assert.ok(kernel !== undefined);
 
@@ -175,7 +174,7 @@ describe('WorkspaceRegistry', () => {
     });
 
     try {
-      await registry.spawn(workspaceRoot, []);
+      await registry.spawn(workspaceRoot);
       registry.attachClient(workspaceRoot, 'client-1');
 
       await delay(150);
@@ -195,9 +194,9 @@ describe('WorkspaceRegistry', () => {
     const second = new WorkspaceRegistry();
 
     try {
-      const workspaceA = await first.spawn(rootA, []);
-      const workspaceB = await first.spawn(rootB, []);
-      const otherRegistryA = await second.spawn(rootC, []);
+      const workspaceA = await first.spawn(rootA);
+      const workspaceB = await first.spawn(rootB);
+      const otherRegistryA = await second.spawn(rootC);
 
       assert.notEqual(workspaceA.kernel, workspaceB.kernel);
       assert.notEqual(workspaceA.kernel, otherRegistryA.kernel);

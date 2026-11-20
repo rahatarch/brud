@@ -6,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import type { IBrudToolsService } from '@brud/service-tools' with { 'resolution-mode': 'import' };
-import type { IPluginManagerService } from '@brud/service-plugin-manager' with { 'resolution-mode': 'import' };
 import type { IUtilityService } from '@brud/service-utility' with { 'resolution-mode': 'import' };
 import {
   DEFAULT_BRUD_CONFIG_PATH,
@@ -123,12 +122,6 @@ describe('non-hardcore service packages through the production boot path', () =>
       assert.equal(typeof tools.listTools, 'function');
       assert.ok(tools.listTools().length > 0, 'the official plugins registered tools');
 
-      const { PluginManagerToken } = await import('@brud/service-plugin-manager');
-      const manager = kernel.requestAccess<IPluginManagerService>(caller, PluginManagerToken);
-      const plugins = manager.listPlugins();
-
-      assert.ok(plugins.length >= 9, 'the daemon config activated the real plugins');
-      assert.ok(plugins.every((plugin) => plugin.state === 'active'));
     } finally {
       await kernel.shutdown();
     }

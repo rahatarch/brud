@@ -41,5 +41,11 @@ The WASM cage's only outward surface is `resolve`. A caged participant reaches a
 
 **Platforms.** The cage ships one native binary per platform (`brud-wasm-cage.<platform>.node`: `linux-x64-gnu`, `linux-arm64-gnu`, `darwin-x64`, `darwin-arm64`, `win32-x64-msvc`). Their SHA-256 digests are in a table inside the cage's pinned package, and the loader refuses a binary whose digest is not listed (`WASM_CAGE_NATIVE_TAMPERED`). On a platform with no binary the kernel still boots; only caged participants are unavailable (`WASM_CAGE_NATIVE_UNAVAILABLE`).
 
+## Token access is bound to the call chain
+`broker.requestAccess(caller, token)` is the older token path. Inside a call chain, the kernel binds `caller.callerId` to the chain: a participant can only ask as its own token id or kernel identity (`CALLER_IDENTITY_MISMATCH` otherwise), and a host-origin chain cannot claim `kernel` or a live participant. Token allow-lists therefore check the real caller.
+
+## Brud Syntax: kinds and routing
+AI-facing commands are written in Brud Syntax (`[BRUD]` … `[CALL <kind> <name>]` `key: value` … `[END]` … `[/BRUD]`). The Parser (`syntax.parse@1`) turns text into operations; the Router (`syntax.route@1`, scope `any`) dispatches them. A participant claims a kind at boot (`registerWithRouter(router)` → `router.register({ kind, exposure, version })`), naming one of **its own** exposures that provides `dispatch(operation, context)`. Per operation the Router resolves that exposure on the current chain and passes `context.caller`, the real caller it captured at resolve time (delegation by the owner); the request cannot supply or change it. A kind owner's dispatch exposure should require `official: true`, since it trusts the caller view the Router passes. A host enters with `kernel.runHostCall({ capabilities }, …)` and `resolve('syntax.route')`.
+
 ## Observations
 Refusals and diagnostics are recorded on the **observation stream** (`BrudKernel.readObservations()`). It is for diagnostics, not delivery. See [the observation events](../catalogue/observations.md).

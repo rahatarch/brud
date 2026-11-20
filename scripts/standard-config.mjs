@@ -12,7 +12,6 @@ const ENTRIES = [
   'SettingsService/settingsReader.ts',
   'UtilityService/serviceModule.ts',
   'kernel:serviceModules/exposedApiRegistry.js',
-  'BrandRegistry/serviceModule.ts',
   'WorkspaceService/serviceModule.ts',
   'BrudFileSystem/serviceModule.ts',
   'ValidationService/serviceModule.ts',
@@ -26,7 +25,6 @@ const ENTRIES = [
   'ActionManager/serviceModule.ts',
   'UniversalHistory/historySession.ts',
   'UniversalHistory/historyJournal.ts',
-  'PluginManager/serviceModule.ts',
 ];
 
 /**

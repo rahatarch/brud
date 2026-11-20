@@ -72,6 +72,32 @@ export class BlacklistedAccessViolationError extends AccessDeniedError {
 /**
  * Raised when a caller is not present in a service's allow list.
  */
+/**
+ * Raised when a caller inside a kernel call chain asserts a caller id that is
+ * not the identity the kernel admitted it with. Token access binds to the
+ * call chain: a participant can only ever be itself.
+ */
+export class CallerIdentityMismatchError extends AccessDeniedError {
+  /** Stable, machine-readable error code. */
+  public readonly code = 'CALLER_IDENTITY_MISMATCH' as const;
+
+  /**
+   * @param assertedCallerId - Caller id the requester supplied.
+   * @param targetServiceId - Identifier of the service requested.
+   * @param boundCallerId - Caller id the call chain binds the requester to, if any.
+   */
+  constructor(assertedCallerId: string, targetServiceId: string, boundCallerId: string | undefined) {
+    super(
+      boundCallerId === undefined
+        ? `Caller "${assertedCallerId}" is not an admitted identity in this call chain (service "${targetServiceId}")`
+        : `Caller "${assertedCallerId}" does not match its call-chain identity "${boundCallerId}" (service "${targetServiceId}")`,
+      assertedCallerId,
+      targetServiceId,
+    );
+    this.name = 'CallerIdentityMismatchError';
+  }
+}
+
 export class AllowlistViolationError extends AccessDeniedError {
   /** Stable, machine-readable error code. */
   public readonly code = 'NOT_IN_ALLOWLIST' as const;

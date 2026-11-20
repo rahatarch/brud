@@ -50,7 +50,7 @@ export function createEventsDescriptor(): ServiceDescriptor<IEventsService, Even
       methods: EVENTS_CONTRACT_METHODS,
     },
     accessPolicy: {
-      allowedCallers: ['kernel', 'brud.core.router', 'brud.host.daemon'],
+      allowedCallers: ['kernel'],
     },
     manifest: {
       exposures: [

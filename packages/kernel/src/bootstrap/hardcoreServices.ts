@@ -1,5 +1,6 @@
 import type { KernelCallAuthority } from '../contracts/callChain.js';
-import type { EventDeclaration, ExposureDeclaration } from '../contracts/manifest.js';
+import type { EventDeclaration,
+  KindDeclaration, ExposureDeclaration } from '../contracts/manifest.js';
 import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /**
@@ -23,27 +24,27 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  'eaf6756fd104e2f388bd976fa98a3f8a88cc39fa31390e5a741cd62886e6d7f7';
+  '40e3690aa8b3d97ea81f85212ec79ce2cc6b07e0843214d3679236b9881579cc';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'e169f2b42cfdc6d277bb01a164f569d29c03687bcfc50ccdce9f6ebf4f7f1895';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '32d9f049eb7a1d4dbefbd22f9c3f5020c49f2e87231eea6252c3cbeb8527d9e0';
+  '031bca28d929ba2c8184627d7e4d10c549b6856b952a0338d27743e936032286';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '1be233d60e6ae4d136531be3198bf5033f8b34b0cd4d8af9ca8a2563420b793f';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  'df9808275d8d9cede6da94fd19407409ad6dd7505a9eaba0df164b3a12f781c8';
+  '14d746d06272a6156c6c557dc236d1ab266bdc0e9fd61c7c436978c2baa2558b';
 const PARSER_BUILT_HASH =
-  '00e6d1a17a64e9e9aeb4ea2b88e7520c942fe19126c62dde94c31c296388d985';
+  '2b2520552e7652a0992677bd8607cbe0d4b798e4e629963a4a27727a851e3c37';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  'a3ed4d9cda9997a5dac33729090b8cc9f7f996461df173db5c13b03942da63c6';
+  '1d75e1db756669f98be8293c5df6747275abf5d1a53a8f71c2e564d0a545ca12';
 const ROUTER_BUILT_HASH =
-  '3a79fa292a5d89ec67bc9c7cfa6e939487b37dfec998bc0084f7ce4d98d3ed18';
+  'fda0abd1c31cc85c53277164478ab93cf24608dae78aa26d713af35b37b1630b';
 
 /**
  * Pinned digests of the WASM cage package.
@@ -55,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '31ef67681dab3df007dab8be41b518f5a6cc91ed0f78834e1f73fc9eb1347018';
+  'ab79b775d3d1ddca13c84f8de39d56d19aa1cecb318df4de7ffdd5f5374ed7e8';
 const WASM_CAGE_BUILT_HASH =
-  'dc7bb987e0fcede6b618ac5d36d04e3a89adf55e617519aa16fd84aa9a450901';
+  '4fea387744a9ef01eca164c5c42fce50f3238be3b768befb7feee53eed1a1834';
 
 /**
  * Pinned digests of the events hardcore package.
@@ -69,14 +70,14 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  '4d625a01754faf43ab6a58b0ecc112d552372ba538356d951e4eb9fb2981e108';
+  '2be65138fd69574885b672a954f9c36eea38cc59693f5136b50fb610462cf11c';
 const INTERCEPTION_BUILT_HASH =
-  '396e7fafb277679f1b40dc5421a08975cfd55ea7d4020bab28549579f70a845f';
+  '372361ad9c50b00e5956319891b615f5f3397d911a0fd168438a34985153d960';
 
 const EVENTS_SOURCE_HASH =
-  'a5fab2b816d5902885f389722f89d5589c469fff0889e8d194f80c307c314458';
+  '42673c2cb4e2d42143ebb6332e5a435dc035ebedb2e39c89eb1e8d9dc82586f0';
 const EVENTS_BUILT_HASH =
-  'dcf613227c696578c37bd21f06c6d874d421df71e0a526650ceded9cd806818f';
+  'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 
 /** Binding the identity registry records for one composed participant. */
 interface IdentityBootBinding {
@@ -211,7 +212,7 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     token: 'brud.core.router',
     expectedContentHash: ROUTER_SOURCE_HASH,
     expectedBuiltContentHash: ROUTER_BUILT_HASH,
-    contractVersion: '1.0.0',
+    contractVersion: '2.0.0',
     contractInterface: [
       'register',
       'closeRegistration',
@@ -220,13 +221,33 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
       'route',
       'dispatch',
     ],
-    // The Router performs no boot-time work here. Its registration window is
-    // opened by its descriptor and closed by its module's boot-registrant hook,
-    // which the kernel calls after composed construction; this hook only
-    // satisfies the uniform signature.
-    boot: (_instance: unknown, _context: HardcoreBootContext): void => {
-      void _instance;
-      void _context;
+    // Binds the call chain. The registration window is opened by its
+    // descriptor and closed by its module's boot-registrant hook, which the
+    // kernel calls after composed construction.
+    boot: (instance: unknown, context: HardcoreBootContext): void => {
+      const router = instance as {
+        bindAuthority(value: KernelCallAuthority): void;
+        registerDeclared(owner: string, declaration: KindDeclaration): void;
+      };
+      // The Router reads the real caller from the kernel call chain.
+      router.bindAuthority(context.authority);
+
+      // Declared kinds (`manifest.kinds`): any participant, native or caged.
+      for (const entry of context.composition) {
+        if (entry.manifest.kinds.length === 0) {
+          continue;
+        }
+
+        const owner = context.identityOf(entry.token);
+
+        if (owner === undefined) {
+          throw new TypeError(`Participant "${entry.token}" declares kinds but has no kernel identity`);
+        }
+
+        for (const declaration of entry.manifest.kinds) {
+          router.registerDeclared(owner, declaration);
+        }
+      }
     },
   },
   {

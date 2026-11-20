@@ -9,7 +9,6 @@ import type { LockHandle } from '../lifecycle/lock.js';
 import { canonicalizeDaemonWorkspaceRoot, resolveEndpoint } from '../lifecycle/endpoint.js';
 import type { DaemonEndpoint } from '../lifecycle/endpoint.js';
 import { GracefulShutdownCoordinator } from '../lifecycle/shutdown.js';
-import { attachMcpTransports } from '../mcpTransport.js';
 import { WorkspaceRegistry } from '../workspaceRegistry.js';
 import type { KernelWorkspace } from '../workspaceRegistry.js';
 import { DaemonServer } from './DaemonServer.js';
@@ -110,11 +109,6 @@ function createWorkspaceRegistry(
       : options.workspaceIdleTimeoutMs === undefined
         ? {}
         : { idleTimeoutMs: options.workspaceIdleTimeoutMs }),
-    onWorkspaceSpawned: (workspace) =>
-      attachMcpTransports(workspace, {
-        stdio,
-        logger: { warn: writeDaemonWarning },
-      }),
     logger: { warn: writeDaemonWarning },
   });
 }
@@ -225,9 +219,9 @@ async function startRuntime(
  * Boots a daemon whose only transport is the host process's stdio.
  *
  * No Unix-domain socket is bound and no runtime artifacts are written. The
- * workspace registry spawns one kernel, and `attachMcpTransports` hands the
- * MCP bridge plugin a {@link StdioMcpTransport} reading from `process.stdin`
- * and writing to `process.stdout`. Diagnostics go to stderr so the stdout
+ * workspace registry spawns one kernel. MCP transport binding is paused until
+ * the MCP bridge is rebuilt as a kernel participant; {@link StdioMcpTransport} reads `process.stdin`
+ * and writes `process.stdout`. Diagnostics go to stderr so the stdout
  * stream stays a clean newline-delimited JSON-RPC channel.
  */
 export async function createStdioDaemon(

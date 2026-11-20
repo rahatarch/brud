@@ -6,6 +6,8 @@ The callable APIs the hardcores register with the exposed-API registry. A partic
 
 | Exposure | Scope | Policy | Hardcore |
 | --- | --- | --- | --- |
+| `syntax.parse@1` | `any` | none | `brud.core.parser` |
+| `syntax.route@1` | `any` | none | `brud.core.router` |
 | `events.emit@1` | `runtime` | none | `brud.core.events` |
 | `events.pull@1` | `runtime` | none | `brud.core.events` |
 | `events.close@1` | `runtime` | none | `brud.core.events` |
