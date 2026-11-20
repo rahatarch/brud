@@ -6,6 +6,7 @@ on:
     paths:
       - 'packages/kernel/**'
       - 'packages/protocol/**'
+      - 'packages/sdk/**'
       - 'packages/daemon/**'
       - 'packages/ui/**'
       - 'scripts/**'
@@ -17,6 +18,7 @@ on:
     paths:
       - 'packages/kernel/**'
       - 'packages/protocol/**'
+      - 'packages/sdk/**'
       - 'packages/daemon/**'
       - 'packages/ui/**'
       - 'scripts/**'
@@ -50,6 +52,9 @@ jobs:
 
       - name: Kernel tests (blocking)
         run: npm run test:kernel
+
+      - name: SDK tests (blocking)
+        run: npm run test:sdk
 
       - name: B0 goal tests (blocking)
         run: node --import tsx --test "packages/kernel/src/__tests__/goals/*.test.ts"

@@ -23,6 +23,7 @@
     "typecheck:ci": "tsc -p packages/kernel/tsconfig.json --noEmit && tsc -p packages/services/tsconfig.json --noEmit && tsc -p packages/daemon/tsconfig.json --noEmit && tsc -p packages/protocol/tsconfig.json --noEmit",
     "test": "npm run test:kernel && npm run test:daemon",
     "test:kernel": "npm run test --workspace @brud/kernel",
+    "test:sdk": "npm run test --workspace @brud/sdk",
     "check:boundaries": "node scripts/check-boundaries.mjs",
     "test:daemon": "npm run test --workspace @brud/daemon",
     "build:ui": "npm run build --workspace @brud/ui",
