@@ -109,6 +109,31 @@ function positiveOr(value: unknown, fallback: number): number {
 }
 
 /**
+ * The handle a terminal caller receives. Sessions are attributed to the
+ * kernel-derived caller (its identity, or its class for the host session),
+ * never to a value the request supplies.
+ */
+export function createTerminalHandle(
+  caller: { readonly identity: string | null; readonly callerClass: string },
+  service: ITerminalService,
+): ITerminalService {
+  const owner = caller.identity ?? caller.callerClass;
+
+  return {
+    run: (request, runOptions) => service.run({ ...request, callerId: owner }, runOptions),
+    registerExternal: (session, controls) => service.registerExternal({ ...session, callerId: owner }, controls),
+    registerChild: (child, onChunk) => service.registerChild(child, onChunk),
+    kill: (sessionId) => service.kill(sessionId),
+    killAll: () => service.killAll(),
+    activeSessions: () => service.activeSessions(),
+    chunkCallback: (sessionId) => service.chunkCallback(sessionId),
+    hasSession: (sessionId) => service.hasSession(sessionId),
+    unregister: (sessionId) => service.unregister(sessionId),
+    getPolicy: () => service.getPolicy(),
+  };
+}
+
+/**
  * Builds the terminal service descriptor.
  *
  * Boot position is after validation: the service re-validates every command,
@@ -133,7 +158,7 @@ export function createTerminalDescriptor(
         version: 1,
         scope: 'runtime',
         policy: { policyVersion: 2, capabilities: [TERMINAL_EXECUTE_CAPABILITY] },
-        handle: (_caller, ctx) => ctx.instance,
+        handle: (caller, ctx) => createTerminalHandle(caller, ctx.instance),
       },
     },
     create: (ctx) => {

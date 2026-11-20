@@ -27,7 +27,7 @@ import { UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { ReversalEngine } from '../engine/ReversalEngine.js';
 import { CORE_NAMESPACE, HISTORY_GC_GRACE_MS, UnifiedHistoryService } from '../service/index.js';
 import { UnifiedHistoryStore, blobPath, sha256Hex } from '../store/index.js';
-import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../test-support/workspaceContext.js';
 import { provisionIdentityRegistryStorage } from '@brud/kernel';
 
 const DAY = 86_400_000;

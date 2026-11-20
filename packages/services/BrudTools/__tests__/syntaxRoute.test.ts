@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ExposedApiRegistryToken, bootKernel, provisionIdentityRegistryStorage } from '@brud/kernel';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 const SERVICES = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const HARDCORES = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']

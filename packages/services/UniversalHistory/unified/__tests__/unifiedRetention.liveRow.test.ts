@@ -30,7 +30,7 @@ import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js'
 import { FileSystemToken } from '../../../BrudFileSystem/descriptor/tokens.js';
 import { provisionIdentityRegistryStorage } from '@brud/kernel';
 
-import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../test-support/workspaceContext.js';
 const DAY = 86_400_000;
 const LINE_TIMEOUT_MS = 120_000;
 

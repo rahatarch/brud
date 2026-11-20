@@ -37,7 +37,7 @@ import type { EntryRow } from '../store/index.js';
 import {
   createIsolatedIdentityRegistryContext,
   workspaceContextOptions,
-} from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+} from '../../../test-support/workspaceContext.js';
 
 const isRoot = typeof process.getuid === 'function' && process.getuid() === 0;
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);

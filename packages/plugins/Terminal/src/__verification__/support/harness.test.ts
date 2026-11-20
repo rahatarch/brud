@@ -5,7 +5,7 @@
  * with the real `brud.core.terminal` service and the real validation gate. It
  * imports only the plugin's public factory; no handler is stubbed.
  */
-import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../../services/test-support/workspaceContext.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

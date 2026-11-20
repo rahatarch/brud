@@ -9,8 +9,7 @@ import type { ServiceContext } from '@brud/kernel';
 import type { ServiceToken } from '@brud/kernel';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { ReadOnlyFacade, ReadOnlyViolationError } from '../projection/ReadOnlyFacade/ReadOnlyFacade.js';
-import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
-import { FileSystemDescriptor, createFileSystemDescriptor } from './descriptor.js';
+import { FileSystemDescriptor, createFileSystemDescriptor, createFileSystemHandle } from './descriptor.js';
 import { FileSystemToken } from './tokens.js';
 
 let workspaceRoot = '';
@@ -104,59 +103,47 @@ describe('FileSystemDescriptor', () => {
     await built.dispose();
   });
 
-  it('returns the internal service unchanged for privileged callers', async () => {
-    const project = FileSystemDescriptor.project;
-    assert.ok(project);
-    const instance = await createInstance();
+  describe('exposure handle', () => {
+    const caller = (capabilities: readonly string[], identity: string | null = 'acme.holder') => ({
+      callerClass: 'participant',
+      identity,
+      official: false,
+      origin: 'runtime',
+      capabilities: new Set(capabilities),
+    }) as unknown as Parameters<ReturnType<typeof createFileSystemHandle>>[0];
 
-    const projection = project(instance, createCaller({ tier: 'core' }));
+    it('hands a writer the service itself', async () => {
+      const instance = await createInstance();
 
-    assert.equal(projection, instance);
-  });
+      assert.equal(createFileSystemHandle()(caller(['fs:write']), instance), instance);
+    });
 
-  it('scopes callers carrying a partition prefix', async () => {
-    const project = FileSystemDescriptor.project;
-    assert.ok(project);
-    const instance = await createInstance();
+    it('hands a reader-only caller a read-only facade', async () => {
+      const instance = await createInstance();
+      await instance.createFile('shared.txt', 'readable');
 
-    const projection = project(
-      instance,
-      createCaller({ tier: 'core', options: { 'filesystem.root': workspaceRoot, 'filesystem.partitionPrefix': '.brud/work' } }),
-    );
+      const handle = createFileSystemHandle()(caller(['fs:read']), instance);
 
-    assert.ok(projection instanceof ScopedPartitionFacade);
-    await projection.createFile('session.json', '{"ok":true}');
-    assert.equal(await instance.readText('.brud/work/session.json'), '{"ok":true}');
-  });
+      assert.ok(handle instanceof ReadOnlyFacade);
+      assert.equal(await handle.readText('shared.txt'), 'readable');
+      await assert.rejects(handle.writeAtomic('shared.txt', 'blocked'), isReadOnlyViolation);
+      await assert.rejects(handle.createFile('new.txt', 'blocked'), isReadOnlyViolation);
+      await assert.rejects(handle.deleteFile('shared.txt'), isReadOnlyViolation);
+    });
 
-  it('projects userland callers to a read-only facade', async () => {
-    const project = FileSystemDescriptor.project;
-    assert.ok(project);
-    const instance = await createInstance();
-    await instance.createFile('shared.txt', 'readable');
+    it('refuses a caller holding neither capability', async () => {
+      const instance = await createInstance();
 
-    const projection = project(instance, createCaller({ tier: 'userland' }));
+      assert.equal(createFileSystemHandle()(caller([]), instance), null);
+    });
 
-    assert.ok(projection instanceof ReadOnlyFacade);
-    assert.equal(await projection.readText('shared.txt'), 'readable');
-    await assert.rejects(projection.writeAtomic('shared.txt', 'blocked'), isReadOnlyViolation);
-    await assert.rejects(projection.createFile('new.txt', 'blocked'), isReadOnlyViolation);
-    await assert.rejects(projection.deleteFile('shared.txt'), isReadOnlyViolation);
-  });
+    it('applies an authorized write scope by the caller identity, never by an argument', async () => {
+      const instance = await createInstance();
+      const handle = createFileSystemHandle({ 'acme.holder': ['.brud/work'] });
 
-  it('composes partition scoping with read-only projection for userland callers', async () => {
-    const project = FileSystemDescriptor.project;
-    assert.ok(project);
-    const instance = await createInstance();
-    await instance.createFile('.brud/work/scoped.txt', 'scoped');
-
-    const projection = project(
-      instance,
-      createCaller({ tier: 'userland', options: { 'filesystem.root': workspaceRoot, 'filesystem.partitionPrefix': '.brud/work' } }),
-    );
-
-    assert.ok(projection instanceof ReadOnlyFacade);
-    assert.equal(await projection.readText('scoped.txt'), 'scoped');
-    await assert.rejects(projection.writeAtomic('scoped.txt', 'blocked'), isReadOnlyViolation);
+      assert.notEqual(handle(caller(['fs:write']), instance), instance);
+      assert.equal(handle(caller(['fs:write'], 'acme.other'), instance), instance);
+      assert.equal(handle(caller(['fs:write'], null), instance), instance);
+    });
   });
 });

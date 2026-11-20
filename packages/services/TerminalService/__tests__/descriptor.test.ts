@@ -8,7 +8,7 @@ import { TerminalToken } from '../descriptor/tokens.js';
 import type { ITerminalService, TerminalChunkCallback } from '../contracts/ITerminalService.js';
 import { ValidationToken } from '../../ValidationService/descriptor/tokens.js';
 import type { ServiceContext } from '@brud/kernel';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 let workspaceRoot = '';
 

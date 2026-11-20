@@ -7,8 +7,6 @@ export type {
   RegisteredActionInfo,
 } from './IActionManager.js';
 export {
-  ACTION_MANAGER_ALLOWED_CALLERS,
-  ACTION_MANAGER_DAEMON_CALLER_ID,
 } from './IActionManager.js';
 export type { ActionManagerErrorCode } from './errors.js';
 export {

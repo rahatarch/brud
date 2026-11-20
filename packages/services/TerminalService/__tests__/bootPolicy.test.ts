@@ -23,7 +23,7 @@ import type { TerminalRunOutcome } from '../contracts/ITerminalService.js';
 import { createTerminalDescriptor } from '../descriptor/TerminalDescriptor.js';
 import { TerminalToken } from '../descriptor/tokens.js';
 import type { TerminalValidatorPort } from '../orchestrator/TerminalService.js';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 const allowAll: TerminalValidatorPort = { validateCommand: () => ({ ok: true as const }) };
 

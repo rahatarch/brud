@@ -5,7 +5,7 @@
  * a real temporary workspace and the real DurableNodeStorageDriver. Nothing in
  * the plugin implementation is imported except the public plugin factory.
  */
-import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../../services/test-support/workspaceContext.js';
 import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix, relative, sep } from 'node:path';

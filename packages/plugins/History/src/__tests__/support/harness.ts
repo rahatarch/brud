@@ -1,4 +1,4 @@
-import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../../services/test-support/workspaceContext.js';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,7 +10,6 @@ import type { IPluginHistoryService } from '@brud/service-history';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import { ActionManagerToken } from '../../../../../services/ActionManager/descriptor/tokens.js';
-import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../services/ActionManager/contracts/IActionManager.js';
 import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
 import { UniversalHistoryToken } from '../../../../../services/UniversalHistory/descriptor/tokens.js';
 import { createHistoryPlugin } from '../../plugin.js';
@@ -51,7 +50,7 @@ export async function bootHistoryHarness(): Promise<HistoryHarness> {
     workspaceRoot: root,
   };
   const actionCaller = {
-    callerId: ACTION_MANAGER_DAEMON_CALLER_ID,
+    callerId: 'test.host.daemon',
     tier: 'core' as const,
     workspaceRoot: root,
   };

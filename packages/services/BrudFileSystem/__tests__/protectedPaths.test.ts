@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { DurableNodeStorageDriver } from '../drivers/DurableNodeStorageDriver.js';
 import type { ServiceContext } from '@brud/kernel';
 import { WorkspaceViolationError } from '../../WorkspaceService/contracts/errors.js';
-import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
+import { createFileSystemHandle } from '../descriptor/descriptor.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
 
@@ -91,37 +91,28 @@ describe('A10 protected-path denylist (V-9)', () => {
     // Since D-15 U-7 history writes through the storage driver, so no caller,
     // the history service included, may write .brud/history by default. The
     // workspace authority enforces A10 before any authorized-scope check runs.
-    const descriptor = createFileSystemDescriptor({ driver: new DurableNodeStorageDriver() });
-    const scoped = createFileSystemDescriptor({
-      driver: new DurableNodeStorageDriver(),
-      authorizedWriteScopesByCaller: { 'acme.owner': ['.brud/history'] },
-    });
+    const plain = createFileSystemHandle();
+    const scoped = createFileSystemHandle({ 'acme.owner': ['.brud/history'] });
     const instance = new BrudFileSystem(root, new DurableNodeStorageDriver());
 
     await instance.initialize();
 
-    const coreCaller: ServiceContext = {
-      callerId: 'some.core.service',
-      tier: 'core',
-      options: { 'filesystem.root': root },
-    };
-    const historyCaller: ServiceContext = {
-      callerId: 'brud.core.universalHistory',
-      tier: 'core',
-      options: { 'filesystem.root': root },
-    };
+    const caller = (identity: string): Parameters<typeof plain>[0] => ({
+      callerClass: 'participant',
+      identity,
+      official: true,
+      origin: 'runtime',
+      capabilities: new Set(['fs:write']),
+    }) as unknown as Parameters<typeof plain>[0];
 
-    assert.ok(descriptor.project);
-    const coreProjection = descriptor.project(instance, coreCaller);
-    const historyProjection = descriptor.project(instance, historyCaller);
+    for (const handle of [plain, scoped]) {
+      for (const identity of ['some.core.service', 'brud.core.universalHistory', 'acme.owner']) {
+        const projection = handle(caller(identity), instance);
 
-    await assert.rejects(coreProjection.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
-    await assert.rejects(historyProjection.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
-
-    assert.ok(scoped.project);
-    const owner = scoped.project(instance, { ...coreCaller, callerId: 'acme.owner' });
-    await assert.rejects(scoped.project(instance, historyCaller).writeAtomic('.brud/history/seq.json', '{}'), isProtected);
-    await assert.rejects(owner.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+        assert.ok(projection);
+        await assert.rejects(projection.writeAtomic('.brud/history/seq.json', '{}'), isProtected);
+      }
+    }
   });
 
   it('silently omits protected and user-ignored entries from directory listings', async () => {
@@ -148,27 +139,22 @@ describe('A10 protected-path denylist (V-9)', () => {
     assert.deepEqual(await service.readDirectory('.brud'), []);
   });
 
-  it('projects kernel and userland callers away from the raw writable handle', async () => {
-    const descriptor = createFileSystemDescriptor();
+  it('gives a caller without fs:write no writable handle', async () => {
+    const handle = createFileSystemHandle();
     const instance = new BrudFileSystem(root, new DurableNodeStorageDriver());
 
     await instance.initialize();
 
-    assert.ok(descriptor.project);
-    const kernelProjection = descriptor.project(instance, {
-      callerId: 'kernel.host',
-      tier: 'kernel',
-      options: { 'filesystem.root': root },
-    });
-    const userlandProjection = descriptor.project(instance, {
-      callerId: 'plugin.demo',
-      tier: 'userland',
-      options: { 'filesystem.root': root },
-    });
+    const reader = handle({
+      callerClass: 'participant',
+      identity: 'plugin.demo',
+      official: false,
+      origin: 'runtime',
+      capabilities: new Set(['fs:read']),
+    } as unknown as Parameters<typeof handle>[0], instance);
 
-    assert.notEqual(kernelProjection, instance);
-    assert.notEqual(userlandProjection, instance);
-    await assert.rejects(kernelProjection.writeAtomic('anything.txt', 'blocked'));
-    await assert.rejects(userlandProjection.writeAtomic('anything.txt', 'blocked'));
+    assert.notEqual(reader, instance);
+    assert.ok(reader);
+    await assert.rejects(reader.writeAtomic('anything.txt', 'blocked'));
   });
 });

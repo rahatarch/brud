@@ -26,7 +26,7 @@ import {
   isBinaryContent,
   normalizeTargetPath,
 } from '../service/index.js';
-import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../test-support/workspaceContext.js';
 
 const text = (value: string): Uint8Array => new TextEncoder().encode(value);
 

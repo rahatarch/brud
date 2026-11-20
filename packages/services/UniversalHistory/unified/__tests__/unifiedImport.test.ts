@@ -24,7 +24,7 @@ import type { IUniversalHistory } from '../../contracts/IUniversalHistory.js';
 import type { IUniversalHistoryService } from '../../contracts/IUniversalHistoryService/IUniversalHistoryService.js';
 import { HistoryToken, UniversalHistoryToken } from '../../descriptor/tokens.js';
 import { UnifiedSessionNotRevertibleError } from '../engine/errors.js';
-import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../test-support/workspaceContext.js';
 
 const sha = (data: Uint8Array | string): string => createHash('sha256').update(data).digest('hex');
 const LARGE_BEFORE = 'a'.repeat(70 * 1024);

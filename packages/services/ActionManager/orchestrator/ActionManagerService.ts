@@ -146,7 +146,7 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
    */
   dispatchRouted(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> {
     const callerContext: IActionExecutionContext = {
-      callerId: context.caller.identity ?? context.caller.callerClass,
+      callerId: dispatchCallerId(context.caller),
       ...{ permissions: context.caller.capabilities },
       ...(context.signal === undefined ? {} : { signal: context.signal }),
       origin: context.caller.origin,
@@ -224,6 +224,23 @@ type PreparedAction =
   | { readonly ok: false; readonly result: OperationResult };
 
 /** Builds a `failed` result carrying an ActionManager code. */
+/**
+ * The id a routed operation runs under: the caller's kernel-issued identity, or
+ * `host` for the host session, which has none. Any other caller without an
+ * identity is refused.
+ */
+function dispatchCallerId(caller: { readonly identity: string | null; readonly callerClass: string }): string {
+  if (caller.identity !== null) {
+    return caller.identity;
+  }
+
+  if (caller.callerClass === 'host') {
+    return 'host';
+  }
+
+  throw new Error(`A ${caller.callerClass} caller needs a kernel-issued identity`);
+}
+
 function failed(error: string): OperationResult {
   return { status: 'failed', error };
 }

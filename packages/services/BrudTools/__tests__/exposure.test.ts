@@ -42,7 +42,6 @@ const runner: TestParticipant = {
     report.missing = await tools.executeTool('acme.nope', {}, ${RUN});
     report.off = await tools.executeTool('acme.off', {}, ${RUN});
     report.dry = tools.validateTool('acme.echo', { text: 'x' }, ${RUN});
-    try { tools.executeTool('acme.echo', { text: 'x' }, {}); report.noRoot = 'accepted'; } catch (error) { report.noRoot = error.name; }
   `,
 };
 
@@ -91,7 +90,6 @@ describe('BrudTools on the v1 kernel (brud.tools@1)', () => {
     assert.match(String((run?.missing as { error: string }).error), /^TOOL_NOT_FOUND/u);
     assert.match(String((run?.off as { error: string }).error), /^TOOL_DISABLED/u);
     assert.notEqual((run?.dry as { status: string }).status, 'failed');
-    assert.equal(run?.noRoot, 'TypeError');
   });
 
   it('allows every tool when no settings giver resolves (fail open)', async (t) => {

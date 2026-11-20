@@ -19,7 +19,7 @@ import { createStandardKernel } from '../../../kernel/src/__tests__/support/stan
 import { ValidationToken } from '../descriptor/tokens.js';
 import { WorkspaceToken } from '../../WorkspaceService/descriptor/tokens.js';
 import { SettingsReaderToken } from '../../SettingsService/descriptor/tokens.js';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 const ROOT = '/workspace';
 

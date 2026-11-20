@@ -5,7 +5,6 @@ import { ACTION_MANAGER_DISPATCH_EXPOSURE, ACTION_MANAGER_EXPOSURE, ACTIONS_REGI
 import type { BrudDispatchContext } from '@brud/kernel/services/Router/contracts/types.js';
 import type { BrudOperation } from '@brud/kernel/services/Parser/contracts/types.js';
 import type { IActionManager } from '../contracts/IActionManager.js';
-import { ACTION_MANAGER_ALLOWED_CALLERS } from '../contracts/IActionManager.js';
 import { ActionManagerService } from '../orchestrator/index.js';
 import type { ActionManagerDependencies } from '../orchestrator/index.js';
 import { ActionManagerToken } from './tokens.js';
@@ -65,7 +64,6 @@ export function createActionManagerDescriptor(
   return {
     ...base,
     token: ActionManagerToken,
-    accessPolicy: { allowedCallers: ACTION_MANAGER_ALLOWED_CALLERS },
   } as unknown as ServiceDescriptor<IActionManager, ActionManagerService>;
 }
 

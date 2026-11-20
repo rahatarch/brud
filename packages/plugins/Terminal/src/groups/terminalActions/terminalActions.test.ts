@@ -1,4 +1,4 @@
-import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../../services/test-support/workspaceContext.js';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
@@ -9,7 +9,6 @@ import type {
 import type { IActionManager } from '@brud/service-actions';
 import type { IBrudToolsService, IPluginExecutionContext } from '@brud/service-tools';
 import { ActionManagerToken } from '../../../../../services/ActionManager/descriptor/tokens.js';
-import { ACTION_MANAGER_DAEMON_CALLER_ID } from '../../../../../services/ActionManager/contracts/IActionManager.js';
 import { createStandardKernel } from '../../../../../kernel/src/bootstrap/index.js';
 import type { BrudKernel } from '../../../../../kernel/src/engine/BrudKernel.js';
 import { BrudToolsToken } from '../../../../../services/BrudTools/descriptor/tokens.js';
@@ -45,7 +44,7 @@ async function bootKernel(): Promise<Harness> {
 
   const caller = { callerId: 'test.terminal.actions', tier: 'core' as const, workspaceRoot: root };
   const actionCaller = {
-    callerId: ACTION_MANAGER_DAEMON_CALLER_ID,
+    callerId: 'test.host.daemon',
     tier: 'core' as const,
     workspaceRoot: root,
   };

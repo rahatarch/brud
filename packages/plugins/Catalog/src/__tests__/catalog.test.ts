@@ -1,4 +1,4 @@
-import { workspaceContextOptions } from '../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../services/test-support/workspaceContext.js';
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';

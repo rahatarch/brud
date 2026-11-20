@@ -139,23 +139,3 @@ export interface IActionManager {
  */
 export type IActionManagerReader = Pick<IActionManager, 'getAction' | 'listActions'>;
 
-/**
- * Caller id the daemon uses when resolving {@link IActionManager}.
- *
- * The daemon's access-policy allowlist names this exact value, so the UI RPC
- * surface can reach the manager while arbitrary internal callers cannot.
- */
-export const ACTION_MANAGER_DAEMON_CALLER_ID = 'brud.host.daemon';
-
-/**
- * Callers allowed to resolve the ActionManager token.
- *
- * Token-level access only: `kernel` covers boot/composition probes and
- * `brud.host.daemon` is the UI RPC path. Participants register through the
- * `brud.actions` exposure (policy `actions:register`), not the token.
- */
-export const ACTION_MANAGER_ALLOWED_CALLERS: readonly string[] = Object.freeze([
-  'kernel',
-  ACTION_MANAGER_DAEMON_CALLER_ID,
-  'brud.core.router',
-]);

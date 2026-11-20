@@ -126,7 +126,11 @@ export function createUnifiedHistoryDescriptors(options: UnifiedHistoryDescripto
       : new ReadOnlyUniversalHistoryFacade(instance)
   );
   const namespaceFor = (instance: PluginHistoryFacade, caller: ExposedApiCaller): object => {
-    const subject = caller.identity ?? caller.callerClass;
+    if (caller.identity === null) {
+      throw new Error(`Namespace history requires a kernel-issued identity (caller class "${caller.callerClass}")`);
+    }
+
+    const subject = caller.identity;
     const handle = namespaceHistoryFor(instance, subject, { official: caller.official });
 
     if (handle === undefined) {

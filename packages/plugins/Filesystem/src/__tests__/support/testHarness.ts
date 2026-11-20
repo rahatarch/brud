@@ -5,7 +5,7 @@
  * driver, and a fresh temporary workspace. Tests never construct a fake
  * filesystem unless they explicitly need to isolate memory behaviour.
  */
-import { workspaceContextOptions } from '../../../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../../../../services/test-support/workspaceContext.js';
 import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';

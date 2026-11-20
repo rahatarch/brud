@@ -12,7 +12,7 @@ import type { IFileMutationJournal } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import { FileSystemToken } from '../descriptor/tokens.js';
 import { createFileSystemDescriptor } from '../descriptor/descriptor.js';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 let root = '';
 

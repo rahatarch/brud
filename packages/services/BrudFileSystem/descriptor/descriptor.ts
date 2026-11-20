@@ -1,5 +1,4 @@
 import type { IStorageDriver } from '../contracts/index.js';
-import type { ServiceContext } from '@brud/kernel';
 import type { ServiceDescriptor } from '@brud/kernel';
 import type { ExposedApiCaller } from '@brud/kernel';
 import { defineParticipant } from '@brud/sdk/participant';
@@ -16,7 +15,6 @@ import type { IFileMutationJournal } from '../events/types.js';
 import { BrudFileSystem } from '../orchestrator/BrudFileSystem.js';
 import type { ValidationAuthority, WorkspaceAuthority } from '../orchestrator/BrudFileSystem.js';
 import { ReadOnlyFacade } from '../projection/ReadOnlyFacade/ReadOnlyFacade.js';
-import { ScopedPartitionFacade } from '../projection/ScopedPartitionFacade/ScopedPartitionFacade.js';
 import { FileSystemToken } from './tokens.js';
 
 /** Namespace owned by the filesystem service in the context contract. */
@@ -24,15 +22,6 @@ export const FILESYSTEM_CONTEXT_SCOPE = 'filesystem';
 
 /** Namespaced context field holding the workspace root. */
 export const FILESYSTEM_ROOT_CONTEXT_FIELD = 'filesystem.root';
-
-/**
- * Namespaced context field carrying this service's own partition scope.
- *
- * Partitions are the storage service's design. The kernel carries no partition
- * field; a caller that wants a scoped view supplies this key in its own
- * context options.
- */
-export const FILESYSTEM_PARTITION_CONTEXT_FIELD = 'filesystem.partitionPrefix';
 
 /** Configuration for {@link createFileSystemDescriptor}. */
 export interface FileSystemDescriptorOptions {
@@ -94,6 +83,28 @@ export interface FileSystemDescriptorOptions {
 }
 
 /**
+ * Builds the caller-facing handle for the `brud.filesystem` exposure.
+ *
+ * A caller with `fs:write` receives the service (or, when its identity holds an
+ * authorized write scope, an authorized projection); a caller with only
+ * `fs:read` receives a read-only facade; any other caller is refused (`null`).
+ * The handle is derived from the kernel's caller view, never from arguments.
+ */
+export function createFileSystemHandle(
+  authorizedScopesByCaller: Readonly<Record<string, readonly string[]>> = {},
+): (caller: ExposedApiCaller, instance: BrudFileSystem) => IBrudFileSystem | null {
+  return (caller, instance) => {
+    if (caller.capabilities.has(FS_WRITE_CAPABILITY)) {
+      const scopes = caller.identity === null ? [] : authorizedScopesByCaller[caller.identity] ?? [];
+
+      return scopes.length > 0 ? instance.createAuthorizedProjection(scopes) : instance;
+    }
+
+    return caller.capabilities.has(FS_READ_CAPABILITY) ? new ReadOnlyFacade(instance) : null;
+  };
+}
+
+/**
  * Builds the filesystem service descriptor.
  *
  * Declared dependencies make the boot graph explicit:
@@ -113,15 +124,7 @@ export function createFileSystemDescriptor(
 
   const authorizedScopesByCaller = { ...options?.authorizedWriteScopesByCaller };
 
-  const handle = (caller: ExposedApiCaller, instance: BrudFileSystem): IBrudFileSystem | null => {
-    if (caller.capabilities.has(FS_WRITE_CAPABILITY)) {
-      const scopes = caller.identity == null ? [] : authorizedScopesByCaller[caller.identity] ?? [];
-
-      return scopes.length > 0 ? instance.createAuthorizedProjection(scopes) : instance;
-    }
-
-    return caller.capabilities.has(FS_READ_CAPABILITY) ? new ReadOnlyFacade(instance) : null;
-  };
+  const handle = createFileSystemHandle(authorizedScopesByCaller);
 
   const warmups: (() => void)[] = [];
 
@@ -210,31 +213,6 @@ export function createFileSystemDescriptor(
   return {
     ...base,
     token: FileSystemToken,
-    // Token-level projection, kept for hosts that take the token directly.
-    project: (instance: BrudFileSystem, caller: ServiceContext): IBrudFileSystem => {
-      const authorizedScopes = authorizedScopesByCaller[caller.callerId] ?? [];
-      let projection: IBrudFileSystem = caller.tier === 'core' && authorizedScopes.length > 0
-        ? instance.createAuthorizedProjection(authorizedScopes)
-        : instance;
-
-      const partitionPrefix = caller.options?.[FILESYSTEM_PARTITION_CONTEXT_FIELD];
-
-      if (typeof partitionPrefix === 'string' && partitionPrefix.length > 0) {
-        projection = new ScopedPartitionFacade(projection, partitionPrefix);
-      }
-
-      if (caller.tier === 'userland') {
-        projection = new ReadOnlyFacade(projection);
-      }
-
-      if (caller.tier === 'kernel' && (typeof partitionPrefix !== 'string' || partitionPrefix.length === 0)) {
-        // Raw writable handles are reserved for `tier: 'core'`. Kernel-tier
-        // callers without an explicit partition receive read-only access.
-        projection = new ReadOnlyFacade(projection);
-      }
-
-      return projection;
-    },
   } as unknown as ServiceDescriptor<IBrudFileSystem, BrudFileSystem>;
 }
 

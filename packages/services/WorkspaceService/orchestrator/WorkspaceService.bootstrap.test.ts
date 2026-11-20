@@ -11,7 +11,7 @@ import { FileSystemToken } from '../../BrudFileSystem/descriptor/tokens.js';
 import { SettingsReaderToken, SettingsToken } from '../../SettingsService/descriptor/tokens.js';
 import { createWorkspacePathBridge } from '../bridge/WorkspacePathBridge.js';
 import { WorkspaceToken } from '../descriptor/tokens.js';
-import { workspaceContextOptions } from '../../../kernel/src/__tests__/support/workspaceContext.js';
+import { workspaceContextOptions } from '../../test-support/workspaceContext.js';
 
 interface Fixture {
   readonly base: string;
