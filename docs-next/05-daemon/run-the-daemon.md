@@ -34,13 +34,15 @@ Read once at start and then frozen.
 
 | Key | Meaning |
 |---|---|
-| `composition` | Required. Path to the `brud.config.json` every kernel boots. Relative paths resolve against this file's folder |
+| `composition` | Required. Path to the `brud.config.json` every kernel boots. Relative paths resolve against this file's folder, not the daemon home or your working directory |
 | `fixedOptions` | Startup options the operator sets. Clients can never override them |
 | `clientOptions` | Names of startup fields a client may set in `kernel.boot` |
 | `principals` | Host-call capabilities granted to each caller tier, `ui` and `ai` |
 | `reuseIdenticalBoots` | Reuse a running kernel when a boot request has identical options |
 
 Unknown keys are refused (`DAEMON_OPERATOR_CONFIG_INVALID`).
+
+For example, with `--home ./daemon-home/prod` and the config at `./daemon-home/prod/daemon.json`, a composition kept two levels up at the project root is `"composition": "../../brud.config.json"`. A composition inside the same folder is `"./brud.config.json"`.
 
 ## What lives in the home
 

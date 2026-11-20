@@ -69,7 +69,9 @@ policy: {
 | `capabilities` | Have declared **every** capability listed |
 | `official` | Have exactly this official status in the composition |
 
-Every field is optional. Leave out what you do not need.
+Every field except `policyVersion` is optional. Leave out what you do not need.
+
+`capabilities`, if present, must be a non-empty array: `capabilities: []` is refused with `EXPOSED_API_INVALID_POLICY`. To require no capability, omit the field. Do not write an empty list.
 
 ## Projections: tailor the handle
 

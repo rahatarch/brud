@@ -47,7 +47,7 @@ These are independent, and the difference is important.
 
 The kernel builds an identity-to-official mapping from your config at boot. Giver policies can then require `official: true`.
 
-In this beta, a module that is not declared official is refused as native code. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md).
+In this beta, a module that is not declared official is refused as native code. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is refused with `PARTICIPANT_TIER`.
 
 ## Trust is a content hash
 
@@ -65,9 +65,9 @@ The config is frozen once the kernel boots. A change to it while the kernel is r
 | `CONFIG_PARSE` | The file is not valid JSON |
 | `CONFIG_SCHEMA` | The shape is wrong (unknown key, missing `services`) |
 | `CONFIG_INTEGRITY` | A protected config or state path was touched |
-| `MODULE_RESOLVE` | A module could not be found or imported, or is not official |
+| `MODULE_RESOLVE` | A module could not be found or imported, or a participant package failed its digest check |
 | `MODULE_CONTRACT` | A module does not export a valid `createService` |
-| `PARTICIPANT_TIER` | A participant claims a tier it may not have |
+| `PARTICIPANT_TIER` | A participant claims a tier it may not have, or a plain module is not declared official |
 | `HARDCORE_VERIFICATION` | A hardcore service failed its content-hash check |
 
 **Next:** [Boot and lifecycle](boot-and-lifecycle.md)
