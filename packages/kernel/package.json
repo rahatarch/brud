@@ -14,7 +14,15 @@
       "types": "./dist/services/*.d.ts",
       "import": "./dist/services/*.js",
       "default": "./dist/services/*.js"
-    }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "services/WasmCage/native"
+  ],
+  "engines": {
+    "node": ">=22"
   },
   "scripts": {
     "build": "node scripts/clean.mjs && tsc",

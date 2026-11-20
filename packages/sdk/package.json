@@ -6,16 +6,38 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js", "default": "./dist/index.js" },
-    "./participant": { "types": "./dist/participant/index.d.ts", "import": "./dist/participant/index.js", "default": "./dist/participant/index.js" },
-    "./testing": { "types": "./dist/testing/index.d.ts", "import": "./dist/testing/index.js", "default": "./dist/testing/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./participant": {
+      "types": "./dist/participant/index.d.ts",
+      "import": "./dist/participant/index.js",
+      "default": "./dist/participant/index.js"
+    },
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
+    },
+    "./package.json": "./package.json"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
-  "peerDependencies": { "@brud/kernel": "*" },
-  "devDependencies": { "@types/node": "22.x" }
+  "peerDependencies": {
+    "@brud/kernel": "*"
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  }
 }
