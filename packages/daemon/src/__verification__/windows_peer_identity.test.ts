@@ -128,6 +128,7 @@ describe(
     });
 
     it('accepts the process that spawned the daemon', async () => {
+      console.error('DAEMON_STDERR_BEFORE_CONNECT:', daemon.stderr());
       const pair = await daemon.connectAndHandshake();
       const response = await pair.client.request(Protocol.KERNEL_LIST, {});
       const result = response.result as Protocol.KernelListResult | undefined;
