@@ -10,9 +10,10 @@ import {
 } from '../lifecycle/idle.js';
 import { createDaemon } from '../server/createDaemon.js';
 import type { RunningDaemon } from '../server/createDaemon.js';
+import { createProbeHome } from './support/probeHome.js';
 
 let root = '';
-let workspaceRoot = '';
+let home = '';
 let daemon: RunningDaemon | undefined;
 let previousRuntimeDir: string | undefined;
 
@@ -20,11 +21,10 @@ before(async () => {
   root = await mkdtemp(join(tmpdir(), 'brud-idle-'));
   previousRuntimeDir = process.env.BRUD_DAEMON_RUNTIME_DIR;
   process.env.BRUD_DAEMON_RUNTIME_DIR = join(root, 'runtime');
-  workspaceRoot = join(root, 'workspace');
-  await mkdir(workspaceRoot, { recursive: true });
-  workspaceRoot = await realpath(workspaceRoot);
+  const probe = await createProbeHome({});
+  home = probe.home;
 
-  daemon = await createDaemon({ workspaceRoot });
+  daemon = await createDaemon({ home });
 });
 
 after(async () => {

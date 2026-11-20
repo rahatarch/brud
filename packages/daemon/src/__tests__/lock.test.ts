@@ -70,7 +70,7 @@ describe('daemon lock', () => {
 
     assert.equal(handle.lockPath, endpoint.lockPath);
     assert.equal(handle.record.pid, process.pid);
-    assert.equal(handle.record.workspaceRoot, endpoint.workspaceRoot);
+    assert.equal(handle.record.home, endpoint.home);
 
     const info = await stat(endpoint.lockPath);
     assert.equal(info.mode & 0o777, 0o600);
@@ -110,7 +110,7 @@ describe('daemon lock', () => {
       pid: deadPid,
       startedAt: Date.now() - 60_000,
       version: '0.0.0-stale',
-      workspaceRoot: endpoint.workspaceRoot,
+      home: endpoint.home,
     };
 
     await writeFile(endpoint.lockPath, JSON.stringify(stale), { encoding: 'utf8', mode: 0o600 });

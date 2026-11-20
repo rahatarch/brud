@@ -3,11 +3,12 @@ import { access, mkdir, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
-import type { IStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
+import { createProbeHome } from './support/probeHome.js';
 import { LockContentionError } from '../lifecycle/lock.js';
 import { createDaemon } from '../server/createDaemon.js';
 
 let root = '';
+let home = '';
 let workspace = '';
 let previousRuntimeDir: string | undefined;
 
@@ -22,8 +23,9 @@ async function pathExists(path: string): Promise<boolean> {
 
 before(async () => {
   root = await mkdtemp(join(tmpdir(), 'brud-lifecycle-'));
-  workspace = join(root, 'workspace');
-  await mkdir(workspace, { recursive: true });
+  const probe = await createProbeHome({});
+  home = probe.home;
+  workspace = home;
 
   previousRuntimeDir = process.env.BRUD_DAEMON_RUNTIME_DIR;
   process.env.BRUD_DAEMON_RUNTIME_DIR = join(root, 'runtime');
@@ -41,15 +43,14 @@ after(async () => {
 
 describe('daemon lifecycle', () => {
   it('boots, enforces single-instance locking, and tears down cleanly', async (t) => {
-    const { NodeStorageDriver } = await import('@brud/service-filesystem');
-    const storageDriver: IStorageDriver = new NodeStorageDriver();
-    const daemon = await createDaemon({ workspaceRoot: workspace, storageDriver });
+    const daemon = await createDaemon({ home: workspace, expectedPeerPid: process.pid });
 
     t.after(async () => {
       await daemon.shutdown();
     });
 
-    assert.equal(daemon.kernel.lifecycleState, 'RUNNING');
+    // A neutral host boots no kernel until a client asks for one.
+    assert.equal(daemon.registry.size, 0);
     assert.equal(await pathExists(daemon.endpoint.lockPath), true);
     assert.equal(await pathExists(daemon.endpoint.tokenPath), true);
     assert.equal(await pathExists(daemon.endpoint.aiTokenPath), true);
@@ -81,12 +82,12 @@ describe('daemon lifecycle', () => {
 
     if (typeof metadata === 'object' && metadata !== null) {
       assert.equal('pid' in metadata ? metadata.pid : undefined, process.pid);
-      assert.equal('workspaceRoot' in metadata ? metadata.workspaceRoot : undefined, daemon.endpoint.workspaceRoot);
+      assert.equal('home' in metadata ? metadata.home : undefined, daemon.endpoint.home);
       assert.equal('socketPath' in metadata ? metadata.socketPath : undefined, daemon.endpoint.socketPath);
     }
 
     await assert.rejects(
-      () => createDaemon({ workspaceRoot: workspace, storageDriver }),
+      () => createDaemon({ home: workspace, expectedPeerPid: process.pid }),
       LockContentionError,
     );
 
@@ -95,7 +96,7 @@ describe('daemon lifecycle', () => {
     await daemon.shutdown();
 
     assert.equal(daemon.isShuttingDown(), true);
-    assert.equal(daemon.kernel.lifecycleState, 'DISPOSED');
+    assert.equal(daemon.registry.size, 0);
     assert.equal(await pathExists(daemon.endpoint.lockPath), false);
     assert.equal(await pathExists(daemon.endpoint.tokenPath), false);
     assert.equal(await pathExists(daemon.endpoint.aiTokenPath), false);

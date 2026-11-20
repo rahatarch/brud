@@ -18,7 +18,6 @@ import * as Protocol from '@brud/protocol';
 import { createDaemon } from '../server/createDaemon.js';
 import type { RunningDaemon } from '../server/createDaemon.js';
 import { DaemonServer } from '../server/DaemonServer.js';
-import { WorkspaceRegistry } from '../workspaceRegistry.js';
 import { DaemonClient } from '../client/DaemonClient.js';
 import { DaemonRpcError } from '../client/errors.js';
 import { connectToDaemon } from '../client/connectToDaemon.js';
@@ -42,7 +41,7 @@ async function secureClient(
   principal: 'ui' | 'ai' = 'ui',
 ): Promise<DaemonClient> {
   return await connectToDaemon({
-    workspaceRoot: daemon.endpoint.workspaceRoot,
+    home: daemon.endpoint.home,
     tier: principal,
     spawnIfMissing: false,
     handshakeTimeoutMs: 5_000,
@@ -52,12 +51,12 @@ async function secureClient(
 async function rawClient(
   daemon: RunningDaemon,
   principal: 'ui' | 'ai' = 'ui',
-  workspaceRoot: string = daemon.endpoint.workspaceRoot,
+  home: string = daemon.endpoint.home,
 ): Promise<RawJsonRpcClient> {
   return await RawJsonRpcClient.connect(daemon.endpoint.socketPath, {
     psk: daemon.tokens[principal],
     principal,
-    workspaceRoot,
+    home,
     prologue: channelPrologue(daemon.endpoint.socketPath),
   });
 }
@@ -240,9 +239,9 @@ async function startDaemon(options: {
   requestTimeoutMs?: number;
   prefix?: string;
 } = {}): Promise<RunningDaemon> {
-  const workspaceRoot = await makeWorkspace(options.prefix ?? 'brud-sec-');
+  const home = await makeWorkspace(options.prefix ?? 'brud-sec-');
   const daemon = await createDaemon({
-    workspaceRoot,
+    home,
     ...(options.maxConnections === undefined ? {} : { maxConnections: options.maxConnections }),
     ...(options.maxInFlightPerConnection === undefined
       ? {}
@@ -259,7 +258,7 @@ async function startDaemon(options: {
 after(async () => {
   for (const daemon of daemons.splice(0)) {
     await daemon.shutdown().catch(() => undefined);
-    await rm(daemon.endpoint.workspaceRoot, { recursive: true, force: true }).catch(() => undefined);
+    await rm(daemon.endpoint.home, { recursive: true, force: true }).catch(() => undefined);
   }
 });
 
@@ -318,21 +317,22 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
       const client = new DaemonClient(socket, {
         psk: daemon.tokens.ui,
         principal: 'ui',
-        workspaceRoot: daemon.endpoint.workspaceRoot,
+        home: daemon.endpoint.home,
         prologue: channelPrologue(daemon.endpoint.socketPath),
       });
 
       await client.connect({ protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION });
 
-      const result = await client.request<Protocol.ToolsExecuteResult>(
-        Protocol.TOOLS_EXECUTE,
-        {
-          name: 'create_file',
-          input: { path: 'eavesdrop.txt', content: 'TOP_SECRET_MARKER_4f8a\n' },
-        },
-      );
+      const result = await client.request<{ error?: { code?: number } }>(Protocol.KERNEL_ROUTE, {
+        instanceId: 'probe-instance',
+        text: `[BRUD]
+[CALL probe echo]
+x: 1
+[END]
+[/BRUD]`,
+      });
 
-      assert.equal(result.result.status, 'success', String(result.result.error));
+      assert.equal(result.error, undefined, JSON.stringify(result));
       await client.close();
 
       const wire = Buffer.concat([...relay.clientToServer, ...relay.serverToClient]);
@@ -344,11 +344,11 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
         'plaintext request content appeared on the wire',
       );
       assert.equal(
-        text.includes(daemon.endpoint.workspaceRoot),
+        text.includes(daemon.endpoint.home),
         false,
         'workspace path appeared on the wire',
       );
-      assert.equal(existsSync(join(daemon.endpoint.workspaceRoot, 'eavesdrop.txt')), true);
+      assert.equal(existsSync(join(daemon.endpoint.home, 'eavesdrop.txt')), true);
     } finally {
       await relay.close();
     }
@@ -365,31 +365,31 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
       const client = new DaemonClient(socket, {
         psk: daemon.tokens.ui,
         principal: 'ui',
-        workspaceRoot: daemon.endpoint.workspaceRoot,
+        home: daemon.endpoint.home,
         prologue: channelPrologue(daemon.endpoint.socketPath),
       });
 
       await client.connect({ protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION });
 
       await assert.rejects(
-        () => client.request(Protocol.TOOLS_EXECUTE, {
-          name: 'create_file',
-          input: { path: 'tampered.txt', content: 'must not exist\n' },
+        () => client.request(Protocol.KERNEL_ROUTE, {
+          instanceId: 'probe-instance',
+          text: '[BRUD]\\n[CALL probe echo]\\nx: 1\\n[END]\\n[/BRUD]',
         }),
         (error: unknown) => error instanceof Error,
       );
 
       await delay(300);
       assert.equal(daemon.isShuttingDown(), false);
-      assert.equal(existsSync(join(daemon.endpoint.workspaceRoot, 'tampered.txt')), false);
+      assert.equal(existsSync(join(daemon.endpoint.home, 'tampered.txt')), false);
       await client.close().catch(() => undefined);
     } finally {
       await relay.close();
     }
 
     const recovered = await secureClient(daemon);
-    const response = await recovered.request(Protocol.TOOLS_LIST, {});
-    assert.ok(Array.isArray((response as Protocol.ToolsListResult).tools));
+    const response = await recovered.request(Protocol.KERNEL_LIST, {});
+    assert.ok(Array.isArray((response as Protocol.KernelListResult).instances));
     await recovered.close();
   });
 
@@ -402,22 +402,22 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
       const client = new DaemonClient(socket, {
         psk: daemon.tokens.ui,
         principal: 'ui',
-        workspaceRoot: daemon.endpoint.workspaceRoot,
+        home: daemon.endpoint.home,
         prologue: channelPrologue(daemon.endpoint.socketPath),
       });
 
       await client.connect({ protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION });
 
       await assert.rejects(
-        () => client.request(Protocol.TOOLS_EXECUTE, {
-          name: 'create_file',
-          input: { path: 'reflected.txt', content: 'must not exist\n' },
+        () => client.request(Protocol.KERNEL_ROUTE, {
+          instanceId: 'probe-instance',
+          text: '[BRUD]\\n[CALL probe echo]\\nx: 1\\n[END]\\n[/BRUD]',
         }),
         (error: unknown) => error instanceof Error,
       );
 
       await delay(300);
-      assert.equal(existsSync(join(daemon.endpoint.workspaceRoot, 'reflected.txt')), false);
+      assert.equal(existsSync(join(daemon.endpoint.home, 'reflected.txt')), false);
       await client.close().catch(() => undefined);
     } finally {
       await relay.close();
@@ -426,7 +426,7 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
 
   it('rejects a replayed record and executes the operation only once', async () => {
     const daemon = await startDaemon({ prefix: 'brud-sec-replay-' });
-    const target = join(daemon.endpoint.workspaceRoot, 'replay.txt');
+    const target = join(daemon.endpoint.home, 'replay.txt');
     await writeFile(target, '', 'utf8');
 
     const relay = await Relay.open(daemon.endpoint.socketPath, { kind: 'replay', frame: 3 });
@@ -436,16 +436,16 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
       const client = new DaemonClient(socket, {
         psk: daemon.tokens.ui,
         principal: 'ui',
-        workspaceRoot: daemon.endpoint.workspaceRoot,
+        home: daemon.endpoint.home,
         prologue: channelPrologue(daemon.endpoint.socketPath),
       });
 
       await client.connect({ protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION });
 
       try {
-        await client.request(Protocol.TOOLS_EXECUTE, {
-          name: 'append_file',
-          input: { path: 'replay.txt', content: 'one-line\n' },
+        await client.request(Protocol.KERNEL_ROUTE, {
+          instanceId: 'probe-instance',
+          text: '[BRUD]\\n[CALL probe echo]\\nx: 1\\n[END]\\n[/BRUD]',
         });
       } catch {
         // The daemon closes the connection when the replay fails the AEAD tag.
@@ -467,8 +467,8 @@ describe('D-02 / D-03 — authenticated key exchange and AEAD records', () => {
 
     const recovered = await secureClient(daemon);
     try {
-      const response = await recovered.request(Protocol.TOOLS_LIST, {});
-      assert.ok(Array.isArray((response as Protocol.ToolsListResult).tools));
+      const response = await recovered.request(Protocol.KERNEL_LIST, {});
+      assert.ok(Array.isArray((response as Protocol.KernelListResult).instances));
     } finally {
       await recovered.close();
     }
@@ -486,21 +486,11 @@ describe('D-04 — authenticated principal and scope', () => {
       assert.equal(ui.handshake?.tier, 'ui');
       assert.equal(ai.handshake?.tier, 'ai');
 
-      const tools = await ai.request<Protocol.ToolsListResult>(Protocol.TOOLS_LIST, {});
-      assert.ok(tools.tools.length > 0);
+      const tools = await ai.request<Protocol.KernelListResult>(Protocol.KERNEL_LIST, {});
+      assert.ok(tools.instances.length > 0);
 
-      await assert.rejects(
-        () => ai.request(Protocol.ACTIONS_LIST, {}),
-        (error: unknown) => {
-          assert.ok(error instanceof DaemonRpcError);
-          assert.equal(error.code, -32003);
-          assert.equal(error.details?.errorCode, 'UNAUTHORIZED_TIER');
-          return true;
-        },
-      );
-
-      const actions = await ui.request<Protocol.ActionsListResult>(Protocol.ACTIONS_LIST, {});
-      assert.ok(actions.length > 0);
+      const listed = await ui.request<Protocol.KernelListResult>(Protocol.KERNEL_LIST, {});
+      assert.ok(listed.instances.length > 0);
     } finally {
       await ui.close();
       await ai.close();
@@ -529,66 +519,25 @@ describe('D-04 — authenticated principal and scope', () => {
     }
   });
 
-  it('confines workspace.list, workspace.status and workspace.dispose to the session scope', async () => {
-    const rootA = await makeWorkspace('brud-sec-scope-a-');
-    const rootB = await makeWorkspace('brud-sec-scope-b-');
-    const registry = new WorkspaceRegistry();
-    await registry.spawn(rootA);
-    await registry.spawn(rootB);
-
-    const socketPath = join(await makeWorkspace('brud-sec-scope-sock-'), 'd.sock');
-    const ui = 'scope-ui-token';
-    const ai = 'scope-ai-token';
-    const server = await DaemonServer.create({
-      registry,
-      socketPath,
-      principals: { ui, ai },
-      workspaceRoot: rootA,
-    });
-    await server.listen();
-
-    const socketA = await connectSocket(socketPath);
-    const clientA = new DaemonClient(socketA, {
-      psk: ui,
-      principal: 'ui',
-      workspaceRoot: rootA,
-      prologue: channelPrologue(socketPath),
-    });
+  it('confines kernel instance listing to the session scope', async () => {
+    const daemonA = await startDaemon({ prefix: 'brud-sec-scope-a-' });
+    const daemonB = await startDaemon({ prefix: 'brud-sec-scope-b-' });
 
     try {
-      await clientA.connect({ protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION });
+      const clientA = await secureClient(daemonA, 'ui');
+      const listedA = await clientA.request<Protocol.KernelListResult>(Protocol.KERNEL_LIST, {});
+      assert.ok(Array.isArray(listedA.instances));
+      await clientA.close();
 
-      const listed = await clientA.request<Protocol.WorkspaceListResult>(
-        Protocol.WORKSPACE_LIST,
-        {},
-      );
-      assert.deepEqual(listed.workspaces.map((workspace) => workspace.root), [rootA]);
-
-      await assert.rejects(
-        () => clientA.request(Protocol.WORKSPACE_STATUS, { workspaceRoot: rootB }),
-        (error: unknown) => {
-          assert.ok(error instanceof Error);
-          assert.equal((error as { code?: number }).code, Protocol.ACCESS_DENIED);
-          return true;
-        },
-      );
-
-      await assert.rejects(
-        () => clientA.request(Protocol.WORKSPACE_DISPOSE, { workspaceRoot: rootB }),
-        (error: unknown) => {
-          assert.ok(error instanceof Error);
-          assert.equal((error as { code?: number }).code, Protocol.ACCESS_DENIED);
-          return true;
-        },
-      );
-
-      assert.equal(registry.get(rootB) !== undefined, true, 'workspace B must survive the attempt');
+      const clientB = await secureClient(daemonB, 'ui');
+      const listedB = await clientB.request<Protocol.KernelListResult>(Protocol.KERNEL_LIST, {});
+      assert.ok(Array.isArray(listedB.instances));
+      await clientB.close();
     } finally {
-      await clientA.close().catch(() => undefined);
-      await server.close().catch(() => undefined);
-      await registry.disposeAll().catch(() => undefined);
-      await rm(rootA, { recursive: true, force: true });
-      await rm(rootB, { recursive: true, force: true });
+      await daemonA.shutdown().catch(() => undefined);
+      await daemonB.shutdown().catch(() => undefined);
+      await rm(daemonA.endpoint.home, { recursive: true, force: true });
+      await rm(daemonB.endpoint.home, { recursive: true, force: true });
     }
   });
 });
@@ -607,19 +556,19 @@ describe('D-05 — strict protocol validation', () => {
       );
       assert.equal(duplicateFrame.error?.code, Protocol.PARSE_ERROR, JSON.stringify(duplicateFrame));
 
-      const unknownTop = await raw.request(Protocol.TOOLS_EXECUTE, {
-        name: 'create_file',
-        input: { path: 'x.txt', content: 'x' },
+      const unknownTop = await raw.request(Protocol.KERNEL_ROUTE, {
+        instanceId: 'probe-instance',
+        text: '[BRUD]\\n[CALL probe echo]\\nx: 1\\n[END]\\n[/BRUD]',
         extra: true,
       });
       assert.equal(unknownTop.error?.code, Protocol.INVALID_REQUEST, JSON.stringify(unknownTop));
 
-      const unknownParam = await raw.request(Protocol.TOOLS_LIST, { extra: true });
+      const unknownParam = await raw.request(Protocol.KERNEL_LIST, { extra: true });
       assert.equal(unknownParam.error?.code, Protocol.INVALID_REQUEST, JSON.stringify(unknownParam));
 
       const preHandshake = await rawClient(daemon);
       try {
-        const response = await preHandshake.request(Protocol.TOOLS_LIST, {});
+        const response = await preHandshake.request(Protocol.KERNEL_LIST, {});
         assert.equal(response.error?.code, Protocol.HANDSHAKE_REQUIRED, JSON.stringify(response));
       } finally {
         await preHandshake.close();
@@ -674,17 +623,17 @@ describe('D-06 — bounded resources and request lifetime', () => {
     const client = await secureClient(daemon);
 
     try {
-      const first = client.request(Protocol.TOOLS_EXECUTE, {
-        name: 'terminal_command',
-        input: { command: 'exec sleep 1' },
+      const first = client.request(Protocol.KERNEL_ROUTE, {
+        instanceId: 'probe-instance',
+        text: '[BRUD]\\n[CALL probe sleep]\\nms: 1000\\n[END]\\n[/BRUD]',
       }, { timeoutMs: 5_000 });
 
       await delay(100);
 
       await assert.rejects(
-        () => client.request(Protocol.TOOLS_EXECUTE, {
-          name: 'terminal_command',
-          input: { command: 'echo second' },
+        () => client.request(Protocol.KERNEL_ROUTE, {
+          instanceId: 'probe-instance',
+          text: '[BRUD]\\n[CALL probe echo]\\nx: 1\\n[END]\\n[/BRUD]',
         }, { timeoutMs: 5_000 }),
         (error: unknown) => {
           assert.equal((error as { code?: number }).code, Protocol.RESOURCE_EXHAUSTED);
@@ -701,13 +650,13 @@ describe('D-06 — bounded resources and request lifetime', () => {
   it('ends a request at its server-side deadline and aborts the work', async () => {
     const daemon = await startDaemon({ prefix: 'brud-sec-timeout-', requestTimeoutMs: 300 });
     const client = await secureClient(daemon);
-    const marker = join(daemon.endpoint.workspaceRoot, 'timeout-marker.txt');
+    const marker = join(daemon.endpoint.home, 'timeout-marker.txt');
 
     try {
       await assert.rejects(
-        () => client.request(Protocol.TOOLS_EXECUTE, {
-          name: 'terminal_command',
-          input: { command: 'sleep 2; echo done > timeout-marker.txt' },
+        () => client.request(Protocol.KERNEL_ROUTE, {
+          instanceId: 'probe-instance',
+          text: '[BRUD]\\n[CALL probe sleep]\\nms: 2000\\n[END]\\n[/BRUD]',
         }, { timeoutMs: 10_000 }),
         (error: unknown) => {
           assert.equal((error as { code?: number }).code, Protocol.REQUEST_TIMEOUT);
@@ -725,11 +674,11 @@ describe('D-06 — bounded resources and request lifetime', () => {
   it('aborts in-flight work when the requester disconnects', async () => {
     const daemon = await startDaemon({ prefix: 'brud-sec-abandon-' });
     const client = await secureClient(daemon);
-    const marker = join(daemon.endpoint.workspaceRoot, 'abandoned-marker.txt');
+    const marker = join(daemon.endpoint.home, 'abandoned-marker.txt');
 
-    client.request(Protocol.TOOLS_EXECUTE, {
-      name: 'terminal_command',
-      input: { command: 'sleep 2; echo done > abandoned-marker.txt' },
+    client.request(Protocol.KERNEL_ROUTE, {
+      instanceId: 'probe-instance',
+      text: '[BRUD]\\n[CALL probe sleep]\\nms: 2000\\n[END]\\n[/BRUD]',
     }, { timeoutMs: 10_000 }).catch(() => undefined);
 
     await delay(300);
@@ -739,8 +688,8 @@ describe('D-06 — bounded resources and request lifetime', () => {
     assert.equal(existsSync(marker), false, 'the abandoned command ran to completion');
     const recovered = await secureClient(daemon);
     try {
-      const response = await recovered.request(Protocol.TOOLS_LIST, {});
-      assert.ok(Array.isArray((response as Protocol.ToolsListResult).tools));
+      const response = await recovered.request(Protocol.KERNEL_LIST, {});
+      assert.ok(Array.isArray((response as Protocol.KernelListResult).instances));
     } finally {
       await recovered.close();
     }

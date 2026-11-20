@@ -91,10 +91,10 @@ export class RawMcpClient {
 
   private readonly pending = new Map<number, PendingRequest>();
 
-  constructor(workspaceRoot: string, extraArgs: readonly string[] = []) {
+  constructor(home: string, extraArgs: readonly string[] = []) {
     this.process = spawn(
       process.execPath,
-      [...cliInvocation(), ...extraArgs, '--stdio', '--workspace', workspaceRoot],
+      [...cliInvocation(), ...extraArgs, '--stdio', '--home', home],
       { cwd: REPO_ROOT, stdio: ['pipe', 'pipe', 'pipe'] },
     );
 
@@ -246,12 +246,12 @@ export interface SdkClientHarness {
 
 /** Connects a real MCP SDK client to a real daemon subprocess. */
 export async function connectSdkClient(
-  workspaceRoot: string,
+  home: string,
   extraArgs: readonly string[] = [],
 ): Promise<SdkClientHarness> {
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [...cliInvocation(), ...extraArgs, '--stdio', '--workspace', workspaceRoot],
+    args: [...cliInvocation(), ...extraArgs, '--stdio', '--home', home],
     cwd: REPO_ROOT,
     stderr: 'pipe',
   });
@@ -315,21 +315,21 @@ export async function waitForPidGone(pid: number, timeoutMs = 10_000): Promise<b
 }
 
 /** Resolves the daemon endpoint paths for a workspace. */
-export async function endpointOf(workspaceRoot: string): Promise<DaemonEndpoint> {
-  return await resolveEndpoint(workspaceRoot);
+export async function endpointOf(home: string): Promise<DaemonEndpoint> {
+  return await resolveEndpoint(home);
 }
 
 /** Connects a daemon client over the real Unix socket. */
 export async function connectSocketClient(
   endpoint: DaemonEndpoint,
   token: string,
-  workspaceRoot: string,
+  home: string,
 ): Promise<DaemonClient> {
   const socket = await connectSocket(endpoint.socketPath, 5_000);
   const client = new DaemonClient(socket, {
     psk: token,
     principal: 'ui',
-    workspaceRoot,
+    home,
     prologue: channelPrologue(endpoint.socketPath),
   });
 

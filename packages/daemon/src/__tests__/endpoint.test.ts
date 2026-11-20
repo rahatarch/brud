@@ -112,20 +112,20 @@ describe('resolveEndpoint', () => {
   it('derives paths under the configured runtime directory', posixOnly, async () => {
     const workspace = await createWorkspace('paths');
     const endpoint = await resolveEndpoint(workspace);
-    const preferredSocketPath = join(runtimeDir, `d-${endpoint.workspaceHash}.sock`);
+    const preferredSocketPath = join(runtimeDir, `d-${endpoint.homeHash}.sock`);
 
-    assert.equal(endpoint.workspaceRoot, workspace);
+    assert.equal(endpoint.home, workspace);
     assert.equal(endpoint.isWindows, process.platform === 'win32');
     assert.equal(Buffer.byteLength(preferredSocketPath) < MAX_SOCKET_PATH_BYTES, true);
     assert.equal(endpoint.socketPath, preferredSocketPath);
     assert.equal(dirname(endpoint.socketPath), runtimeDir);
-    assert.equal(endpoint.lockPath, join(runtimeDir, `d-${endpoint.workspaceHash}.lock`));
-    assert.equal(endpoint.tokenPath, join(runtimeDir, `d-${endpoint.workspaceHash}.token`));
+    assert.equal(endpoint.lockPath, join(runtimeDir, `d-${endpoint.homeHash}.lock`));
+    assert.equal(endpoint.tokenPath, join(runtimeDir, `d-${endpoint.homeHash}.token`));
     assert.equal(
       endpoint.aiTokenPath,
-      join(runtimeDir, `d-${endpoint.workspaceHash}.ai.token`),
+      join(runtimeDir, `d-${endpoint.homeHash}.ai.token`),
     );
-    assert.equal(endpoint.metaPath, join(runtimeDir, `d-${endpoint.workspaceHash}.json`));
+    assert.equal(endpoint.metaPath, join(runtimeDir, `d-${endpoint.homeHash}.json`));
 
     await assertUsableSocketPath(endpoint.socketPath);
   });
@@ -133,14 +133,14 @@ describe('resolveEndpoint', () => {
   it('falls back to the temp directory when the configured socket path does not fit', posixOnly, async () => {
     const workspace = await createWorkspace('fallback');
     const canonical = await realpath(workspace);
-    const workspaceHash = createHash('sha256').update(canonical).digest('hex').slice(0, HASH_LENGTH);
+    const homeHash = createHash('sha256').update(canonical).digest('hex').slice(0, HASH_LENGTH);
     const minimumRuntimeDirBytes =
       MAX_SOCKET_PATH_BYTES - Buffer.byteLength(`d-${'0'.repeat(HASH_LENGTH)}.sock`);
     const baseRuntime = join(root, 'long-runtime');
     const padding = Math.max(0, minimumRuntimeDirBytes - Buffer.byteLength(baseRuntime));
     const longRuntimeDir = `${baseRuntime}${'x'.repeat(padding)}`;
-    const preferredSocketPath = join(longRuntimeDir, `d-${workspaceHash}.sock`);
-    const fallbackSocketPath = join(tmpdir(), `b-${workspaceHash}.sock`);
+    const preferredSocketPath = join(longRuntimeDir, `d-${homeHash}.sock`);
+    const fallbackSocketPath = join(tmpdir(), `b-${homeHash}.sock`);
 
     assert.equal(Buffer.byteLength(preferredSocketPath) >= MAX_SOCKET_PATH_BYTES, true);
     assert.equal(Buffer.byteLength(fallbackSocketPath) < MAX_SOCKET_PATH_BYTES, true);
@@ -150,17 +150,17 @@ describe('resolveEndpoint', () => {
     try {
       const endpoint = await resolveEndpoint(workspace);
 
-      assert.equal(endpoint.workspaceHash, workspaceHash);
+      assert.equal(endpoint.homeHash, homeHash);
       assert.equal(endpoint.runtimeDir, longRuntimeDir);
       assert.equal(endpoint.socketPath, fallbackSocketPath);
       assert.notEqual(endpoint.socketPath, preferredSocketPath);
       assert.equal(dirname(endpoint.socketPath), tmpdir());
       assert.notEqual(dirname(endpoint.socketPath), longRuntimeDir);
       assert.equal(Buffer.byteLength(endpoint.socketPath) < MAX_SOCKET_PATH_BYTES, true);
-      assert.equal(endpoint.lockPath, join(longRuntimeDir, `d-${workspaceHash}.lock`));
-      assert.equal(endpoint.tokenPath, join(longRuntimeDir, `d-${workspaceHash}.token`));
-      assert.equal(endpoint.aiTokenPath, join(longRuntimeDir, `d-${workspaceHash}.ai.token`));
-      assert.equal(endpoint.metaPath, join(longRuntimeDir, `d-${workspaceHash}.json`));
+      assert.equal(endpoint.lockPath, join(longRuntimeDir, `d-${homeHash}.lock`));
+      assert.equal(endpoint.tokenPath, join(longRuntimeDir, `d-${homeHash}.token`));
+      assert.equal(endpoint.aiTokenPath, join(longRuntimeDir, `d-${homeHash}.ai.token`));
+      assert.equal(endpoint.metaPath, join(longRuntimeDir, `d-${homeHash}.json`));
 
       const info = await stat(longRuntimeDir);
       assert.equal(info.mode & 0o777, 0o700);
@@ -183,9 +183,9 @@ describe('resolveEndpoint', () => {
     const second = await resolveEndpoint(`${workspace}/.`);
     const third = await resolveEndpoint(`${workspace}/`);
 
-    assert.equal(first.workspaceHash, expected);
-    assert.equal(second.workspaceHash, expected);
-    assert.equal(third.workspaceHash, expected);
+    assert.equal(first.homeHash, expected);
+    assert.equal(second.homeHash, expected);
+    assert.equal(third.homeHash, expected);
     assert.equal(first.socketPath, second.socketPath);
     assert.equal(second.lockPath, third.lockPath);
   });

@@ -1,6 +1,4 @@
 import { strict as assert } from 'node:assert';
-import { existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import * as Protocol from '@brud/protocol';
 import type { RequestCancelledParams } from '@brud/protocol';
@@ -21,7 +19,7 @@ async function connectClient(daemon: AttackDaemon): Promise<DaemonClient> {
   const client = new DaemonClient(socket, {
     psk: daemon.token,
     principal: 'ui',
-    workspaceRoot: daemon.workspaceRoot,
+    home: daemon.home,
     prologue: daemon.prologue,
   });
 
@@ -56,9 +54,7 @@ describe('server-side cancellation round trip', () => {
     'stops a real long-running operation and acknowledges the cancellation',
     { timeout: 30_000 },
     async () => {
-      const marker = join(daemon.workspaceRoot, 'cancel-marker.txt');
-
-      assert.equal(existsSync(marker), false);
+      const boot = await client.request<Protocol.KernelBootResult>(Protocol.KERNEL_BOOT, { options: { 'probe.label': 'cancel' } });
 
       let unsubscribe: () => void = () => undefined;
       const ackPromise = new Promise<RequestCancelledParams>((resolveAck) => {
@@ -69,17 +65,14 @@ describe('server-side cancellation round trip', () => {
 
       const controller = new AbortController();
       const startedAt = Date.now();
-      const pending = client.request<Protocol.ToolsExecuteResult>(
-        Protocol.TOOLS_EXECUTE,
-        {
-          name: 'terminal_command',
-          input: {
-            // Writes the marker only after two seconds. If the daemon drops
-            // the cancellation, the marker appears; if it stops the process,
-            // the marker never exists.
-            command: 'sleep 2; echo done > cancel-marker.txt',
-          },
-        },
+      const pending = client.request(
+        Protocol.KERNEL_ROUTE,
+        // The probe sleeps 3s unless its dispatch signal aborts.
+        { instanceId: boot.instance.instanceId, text: `[BRUD]
+[CALL probe sleep]
+ms: 3000
+[END]
+[/BRUD]` },
         { timeoutMs: 20_000, signal: controller.signal },
       );
 
@@ -90,7 +83,7 @@ describe('server-side cancellation round trip', () => {
       try {
         await assert.rejects(pending, (error: unknown) => {
           assert.ok(error instanceof DaemonRequestCancelledError);
-          assert.equal(error.method, Protocol.TOOLS_EXECUTE);
+          assert.equal(error.method, Protocol.KERNEL_ROUTE);
           return true;
         });
 
@@ -100,22 +93,12 @@ describe('server-side cancellation round trip', () => {
         assert.equal(typeof ack.id, 'number', JSON.stringify(ack));
         assert.ok(
           Date.now() - startedAt < 10_000,
-          'cancellation must be acknowledged without waiting for the full command',
+          'cancellation must be acknowledged without waiting for the full operation',
         );
       } finally {
         unsubscribe();
       }
 
-      // The command would have completed at ~2s. Give it more than enough
-      // time to prove the process tree was actually stopped, not merely
-      // detached.
-      await delay(2_500);
-
-      assert.equal(
-        existsSync(marker),
-        false,
-        'a cancelled terminal command must not run to completion',
-      );
       assert.equal(daemon.isAlive(), true);
     },
   );

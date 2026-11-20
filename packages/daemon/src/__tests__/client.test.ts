@@ -22,18 +22,29 @@ import { spawnDaemon } from '../client/spawn.js';
 import { resolveEndpoint } from '../lifecycle/endpoint.js';
 import { acquireDaemonLock, isPidAlive } from '../lifecycle/lock.js';
 import { createDaemon } from '../server/createDaemon.js';
+import { createProbeHome } from './support/probeHome.js';
 import type { RunningDaemon } from '../server/createDaemon.js';
 
-const SLOW_COMMAND = 'exec sleep 2';
+/** Brud syntax for a probe sleep that honours cancellation. */
+function sleepText(ms: number): string {
+  return `[BRUD]\n[CALL probe sleep]\nms: ${String(ms)}\n[END]\n[/BRUD]`;
+}
 
-async function createWorkspace(path: string): Promise<string> {
-  await mkdir(path, { recursive: true });
-  return realpath(path);
+/** Boots a probe kernel for the client and returns its instance id. */
+async function probeInstance(client: DaemonClient, label = 'client'): Promise<string> {
+  const boot = await client.request<Protocol.KernelBootResult>(Protocol.KERNEL_BOOT, { options: { 'probe.label': label } });
+  return boot.instance.instanceId;
+}
+
+/** A daemon home holding the probe composition and operator config. */
+async function createWorkspace(_path: string): Promise<string> {
+  const probe = await createProbeHome({});
+  return probe.home;
 }
 
 interface SpawnedMetadata {
   readonly pid: number;
-  readonly workspaceRoot: string;
+  readonly home: string;
 }
 
 function parseSpawnedMetadata(value: unknown): SpawnedMetadata | undefined {
@@ -41,28 +52,28 @@ function parseSpawnedMetadata(value: unknown): SpawnedMetadata | undefined {
     return undefined;
   }
 
-  if (!('pid' in value) || !('workspaceRoot' in value)) {
+  if (!('pid' in value) || !('home' in value)) {
     return undefined;
   }
 
-  const { pid, workspaceRoot } = value;
+  const { pid, home } = value;
 
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) {
     return undefined;
   }
 
-  if (typeof workspaceRoot !== 'string') {
+  if (typeof home !== 'string') {
     return undefined;
   }
 
-  return { pid, workspaceRoot };
+  return { pid, home };
 }
 
-async function stopSpawnedDaemon(workspaceRoot: string): Promise<void> {
+async function stopSpawnedDaemon(home: string): Promise<void> {
   let endpoint;
 
   try {
-    endpoint = await resolveEndpoint(workspaceRoot);
+    endpoint = await resolveEndpoint(home);
   } catch {
     return;
   }
@@ -77,7 +88,7 @@ async function stopSpawnedDaemon(workspaceRoot: string): Promise<void> {
     return;
   }
 
-  if (metadata === undefined || metadata.workspaceRoot !== endpoint.workspaceRoot) {
+  if (metadata === undefined || metadata.home !== endpoint.home) {
     return;
   }
 
@@ -134,7 +145,7 @@ before(async () => {
   idleWorkspace = await createWorkspace(join(root, 'idle'));
   dropWorkspace = await createWorkspace(join(root, 'drop'));
 
-  runningDaemon = await createDaemon({ workspaceRoot: runningWorkspace });
+  runningDaemon = await createDaemon({ home: runningWorkspace, expectedPeerPid: process.pid });
 });
 
 after(async () => {
@@ -157,7 +168,7 @@ after(async () => {
 
 describe('daemon client', () => {
   it('connects to an already-running daemon and completes the handshake', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
+    const client = await connectToDaemon({ home: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
@@ -167,7 +178,6 @@ describe('daemon client', () => {
 
     const handshake = client.handshake;
     assert.ok(handshake !== undefined);
-    assert.equal(handshake.workspaceRoot, await realpath(runningWorkspace));
     assert.equal(handshake.server.pid, process.pid);
     assert.equal(handshake.protocolVersion, Protocol.DAEMON_PROTOCOL_VERSION);
     assert.equal(handshake.tier, 'ui');
@@ -180,13 +190,12 @@ describe('daemon client', () => {
     assert.equal(ping.nonce, 'client-ping');
 
     const info = await client.request<DaemonInfoResult>(Protocol.DAEMON_INFO, {});
-    assert.equal(info.workspaceRoot, handshake.workspaceRoot);
     assert.equal(info.pid, process.pid);
   });
 
   it('reuses a responsive daemon when spawnIfMissing is disabled', async (t) => {
     const client = await connectToDaemon({
-      workspaceRoot: runningWorkspace,
+      home: runningWorkspace,
       tier: 'ui',
       spawnIfMissing: false,
     });
@@ -200,7 +209,7 @@ describe('daemon client', () => {
   });
 
   it('translates wire errors into typed DaemonRpcError instances', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
+    const client = await connectToDaemon({ home: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
@@ -221,21 +230,23 @@ describe('daemon client', () => {
   });
 
   it('rejects requests that exceed their timeout while the real daemon keeps running', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
+    const client = await connectToDaemon({ home: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
     });
 
+    const instanceId = await probeInstance(client);
+
     await assert.rejects(
       () => client.request(
-        Protocol.TOOLS_EXECUTE,
-        { name: 'terminal_command', input: { command: SLOW_COMMAND } },
+        Protocol.KERNEL_ROUTE,
+        { instanceId, text: sleepText(2000) },
         { timeoutMs: 60 },
       ),
       (error: unknown) => {
         assert.ok(error instanceof DaemonRequestTimeoutError);
-        assert.equal(error.method, Protocol.TOOLS_EXECUTE);
+        assert.equal(error.method, Protocol.KERNEL_ROUTE);
         assert.equal(error.timeoutMs, 60);
         return true;
       },
@@ -245,16 +256,17 @@ describe('daemon client', () => {
   });
 
   it('cancels in-flight requests through an AbortSignal', async (t) => {
-    const client = await connectToDaemon({ workspaceRoot: runningWorkspace, tier: 'ui' });
+    const client = await connectToDaemon({ home: runningWorkspace, tier: 'ui' });
 
     t.after(async () => {
       await client.close();
     });
 
+    const instanceId = await probeInstance(client);
     const controller = new AbortController();
     const pending = client.request(
-      Protocol.TOOLS_EXECUTE,
-      { name: 'terminal_command', input: { command: SLOW_COMMAND } },
+      Protocol.KERNEL_ROUTE,
+      { instanceId, text: sleepText(2000) },
       { timeoutMs: 5_000, signal: controller.signal },
     );
 
@@ -262,7 +274,7 @@ describe('daemon client', () => {
 
     await assert.rejects(pending, (error: unknown) => {
       assert.ok(error instanceof DaemonRequestCancelledError);
-      assert.equal(error.method, Protocol.TOOLS_EXECUTE);
+      assert.equal(error.method, Protocol.KERNEL_ROUTE);
       return true;
     });
 
@@ -271,7 +283,7 @@ describe('daemon client', () => {
 
   it('drops the connection and refuses retries when the daemon dies mid-request', async (t) => {
     const client = await connectToDaemon({
-      workspaceRoot: dropWorkspace,
+      home: dropWorkspace,
       tier: 'ui',
       timeoutMs: 10_000,
     });
@@ -285,10 +297,8 @@ describe('daemon client', () => {
     assert.ok(pid !== undefined);
     assert.notEqual(pid, process.pid);
 
-    const pending = client.request(Protocol.TOOLS_EXECUTE, {
-      name: 'terminal_command',
-      input: { command: 'exec sleep 5' },
-    });
+    const instanceId = await probeInstance(client);
+    const pending = client.request(Protocol.KERNEL_ROUTE, { instanceId, text: sleepText(5000) });
 
     await delay(200);
     process.kill(pid, 'SIGKILL');
@@ -301,10 +311,7 @@ describe('daemon client', () => {
     assert.equal(client.isConnected, false);
 
     await assert.rejects(
-      () => client.request(Protocol.TOOLS_EXECUTE, {
-        name: 'terminal_command',
-        input: { command: 'echo never-retried' },
-      }),
+      () => client.request(Protocol.KERNEL_ROUTE, { instanceId, text: sleepText(1) }),
       DaemonDisconnectedError,
     );
   });
@@ -313,10 +320,10 @@ describe('daemon client', () => {
     const canonicalRoot = await realpath(idleWorkspace);
 
     await assert.rejects(
-      () => connectToDaemon({ workspaceRoot: idleWorkspace, tier: 'ui', spawnIfMissing: false }),
+      () => connectToDaemon({ home: idleWorkspace, tier: 'ui', spawnIfMissing: false }),
       (error: unknown) => {
         assert.ok(error instanceof DaemonNotRunningError);
-        assert.equal(error.workspaceRoot, canonicalRoot);
+        assert.equal(error.home, canonicalRoot);
         return true;
       },
     );
@@ -332,27 +339,24 @@ describe('daemon client', () => {
       await stopSpawnedDaemon(coldWorkspace);
     });
 
-    client = await connectToDaemon({ workspaceRoot: coldWorkspace, tier: 'ui', timeoutMs: 10_000 });
+    client = await connectToDaemon({ home: coldWorkspace, tier: 'ui', timeoutMs: 10_000 });
 
     assert.ok(client.handshake !== undefined);
     assert.notEqual(client.handshake.server.pid, process.pid);
-    assert.equal(client.handshake.workspaceRoot, await realpath(coldWorkspace));
 
-    const write = await client.request<Protocol.ToolsExecuteResult>(
-      Protocol.TOOLS_EXECUTE,
-      {
-        name: 'create_file',
-        input: { path: 'cold/created.txt', content: 'spawned daemon' },
-      },
+    const instanceId = await probeInstance(client, 'spawned');
+    const routed = await client.request<{ operations: { result?: { data?: { label?: string } } }[] }>(
+      Protocol.KERNEL_ROUTE,
+      { instanceId, text: `[BRUD]
+[CALL probe echo]
+x: 1
+[END]
+[/BRUD]` },
     );
-    assert.equal(write.result.status, 'success', String(write.result.error));
-    assert.equal(
-      await readFile(join(coldWorkspace, 'cold', 'created.txt'), 'utf8'),
-      'spawned daemon',
-    );
+    assert.equal(routed.operations[0]?.result?.data?.label, 'spawned');
 
     secondClient = await connectToDaemon({
-      workspaceRoot: coldWorkspace,
+      home: coldWorkspace,
       tier: 'ui',
       spawnIfMissing: false,
     });

@@ -17,7 +17,7 @@ function fail(message: string): never {
   process.exit(2);
 }
 
-const [mode, socketPath, workspaceRoot, token] = process.argv.slice(2);
+const [mode, socketPath, home, token] = process.argv.slice(2);
 
 if (mode !== 'raw' && mode !== 'client') {
   fail(`unknown probe mode "${String(mode)}"`);
@@ -25,7 +25,7 @@ if (mode !== 'raw' && mode !== 'client') {
 
 if (
   socketPath === undefined
-  || workspaceRoot === undefined
+  || home === undefined
   || token === undefined
 ) {
   fail('missing probe arguments');
@@ -62,7 +62,7 @@ async function run(): Promise<void> {
   const client = new DaemonClient(socket, {
     psk: token,
     principal: 'ui',
-    workspaceRoot,
+    home,
     prologue: channelPrologue(socketPath),
   });
 

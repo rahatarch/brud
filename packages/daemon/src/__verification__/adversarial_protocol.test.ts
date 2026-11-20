@@ -48,11 +48,11 @@ async function expectMethodNotFound(method: string): Promise<void> {
 }
 
 async function expectToolsListAlive(): Promise<void> {
-  const response = await client.request(Protocol.TOOLS_LIST, {});
-  const result = response.result as Protocol.ToolsListResult | undefined;
+  const response = await client.request(Protocol.KERNEL_LIST, {});
+  const result = response.result as Protocol.KernelListResult | undefined;
 
   assert.equal(response.error, undefined, JSON.stringify(response));
-  assert.ok(Array.isArray(result?.tools), 'tools.list must still answer after the attack');
+  assert.ok(Array.isArray(result?.instances), 'kernel.list must still answer after the attack');
 }
 
 describe('Attack 1 — The Ghost Method', () => {
@@ -92,7 +92,7 @@ describe('Attack 4 — Malformed Batch Bomb', () => {
   it('rejects a JSON-RPC batch array without consuming or crashing the daemon', async () => {
     const batch = Array.from({ length: 50 }, (_, index) => {
       if (index % 5 === 0) {
-        return { jsonrpc: '2.0', id: index + 1, method: Protocol.TOOLS_LIST, params: {} };
+        return { jsonrpc: '2.0', id: index + 1, method: Protocol.KERNEL_LIST, params: {} };
       }
 
       if (index % 5 === 1) {
@@ -146,7 +146,7 @@ describe('Attack 4 — Malformed Batch Bomb', () => {
       lines.push(JSON.stringify({
         jsonrpc: '2.0',
         id: validId,
-        method: Protocol.TOOLS_LIST,
+        method: Protocol.KERNEL_LIST,
         params: {},
       }));
       lines.push(JSON.stringify({
@@ -231,9 +231,9 @@ describe('Attack 5 — Unauthenticated Socket', () => {
     const unauthenticated = await daemon.connect();
 
     try {
-      const response = await unauthenticated.request(Protocol.TOOLS_EXECUTE, {
-        name: 'create_file',
-        input: { path: 'unauth-created.txt', content: 'should never exist\n' },
+      const response = await unauthenticated.request(Protocol.KERNEL_ROUTE, {
+        instanceId: 'probe-instance',
+        text: '[BRUD]\n[CALL probe echo]\nx: 1\n[END]\n[/BRUD]',
       });
 
       assert.ok(response.error !== undefined, JSON.stringify(response));
@@ -248,7 +248,7 @@ describe('Attack 5 — Unauthenticated Socket', () => {
 
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 300));
       assert.equal(
-        existsSync(join(daemon.workspaceRoot, 'unauth-created.txt')),
+        existsSync(join(daemon.home, 'unauth-created.txt')),
         false,
         'an unauthenticated tools.execute must not reach the kernel',
       );

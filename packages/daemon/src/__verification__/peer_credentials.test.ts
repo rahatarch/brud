@@ -39,7 +39,7 @@ async function runProbe(
       PROBE_PATH,
       mode,
       daemon.socketPath,
-      daemon.workspaceRoot,
+      daemon.home,
       daemon.token,
     ],
     {
@@ -78,12 +78,12 @@ async function assertParentCanConnect(daemon: AttackDaemon): Promise<void> {
   const pair = await daemon.connectAndHandshake();
 
   try {
-    const response = await pair.client.request(Protocol.TOOLS_LIST, {});
-    const result = response.result as Protocol.ToolsListResult | undefined;
+    const response = await pair.client.request(Protocol.KERNEL_LIST, {});
+    const result = response.result as Protocol.KernelListResult | undefined;
 
     assert.equal(response.error, undefined, JSON.stringify(response));
     assert.ok(
-      Array.isArray(result?.tools),
+      Array.isArray(result?.instances),
       'the expected parent must reach dispatch',
     );
   } finally {
@@ -109,11 +109,11 @@ describe(
       assert.equal(daemon.process.pid !== undefined, true);
 
       const pair = await daemon.connectAndHandshake();
-      const response = await pair.client.request(Protocol.TOOLS_LIST, {});
-      const result = response.result as Protocol.ToolsListResult | undefined;
+      const response = await pair.client.request(Protocol.KERNEL_LIST, {});
+      const result = response.result as Protocol.KernelListResult | undefined;
 
       assert.equal(response.error, undefined, JSON.stringify(response));
-      assert.ok(Array.isArray(result?.tools));
+      assert.ok(Array.isArray(result?.instances));
 
       await pair.client.close();
     });

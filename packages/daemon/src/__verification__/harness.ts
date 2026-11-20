@@ -5,7 +5,7 @@
  * waits for the real Unix-domain socket (or Windows named pipe), and speaks
  * raw newline-delimited JSON-RPC over `node:net`. Nothing is mocked: the
  * daemon boots a real kernel, real official plugins, and a real
- * `DurableNodeStorageDriver`-backed workspace.
+ * temporary daemon home holding a probe composition.
  */
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
@@ -15,7 +15,7 @@ import { createConnection } from 'node:net';
 import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { DurableNodeStorageDriver } from '@brud/service-filesystem' with { 'resolution-mode': 'import' };
+import { createProbeHome } from '../__tests__/support/probeHome.js';
 import * as Protocol from '@brud/protocol';
 import {
   channelPrologue,
@@ -88,7 +88,7 @@ async function pathExists(path: string): Promise<boolean> {
 export interface RawClientSecurity {
   readonly psk: string;
   readonly principal: 'ui' | 'ai';
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly prologue: Buffer;
 }
 
@@ -177,7 +177,7 @@ export class RawJsonRpcClient {
           prologue: security.prologue,
           context: {
             principal: security.principal,
-            workspaceRoot: security.workspaceRoot,
+            home: security.home,
           },
           handshakeTimeoutMs: timeoutMs,
         });
@@ -463,13 +463,13 @@ export class RawJsonRpcClient {
   }
 }
 
+/** A temporary daemon home: probe composition plus operator config. */
 export interface AttackWorkspace {
   readonly root: string;
-  readonly driver: DurableNodeStorageDriver;
 }
 
 /**
- * Creates a real temporary workspace through `DurableNodeStorageDriver`.
+ * Creates a temporary daemon home with the probe composition and operator config.
  *
  * The seed `.brudignore` exists before boot so the self-destruction attack has
  * a concrete target rather than a missing-file shortcut.
@@ -477,15 +477,9 @@ export interface AttackWorkspace {
 export async function createAttackWorkspace(
   prefix: string = 'brud-redteam-',
 ): Promise<AttackWorkspace> {
-  const root = await realpath(await mkdtemp(join(tmpdir(), prefix)));
-  const { DurableNodeStorageDriver } = await import('@brud/service-filesystem');
-  const driver = new DurableNodeStorageDriver();
+  const probe = await createProbeHome({ prefix });
 
-  await driver.mkdir(root, { recursive: true });
-  await driver.writeFile(join(root, '.brudignore'), 'node_modules/\ndist/\n');
-  await driver.writeFile(join(root, 'seed.txt'), 'adversarial seed\n');
-
-  return { root, driver };
+  return { root: probe.home };
 }
 
 export interface StartDaemonOptions {
@@ -496,7 +490,7 @@ export interface StartDaemonOptions {
 }
 
 export interface AttackDaemon {
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly runtimeDir: string;
   readonly socketPath: string;
   readonly tokenPath: string;
@@ -510,7 +504,7 @@ export interface AttackDaemon {
   /** Opens a fresh authenticated connection to the daemon socket. */
   connect(options?: {
     readonly principal?: 'ui' | 'ai';
-    readonly workspaceRoot?: string;
+    readonly home?: string;
   }): Promise<RawJsonRpcClient>;
   /** Opens a fresh connection and performs the real `daemon.connect`. */
   connectAndHandshake(): Promise<{
@@ -618,7 +612,7 @@ export async function startAttackDaemon(
       'tsx',
       DAEMON_SOURCE_CLI,
       '--foreground',
-      '--workspace',
+      '--home',
       workspace.root,
     ],
     {
@@ -659,14 +653,14 @@ export async function startAttackDaemon(
 
   const connect = async (options: {
     readonly principal?: 'ui' | 'ai';
-    readonly workspaceRoot?: string;
+    readonly home?: string;
   } = {}): Promise<RawJsonRpcClient> => {
     const principal = options.principal ?? 'ui';
 
     return await RawJsonRpcClient.connect(socketPath, {
       psk: principal === 'ai' ? aiToken : token,
       principal,
-      workspaceRoot: options.workspaceRoot ?? workspace.root,
+      home: options.home ?? workspace.root,
       prologue,
     });
   };
@@ -689,7 +683,7 @@ export async function startAttackDaemon(
   };
 
   return {
-    workspaceRoot: workspace.root,
+    home: workspace.root,
     runtimeDir,
     socketPath,
     tokenPath,
