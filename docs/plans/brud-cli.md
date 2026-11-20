@@ -77,6 +77,37 @@ For the beta this is experimental and limited to one guest language. AssemblyScr
 - A small guest library handles the memory and JSON convention (`brud_alloc`, `brud_invoke`, `brud.call`), so the author writes `invoke(exposure, method, args, caller)`.
 - `brud pack --verify` loads the result into a scratch kernel and calls each exposure once, including the failure paths (fuel, memory, response size).
 
+## Kernel prerequisite: packages can require official
+
+Status: implemented in the kernel (`requires` in `brud.participant.json`).
+
+A participant that cannot run caged (a filesystem or terminal service, for example) can say so in its own package data, without touching the owner's config:
+
+```json
+{ "format": 1, "id": "acme.fs", "manifest": { }, "cage": { }, "native": "native/index.js",
+  "requires": { "official": true, "powers": ["filesystem", "process"] } }
+```
+
+Rules:
+
+- **A veto, never a grant.** `requires` can only make the kernel refuse. The owner's `"official": true` in the composition is still the only way an entry becomes official. A package can never promote itself.
+- **Refusal at boot.** If the entry is not declared official, boot stops with `PARTICIPANT_REQUIRES_OFFICIAL` and a message that names the entry, the `official: true` line to add, and the declared powers. The owner either marks the entry official or removes it. There is no fallback to a caged build.
+- **Fixed vocabulary.** `powers` may list only `environment`, `filesystem`, `network` and `process`. The refusal text is built from that list and the owner's own entry path, never from free text in the package.
+- **Readable without running code.** The requirement lives in the data file, so the kernel and tools read it before any participant code is loaded. A plain `.mjs` module has nowhere to declare it, and an unofficial one is still refused before it is imported (`PARTICIPANT_TIER`).
+- **Malformed sections are rejected** with `MODULE_RESOLVE` (`requires.official` must be `true`, unknown keys and unknown powers are errors).
+- **Does not replace pinning.** The content hash is still what makes officialness safe. The message tells the owner what the participant will do; it does not vouch for it.
+
+What the CLI does with it:
+
+| Command | Behaviour |
+|---|---|
+| `brud doctor` and `brud check` | List every entry that requires official, its declared powers, and whether the composition grants it. Check 4 of `doctor` reports `PARTICIPANT_REQUIRES_OFFICIAL` as a failure with the exact line to add |
+| `brud inspect` | Shows `requires` next to each participant's exposures |
+| `brud pack` | Writes `requires` when the guest source asks for it, and refuses to build a caged module for a package that requires official |
+| `brud trust <package>` (later) | Prints the config line and the package content hash for the owner to paste. It prints; it never edits the config |
+
+`doctor` needs to read these declarations without booting, which is one more reason for the kernel to expose a public inspect-without-boot API (see Open questions).
+
 ## Security rules for the CLI itself
 
 - Read-only commands (`doctor`, `check`, `inspect`) must not write outside a scratch directory.

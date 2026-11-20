@@ -47,7 +47,7 @@ These are independent, and the difference is important.
 
 The kernel builds an identity-to-official mapping from your config at boot. Giver policies can then require `official: true`.
 
-In this beta, a module that is not declared official is refused as native code. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is refused with `PARTICIPANT_TIER`.
+In this beta, a module that is not declared official is refused as native code. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is refused with `PARTICIPANT_TIER`. A package that cannot run caged (a filesystem service, for example) can declare `requires: { official: true }`; leaving such an entry unofficial is refused with `PARTICIPANT_REQUIRES_OFFICIAL`, and the owner decides whether to declare it official or remove it.
 
 ## Trust is a content hash
 

@@ -94,5 +94,3 @@ export {
 export type { MiddlewareNext, Middleware, IExecutionPipeline } from './pipeline.js';
 
 export type { IOperationRegistry } from './registry.js';
-
-export type { DispatchCallerView, DispatchContextView } from './dispatchView.js';

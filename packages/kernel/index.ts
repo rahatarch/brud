@@ -1,4 +1,5 @@
 export * from './src/contracts/index.js';
+export type { DispatchCallerView, DispatchContextView } from './src/contracts/dispatchView.js';
 export * from './src/bootstrap/index.js';
 
 // Hardcore services shipped inside the kernel package.

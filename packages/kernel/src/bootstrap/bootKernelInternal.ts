@@ -22,6 +22,7 @@ import {
   verifyConfigIntegrity,
 } from './config/integrity.js';
 import { lineOf, parseBrudConfig } from './config/parse.js';
+import { PackageRequirementsError, readPackageRequirements } from './packageRequirements.js';
 import {
   buildHardcoreBootEntries,
   invokeHardcoreBootHooks,
@@ -463,6 +464,22 @@ type ParticipantPackageLoader = (manifestPath: string) => Promise<unknown>;
 const isParticipantPackage = (id: string): boolean => id.endsWith('.json');
 
 /** Reads the optional `native` entry of a participant package declared official. */
+function packageRequirementsOf(
+  manifestPath: string,
+  declaredPath: string,
+  configPath: string,
+  label: string,
+  line: number | undefined,
+): ReturnType<typeof readPackageRequirements> {
+  try {
+    return readPackageRequirements(manifestPath);
+  } catch (error: unknown) {
+    const reason = error instanceof PackageRequirementsError ? error.message : String(error);
+
+    throw new BrudConfigError('MODULE_RESOLVE', `Cannot read participant package "${declaredPath}" (${label}): ${reason}`, configPath, line);
+  }
+}
+
 function nativeEntryOf(manifestPath: string, configPath: string, label: string, line: number | undefined): string | undefined {
   let pkg: unknown;
 
@@ -532,6 +549,19 @@ async function loadServiceModules(
       throw new BrudConfigError(
         'PARTICIPANT_TIER',
         `"${entry.path}" (${label}) is not declared official, so it cannot run as native code (W-01): ship it as a participant package (brud.participant.json) or declare it "official": true`,
+        configPath,
+        line,
+      );
+    }
+
+    const requirements = packageRequirementsOf(resolvedId, entry.path, configPath, label, line);
+
+    if (requirements.official && entry.official !== true) {
+      const needs = requirements.powers.length === 0 ? '' : ` It uses: ${requirements.powers.join(', ')}.`;
+
+      throw new BrudConfigError(
+        'PARTICIPANT_REQUIRES_OFFICIAL',
+        `"${entry.path}" (${label}) requires the composition to declare it "official": true, because it cannot run caged.${needs} Declare it official to run it as trusted native code, or remove the entry`,
         configPath,
         line,
       );

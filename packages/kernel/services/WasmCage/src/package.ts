@@ -16,7 +16,10 @@ import { createCagedParticipant, type CagedParticipantLimits } from './caged.js'
  * ```
  *
  * `native` is optional and used only when the composition declares the entry
- * official; the kernel's loader reads it, never this module.
+ * official; the kernel's loader reads it, never this module. `requires` is
+ * optional too: `{ "official": true, "powers": [...] }` makes the kernel refuse
+ * the entry unless the composition declares it official. The kernel's loader
+ * enforces it; this module only accepts the key.
  */
 export const PARTICIPANT_PACKAGE_FORMAT = 1;
 
@@ -31,7 +34,7 @@ export class ParticipantPackageError extends Error {
   }
 }
 
-const PACKAGE_KEYS = new Set(['format', 'id', 'manifest', 'cage', 'native']);
+const PACKAGE_KEYS = new Set(['format', 'id', 'manifest', 'cage', 'native', 'requires']);
 const CAGE_KEYS = new Set(['module', 'sha256', 'limits']);
 const LIMIT_KEYS = new Set(['fuel', 'maxMemoryBytes', 'deadlineMs']);
 

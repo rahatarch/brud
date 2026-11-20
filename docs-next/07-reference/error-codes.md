@@ -13,6 +13,7 @@ Branch on `code`, never on the message. The complete generated list, with defini
 | `MODULE_RESOLVE` | Module missing or unimportable, or a participant package failed its digest check | Use an absolute path; rebuild the package digest |
 | `MODULE_CONTRACT` | No valid `createService` | Export what the loader expects |
 | `PARTICIPANT_TIER` | A plain module (or any hardcore) is not declared `official: true`, or the composition has no single participant-package loader | Mark it official, or ship it as a participant package (not for hardcores) |
+| `PARTICIPANT_REQUIRES_OFFICIAL` | A package says it must be official and the config does not declare it | Add `"official": true` for that entry, or remove it |
 | `HARDCORE_VERIFICATION` | Hardcore failed its pin | Reinstall the matching release |
 | `PARTICIPANT_MANIFEST_INVALID` | Manifest malformed | Check against [the manifest page](../03-concepts/manifest.md) |
 

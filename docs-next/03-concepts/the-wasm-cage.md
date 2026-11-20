@@ -39,6 +39,7 @@ Participant code that is not official cannot be a plain JavaScript module. It mu
 | `cage.sha256` | Digest of the module. A mismatch refuses the boot with `MODULE_RESOLVE` (digest check failed) |
 | `cage.limits` | `fuel` and `maxMemoryBytes` are required; `deadlineMs` is optional |
 | `native` | Optional. Used only when the composition declares the entry official |
+| `requires` | Optional. `{ "official": true, "powers": [...] }` makes the kernel refuse the entry unless the owner declares it official. `powers` may list `environment`, `filesystem`, `network` and `process`. It can only refuse a load, never make a package official |
 
 Behavior you can rely on: a valid package boots and its exposures resolve like any other. A module that is not a working guest fails at call time with `WASM_CAGE_GUEST_FAILED`.
 
