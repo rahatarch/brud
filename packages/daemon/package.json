@@ -29,10 +29,29 @@
   },
   "dependencies": {
     "@brud/kernel": "^0.1.4",
-    "@brud/protocol": "*",
+    "@brud/protocol": "^0.0.1",
     "@cotal-ai/seat": "0.160.4"
   },
   "devDependencies": {
     "@types/node": "22.x"
-  }
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/daemon"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "brud",
+    "brudos",
+    "kernel",
+    "participants"
+  ]
 }

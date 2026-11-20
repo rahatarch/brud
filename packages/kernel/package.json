@@ -37,5 +37,25 @@
     "@types/node": "22.x",
     "tsx": "^4.0.0",
     "typescript": "^5.9.3"
-  }
+  },
+  "description": "The BrudOS kernel: identity, giver-controlled exposures, call chains and the seven hardcore services.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/kernel"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "brud",
+    "brudos",
+    "kernel",
+    "participants"
+  ]
 }

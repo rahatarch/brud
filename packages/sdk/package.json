@@ -35,9 +35,28 @@
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
   "peerDependencies": {
-    "@brud/kernel": "*"
+    "@brud/kernel": "^0.1.4"
   },
   "devDependencies": {
     "@types/node": "22.x"
-  }
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/sdk"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "brud",
+    "brudos",
+    "kernel",
+    "participants"
+  ]
 }

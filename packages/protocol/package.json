@@ -22,5 +22,25 @@
   "scripts": {
     "build": "tsc"
   },
-  "dependencies": {}
+  "dependencies": {},
+  "description": "Wire types and error codes for the BrudOS daemon protocol (JSON-RPC over a Noise-secured local channel).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/protocol"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "brud",
+    "brudos",
+    "kernel",
+    "participants"
+  ]
 }
