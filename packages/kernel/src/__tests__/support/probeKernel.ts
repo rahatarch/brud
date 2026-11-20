@@ -6,7 +6,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { TestContext } from 'node:test';
 import { ExposedApiRegistryToken, bootKernel, type BrudKernel } from '../../../index.js';
 import { workspaceContextOptions } from './workspaceContext.js';
@@ -14,7 +13,8 @@ import { workspaceContextOptions } from './workspaceContext.js';
 const HARDCORES = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']
   .map((name) => ({ path: `kernel:serviceModules/${name}.js`, official: true }));
 
-const PROBE_FIXTURE = fileURLToPath(new URL('../fixtures/probeParticipant.ts', import.meta.url));
+// A file:// URL, not a path: a raw Windows path is not a valid import specifier.
+const PROBE_FIXTURE = new URL('../fixtures/probeParticipant.ts', import.meta.url).href;
 
 export interface RouteOptions {
   readonly signal?: AbortSignal;
