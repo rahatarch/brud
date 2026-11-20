@@ -1,7 +1,7 @@
 import * as Protocol from '@brud/protocol';
 import type { DaemonCallerTier, DaemonClientIdentity } from '@brud/protocol';
 import {
-  canonicalizeDaemonWorkspaceRoot,
+  canonicalizeDaemonHome,
   resolveEndpoint,
 } from '../lifecycle/endpoint.js';
 import type { DaemonEndpoint } from '../lifecycle/endpoint.js';
@@ -30,7 +30,7 @@ import { channelPrologue } from '../security/channel.js';
 export const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 export interface ConnectDaemonOptions {
-  readonly workspaceRoot: string;
+  readonly home: string;
   /**
    * Principal the client authenticates as. The key at the matching token path
    * is the pre-shared key; the value is not transmitted in a request field.
@@ -68,7 +68,7 @@ async function openClient(
   const client = new DaemonClient(socket, {
     psk: token,
     principal: options.tier,
-    workspaceRoot: endpoint.workspaceRoot,
+    home: endpoint.home,
     prologue: channelPrologue(endpoint.socketPath),
     handshakeTimeoutMs,
   });
@@ -123,14 +123,14 @@ async function openClientWithRetry(
   }
 
   throw new DaemonStartupTimeoutError({
-    workspaceRoot: endpoint.workspaceRoot,
+    home: endpoint.home,
     timeoutMs,
     cause: lastError,
   });
 }
 
 export async function connectToDaemon(options: ConnectDaemonOptions): Promise<DaemonClient> {
-  const canonicalRoot = await canonicalizeDaemonWorkspaceRoot(options.workspaceRoot);
+  const canonicalRoot = await canonicalizeDaemonHome(options.home);
   const endpoint = await resolveEndpoint(canonicalRoot);
   const timeoutMs = normalizeTimeout(options.timeoutMs, DEFAULT_SPAWN_TIMEOUT_MS);
   const connectTimeoutMs = normalizeTimeout(
@@ -151,13 +151,13 @@ export async function connectToDaemon(options: ConnectDaemonOptions): Promise<Da
 
     if (options.spawnIfMissing === false) {
       throw new DaemonNotRunningError({
-        workspaceRoot: endpoint.workspaceRoot,
+        home: endpoint.home,
         socketPath: endpoint.socketPath,
         cause: error,
       });
     }
 
-    await spawnDaemon(endpoint.workspaceRoot, { timeoutMs });
+    await spawnDaemon(endpoint.home, { timeoutMs });
 
     return openClientWithRetry(
       endpoint,

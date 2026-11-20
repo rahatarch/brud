@@ -107,45 +107,45 @@ export class DaemonSpawnError extends DaemonClientError {
 }
 
 export interface DaemonNotRunningErrorOptions {
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly socketPath: string;
   readonly cause?: unknown;
 }
 
 export class DaemonNotRunningError extends DaemonClientError {
-  readonly workspaceRoot: string;
+  readonly home: string;
 
   readonly socketPath: string;
 
   constructor(options: DaemonNotRunningErrorOptions) {
     super(
-      `No daemon is running for workspace "${options.workspaceRoot}" at "${options.socketPath}"`,
+      `No daemon is running for workspace "${options.home}" at "${options.socketPath}"`,
       options.cause === undefined ? undefined : { cause: options.cause },
     );
     this.name = 'DaemonNotRunningError';
-    this.workspaceRoot = options.workspaceRoot;
+    this.home = options.home;
     this.socketPath = options.socketPath;
   }
 }
 
 export interface DaemonStartupTimeoutErrorOptions {
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly timeoutMs: number;
   readonly cause?: unknown;
 }
 
 export class DaemonStartupTimeoutError extends DaemonClientError {
-  readonly workspaceRoot: string;
+  readonly home: string;
 
   readonly timeoutMs: number;
 
   constructor(options: DaemonStartupTimeoutErrorOptions) {
     super(
-      `Daemon for workspace "${options.workspaceRoot}" did not become ready within ${options.timeoutMs} ms`,
+      `Daemon for workspace "${options.home}" did not become ready within ${options.timeoutMs} ms`,
       options.cause === undefined ? undefined : { cause: options.cause },
     );
     this.name = 'DaemonStartupTimeoutError';
-    this.workspaceRoot = options.workspaceRoot;
+    this.home = options.home;
     this.timeoutMs = options.timeoutMs;
   }
 }

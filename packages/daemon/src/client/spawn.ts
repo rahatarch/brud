@@ -112,7 +112,7 @@ async function probeDaemonReadiness(
   const client = new DaemonClient(socket, {
     psk: token,
     principal: 'ui',
-    workspaceRoot: endpoint.workspaceRoot,
+    home: endpoint.home,
     prologue: channelPrologue(endpoint.socketPath),
     handshakeTimeoutMs: timeoutMs,
   });
@@ -132,21 +132,21 @@ async function probeDaemonReadiness(
 }
 
 export async function spawnDaemon(
-  workspaceRoot: string,
+  home: string,
   options?: SpawnDaemonOptions,
 ): Promise<void> {
   const timeoutMs = normalizeTimeout(options?.timeoutMs, DEFAULT_SPAWN_TIMEOUT_MS);
-  const endpoint = await resolveEndpoint(workspaceRoot);
+  const endpoint = await resolveEndpoint(home);
   const cliPath = await resolveDaemonCliPath();
 
   const invocation = cliPath.endsWith('.ts')
     ? ['--import', 'tsx', cliPath]
     : [cliPath];
-  const child = spawn(process.execPath, [...invocation, '--workspace', endpoint.workspaceRoot], {
+  const child = spawn(process.execPath, [...invocation, '--home', endpoint.home], {
     detached: true,
     stdio: 'ignore',
     windowsHide: true,
-    env: { ...process.env, BRUD_DAEMON_WORKSPACE: endpoint.workspaceRoot },
+    env: { ...process.env, BRUD_DAEMON_HOME: endpoint.home },
   });
 
   let spawnError: Error | undefined;
@@ -162,7 +162,7 @@ export async function spawnDaemon(
   for (;;) {
     if (spawnError !== undefined) {
       throw new DaemonSpawnError(
-        `Failed to spawn daemon for workspace "${endpoint.workspaceRoot}"`,
+        `Failed to spawn daemon for home "${endpoint.home}"`,
         { cause: spawnError },
       );
     }
@@ -187,7 +187,7 @@ export async function spawnDaemon(
   }
 
   throw new DaemonStartupTimeoutError({
-    workspaceRoot: endpoint.workspaceRoot,
+    home: endpoint.home,
     timeoutMs,
     cause: lastError,
   });

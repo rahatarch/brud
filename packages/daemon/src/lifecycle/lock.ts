@@ -13,7 +13,7 @@ export interface DaemonLockRecord {
   readonly pid: number;
   readonly startedAt: number;
   readonly version: string;
-  readonly workspaceRoot: string;
+  readonly home: string;
 }
 
 export interface LockHandle {
@@ -57,11 +57,11 @@ function asLockRecord(value: unknown): DaemonLockRecord | undefined {
     return undefined;
   }
 
-  if (!('pid' in value) || !('startedAt' in value) || !('version' in value) || !('workspaceRoot' in value)) {
+  if (!('pid' in value) || !('startedAt' in value) || !('version' in value) || !('home' in value)) {
     return undefined;
   }
 
-  const { pid, startedAt, version, workspaceRoot } = value;
+  const { pid, startedAt, version, home } = value;
 
   if (typeof pid !== 'number' || !Number.isInteger(pid) || pid <= 0) {
     return undefined;
@@ -71,11 +71,11 @@ function asLockRecord(value: unknown): DaemonLockRecord | undefined {
     return undefined;
   }
 
-  if (typeof version !== 'string' || typeof workspaceRoot !== 'string') {
+  if (typeof version !== 'string' || typeof home !== 'string') {
     return undefined;
   }
 
-  return { pid, startedAt, version, workspaceRoot };
+  return { pid, startedAt, version, home };
 }
 
 export function isPidAlive(pid: number): boolean {
@@ -172,7 +172,7 @@ export async function acquireDaemonLock(
     pid: metadata.pid,
     startedAt: Date.now(),
     version: metadata.version,
-    workspaceRoot: endpoint.workspaceRoot,
+    home: endpoint.home,
   };
 
   for (let attempt = 1; attempt <= MAX_ACQUIRE_ATTEMPTS; attempt += 1) {

@@ -51,7 +51,7 @@ const RECORD_TYPES: ReadonlySet<number> = new Set([
 
 export interface SecureChannelHandshakeContext {
   readonly principal: DaemonCallerTier;
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly clientInfo?: DaemonClientIdentity;
   readonly capabilities?: readonly string[];
 }
@@ -74,7 +74,7 @@ export interface SecureChannelAcceptOptions extends SecureChannelOptions {
     readonly psk: Buffer;
   }[];
   /** Validates the client-claimed workspace before the channel opens. */
-  readonly validateWorkspaceRoot: (workspaceRoot: string) => void;
+  readonly validateHome: (home: string) => void;
   readonly server: SecureChannelServerContext;
 }
 
@@ -88,7 +88,7 @@ export type SecureChannelMessageListener = (type: RecordType, text: string) => v
 interface HandshakePayload {
   readonly v: 1;
   readonly principal: DaemonCallerTier;
-  readonly workspaceRoot: string;
+  readonly home: string;
   readonly clientInfo?: DaemonClientIdentity;
   readonly capabilities?: readonly string[];
 }
@@ -110,14 +110,14 @@ function parseHandshakePayload(text: string): HandshakePayload {
   }
 
   const principal = value.principal;
-  const workspaceRoot = value.workspaceRoot;
+  const home = value.home;
 
   if (principal !== 'ui' && principal !== 'ai') {
     throw new Error('Invalid handshake principal');
   }
 
-  if (typeof workspaceRoot !== 'string' || workspaceRoot.length === 0) {
-    throw new Error('Invalid handshake workspace root');
+  if (typeof home !== 'string' || home.length === 0) {
+    throw new Error('Invalid handshake daemon home');
   }
 
   const clientInfo = parseIdentity(value.clientInfo);
@@ -128,7 +128,7 @@ function parseHandshakePayload(text: string): HandshakePayload {
   return {
     v: 1,
     principal,
-    workspaceRoot,
+    home,
     ...(clientInfo === undefined ? {} : { clientInfo }),
     ...(capabilities === undefined ? {} : { capabilities }),
   };
@@ -268,7 +268,7 @@ export class SecureChannel {
     const payload = Buffer.from(JSON.stringify({
       v: 1,
       principal: options.context.principal,
-      workspaceRoot: options.context.workspaceRoot,
+      home: options.context.home,
       ...(options.context.clientInfo === undefined
         ? {}
         : { clientInfo: options.context.clientInfo }),
@@ -345,7 +345,7 @@ export class SecureChannel {
             continue;
           }
 
-          options.validateWorkspaceRoot(payload.workspaceRoot);
+          options.validateHome(payload.home);
           accepted = { handshake, context: payload };
           break;
         } catch {

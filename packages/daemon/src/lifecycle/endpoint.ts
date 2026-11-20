@@ -8,8 +8,8 @@ const MAX_SOCKET_PATH_BYTES = 100;
 const RUNTIME_DIRECTORY_MODE = 0o700;
 
 export interface DaemonEndpoint {
-  readonly workspaceRoot: string;
-  readonly workspaceHash: string;
+  readonly home: string;
+  readonly homeHash: string;
   readonly runtimeDir: string;
   readonly socketPath: string;
   readonly lockPath: string;
@@ -37,19 +37,21 @@ function currentUid(): number | undefined {
   return typeof process.getuid === 'function' ? process.getuid() : undefined;
 }
 
-export function hashWorkspaceRoot(canonicalRoot: string): string {
+export function hashDaemonHome(canonicalRoot: string): string {
   return createHash('sha256').update(canonicalRoot).digest('hex').slice(0, HASH_LENGTH);
 }
 
-export async function canonicalizeDaemonWorkspaceRoot(workspaceRoot: string): Promise<string> {
-  const requested = resolve(workspaceRoot);
+export async function canonicalizeDaemonHome(home: string): Promise<string> {
+  const requested = resolve(home);
 
   try {
+    // The daemon home is the operator's state folder; it is created on demand.
+    await mkdir(requested, { recursive: true, mode: RUNTIME_DIRECTORY_MODE });
     const canonical = await realpath(requested);
     return process.platform === 'win32' ? canonical.toLowerCase() : canonical;
   } catch (error: unknown) {
     throw new EndpointResolutionError(
-      `Cannot resolve workspace root "${workspaceRoot}"`,
+      `Cannot resolve daemon home "${home}"`,
       { cause: error },
     );
   }
@@ -125,9 +127,9 @@ function derivePosixSocketPath(runtimeDir: string, hash: string): string {
   return fallback;
 }
 
-export async function resolveEndpoint(workspaceRoot: string): Promise<DaemonEndpoint> {
-  const canonicalRoot = await canonicalizeDaemonWorkspaceRoot(workspaceRoot);
-  const workspaceHash = hashWorkspaceRoot(canonicalRoot);
+export async function resolveEndpoint(home: string): Promise<DaemonEndpoint> {
+  const canonicalRoot = await canonicalizeDaemonHome(home);
+  const homeHash = hashDaemonHome(canonicalRoot);
   const isWindows = process.platform === 'win32';
 
   if (isWindows) {
@@ -135,14 +137,14 @@ export async function resolveEndpoint(workspaceRoot: string): Promise<DaemonEndp
     await ensureWindowsRuntimeDirectory(runtimeDir);
 
     return {
-      workspaceRoot: canonicalRoot,
-      workspaceHash,
+      home: canonicalRoot,
+      homeHash,
       runtimeDir,
-      socketPath: `\\\\.\\pipe\\brud-${workspaceHash}`,
-      lockPath: join(runtimeDir, `d-${workspaceHash}.lock`),
-      tokenPath: join(runtimeDir, `d-${workspaceHash}.token`),
-      aiTokenPath: join(runtimeDir, `d-${workspaceHash}.ai.token`),
-      metaPath: join(runtimeDir, `d-${workspaceHash}.json`),
+      socketPath: `\\\\.\\pipe\\brud-${homeHash}`,
+      lockPath: join(runtimeDir, `d-${homeHash}.lock`),
+      tokenPath: join(runtimeDir, `d-${homeHash}.token`),
+      aiTokenPath: join(runtimeDir, `d-${homeHash}.ai.token`),
+      metaPath: join(runtimeDir, `d-${homeHash}.json`),
       isWindows,
     };
   }
@@ -151,14 +153,14 @@ export async function resolveEndpoint(workspaceRoot: string): Promise<DaemonEndp
   await ensurePosixRuntimeDirectory(runtimeDir);
 
   return {
-    workspaceRoot: canonicalRoot,
-    workspaceHash,
+    home: canonicalRoot,
+    homeHash,
     runtimeDir,
-    socketPath: derivePosixSocketPath(runtimeDir, workspaceHash),
-    lockPath: join(runtimeDir, `d-${workspaceHash}.lock`),
-    tokenPath: join(runtimeDir, `d-${workspaceHash}.token`),
-    aiTokenPath: join(runtimeDir, `d-${workspaceHash}.ai.token`),
-    metaPath: join(runtimeDir, `d-${workspaceHash}.json`),
+    socketPath: derivePosixSocketPath(runtimeDir, homeHash),
+    lockPath: join(runtimeDir, `d-${homeHash}.lock`),
+    tokenPath: join(runtimeDir, `d-${homeHash}.token`),
+    aiTokenPath: join(runtimeDir, `d-${homeHash}.ai.token`),
+    metaPath: join(runtimeDir, `d-${homeHash}.json`),
     isWindows,
   };
 }

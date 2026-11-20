@@ -77,8 +77,8 @@ export interface DaemonClientSecurity {
   readonly psk: string;
   /** Principal fixed by the key that authenticates the handshake. */
   readonly principal: DaemonCallerTier;
-  /** Workspace scope fixed by the authenticated handshake. */
-  readonly workspaceRoot: string;
+  /** Daemon home the client expects (bound into the authenticated handshake). */
+  readonly home: string;
   /** Endpoint binding mixed into the Noise prologue. */
   readonly prologue: Buffer;
   readonly handshakeTimeoutMs?: number;
@@ -331,7 +331,7 @@ export class DaemonClient {
         prologue: this.security.prologue,
         context: {
           principal: this.security.principal,
-          workspaceRoot: this.security.workspaceRoot,
+          home: this.security.home,
         },
         ...(this.security.handshakeTimeoutMs === undefined
           ? {}

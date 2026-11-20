@@ -1,41 +1,37 @@
-import type { IActionManager } from '@brud/service-actions' with { 'resolution-mode': 'import' };
-import type { IBrudToolsService, IPluginExecutionContext } from '@brud/service-tools' with { 'resolution-mode': 'import' };
-import type {
-  BrudKernel,
-  OperationResult,
-  ServiceContext,
-  ServiceToken,
-} from '@brud/kernel' with { 'resolution-mode': 'import' };
+import type { BrudKernel } from '@brud/kernel' with { 'resolution-mode': 'import' };
 import * as Protocol from '@brud/protocol';
 import type {
-  ActionsListResult,
-  ActionsExecuteResult,
   DaemonCallerTier,
   DaemonHandshakeResult,
   DaemonInfoResult,
   DaemonPingResult,
   JsonRpcId,
+  KernelBootResult,
+  KernelDisposeResult,
+  KernelInstanceDescriptor,
+  KernelKindsResult,
+  KernelListResult,
+  KernelRequirementsResult,
+  KernelRouteResult,
+  KernelStatusResult,
   RpcErrorDetails,
   RpcRequest,
   RpcResponse,
   RpcSuccessResponse,
 } from '@brud/protocol';
-import { canonicalizeWorkspaceRoot, ConnectValidator } from './handshake.js';
+import {
+  BootOptionNotAllowedError,
+  KernelInstanceNotFoundError,
+  loadKernelModule,
+} from '../instanceRegistry.js';
+import type { KernelInstance, KernelInstanceRegistry } from '../instanceRegistry.js';
+import { ConnectValidator } from './handshake.js';
 import { createRpcErrorResponse, toRpcErrorResponse } from './wireErrors.js';
-import { WorkspaceRegistry } from '../workspaceRegistry.js';
-import type { KernelWorkspace } from '../workspaceRegistry.js';
 import * as DaemonVersion from '../version.js';
 
 export interface DispatchSession {
   readonly connectionId: string;
   readonly handshaken: boolean;
-  /**
-   * Workspace fixed by the authenticated handshake before any dispatch.
-   *
-   * `daemon.connect` cannot change it; it may only attach the session to this
-   * already-authenticated root.
-   */
-  workspaceRoot: string | undefined;
   /**
    * Caller principal fixed by the authenticated handshake. Undefined only
    * before the secure channel has established a session.
@@ -44,62 +40,25 @@ export interface DispatchSession {
   markHandshaken(): void;
 }
 
-/**
- * Rejects a session whose tier does not match the required tier.
- *
- * Throws a structured JSON-RPC error (`-32003` / `UNAUTHORIZED_TIER`) carrying
- * both the required and actual tiers. `tools.*` methods are intentionally not
- * guarded: both `ui` and `ai` callers may use them.
- */
-export function requireTier(
-  session: DispatchSession,
-  required: DaemonCallerTier,
-): void {
-  const actual = session.tier;
-
-  if (actual === required) {
-    return;
-  }
-
-  throw new MethodError(
-    -32003,
-    'UNAUTHORIZED_TIER',
-    {
-      errorCode: 'UNAUTHORIZED_TIER',
-      expected: required,
-      actual: actual ?? 'unknown',
-    },
-  );
-}
-
-/**
- * Caller id the dispatcher presents when resolving the ActionManager token.
- *
- * The ActionManager's access-policy allowlist names this exact value, so the
- * UI RPC path can reach the service while arbitrary internal callers cannot.
- * It is deliberately not the connection id: the connection id identifies a
- * client, not a host authority.
- */
-const ACTION_MANAGER_CALLER_ID = 'brud.host.daemon';
-
 export interface DispatchOptions {
   /** Cancellation signal owned by the transport connection. */
   readonly signal?: AbortSignal;
 }
 
 export interface RequestDispatcherOptions {
-  /**
-   * Multi-workspace registry. When omitted, a private registry adopts
-   * {@link kernel} for {@link workspaceRoot}.
-   */
-  readonly registry?: WorkspaceRegistry;
-  /** Single-kernel composition. */
-  readonly kernel?: BrudKernel;
-  readonly toolsToken?: ServiceToken<IBrudToolsService>;
-  readonly actionsToken?: ServiceToken<IActionManager>;
-  readonly workspaceRoot: string;
+  /** The daemon's kernels. */
+  readonly registry: KernelInstanceRegistry;
   readonly serverName?: string;
   readonly serverVersion?: string;
+}
+
+/** Caller id the daemon presents to the kernel when opening a host session. */
+const HOST_CALLER_ID = 'brud.host.daemon';
+
+/** Route surface the Router (hardcore) exposes as `syntax.route@1`. */
+interface SyntaxRoute {
+  route(text: string, options?: Record<string, unknown>): Promise<unknown>;
+  kinds(): readonly unknown[];
 }
 
 class MethodError extends Error {
@@ -107,11 +66,7 @@ class MethodError extends Error {
 
   readonly details: RpcErrorDetails | undefined;
 
-  constructor(
-    rpcCode: Protocol.RpcErrorCode,
-    message: string,
-    details?: RpcErrorDetails,
-  ) {
+  constructor(rpcCode: Protocol.RpcErrorCode, message: string, details?: RpcErrorDetails) {
     super(message);
     this.name = 'MethodError';
     this.rpcCode = rpcCode;
@@ -119,37 +74,23 @@ class MethodError extends Error {
   }
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-/**
- * Re-validates the workspace options bag before building a caller context.
- *
- * Boot already validated the bag; this keeps the boundary explicit for hosts
- * that attach a context after the handshake.
- */
-function assertContextOptions(workspace: KernelWorkspace): void {
-  workspace.kernel.validateContextOptions?.(workspace.options);
-}
-
 function asParams(value: unknown): Record<string, unknown> {
-  if (value === undefined || value === null) {
+  if (value === undefined) {
     return {};
   }
 
-  if (!isRecord(value)) {
-    throw new MethodError(Protocol.INVALID_PARAMS, 'Method params must be a JSON object');
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new MethodError(Protocol.INVALID_PARAMS, 'Params must be an object');
   }
 
-  return value;
+  return value as Record<string, unknown>;
 }
 
 function requireString(params: Record<string, unknown>, key: string): string {
   const value = params[key];
 
-  if (typeof value !== 'string') {
-    throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be a string`);
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new MethodError(Protocol.INVALID_PARAMS, `${key} must be a non-empty string`, { field: key });
   }
 
   return value;
@@ -163,20 +104,43 @@ function optionalString(params: Record<string, unknown>, key: string): string | 
   }
 
   if (typeof value !== 'string') {
-    throw new MethodError(Protocol.INVALID_PARAMS, `Parameter "${key}" must be a string`);
+    throw new MethodError(Protocol.INVALID_PARAMS, `${key} must be a string`, { field: key });
   }
 
   return value;
 }
 
+function optionalBoolean(params: Record<string, unknown>, key: string): boolean | undefined {
+  const value = params[key];
+
+  if (value !== undefined && typeof value !== 'boolean') {
+    throw new MethodError(Protocol.INVALID_PARAMS, `${key} must be a boolean`, { field: key });
+  }
+
+  return value as boolean | undefined;
+}
+
+/** Plain JSON copy: nothing but data crosses the wire. */
+function toJson<T>(value: unknown): T {
+  return JSON.parse(JSON.stringify(value ?? null)) as T;
+}
+
+function describe(instance: KernelInstance): KernelInstanceDescriptor {
+  return {
+    instanceId: instance.id,
+    state: instance.state,
+    clientCount: instance.clients.size,
+    lastUsedAt: instance.lastUsedAt.toISOString(),
+  };
+}
+
+/**
+ * Routes daemon RPC. The dispatcher knows the kernel and nothing above it:
+ * remote work is Brud syntax handed to the Router inside a host session whose
+ * capabilities the operator assigned to the authenticated principal.
+ */
 export class RequestDispatcher {
-  private readonly registry: WorkspaceRegistry;
-
-  private readonly toolsToken: ServiceToken<IBrudToolsService> | undefined;
-
-  private readonly actionsToken: ServiceToken<IActionManager> | undefined;
-
-  private readonly defaultWorkspaceRoot: string;
+  private readonly registry: KernelInstanceRegistry;
 
   private readonly connectValidator = new ConnectValidator();
 
@@ -187,27 +151,17 @@ export class RequestDispatcher {
   private readonly startedAt: number = Date.now();
 
   constructor(options: RequestDispatcherOptions) {
-    if (options.registry !== undefined) {
-      this.registry = options.registry;
-    } else if (options.kernel !== undefined) {
-      this.registry = new WorkspaceRegistry();
-      this.registry.adopt(options.workspaceRoot, options.kernel);
-    } else {
-      throw new Error('RequestDispatcher requires a workspace registry or a kernel');
-    }
-
-    this.toolsToken = options.toolsToken;
-    this.actionsToken = options.actionsToken;
-    this.defaultWorkspaceRoot = options.workspaceRoot;
+    this.registry = options.registry;
     this.serverName = options.serverName ?? DaemonVersion.DAEMON_SERVER_NAME;
     this.serverVersion = options.serverVersion ?? DaemonVersion.DAEMON_SERVER_VERSION;
   }
 
-  async dispatch(
-    request: RpcRequest,
-    session: DispatchSession,
-    options: DispatchOptions = {},
-  ): Promise<RpcResponse> {
+  /** Detaches a closed connection from every kernel it used. */
+  connectionClosed(connectionId: string): void {
+    this.registry.detachClient(connectionId);
+  }
+
+  async dispatch(request: RpcRequest, session: DispatchSession, options: DispatchOptions = {}): Promise<RpcResponse> {
     try {
       return await this.route(request, session, options);
     } catch (error: unknown) {
@@ -215,17 +169,27 @@ export class RequestDispatcher {
         return createRpcErrorResponse(request.id, error.rpcCode, error.message, error.details);
       }
 
+      if (error instanceof KernelInstanceNotFoundError) {
+        return createRpcErrorResponse(request.id, Protocol.INVALID_PARAMS, error.message, {
+          errorCode: error.code,
+          instanceId: error.instanceId,
+        });
+      }
+
+      if (error instanceof BootOptionNotAllowedError) {
+        return createRpcErrorResponse(request.id, Protocol.INVALID_PARAMS, error.message, {
+          errorCode: error.code,
+          field: error.field,
+        });
+      }
+
       return toRpcErrorResponse(request.id, error);
     }
   }
 
-  private async route(
-    request: RpcRequest,
-    session: DispatchSession,
-    options: DispatchOptions,
-  ): Promise<RpcResponse> {
+  private async route(request: RpcRequest, session: DispatchSession, options: DispatchOptions): Promise<RpcResponse> {
     if (request.method === Protocol.DAEMON_CONNECT) {
-      return success(request.id, await this.connect(request.params, session));
+      return success(request.id, this.connect(request.params, session));
     }
 
     if (!session.handshaken) {
@@ -236,51 +200,37 @@ export class RequestDispatcher {
       );
     }
 
+    const params = asParams(request.params);
+
     switch (request.method) {
       case Protocol.DAEMON_PING:
-        return success(request.id, this.ping(request.params, session));
+        return success(request.id, this.ping(params, session));
       case Protocol.DAEMON_INFO:
         return success(request.id, this.info(session));
-      case Protocol.WORKSPACE_LIST:
-        return success(request.id, this.listWorkspaces(session));
-      case Protocol.WORKSPACE_STATUS:
-        return success(request.id, this.workspaceStatus(request.params, session));
-      case Protocol.WORKSPACE_DISPOSE:
-        return success(request.id, await this.disposeWorkspace(request.params, session));
-      case Protocol.TOOLS_LIST:
-        return success(request.id, this.listTools(session));
-      case Protocol.TOOLS_EXECUTE:
-        return success(
-          request.id,
-          await this.executeTool(request.params, session, options.signal),
-        );
-      case Protocol.ACTIONS_LIST:
-        requireTier(session, 'ui');
-        return success(request.id, this.listActions(session));
-      case Protocol.ACTIONS_EXECUTE:
-        requireTier(session, 'ui');
-        return success(
-          request.id,
-          await this.executeAction(request.params, session, options.signal),
-        );
+      case Protocol.KERNEL_REQUIREMENTS:
+        return success(request.id, await this.requirements());
+      case Protocol.KERNEL_BOOT:
+        return success(request.id, await this.boot(params, session));
+      case Protocol.KERNEL_ATTACH:
+        return success(request.id, this.attach(params, session));
+      case Protocol.KERNEL_LIST:
+        return success(request.id, this.list(session));
+      case Protocol.KERNEL_STATUS:
+        return success(request.id, this.status(params, session));
+      case Protocol.KERNEL_DISPOSE:
+        return success(request.id, await this.dispose(params, session));
+      case Protocol.KERNEL_KINDS:
+        return success(request.id, await this.kinds(params, session));
+      case Protocol.KERNEL_ROUTE:
+        return success(request.id, await this.routeText(params, session, options.signal));
       default:
-        throw new MethodError(
-          Protocol.METHOD_NOT_FOUND,
-          `Unknown method "${request.method}"`,
-          { method: request.method },
-        );
+        throw new MethodError(Protocol.METHOD_NOT_FOUND, `Unknown method "${request.method}"`, { method: request.method });
     }
   }
 
-  private async connect(
-    value: unknown,
-    session: DispatchSession,
-  ): Promise<DaemonHandshakeResult> {
+  private connect(value: unknown, session: DispatchSession): DaemonHandshakeResult {
     if (session.handshaken) {
-      throw new MethodError(
-        Protocol.ALREADY_HANDSHAKEN,
-        'This connection has already completed the daemon handshake',
-      );
+      throw new MethodError(Protocol.ALREADY_HANDSHAKEN, 'This connection has already completed the daemon handshake');
     }
 
     const outcome = this.connectValidator.validate(value);
@@ -289,54 +239,34 @@ export class RequestDispatcher {
       throw new MethodError(outcome.code, outcome.message, outcome.data);
     }
 
-    const workspaceRoot = session.workspaceRoot;
     const tier = session.tier;
 
-    if (workspaceRoot === undefined || tier === undefined) {
-      throw new MethodError(
-        Protocol.INTERNAL_ERROR,
-        'The connection has no authenticated workspace or principal',
-      );
+    if (tier === undefined) {
+      throw new MethodError(Protocol.INTERNAL_ERROR, 'The connection has no authenticated principal');
     }
 
-    let workspace = this.registry.get(workspaceRoot);
-
-    if (workspace === undefined) {
-      workspace = await this.registry.spawn(workspaceRoot);
-    }
-
-    this.registry.attachClient(workspaceRoot, session.connectionId);
     session.markHandshaken();
 
     return {
       connectionId: session.connectionId,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      workspaceRoot,
       tier,
-      workspaceId: workspace.root,
-      kernelState: 'running',
       capabilities: {
         protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-        workspaceRoot,
+        methods: [...Protocol.DAEMON_METHODS, ...Protocol.KERNEL_METHODS, ...Protocol.REQUEST_METHODS],
       },
-      server: {
-        name: this.serverName,
-        version: this.serverVersion,
-        pid: process.pid,
-      },
+      server: { name: this.serverName, version: this.serverVersion, pid: process.pid },
     };
   }
 
-  private ping(value: unknown, session: DispatchSession): DaemonPingResult {
-    const params = asParams(value);
+  private ping(params: Record<string, unknown>, session: DispatchSession): DaemonPingResult {
     const nonce = optionalString(params, 'nonce');
-    const result: DaemonPingResult = {
+
+    return {
       connectionId: session.connectionId,
       timestamp: Date.now(),
       ...(nonce === undefined ? {} : { nonce }),
     };
-
-    return result;
   }
 
   private info(session: DispatchSession): DaemonInfoResult {
@@ -345,273 +275,112 @@ export class RequestDispatcher {
       name: this.serverName,
       version: this.serverVersion,
       protocolVersion: Protocol.DAEMON_PROTOCOL_VERSION,
-      workspaceRoot: this.sessionWorkspaceRoot(session),
       pid: process.pid,
       uptimeMs: Date.now() - this.startedAt,
     };
   }
 
-  private sessionWorkspaceRoot(session: DispatchSession): string {
-    return session.workspaceRoot ?? this.defaultWorkspaceRoot;
+  private async requirements(): Promise<KernelRequirementsResult> {
+    const fields = await this.registry.requirements();
+    const settable = this.registry.clientSettableFields;
+
+    return { fields: fields.map((field) => ({ ...field, clientSettable: settable.includes(field.name) })) };
   }
 
-  private workspaceEntry(session: DispatchSession): KernelWorkspace {
-    const root = session.workspaceRoot;
+  private async boot(params: Record<string, unknown>, session: DispatchSession): Promise<KernelBootResult> {
+    const options = params.options ?? {};
 
-    if (root === undefined) {
-      throw new MethodError(
-        Protocol.HANDSHAKE_REQUIRED,
-        'The connection is not attached to a workspace',
-      );
+    if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+      throw new MethodError(Protocol.INVALID_PARAMS, 'options must be an object', { field: 'options' });
     }
 
-    const workspace = this.registry.get(root);
+    const { instance, reused } = await this.registry.boot(toJson(options), session.connectionId);
 
-    if (workspace === undefined) {
-      throw new MethodError(
-        Protocol.INTERNAL_ERROR,
-        `Workspace "${root}" is not registered`,
-        { errorCode: 'WORKSPACE_NOT_FOUND', path: root },
-      );
+    return { instance: describe(instance), reused, pruned: toJson(instance.pruned) };
+  }
+
+  private attach(params: Record<string, unknown>, session: DispatchSession): KernelStatusResult {
+    return { instance: describe(this.registry.attach(requireString(params, 'instanceId'), session.connectionId)) };
+  }
+
+  private list(session: DispatchSession): KernelListResult {
+    return { instances: this.registry.listFor(session.connectionId).map(describe) };
+  }
+
+  private status(params: Record<string, unknown>, session: DispatchSession): KernelStatusResult {
+    const instanceId = requireString(params, 'instanceId');
+
+    try {
+      return { instance: describe(this.registry.forClient(instanceId, session.connectionId)) };
+    } catch (error: unknown) {
+      if (error instanceof KernelInstanceNotFoundError) {
+        return { instance: null };
+      }
+
+      throw error;
     }
-
-    return workspace;
   }
 
-  private brudTools(session: DispatchSession): IBrudToolsService {
-    const token = this.toolsToken;
+  private async dispose(params: Record<string, unknown>, session: DispatchSession): Promise<KernelDisposeResult> {
+    const instance = this.registry.forClient(requireString(params, 'instanceId'), session.connectionId);
 
-    if (token === undefined) {
-      throw new MethodError(
-        Protocol.INTERNAL_ERROR,
-        'The tools service token is not configured',
-        { errorCode: 'TOOLS_UNAVAILABLE' },
-      );
-    }
-
-    const workspace = this.workspaceEntry(session);
-    assertContextOptions(workspace);
-    const caller: ServiceContext = {
-      callerId: session.connectionId,
-      tier: 'core',
-      options: workspace.options,
-    };
-
-    return workspace.kernel.requestAccess(caller, token);
+    return { disposed: await this.registry.dispose(instance.id) };
   }
 
-  /**
-   * Resolves the UI-only ActionManager for the caller workspace.
-   *
-   * The caller id is the fixed host authority, not the connection id, so the
-   * ActionManager's allowlist admits exactly this path and rejects arbitrary
-   * internal callers.
-   */
-  private actions(session: DispatchSession): IActionManager {
-    const token = this.actionsToken;
-
-    if (token === undefined) {
-      throw new MethodError(
-        Protocol.INTERNAL_ERROR,
-        'The actions service token is not configured',
-        { errorCode: 'ACTIONS_UNAVAILABLE' },
-      );
-    }
-
-    const workspace = this.workspaceEntry(session);
-    assertContextOptions(workspace);
-    const caller: ServiceContext = {
-      callerId: ACTION_MANAGER_CALLER_ID,
-      tier: 'core',
-      options: workspace.options,
-    };
-
-    return workspace.kernel.requestAccess(caller, token);
-  }
-
-  private listWorkspaces(session: DispatchSession): Protocol.WorkspaceListResult {
-    const root = session.workspaceRoot;
-
-    return {
-      workspaces: this.registry
-        .list()
-        .filter((workspace) => root !== undefined && workspace.root === root)
-        .map(describeWorkspace),
-    };
-  }
-
-  private workspaceStatus(
-    value: unknown,
+  /** Runs `operation` against the Router inside the session's host call. */
+  private async inHostSession<T>(
+    kernel: BrudKernel,
     session: DispatchSession,
-  ): Protocol.WorkspaceStatusResult {
-    const params = asParams(value);
-    const requested = optionalString(params, 'workspaceRoot');
-    const root = this.requireSessionScope(session, requested);
+    operation: (syntax: SyntaxRoute) => Promise<T> | T,
+  ): Promise<T> {
+    const kernelModule = await loadKernelModule();
+    const capabilities = this.registry.capabilitiesFor(session.tier ?? 'ai');
 
-    const workspace = this.registry.get(root);
-
-    return { workspace: workspace === undefined ? null : describeWorkspace(workspace) };
-  }
-
-  private async disposeWorkspace(
-    value: unknown,
-    session: DispatchSession,
-  ): Promise<Protocol.WorkspaceDisposeResult> {
-    const params = asParams(value);
-    const requested = requireString(params, 'workspaceRoot');
-    const root = this.requireSessionScope(session, requested);
-    const existed = this.registry.get(root) !== undefined;
-
-    await this.registry.dispose(root);
-
-    if (session.workspaceRoot === root) {
-      session.workspaceRoot = undefined;
-    }
-
-    return { root, disposed: existed };
-  }
-
-  /**
-   * Rejects a request that names a workspace other than the one fixed by the
-   * authenticated connection.
-   */
-  private requireSessionScope(
-    session: DispatchSession,
-    requested: string | undefined,
-  ): string {
-    const scope = session.workspaceRoot;
-
-    if (scope === undefined) {
-      throw new MethodError(
-        Protocol.HANDSHAKE_REQUIRED,
-        'The connection is not attached to a workspace',
+    return kernel.runHostCall({ capabilities }, async () => {
+      const registry = kernel.requestAccess(
+        { callerId: HOST_CALLER_ID, tier: 'core', options: {} },
+        kernelModule.ExposedApiRegistryToken,
       );
-    }
+      const syntax = registry.resolve<SyntaxRoute>('syntax.route');
 
-    if (requested === undefined) {
-      return scope;
-    }
+      if (syntax === null) {
+        throw new MethodError(Protocol.INTERNAL_ERROR, 'The kernel has no Router (syntax.route@1)');
+      }
 
-    const canonical = canonicalizeWorkspaceRoot(requested);
-
-    if (canonical !== scope) {
-      throw new MethodError(
-        Protocol.ACCESS_DENIED,
-        'The requested workspace is outside the authenticated connection scope',
-        {
-          errorCode: 'WORKSPACE_SCOPE_VIOLATION',
-          expected: scope,
-          actual: canonical,
-        },
-      );
-    }
-
-    return scope;
-  }
-
-  private listTools(session: DispatchSession): Protocol.ToolsListResult {
-    const tools = this.brudTools(session).listTools();
-
-    return {
-      tools: tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parametersSchema: tool.parametersSchema,
-        ...(tool.requiredPermissions === undefined
-          ? {}
-          : { requiredPermissions: tool.requiredPermissions }),
-        ownerPluginId: tool.ownerPluginId,
-        isOfficial: tool.isOfficial,
-      })),
-    };
-  }
-
-  private async executeTool(
-    value: unknown,
-    session: DispatchSession,
-    signal?: AbortSignal,
-  ): Promise<Protocol.ToolsExecuteResult> {
-    const params = asParams(value);
-    const name = requireString(params, 'name');
-    const workspace = this.workspaceEntry(session);
-    const callerContext: IPluginExecutionContext = {
-      workspaceRoot: workspace.root,
-      callerId: session.connectionId,
-      permissions: [],
-      origin: 'daemon-rpc',
-      ...(signal === undefined ? {} : { signal }),
-    };
-    const result = await this.brudTools(session).executeTool(
-      name,
-      params.input,
-      callerContext,
-    );
-
-    return { result: toProtocolOperationResult(result) };
-  }
-
-  private listActions(session: DispatchSession): ActionsListResult {
-    return this.actions(session).listActions().map((action) => ({
-      name: action.name,
-      description: action.description,
-      parametersSchema: action.parametersSchema,
-      ownerPluginId: action.ownerPluginId,
-    }));
-  }
-
-  private async executeAction(
-    value: unknown,
-    session: DispatchSession,
-    signal?: AbortSignal,
-  ): Promise<ActionsExecuteResult> {
-    const params = asParams(value);
-    const name = requireString(params, 'name');
-    const input = params.input;
-    const workspace = this.workspaceEntry(session);
-    const result = await this.actions(session).executeAction(name, input, {
-      workspaceRoot: workspace.root,
-      callerId: session.connectionId,
-      origin: 'daemon-rpc',
-      ...(signal === undefined ? {} : { signal }),
+      return operation(syntax);
     });
-
-    return toProtocolOperationResult(result);
   }
-}
 
-const WORKSPACE_KERNEL_STATES: Readonly<
-  Record<KernelWorkspace['kernel']['lifecycleState'], Protocol.WorkspaceKernelState>
-> = {
-  UNINITIALIZED: 'uninitialized',
-  BOOTING: 'booting',
-  RUNNING: 'running',
-  SHUTTING_DOWN: 'shutting-down',
-  DISPOSED: 'disposed',
-};
+  private async kinds(params: Record<string, unknown>, session: DispatchSession): Promise<KernelKindsResult> {
+    const instance = this.registry.forClient(requireString(params, 'instanceId'), session.connectionId);
 
-function describeWorkspace(workspace: KernelWorkspace): Protocol.WorkspaceDescriptor {
-  return {
-    root: workspace.root,
-    clientCount: workspace.clients.size,
-    kernelState: WORKSPACE_KERNEL_STATES[workspace.kernel.lifecycleState],
-    lastUsedAt: workspace.lastUsedAt.toISOString(),
-  };
-}
+    return { kinds: toJson(await this.inHostSession(instance.kernel, session, (syntax) => syntax.kinds())) };
+  }
 
-function toProtocolOperationResult(
-  result: OperationResult,
-): Protocol.ToolOperationResult {
-  const error = result.error instanceof Error
-    ? result.error.message
-    : result.error;
+  private async routeText(
+    params: Record<string, unknown>,
+    session: DispatchSession,
+    signal: AbortSignal | undefined,
+  ): Promise<KernelRouteResult> {
+    const instance = this.registry.forClient(requireString(params, 'instanceId'), session.connectionId);
+    const text = requireString(params, 'text');
+    const stopOnFailure = optionalBoolean(params, 'stopOnFailure');
+    const dryRun = optionalBoolean(params, 'dryRun');
+    const maxOperations = params.maxOperations;
 
-  return {
-    status: result.status,
-    ...(result.data === undefined ? {} : { data: result.data }),
-    ...(result.message === undefined ? {} : { message: result.message }),
-    ...(error === undefined ? {} : { error }),
-    ...(result.durationMs === undefined ? {} : { durationMs: result.durationMs }),
-  };
+    if (maxOperations !== undefined && (typeof maxOperations !== 'number' || !Number.isInteger(maxOperations) || maxOperations < 1)) {
+      throw new MethodError(Protocol.INVALID_PARAMS, 'maxOperations must be a positive integer', { field: 'maxOperations' });
+    }
+
+    const result = await this.inHostSession(instance.kernel, session, (syntax) => syntax.route(text, {
+      ...(signal === undefined ? {} : { signal }),
+      ...(stopOnFailure === undefined ? {} : { stopOnFailure }),
+      ...(dryRun === undefined ? {} : { dryRun }),
+      ...(maxOperations === undefined ? {} : { maxOperations }),
+    }));
+
+    return toJson(result);
+  }
 }
 
 function success<TResult>(id: JsonRpcId, result: TResult): RpcSuccessResponse<TResult> {
