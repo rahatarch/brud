@@ -19,6 +19,7 @@ import type {
   BrudDispatchContext,
   BrudKindDispatcher,
   BrudRouteOptions,
+  BrudKindInfo,
   BrudRouteRegistration,
   BrudRouteResult,
   RoutedOperationOutcome,
@@ -28,8 +29,6 @@ import type {
 export interface RouterDependencies {
   /** Resolves a kind owner's dispatch exposure on the current kernel call chain. */
   readonly resolveOwner: (exposure: string, version: number | undefined, owner: string | undefined) => BrudKindDispatcher | null;
-  /** Workspace root used when a request omits one. */
-  readonly defaultWorkspaceRoot: () => string;
   readonly getParser: () => IBrudParserService;
 }
 
@@ -114,11 +113,19 @@ export class RouterService implements IRouterService, IServiceLifecycle {
    * boot). The owner's kernel identity is pinned, so only that participant's
    * exposure can serve the kind.
    */
-  registerDeclared(owner: string, declaration: { readonly kind: string; readonly exposure: string; readonly version?: number | string }): void {
+  registerDeclared(owner: string, declaration: {
+    readonly kind: string;
+    readonly exposure: string;
+    readonly version?: number | string;
+    readonly description?: string;
+    readonly operations?: BrudRouteRegistration['operations'];
+  }): void {
     this.register({
       kind: declaration.kind,
       exposure: declaration.exposure,
       ...(declaration.version === undefined ? {} : { version: Number(declaration.version) }),
+      ...(declaration.description === undefined ? {} : { description: declaration.description }),
+      ...(declaration.operations === undefined ? {} : { operations: declaration.operations }),
     }, owner);
   }
 
@@ -158,6 +165,19 @@ export class RouterService implements IRouterService, IServiceLifecycle {
 
   registeredKinds(): readonly string[] {
     return Object.freeze(Array.from(this.registrations.keys()));
+  }
+
+  /**
+   * The public vocabulary: every registered kind with its declared
+   * description and operations. What lives inside a kind is its owner's
+   * business (an optional `describe` operation by convention).
+   */
+  kinds(): readonly BrudKindInfo[] {
+    return Object.freeze(Array.from(this.registrations.values(), (registration) => Object.freeze({
+      kind: registration.kind,
+      ...(registration.description === undefined ? {} : { description: registration.description }),
+      ...(registration.operations === undefined ? {} : { operations: registration.operations }),
+    })));
   }
 
   async route(
@@ -338,7 +358,6 @@ export class RouterService implements IRouterService, IServiceLifecycle {
 
   private buildDispatchContext(options: BrudRouteOptions, caller: BrudDispatchCaller): BrudDispatchContext {
     return Object.freeze({
-      workspaceRoot: options.workspaceRoot ?? this.dependencies.defaultWorkspaceRoot(),
       caller,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
       ...(options.dryRun === true ? { dryRun: true } : {}),

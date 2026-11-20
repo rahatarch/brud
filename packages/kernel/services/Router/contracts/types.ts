@@ -27,8 +27,6 @@ export interface BrudDispatchCaller {
 
 /** Context handed to a kind owner's dispatch exposure for one operation. */
 export interface BrudDispatchContext {
-  /** Workspace root the operation runs against. */
-  readonly workspaceRoot: string;
   /** Kernel-derived caller of the route request. */
   readonly caller: BrudDispatchCaller;
   /** Cancellation signal, when the transport supplied one. */
@@ -42,7 +40,6 @@ export interface BrudDispatchContext {
  * options: the Router takes them from the kernel call chain.
  */
 export interface BrudRouteOptions {
-  readonly workspaceRoot?: string;
   readonly signal?: AbortSignal;
   readonly stopOnFailure?: boolean;
   readonly dryRun?: boolean;
@@ -95,6 +92,17 @@ export interface BrudRouteRegistration {
   /** Name of the owner's dispatch exposure (`name`, major `version`). */
   readonly exposure: string;
   readonly version?: number;
+  /** Public description declared with the kind. */
+  readonly description?: string;
+  /** Public operations declared with the kind. */
+  readonly operations?: Readonly<Record<string, { readonly description?: string; readonly input?: Readonly<Record<string, unknown>> }>>;
+}
+
+/** One kind as remote clients see it: the public vocabulary of Brud syntax. */
+export interface BrudKindInfo {
+  readonly kind: BrudOperationKind;
+  readonly description?: string;
+  readonly operations?: BrudRouteRegistration['operations'];
 }
 
 /** The surface a kind owner's dispatch exposure must provide. */

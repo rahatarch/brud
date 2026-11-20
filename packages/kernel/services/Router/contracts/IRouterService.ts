@@ -1,6 +1,7 @@
 import type { BrudOperationKind } from '../../../src/contracts/brudOperation.js';
 import type { BrudOperation } from '../../Parser/contracts/index.js';
 import type {
+  BrudKindInfo,
   BrudDispatchCaller,
   BrudRouteOptions,
   BrudRouteRegistration,
@@ -33,6 +34,9 @@ export interface IRouterService {
 
   /** Kinds currently claimed, in registration order. */
   registeredKinds(): readonly BrudOperationKind[];
+
+  /** Public vocabulary: registered kinds with declared descriptions. */
+  kinds(): readonly BrudKindInfo[];
 
   /**
    * Parses a raw document with `brud.core.parser` and routes every operation.

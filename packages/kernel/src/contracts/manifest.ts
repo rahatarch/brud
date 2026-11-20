@@ -85,6 +85,15 @@ export interface InterceptionPointDeclaration {
   /** Major version of the exposure; defaults to 1. */
   readonly version?: number | string;
 
+  /** Optional public description of the kind (shown to remote clients). */
+  readonly description?: string;
+
+  /**
+   * Optional public operations of the kind: name → description and a JSON
+   * Schema for its input. Plain JSON data; the owner may serve more.
+   */
+  readonly operations?: Readonly<Record<string, KindOperationDescription>>;
+
   /** Service tokens of the admitted interceptors, in run order. */
   readonly admit: readonly string[];
 }
@@ -93,6 +102,13 @@ export interface InterceptionPointDeclaration {
  * One Brud Syntax kind a participant claims, served by one of its own
  * exposures (which must provide `dispatch(operation, context)`).
  */
+/** Public description of one operation of a kind. */
+export interface KindOperationDescription {
+  readonly description?: string;
+  /** JSON Schema of the operation's input (plain JSON). */
+  readonly input?: Readonly<Record<string, unknown>>;
+}
+
 export interface KindDeclaration {
   /** The kind word written after `[CALL`, e.g. `tool`. */
   readonly kind: string;
@@ -157,7 +173,8 @@ export class ParticipantManifestError extends Error {
 }
 
 const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events', 'interceptions', 'interceptionPoints', 'kinds']);
-const KIND_KEYS = new Set(['kind', 'exposure', 'version']);
+const KIND_KEYS = new Set(['kind', 'exposure', 'version', 'description', 'operations']);
+const KIND_OPERATION_KEYS = new Set(['description', 'input']);
 const KIND_PATTERN = /^[a-z][a-z0-9_-]*$/u;
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
@@ -470,7 +487,36 @@ function admitKinds(
       throw new ParticipantManifestError(participant, `${path}.exposure must name one of the participant's own declared exposures`);
     }
 
-    return Object.freeze({ ...(entry as unknown as KindDeclaration) });
+    if (entry.description !== undefined && typeof entry.description !== 'string') {
+      throw new ParticipantManifestError(participant, `${path}.description must be a string`);
+    }
+
+    if (entry.operations !== undefined) {
+      if (!isPlainObject(entry.operations)) {
+        throw new ParticipantManifestError(participant, `${path}.operations must be an object`);
+      }
+
+      for (const [name, operation] of Object.entries(entry.operations)) {
+        const at = `${path}.operations.${name}`;
+
+        if (!isPlainObject(operation)) {
+          throw new ParticipantManifestError(participant, `${at} must be an object`);
+        }
+
+        assertKnownKeys(operation, KIND_OPERATION_KEYS, at, participant);
+
+        if (operation.description !== undefined && typeof operation.description !== 'string') {
+          throw new ParticipantManifestError(participant, `${at}.description must be a string`);
+        }
+
+        if (operation.input !== undefined && !isPlainObject(operation.input)) {
+          throw new ParticipantManifestError(participant, `${at}.input must be a JSON Schema object`);
+        }
+      }
+    }
+
+    // Deep copy so the admitted declaration is plain, frozen data.
+    return Object.freeze(JSON.parse(JSON.stringify(entry)) as KindDeclaration);
   }));
 }
 

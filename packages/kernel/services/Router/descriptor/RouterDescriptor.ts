@@ -9,8 +9,6 @@ import { RouterToken } from './tokens.js';
 import { withExposureBindings } from '../../ExposedApiRegistry/contracts/registrant.js';
 import { ExposedApiRegistryToken } from '../../ExposedApiRegistry/descriptor/tokens.js';
 import type { ExposedApiCaller, IExposedApiRegistry } from '../../ExposedApiRegistry/contracts/index.js';
-import { requireContextString } from '../../../src/contracts/contextContract.js';
-import { ROUTER_ROOT_CONTEXT_FIELD } from '../bootOptions.js';
 import type { BrudDispatchCaller, BrudKindDispatcher, BrudRouteOptions } from '../contracts/types.js';
 
 /** The Router's v1 entry exposure. */
@@ -28,6 +26,7 @@ export const ROUTER_CONTRACT_METHODS = [
   'closeRegistration',
   'isRegistrationOpen',
   'registeredKinds',
+  'kinds',
   'route',
   'dispatch',
 ] as const;
@@ -86,11 +85,6 @@ export function createRouterDescriptor(
             ...(owner === undefined ? {} : { expectedOwner: owner }),
           });
         },
-        defaultWorkspaceRoot: () => requireContextString(
-          context.options,
-          ROUTER_ROOT_CONTEXT_FIELD,
-          ROUTER_CALLER_ID,
-        ),
         getParser: () => options?.parser
           ?? broker.requestAccess(callerContext, ParserToken),
       });
@@ -113,6 +107,7 @@ export function createRouterDescriptor(
             return Object.freeze({
               route: (rawInput: string, routeOptions?: BrudRouteOptions) => service.route(rawInput, routeOptions, view),
               registeredKinds: () => service.registeredKinds(),
+              kinds: () => service.kinds(),
             });
           },
         },

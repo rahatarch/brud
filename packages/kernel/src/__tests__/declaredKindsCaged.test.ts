@@ -28,14 +28,19 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
     const manifest = {
       requests: { capabilities: [] },
       exposures: [{ name: 'caged.kind', version: 1, scope: 'any' }],
-      kinds: [{ kind: 'caged', exposure: 'caged.kind' }],
+      kinds: [{
+        kind: 'caged',
+        exposure: 'caged.kind',
+        description: 'A caged demo kind',
+        operations: { hello: { description: 'Says hello', input: { type: 'object' } } },
+      }],
       events: [],
     };
     const packagePath = await writeParticipantPackage(join(root, 'caged'), 'acme.caged', manifest, GUEST);
     const config = join(root, 'brud.config.json');
     await writeFile(config, JSON.stringify({ services: [...HARDCORES, { path: packagePath }] }), 'utf8');
 
-    const kernel = await bootKernel(config, { options: { 'identity.registry.path': identity, 'router.root': root } });
+    const kernel = await bootKernel(config, { options: { 'identity.registry.path': identity } });
     t.after(async () => {
       await kernel.shutdown();
       await rm(root, { recursive: true, force: true });
@@ -43,9 +48,19 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
 
     const result = await kernel.runHostCall({ capabilities: [] }, () => {
       const registry = kernel.requestAccess({ callerId: 'acme.host', tier: 'core', options: {} }, ExposedApiRegistryToken);
-      const syntax = registry.resolve<{ route(text: string): Promise<unknown>; registeredKinds(): readonly string[] }>('syntax.route');
+      const syntax = registry.resolve<{
+        route(text: string): Promise<unknown>;
+        registeredKinds(): readonly string[];
+        kinds(): readonly unknown[];
+      }>('syntax.route');
       assert.ok(syntax !== null);
       assert.deepEqual(syntax.registeredKinds(), ['caged']);
+      // The public vocabulary carries the declared description and operations.
+      assert.deepEqual(JSON.parse(JSON.stringify(syntax.kinds())), [{
+        kind: 'caged',
+        description: 'A caged demo kind',
+        operations: { hello: { description: 'Says hello', input: { type: 'object' } } },
+      }]);
 
       return syntax.route('[BRUD]\n[CALL caged hello]\nx: 1\n[END]\n[/BRUD]');
     }) as { status: string; operations: { status: string; result?: unknown }[] };
@@ -66,7 +81,27 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
     await writeFile(config, JSON.stringify({ services: [...HARDCORES, { path: packagePath }] }), 'utf8');
 
     await assert.rejects(
-      bootKernel(config, { options: { 'identity.registry.path': identity, 'router.root': root } }),
+      bootKernel(config, { options: { 'identity.registry.path': identity } }),
+      (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_MANIFEST_INVALID',
+    );
+  });
+
+  it('refuses a kind whose description is not plain data', async (t) => {
+    const root = await mkdtemp(join(tmpdir(), 'brud-declared-kinds-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    const identity = join(root, 'identity.json');
+    provisionIdentityRegistryStorage(identity);
+    const packagePath = await writeParticipantPackage(join(root, 'caged'), 'acme.caged', {
+      requests: { capabilities: [] },
+      exposures: [{ name: 'caged.kind', version: 1, scope: 'any' }],
+      kinds: [{ kind: 'caged', exposure: 'caged.kind', operations: { hello: { input: 'not-a-schema' } } }],
+      events: [],
+    }, GUEST);
+    const config = join(root, 'brud.config.json');
+    await writeFile(config, JSON.stringify({ services: [...HARDCORES, { path: packagePath }] }), 'utf8');
+
+    await assert.rejects(
+      bootKernel(config, { options: { 'identity.registry.path': identity } }),
       (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_MANIFEST_INVALID',
     );
   });
