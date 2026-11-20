@@ -29,7 +29,7 @@ import { connectToDaemon } from '@brud/daemon';
 
 const client = await connectToDaemon({ home, tier: 'ui', spawnIfMissing: true });
 const boot = await client.request('kernel.boot', { options: { 'workspace.root': root } });
-const routed = await client.request('kernel.route', { instanceId: boot.instanceId, text });
+const routed = await client.request('kernel.route', { instanceId: boot.instance.instanceId, text });
 await client.close();
 ```
 
