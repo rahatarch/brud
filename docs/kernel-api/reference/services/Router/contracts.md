@@ -335,7 +335,6 @@ Context handed to a kind owner's dispatch exposure for one operation.
 | <a id="property-caller"></a> `caller` | `readonly` | `BrudDispatchCaller` | Kernel-derived caller of the route request. |
 | <a id="property-dryrun"></a> `dryRun?` | `readonly` | `boolean` | Validate only; do not execute. |
 | <a id="property-signal"></a> `signal?` | `readonly` | `AbortSignal` | Cancellation signal, when the transport supplied one. |
-| <a id="property-workspaceroot"></a> `workspaceRoot` | `readonly` | `string` | Workspace root the operation runs against. |
 
 ***
 
@@ -352,22 +351,23 @@ options: the Router takes them from the kernel call chain.
 | <a id="property-maxoperations"></a> `maxOperations?` | `readonly` | `number` |
 | <a id="property-signal-1"></a> `signal?` | `readonly` | `AbortSignal` |
 | <a id="property-stoponfailure"></a> `stopOnFailure?` | `readonly` | `boolean` |
-| <a id="property-workspaceroot-1"></a> `workspaceRoot?` | `readonly` | `string` |
 
 ***
 
 ### BrudRouteRegistration
 
-Boot-time claim of a kind. The owner names one of its own exposures; the
-Router resolves it per operation on the kernel call chain and calls
-`dispatch`. No service token is involved.
+A kind and the exposure that dispatches it, registered at boot. Each
+operation is dispatched through that exposure, which is looked up on the
+kernel call chain.
 
 #### Properties
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
+| <a id="property-description"></a> `description?` | `readonly` | `string` | Public description declared with the kind. |
 | <a id="property-exposure"></a> `exposure` | `readonly` | `string` | Name of the owner's dispatch exposure (`name`, major `version`). |
 | <a id="property-kind"></a> `kind` | `readonly` | `string` | - |
+| <a id="property-operations"></a> `operations?` | `readonly` | `Readonly`\<`Record`\<`string`, \{ `description?`: `string`; `input?`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; \}\>\> | Public operations declared with the kind. |
 | <a id="property-version"></a> `version?` | `readonly` | `number` | - |
 
 ***
@@ -382,7 +382,7 @@ Result of parsing and routing one document.
 | ------ | ------ | ------ |
 | <a id="property-dispatched"></a> `dispatched` | `readonly` | `number` |
 | <a id="property-failed"></a> `failed` | `readonly` | `number` |
-| <a id="property-operations"></a> `operations` | `readonly` | readonly [`RoutedOperationOutcome`](#routedoperationoutcome)[] |
+| <a id="property-operations-1"></a> `operations` | `readonly` | readonly [`RoutedOperationOutcome`](#routedoperationoutcome)[] |
 | <a id="property-parseerror"></a> `parseError?` | `readonly` | [`BrudParseFailure`](../Parser/contracts.md#brudparsefailure) |
 | <a id="property-status"></a> `status` | `readonly` | [`RouteStatus`](#routestatus) |
 
@@ -475,6 +475,18 @@ Whether new kinds may still be claimed.
 ###### Returns
 
 `boolean`
+
+##### kinds()
+
+```ts
+kinds(): readonly BrudKindInfo[];
+```
+
+Public vocabulary: registered kinds with declared descriptions.
+
+###### Returns
+
+readonly `BrudKindInfo`[]
 
 ##### register()
 

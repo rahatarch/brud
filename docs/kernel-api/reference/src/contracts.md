@@ -606,6 +606,7 @@ A manifest after the kernel has validated and frozen it.
 | <a id="property-exposures"></a> `exposures` | `readonly` | readonly [`ExposureDeclaration`](#exposuredeclaration)[] | Declared exposures, deep-copied and frozen. |
 | <a id="property-interceptionpoints"></a> `interceptionPoints` | `readonly` | readonly [`InterceptionPointDeclaration`](#interceptionpointdeclaration)[] | Declared interception points, deep-copied and frozen. |
 | <a id="property-interceptions"></a> `interceptions` | `readonly` | readonly [`InterceptionDeclaration`](#interceptiondeclaration)[] | Declared interceptions, deep-copied and frozen. |
+| <a id="property-kinds"></a> `kinds` | `readonly` | readonly [`KindDeclaration`](#kinddeclaration)[] | - |
 
 ***
 
@@ -1215,7 +1216,9 @@ One interception point a giver declares on one of its own exposures, naming
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-admit"></a> `admit` | `readonly` | readonly `string`[] | Service tokens of the admitted interceptors, in run order. |
+| <a id="property-description-2"></a> `description?` | `readonly` | `string` | Optional public description of the kind (shown to remote clients). |
 | <a id="property-exposure"></a> `exposure` | `readonly` | `string` | The giver's own exposure name. |
+| <a id="property-operations"></a> `operations?` | `readonly` | `Readonly`\<`Record`\<`string`, `KindOperationDescription`\>\> | Optional public operations of the kind: name → description and a JSON Schema for its input. Plain JSON data; the owner may serve more. |
 | <a id="property-version-3"></a> `version?` | `readonly` | `string` \| `number` | Major version of the exposure; defaults to 1. |
 
 ***
@@ -1770,6 +1773,18 @@ One record on the kernel's observation stream.
 
 ***
 
+### KindDeclaration
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-exposure-1"></a> `exposure` | `readonly` | `string` | The participant's own exposure name that dispatches the kind. |
+| <a id="property-kind"></a> `kind` | `readonly` | `string` | The kind word written after `[CALL`, e.g. `tool`. |
+| <a id="property-version-4"></a> `version?` | `readonly` | `string` \| `number` | Major version of the exposure; defaults to 1. |
+
+***
+
 ### OperationHandler
 
 #### Type Parameters
@@ -1783,7 +1798,7 @@ One record on the kernel's observation stream.
 
 | Property | Modifier | Type |
 | ------ | ------ | ------ |
-| <a id="property-kind"></a> `kind` | `readonly` | `string` |
+| <a id="property-kind-1"></a> `kind` | `readonly` | `string` |
 | <a id="property-metadata-1"></a> `metadata?` | `readonly` | [`PluginMetadata`](#pluginmetadata) |
 | <a id="property-promptdescriptor"></a> `promptDescriptor?` | `readonly` | [`PromptDescriptor`](#promptdescriptor) |
 | <a id="property-requiredcapabilities"></a> `requiredCapabilities?` | `readonly` | readonly [`Token`](#token)\<`unknown`\>[] |
@@ -1841,6 +1856,7 @@ A participant's manifest.
 | <a id="property-exposures-1"></a> `exposures?` | `readonly` | readonly [`ExposureDeclaration`](#exposuredeclaration)[] | Exposures the participant gives. |
 | <a id="property-interceptionpoints-1"></a> `interceptionPoints?` | `readonly` | readonly [`InterceptionPointDeclaration`](#interceptionpointdeclaration)[] | Interception points the participant opens on its own exposures. |
 | <a id="property-interceptions-1"></a> `interceptions?` | `readonly` | readonly [`InterceptionDeclaration`](#interceptiondeclaration)[] | Interceptions the participant asks for. |
+| <a id="property-kinds-1"></a> `kinds?` | `readonly` | readonly [`KindDeclaration`](#kinddeclaration)[] | - |
 | <a id="property-requests"></a> `requests?` | `readonly` | [`ParticipantRequests`](#participantrequests) | What the participant requests. |
 
 ***
@@ -1866,7 +1882,7 @@ What a participant requests. A request is not a grant; the giver decides.
 | <a id="property-author"></a> `author?` | `readonly` | `string` |
 | <a id="property-isofficial"></a> `isOfficial?` | `readonly` | `boolean` |
 | <a id="property-permissions"></a> `permissions?` | `readonly` | readonly `string`[] |
-| <a id="property-version-4"></a> `version?` | `readonly` | `string` |
+| <a id="property-version-5"></a> `version?` | `readonly` | `string` |
 
 ***
 
@@ -1876,7 +1892,7 @@ What a participant requests. A request is not a grant; the giver decides.
 
 | Property | Modifier | Type |
 | ------ | ------ | ------ |
-| <a id="property-description-2"></a> `description` | `readonly` | `string` |
+| <a id="property-description-3"></a> `description` | `readonly` | `string` |
 | <a id="property-examples"></a> `examples?` | `readonly` | readonly `string`[] |
 | <a id="property-syntaxguide"></a> `syntaxGuide?` | `readonly` | `string` |
 | <a id="property-systempromptfragment"></a> `systemPromptFragment?` | `readonly` | `string` |
@@ -1927,7 +1943,7 @@ it does not interpret any method.
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-methods"></a> `methods` | `readonly` | readonly `string`[] | Method names the service implements for this contract. |
-| <a id="property-version-5"></a> `version` | `readonly` | `string` | Contract version the service implements. |
+| <a id="property-version-6"></a> `version` | `readonly` | `string` | Contract version the service implements. |
 
 ***
 
@@ -1968,7 +1984,7 @@ Read-only metadata describing a registered service.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-description-3"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
+| <a id="property-description-4"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
 | <a id="property-id"></a> `id` | `readonly` | `string` | Stable identifier of the service. |
 | <a id="property-initialized"></a> `initialized` | `readonly` | `boolean` | Whether the service has completed initialization. |
 | <a id="property-tier-2"></a> `tier` | `readonly` | [`ServiceTier`](#servicetier) | Privilege tier the service belongs to. |
@@ -1994,7 +2010,7 @@ exists purely to carry `TService` through registration and lookup.
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-_brand"></a> `_brand` | `readonly` | readonly \[`TService`\] | Phantom brand preserving `TService` for strict type inference. |
-| <a id="property-description-4"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
+| <a id="property-description-5"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
 | <a id="property-id-1"></a> `id` | `readonly` | `string` | Stable, human-readable identifier used for diagnostics and policies. |
 
 ## Type Aliases
