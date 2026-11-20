@@ -660,7 +660,7 @@ export async function startAttackDaemon(
     return await RawJsonRpcClient.connect(socketPath, {
       psk: principal === 'ai' ? aiToken : token,
       principal,
-      home: options.home ?? workspace.root,
+      home: options.home ?? endpoint.home,
       prologue,
     });
   };
@@ -683,7 +683,9 @@ export async function startAttackDaemon(
   };
 
   return {
-    home: workspace.root,
+    // The daemon's own canonical home (lower-cased on Windows). The handshake compares it
+    // byte for byte with the home a client sends, so tests must send this value, not the raw path.
+    home: endpoint.home,
     runtimeDir,
     socketPath,
     tokenPath,
