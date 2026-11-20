@@ -1,0 +1,98 @@
+{
+  "services": [
+    {
+      "path": "@brud/service-settings/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-settings/settingsReader.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-utility/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "kernel:serviceModules/exposedApiRegistry.js",
+      "official": true
+    },
+    {
+      "path": "kernel:serviceModules/identityRegistry.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-workspace/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-filesystem/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-validation/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-terminal/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "kernel:serviceModules/parser.js",
+      "official": true
+    },
+    {
+      "path": "kernel:serviceModules/router.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-tools/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-actions/serviceModule.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-history/historySession.js",
+      "official": true
+    },
+    {
+      "path": "@brud/service-history/historyJournal.js",
+      "official": true
+    }
+  ],
+  "plugins": [
+    {
+      "path": "@brud/plugin-catalog",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-reader",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-search",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-structure",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-terminal",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-filesystem",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-user-prompts",
+      "official": true
+    },
+    {
+      "path": "@brud/plugin-history",
+      "official": true
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "composition": "./foundation.config.json",
+  "fixedOptions": {},
+  "clientOptions": ["workspace.root"],
+  "principals": {
+    "ui": [],
+    "ai": []
+  },
+  "reuseIdenticalBoots": false
+}

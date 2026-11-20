@@ -4,6 +4,8 @@
  * composition, and a throwaway participant that owns the `probe` kind.
  */
 import { strict as assert } from 'node:assert';
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
 import * as Protocol from '@brud/protocol';
 import type {
@@ -169,5 +171,46 @@ describe('daemon — operator-controlled kernel reuse', () => {
     assert.equal(second.reused, true);
     assert.equal(second.instance.instanceId, first.instance.instanceId);
     assert.notEqual(other.instance.instanceId, first.instance.instanceId);
+  });
+});
+
+describe('daemon — kernel state isolation', () => {
+  it('gives two live kernels with identical options separate state folders', async (t) => {
+    const probe = await createProbeHome({ prefix: 'brud-daemon-state-' });
+    const daemon = await createDaemon({ home: probe.home, operator: probe.operator, expectedPeerPid: process.pid });
+    const client = await connectToDaemon({ home: probe.home, tier: 'ui', spawnIfMissing: false });
+
+    t.after(async () => {
+      await client.close();
+      await daemon.shutdown();
+      await probe.cleanup();
+    });
+
+    const first = await client.request<KernelBootResult>(Protocol.KERNEL_BOOT, { options: { 'probe.label': 'twin' } });
+    const second = await client.request<KernelBootResult>(Protocol.KERNEL_BOOT, { options: { 'probe.label': 'twin' } });
+
+    assert.equal(second.reused, false);
+    assert.notEqual(second.instance.instanceId, first.instance.instanceId);
+
+    const folders = (await readdir(join(probe.home, 'kernels'))).sort();
+
+    assert.equal(folders.length, 2, `each live kernel owns its state folder: ${folders.join(', ')}`);
+    assert.equal(new Set(folders).size, 2);
+
+    for (const instance of [first, second]) {
+      const routed = await client.request<RouteResult>(Protocol.KERNEL_ROUTE, {
+        instanceId: instance.instance.instanceId,
+        text: probeCall('echo'),
+      });
+
+      assert.equal(routed.status, 'success');
+    }
+
+    // A disposed kernel frees its folder name for the next boot.
+    await client.request(Protocol.KERNEL_DISPOSE, { instanceId: second.instance.instanceId });
+    const third = await client.request<KernelBootResult>(Protocol.KERNEL_BOOT, { options: { 'probe.label': 'twin' } });
+
+    assert.ok(third.instance.instanceId.length > 0);
+    assert.equal((await readdir(join(probe.home, 'kernels'))).length, 2);
   });
 });

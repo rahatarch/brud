@@ -1,20 +1,18 @@
 /**
  * Phase 13.0 — Category 5: concurrency and lifecycle races.
  *
- * A real write is interrupted by a socket close, a reversal request races an
- * active write, and a 10 MiB tools.execute frame probes the payload ceiling.
+ * A routed operation is interrupted by a socket close, an unauthenticated
+ * caller races an active operation, and an oversized record probes the payload
+ * ceiling. The operations are the throwaway probe participant's.
  */
 import { after, before, describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Buffer } from 'node:buffer';
-import { existsSync } from 'node:fs';
-import { readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
 import * as Protocol from '@brud/protocol';
-import { startAttackDaemon, toolResultOf } from './harness.js';
+import { startAttackDaemon } from './harness.js';
 import type { AttackDaemon, RawJsonRpcClient } from './harness.js';
 
-const MID_WRITE_BYTES = 7 * 1024 * 1024;
 const PAYLOAD_DOS_BYTES = 10 * 1024 * 1024;
 
 let daemon: AttackDaemon;
@@ -36,6 +34,18 @@ async function delay(ms: number): Promise<void> {
   await new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
 }
 
+/** Boots a probe kernel on this connection and returns its instance id. */
+async function bootProbe(target: RawJsonRpcClient, label: string): Promise<string> {
+  const response = await target.request(Protocol.KERNEL_BOOT, { options: { 'probe.label': label } });
+  const result = response.result as { readonly instance?: { readonly instanceId?: string } } | undefined;
+  const instanceId = result?.instance?.instanceId;
+
+  assert.equal(response.error, undefined, JSON.stringify(response));
+  assert.equal(typeof instanceId, 'string', JSON.stringify(response));
+
+  return instanceId as string;
+}
+
 async function residentBytes(pid: number | undefined): Promise<number | undefined> {
   if (pid === undefined || process.platform !== 'linux') {
     return undefined;
@@ -51,51 +61,40 @@ async function residentBytes(pid: number | undefined): Promise<number | undefine
   }
 }
 
-describe('Attack 14 — Disconnect-Mid-Write Race', () => {
-  it('leaves no half-written file and releases the target mutex', { timeout: 60_000 }, async () => {
-    const payload = 'w'.repeat(MID_WRITE_BYTES);
-    const target = join(daemon.home, 'race-mid-write.txt');
+describe('Attack 14 — Disconnect-Mid-Operation Race', () => {
+  it('survives a disconnect during a routed operation and stays usable', { timeout: 60_000 }, async () => {
     const racing = await daemon.connectAndHandshake();
+    const racingInstance = await bootProbe(racing.client, 'racing');
 
     racing.client.send({
       jsonrpc: '2.0',
       id: 2,
       method: Protocol.KERNEL_ROUTE,
       params: {
-        instanceId: 'probe-instance',
-        text: '[BRUD]\\n[CALL probe sleep]\\nms: 3000\\n[END]\\n[/BRUD]',
+        instanceId: racingInstance,
+        text: '[BRUD]\n[CALL probe sleep]\nms: 3000\n[END]\n[/BRUD]',
       },
     });
 
     // Let the frame reach the socket, then sever the connection while the
-    // daemon may still be validating, journaling, or writing.
+    // daemon is still running the operation.
     await delay(30);
     racing.client.destroy();
 
     await delay(3_000);
 
-    assert.equal(daemon.isAlive(), true, 'daemon must survive a mid-write disconnect');
-
-    if (existsSync(target)) {
-      const info = await stat(target);
-
-      assert.equal(
-        info.size,
-        Buffer.byteLength(payload, 'utf8'),
-        'the target must be complete or absent, never half-written',
-      );
-    }
+    assert.equal(daemon.isAlive(), true, 'daemon must survive a mid-operation disconnect');
 
     const recovered = await daemon.connectAndHandshake();
 
     try {
+      const recoveredInstance = await bootProbe(recovered.client, 'recovered');
       const response = await recovered.client.request(Protocol.KERNEL_ROUTE, {
-        instanceId: 'probe-instance',
+        instanceId: recoveredInstance,
         text: '[BRUD]\n[CALL probe echo]\nx: 1\n[END]\n[/BRUD]',
       });
 
       assert.equal(response.error, undefined, JSON.stringify(response));
-      assert.equal(existsSync(join(daemon.home, 'post-race.txt')), false);
     } finally {
       await recovered.client.close();
     }
@@ -108,21 +107,21 @@ describe('Attack 15 — Reversal Conflict', () => {
     Protocol.HANDSHAKE_REQUIRED,
   ];
 
-  it('rejects revert_session from an unauthenticated caller while a write is in flight', { timeout: 60_000 }, async () => {
+  it('rejects an unauthenticated caller while an operation is in flight', { timeout: 60_000 }, async () => {
     const writer = await daemon.connectAndHandshake();
     // Deliberately no handshake: this caller is not authorized to reach any
-    // tool, including the History plugin's revert surface.
+    // kernel instance, including the one the writer is using.
     const reverter = await daemon.connect();
-    const payload = 'r'.repeat(4 * 1024 * 1024);
 
     try {
+      const writerInstance = await bootProbe(writer.client, 'writer');
       const writePromise = writer.client.request(Protocol.KERNEL_ROUTE, {
-        instanceId: 'probe-instance',
+        instanceId: writerInstance,
         text: '[BRUD]\n[CALL probe sleep]\nms: 3000\n[END]\n[/BRUD]',
       });
 
       const revertResponse = await reverter.request(Protocol.KERNEL_ROUTE, {
-        instanceId: 'probe-instance',
+        instanceId: writerInstance,
         text: '[BRUD]\n[CALL probe echo]\nx: 1\n[END]\n[/BRUD]',
       });
 
@@ -133,10 +132,10 @@ describe('Attack 15 — Reversal Conflict', () => {
       );
 
       const writeResponse = await writePromise;
-      const writeResult = toolResultOf(writeResponse);
+      const writeResult = writeResponse.result as { readonly status?: string } | undefined;
 
       assert.equal(writeResponse.error, undefined, JSON.stringify(writeResponse));
-      assert.equal(writeResult.status, 'success', JSON.stringify(writeResult));
+      assert.equal(writeResult?.status, 'success', JSON.stringify(writeResult));
     } finally {
       await writer.client.close().catch(() => undefined);
       await reverter.close().catch(() => undefined);
@@ -169,7 +168,6 @@ describe('Attack 16 — Payload Size DoS', () => {
 
     assert.equal(closed, true, `daemon did not close the oversized record (${memory})`);
     assert.equal(daemon.isAlive(), true, `daemon crashed under a 10 MiB length prefix (${memory})`);
-    assert.equal(existsSync(join(daemon.home, 'payload-dos.txt')), false);
 
     // The daemon must still accept fresh connections after the rejection.
     const recovered = await daemon.connectAndHandshake();

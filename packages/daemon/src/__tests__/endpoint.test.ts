@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { strict as assert } from 'node:assert';
-import { mkdir, mkdtemp, realpath, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
@@ -208,7 +208,17 @@ describe('resolveEndpoint', () => {
     assert.equal(info.uid, process.getuid?.());
   });
 
-  it('rejects a workspace root that does not exist', async () => {
-    await assert.rejects(() => resolveEndpoint(join(root, 'missing-workspace')), /Cannot resolve workspace root/);
+  it('creates a daemon home that does not exist yet (the operator state folder is made on demand)', async () => {
+    const missing = join(root, 'missing-home', 'nested');
+    const endpoint = await resolveEndpoint(missing);
+
+    assert.equal((await stat(endpoint.home)).isDirectory(), true);
+  });
+
+  it('rejects a daemon home that cannot be created', async () => {
+    const blocker = join(root, 'not-a-directory');
+    await writeFile(blocker, 'file', 'utf8');
+
+    await assert.rejects(() => resolveEndpoint(join(blocker, 'home')), /Cannot resolve daemon home/);
   });
 });

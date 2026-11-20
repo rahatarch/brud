@@ -91,10 +91,6 @@
       "official": true
     },
     {
-      "path": "@brud/plugin-mcp-bridge",
-      "official": true
-    },
-    {
       "path": "@brud/plugin-history",
       "official": true
     }

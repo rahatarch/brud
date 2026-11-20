@@ -40,9 +40,9 @@ function pruneRecorder(forward: KernelLogger | undefined): { readonly logger: Ke
 
       if (detail !== undefined && Array.isArray(detail.participants) && Array.isArray(detail.missingFields)) {
         pruned.push({
-          participants: [...detail.participants],
+          participants: [...(detail.participants as readonly string[])],
           path: String(detail.path ?? ''),
-          missingFields: [...detail.missingFields],
+          missingFields: [...(detail.missingFields as readonly string[])],
         });
         return;
       }
@@ -62,8 +62,15 @@ function pruneRecorder(forward: KernelLogger | undefined): { readonly logger: Ke
 /** One kernel the daemon hosts. */
 export interface KernelInstance {
   readonly id: string;
-  /** Hash of the client-supplied options; names the instance's state folder. */
+  /** Hash of the client-supplied options (identical boots share a key). */
   readonly key: string;
+  /**
+   * Name of the instance's state folder under `<home>/kernels/`. The first
+   * live kernel for a key uses the key itself, so its identity registry
+   * persists across restarts; a concurrent kernel with the same key gets a
+   * numbered sibling, because two live kernels must never share state.
+   */
+  readonly stateName: string;
   readonly kernel: BrudKernel;
   readonly clients: Set<string>;
   state: KernelInstanceState;
@@ -138,6 +145,9 @@ export class KernelInstanceRegistry {
   private readonly instances = new Map<string, KernelInstance>();
 
   private readonly pending = new Map<string, Promise<KernelInstance>>();
+
+  /** State folder names held by live or booting kernels. */
+  private readonly reservedStates = new Set<string>();
 
   private readonly home: string;
 
@@ -272,16 +282,41 @@ export class KernelInstanceRegistry {
     }
   }
 
+  /** Claims the lowest free state folder name for a key (synchronously, before any await). */
+  private reserveState(key: string): string {
+    let name = key;
+
+    for (let ordinal = 1; this.reservedStates.has(name); ordinal += 1) {
+      name = `${key}-${String(ordinal)}`;
+    }
+
+    this.reservedStates.add(name);
+
+    return name;
+  }
+
   private async create(key: string, clientOptions: Readonly<Record<string, unknown>>): Promise<KernelInstance> {
-    const kernelModule = await loadKernelModule();
-    const recorder = pruneRecorder(this.logger);
-    const kernel = await kernelModule.bootKernel(this.operator.composition, {
-      options: this.kernelOptions(join(this.home, 'kernels', key), clientOptions, kernelModule),
-      logger: recorder.logger as never,
-    });
+    const stateName = this.reserveState(key);
+    let kernel: BrudKernel;
+    let recorder: ReturnType<typeof pruneRecorder>;
+
+    try {
+      const kernelModule = await loadKernelModule();
+
+      recorder = pruneRecorder(this.logger);
+      kernel = await kernelModule.bootKernel(this.operator.composition, {
+        options: this.kernelOptions(join(this.home, 'kernels', stateName), clientOptions, kernelModule),
+        logger: recorder.logger as never,
+      });
+    } catch (error: unknown) {
+      this.reservedStates.delete(stateName);
+      throw error;
+    }
+
     const instance: KernelInstance = {
       id: `k_${randomUUID()}`,
       key,
+      stateName,
       kernel,
       clients: new Set(),
       state: 'running',
@@ -382,6 +417,7 @@ export class KernelInstanceRegistry {
     } finally {
       instance.state = 'disposed';
       instance.clients.clear();
+      this.reservedStates.delete(instance.stateName);
     }
 
     return true;
