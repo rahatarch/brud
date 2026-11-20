@@ -37,7 +37,7 @@ Entries accept only `path` and `official`. Other top-level sections belong to th
 
 These are independent, and the difference is important.
 
-- **Hardcore** is decided by the BrudOS release. The seven hardcore services are compiled into the kernel and pinned by content hash. Every composition gets the same set. You cannot remove, replace or re-pin one, and the kernel will not boot without them.
+- **Hardcore** is decided by the BrudOS release. The seven hardcore services are compiled into the kernel and pinned by content hash. Every composition gets the same set. You cannot remove, replace or re-pin one, and the kernel will not boot without them. Every hardcore entry must also be declared `"official": true`. If one is `false` or has no `official` key, the boot is refused with `PARTICIPANT_TIER` before anything starts. A hardcore cannot run caged or unofficial.
 - **Official** is decided by *you*, the owner of the composition, in your own config. It says "I trust this participant in my system."
 
 > **Important**
