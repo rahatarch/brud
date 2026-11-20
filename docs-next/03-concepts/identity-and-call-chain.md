@@ -17,9 +17,12 @@ Every call the kernel mediates runs inside a **call chain**. The chain carries:
 | `caller.identity` | The caller's kernel identity. `null` for the kernel itself and for a host session |
 | `caller.callerClass` | `participant`, `kernel`, or `host` |
 | `caller.official` | Whether the composition owner declared this caller official |
-| `caller.capabilities` | The capabilities the caller requested. The type is `ReadonlySet<string>`, but a kind dispatcher currently receives an array, so write `new Set(caller.capabilities)` before calling `.has` |
+| `caller.capabilities` | The capabilities the caller requested. See the note below: a `ReadonlySet` in the kernel's own call chain, a sorted array in a kind dispatcher |
 | `caller.parentIdentity` | For a caged child, the identity of the participant that loaded it |
 | `origin` | Where the chain began: `kernel`, `runtime`, or `host` |
+
+> **Set or array?**
+> The kernel's own caller (`KernelCaller`, what policies and projections see) holds `capabilities` as a `ReadonlySet<string>`. A kind owner's `dispatch(operation, context)` receives a different, plain view, `BrudDispatchCaller`, whose `capabilities` is a frozen, sorted `string[]`, so that it is serializable and identical for every transport. Use `context.caller.capabilities.includes('tasks:write')` there, not `.has`. Both types are exported from `@brud/kernel`: `import type { BrudDispatchContext } from '@brud/kernel'`.
 
 These are fixed when the participant is admitted (or, for a host, when the host call starts). A participant cannot change them mid-flight.
 

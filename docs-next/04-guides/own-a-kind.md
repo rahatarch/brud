@@ -21,7 +21,7 @@ Let text commands such as `[CALL note add]` reach your code by claiming an opera
    router.register({ kind: 'note', exposure: 'acme.notes.dispatch', version: 1 });
    ```
 
-3. **Implement `dispatch(operation, context)`.** Decide who is asking from `context.caller`. Never use anything from the request text.
+3. **Implement `dispatch(operation, context)`.** Decide who is asking from `context.caller`. Never use anything from the request text. `context.caller.capabilities` is a sorted `string[]` here (use `.includes`), unlike the `Set` that policies see; see [Identity and the call chain](../03-concepts/identity-and-call-chain.md).
 
 ## Rules
 

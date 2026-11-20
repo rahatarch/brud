@@ -4,6 +4,7 @@ export * from './src/bootstrap/index.js';
 // Hardcore services shipped inside the kernel package.
 export * from './services/IdentityRegistry/index.js';
 export * from './services/ExposedApiRegistry/index.js';
+export type { BrudDispatchCaller, BrudDispatchContext } from './services/Router/contracts/types.js';
 
 export { ServiceContainer } from './src/engine/ServiceContainer.js';
 export { OperationRegistry } from './src/engine/OperationRegistry.js';
