@@ -11,17 +11,12 @@ function callerIdOf(caller: ExposedApiCaller): string {
 }
 
 /** Execution context for one call: identity, permissions and origin from the kernel's caller view. */
-function contextFor(caller: ExposedApiCaller, options: ToolCallOptions): IPluginExecutionContext {
-  if (options === null || typeof options !== 'object' || typeof options.workspaceRoot !== 'string') {
-    throw new TypeError('brud.tools: options.workspaceRoot must be a string');
-  }
-
+function contextFor(caller: ExposedApiCaller, options: ToolCallOptions = {}): IPluginExecutionContext {
   return {
-    workspaceRoot: options.workspaceRoot,
     callerId: callerIdOf(caller),
     permissions: [...caller.capabilities].sort(),
     origin: caller.origin,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
+    ...(options?.signal === undefined ? {} : { signal: options.signal }),
   };
 }
 
@@ -37,7 +32,7 @@ export const toolsHandle = byCapability<BrudToolsService>(
       registerTool: (options: ToolRegistrationOptions) => ctx.instance.registerTool(callerIdOf(caller), caller.official, options, caller.identity ?? undefined),
     }),
     [TOOLS_EXECUTE_CAPABILITY]: (ctx, caller) => ({
-      executeTool: (name: string, input: unknown, options: ToolCallOptions) => ctx.instance.executeTool(name, input, contextFor(caller, options)),
+      executeTool: (name: string, input: unknown, options?: ToolCallOptions) => ctx.instance.executeTool(name, input, contextFor(caller, options)),
       validateTool: (name: string, input: unknown, options: ToolCallOptions) => ctx.instance.validateTool(name, input, contextFor(caller, options)),
     }),
   },

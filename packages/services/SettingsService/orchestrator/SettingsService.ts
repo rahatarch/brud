@@ -136,10 +136,6 @@ function mergePatch(
     next.plugins = { ...readPluginMap(existing.plugins), ...patch.plugins };
   }
 
-  if (patch.mcpAutoOn !== undefined) {
-    next.mcpAutoOn = patch.mcpAutoOn;
-  }
-
   if (patch.historyRetentionDays !== undefined) {
     next.historyRetentionDays = patch.historyRetentionDays;
   }
@@ -537,7 +533,6 @@ export class SettingsService implements ISettingsService, IServiceLifecycle {
       readMaxBatchFiles: candidate.readMaxBatchFiles,
       readMaxAggregateBytes: candidate.readMaxAggregateBytes,
       plugins: candidate.plugins,
-      mcpAutoOn: candidate.mcpAutoOn,
       historyRetentionDays: candidate.historyRetentionDays,
       historyMinUndoEntries: candidate.historyMinUndoEntries,
     };

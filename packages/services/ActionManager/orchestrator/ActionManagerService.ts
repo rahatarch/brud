@@ -146,7 +146,6 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
    */
   dispatchRouted(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> {
     const callerContext: IActionExecutionContext = {
-      workspaceRoot: context.workspaceRoot,
       callerId: context.caller.identity ?? context.caller.callerClass,
       ...{ permissions: context.caller.capabilities },
       ...(context.signal === undefined ? {} : { signal: context.signal }),

@@ -9,13 +9,10 @@ export interface IToolDisposable {
  * Caller context handed to a tool handler at dispatch time.
  *
  * The service never leaks kernel internals to a tool: a handler receives the
- * workspace root, the identity of the caller that asked for execution, and the
+ * identity of the caller that asked for execution and the
  * cancellation signal of the in-flight request.
  */
 export interface IPluginExecutionContext {
-  /** Absolute path of the workspace the tool operates in. */
-  readonly workspaceRoot: string;
-
   /** Identifier of the caller (plugin or surface) that requested execution. */
   readonly callerId: string;
 

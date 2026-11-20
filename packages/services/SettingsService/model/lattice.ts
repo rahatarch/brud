@@ -83,7 +83,6 @@ interface EffectiveSettings {
   readMaxBatchFiles: number;
   readMaxAggregateBytes: number;
   plugins: Record<string, PluginRolloutMode>;
-  mcpAutoOn?: boolean;
   historyRetentionDays: number;
   historyMinUndoEntries: number;
 }
@@ -209,7 +208,6 @@ export function evaluateLattice(input: LatticeInput = {}): LatticeResult {
     plugins: {},
     // Data field with no safety semantics: a project (workspace) preference
     // overrides the user scope, which overrides the default.
-    mcpAutoOn: workspace.mcpAutoOn ?? user.mcpAutoOn ?? defaults.mcpAutoOn ?? true,
     historyRetentionDays: defaults.historyRetentionDays,
     historyMinUndoEntries: defaults.historyMinUndoEntries,
   };

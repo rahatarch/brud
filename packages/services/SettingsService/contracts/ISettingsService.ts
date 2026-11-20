@@ -31,12 +31,6 @@ export interface SettingsSnapshot {
   readonly readMaxAggregateBytes: number;
   readonly plugins: Readonly<Record<string, PluginRolloutMode>>;
   /**
-   * Whether the MCP server starts automatically with the project. Missing
-   * `mcpAutoOn`). Data only: the client reads it and decides. Missing on disk
-   * values resolve to `true`.
-   */
-  readonly mcpAutoOn?: boolean;
-  /**
    * Days of history kept before retention may remove it (D-15 U-8). Layers can
    * only raise it: the effective value is the maximum across layers, capped.
    */

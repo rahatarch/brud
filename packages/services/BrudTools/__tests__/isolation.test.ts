@@ -4,7 +4,7 @@ import type { OperationResult } from '@brud/kernel';
 import type { ToolRegistrationOptions } from '../contracts/IBrudToolsService.js';
 import { BrudToolsService } from '../orchestrator/BrudToolsService.js';
 
-const CONTEXT = { workspaceRoot: '/workspace', callerId: 'test' };
+const CONTEXT = { callerId: 'test' };
 
 function tool(name: string, marker: string): ToolRegistrationOptions {
   return {

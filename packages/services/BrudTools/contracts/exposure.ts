@@ -25,8 +25,6 @@ export const BRUD_TOOLS_DISPATCH_EXPOSURE = 'brud.tools.dispatch';
 
 /** What a caller supplies per call; identity, permissions and origin come from the kernel. */
 export interface ToolCallOptions {
-  /** Workspace root the tool runs against. */
-  readonly workspaceRoot: string;
   /** Optional cancellation signal. */
   readonly signal?: AbortSignal;
 }

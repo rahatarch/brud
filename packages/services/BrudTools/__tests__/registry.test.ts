@@ -5,7 +5,7 @@ import { ToolDuplicateError, ToolNotFoundError } from '../contracts/errors.js';
 import type { IPluginExecutionContext, ToolRegistrationOptions } from '../contracts/IBrudToolsService.js';
 import { ToolRegistry } from '../registry/ToolRegistry.js';
 
-const CONTEXT: IPluginExecutionContext = { workspaceRoot: '/workspace', callerId: 'test' };
+const CONTEXT: IPluginExecutionContext = { callerId: 'test' };
 
 function tool(name: string, overrides: Partial<ToolRegistrationOptions> = {}): ToolRegistrationOptions {
   return {

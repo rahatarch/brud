@@ -6,7 +6,7 @@ import { bootWithBrudTools, reports, type TestParticipant } from './support/kern
 
 const SCHEMA = { type: 'object', properties: { text: { type: 'string' } }, required: ['text'], additionalProperties: false };
 const SURFACE = "['registerTool', 'executeTool', 'validateTool'].filter((key) => typeof tools[key] === 'function')";
-const RUN = "{ workspaceRoot: '/tmp/brud-tools-test' }";
+const RUN = "{}";
 
 /** Registers three tools: an echo, one needing `net:fetch`, one the allow-list disables. */
 const toolsmith: TestParticipant = {

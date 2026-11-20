@@ -5,12 +5,9 @@ import type { OperationResult } from '@brud/kernel';
  *
  * The UI-facing daemon supplies this context; a plugin handler never receives
  * a kernel service, a broker, or another plugin's context. It carries only the
- * workspace the action runs against and the identity of the UI caller.
+ * identity of the UI caller.
  */
 export interface IActionExecutionContext {
-  /** Absolute path of the workspace the action operates in. */
-  readonly workspaceRoot: string;
-
   /** Identifier of the UI caller that requested execution. */
   readonly callerId: string;
 
