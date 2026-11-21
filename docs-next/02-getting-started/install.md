@@ -55,4 +55,6 @@ npm run build:protocol && npm run build:kernel && npm run build:sdk && npm run b
 
 The workspace links `@brud/*` for you, and the samples in [`../examples/`](../examples/README.md) run directly.
 
+Starting a project? [`brud init`](the-brud-cli.md) creates one that already passes `brud doctor` and `npm test`.
+
 **Next:** [Your first participant](your-first-participant.md)

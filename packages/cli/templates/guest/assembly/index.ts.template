@@ -1,0 +1,10 @@
+import { reply } from "./brud";
+
+export { brud_alloc } from "./brud";
+
+// Serves every call to this participant's exposures. `ptr`/`len` locate the request JSON:
+// { "kind": "invoke", "exposure", "method", "args", "caller": { ... } }
+// Parse it with a JSON library of your choice (for example json-as); this guest just answers.
+export function brud_invoke(ptr: i32, len: i32): i64 {
+  return reply('{"ok":true,"value":"hello from the cage"}');
+}

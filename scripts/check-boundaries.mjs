@@ -106,3 +106,59 @@ if (violations.length > 0) {
 }
 
 process.stdout.write(`Plugin boundaries: ok (${String(plugins.length)} plugins scanned)\n`);
+
+/**
+ * The CLI sits above every other package: nothing may depend on `@brud/cli`,
+ * by manifest or by import. The kernel, daemon, SDK, services and plugins must
+ * stay unaware that a CLI exists.
+ */
+function cliDependents() {
+  const found = [];
+  const CLI_ROOT = join(REPO_ROOT, 'packages', 'cli');
+  const DEPENDENCY_FIELDS = ['dependencies', 'devDependencies', 'peerDependencies', 'optionalDependencies'];
+  const scan = (directory) => {
+    for (const name of readdirSync(directory)) {
+      const full = join(directory, name);
+
+      if (name === 'node_modules' || name === 'dist' || full === CLI_ROOT) {
+        continue;
+      }
+
+      if (statSync(full).isDirectory()) {
+        scan(full);
+      } else if (name === 'package.json') {
+        const manifest = JSON.parse(readFileSync(full, 'utf8'));
+
+        if (DEPENDENCY_FIELDS.some((field) => manifest[field] !== undefined && '@brud/cli' in manifest[field])) {
+          found.push(`${relative(REPO_ROOT, full).split(sep).join('/')} depends on @brud/cli`);
+        }
+      } else if (/\.(ts|mts|mjs|js)$/u.test(name)) {
+        const contents = readFileSync(full, 'utf8');
+        const pattern = new RegExp(IMPORT_PATTERN.source, 'g');
+        let match;
+
+        while ((match = pattern.exec(contents)) !== null) {
+          if (match[1] === '@brud/cli' || match[1].startsWith('@brud/cli/')) {
+            found.push(`${relative(REPO_ROOT, full).split(sep).join('/')} imports "${match[1]}"`);
+          }
+        }
+      }
+    }
+  };
+
+  scan(join(REPO_ROOT, 'packages'));
+
+  return found;
+}
+
+const cliViolations = cliDependents();
+
+if (cliViolations.length > 0) {
+  process.stderr.write('Nothing may depend on @brud/cli (it is a leaf above every other package):\n');
+  for (const violation of cliViolations) {
+    process.stderr.write(`  ${violation}\n`);
+  }
+  process.exit(1);
+}
+
+process.stdout.write('CLI boundary: ok (nothing depends on @brud/cli)\n');

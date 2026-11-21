@@ -1,0 +1,34 @@
+// The Brud guest interface: the small, fixed surface the WASM cage calls.
+// Requests and responses are UTF-8 JSON text in linear memory.
+
+@external("brud", "call")
+declare function hostCall(ptr: i32, len: i32): i64;
+
+let requestBuffer: ArrayBuffer = new ArrayBuffer(0);
+
+/** The cage calls this to learn where it may write a request of `len` bytes. */
+export function brud_alloc(len: i32): i32 {
+  requestBuffer = new ArrayBuffer(len);
+
+  return changetype<i32>(requestBuffer);
+}
+
+/** The request text the cage wrote (call it first thing in `brud_invoke`). */
+export function readRequest(ptr: i32, len: i32): string {
+  return String.UTF8.decodeUnsafe(ptr, len);
+}
+
+/** Packs a JSON response into the `(ptr << 32) | len` the cage reads back. */
+export function reply(json: string): i64 {
+  const bytes = String.UTF8.encode(json);
+
+  return (i64(changetype<i32>(bytes)) << 32) | i64(bytes.byteLength);
+}
+
+/** Asks the kernel to resolve and call another exposure as this participant; returns the JSON answer. */
+export function callHost(requestJson: string): string {
+  const bytes = String.UTF8.encode(requestJson);
+  const packed = hostCall(changetype<i32>(bytes), bytes.byteLength);
+
+  return String.UTF8.decodeUnsafe(i32(packed >> 32), i32(packed & 0xffffffff));
+}

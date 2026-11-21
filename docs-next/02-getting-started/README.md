@@ -8,4 +8,6 @@ Five short tutorials, in order. Each one builds on the last and ends with someth
 4. [Own a kind and route text](own-a-kind-and-route-text.md): accept `[CALL ...]` commands.
 5. [Test your participant](test-your-participant.md): boot a real kernel inside a test.
 
+Prefer commands to copy-paste? [The Brud CLI](the-brud-cli.md) scaffolds a project, checks it, runs it and calls it.
+
 Total time: about thirty minutes. Every sample is in [`../examples/`](../examples/README.md).

@@ -48,13 +48,16 @@ jobs:
       - run: npm ci
 
       - name: Build workspace packages
-        run: npm run build:protocol && npm run build:kernel && npm run build:sdk && npm run build:services
+        run: npm run build:protocol && npm run build:kernel && npm run build:sdk && npm run build:services && npm run build:daemon && npm run build:cli
 
       - name: Kernel tests (blocking)
         run: npm run test:kernel
 
       - name: SDK tests (blocking)
         run: npm run test:sdk
+
+      - name: CLI tests (blocking)
+        run: npm run test:cli
 
       - name: B0 goal tests (blocking)
         run: node --import tsx --test "packages/kernel/src/__tests__/goals/*.test.ts"

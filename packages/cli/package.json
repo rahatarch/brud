@@ -1,0 +1,70 @@
+{
+  "name": "@brud/cli",
+  "version": "0.0.1",
+  "description": "The Brud CLI: set up, check, run, call and package BrudOS participants",
+  "type": "module",
+  "bin": {
+    "brud": "dist/cli.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "node scripts/sync-templates.mjs && tsc -p tsconfig.json && node scripts/mark-bin.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "sync:templates": "node scripts/sync-templates.mjs",
+    "test": "node --import tsx --test __tests__/*.test.ts"
+  },
+  "peerDependencies": {
+    "@brud/daemon": "^0.0.1",
+    "@brud/kernel": "^0.1.4",
+    "@brud/sdk": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@brud/daemon": {
+      "optional": true
+    },
+    "@brud/kernel": {
+      "optional": true
+    },
+    "@brud/sdk": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "22.x"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "brud",
+    "brudos",
+    "cli",
+    "participants"
+  ]
+}
