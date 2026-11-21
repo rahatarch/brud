@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { main } from '../src/main.js';
@@ -54,7 +54,7 @@ export async function brud(cwd: string, argv: readonly string[], stdin = '', env
   return { code, out, err };
 }
 
-/** Every file under `dir` (relative, sorted), for proving a command wrote nothing. */
+/** Every file under `dir` (relative, `/`-separated on every platform, sorted), for proving a command wrote nothing. */
 export function listTree(dir: string): string[] {
   const found: string[] = [];
   const walk = (folder: string): void => {
@@ -66,7 +66,7 @@ export function listTree(dir: string): string[] {
           walk(full);
         }
       } else {
-        found.push(relative(dir, full));
+        found.push(relative(dir, full).split(sep).join('/'));
       }
     }
   };
