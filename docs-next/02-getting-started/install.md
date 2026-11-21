@@ -22,8 +22,6 @@ If you also want the daemon:
 npm install @brud/daemon
 ```
 
-> **Beta note.** During the V1-Beta the packages are published under the `beta` tag, so use `npm install @brud/kernel@beta @brud/sdk@beta`.
-
 Create `package.json` with `"type": "module"` or use the `.mjs` extension for your files. The examples use `.mjs`.
 
 ## Check that it works

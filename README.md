@@ -1,99 +1,139 @@
-# Brud OS
+# BrudOS
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
-[![Status: Developer Preview](https://img.shields.io/badge/Status-Developer%20Preview-orange.svg)]()
-[![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)]()
+[![npm](https://img.shields.io/npm/v/@brud/kernel?label=%40brud%2Fkernel)](https://www.npmjs.com/package/@brud/kernel)
+[![License: Apache 2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
+[![Status: beta](https://img.shields.io/badge/status-beta-orange.svg)](https://github.com/rahatarch/brud/releases)
 
-**The embedded microkernel runtime for autonomous agent software.**
+**A small kernel for building software out of parts that do not have to trust each other.**
 
----
+BrudOS is a kernel you embed in a Node.js program. You build your software as independent pieces called **participants**. The kernel gives every participant an identity, lets each participant decide who may use its APIs, and enforces that on every call.
 
-## The Problem & Value Proposition
+The kernel has no abilities of its own: it does not read files, use the network or run commands. Everything useful is a participant. That makes it a good base for plugin systems, tool hosts and AI-agent runtimes, where you need to know exactly who was allowed to do what.
 
-An autonomous agent is only useful if it can take action, but granting an AI model access to tools, files, and system execution introduces severe stability and security risks. Most existing frameworks either grant models unrestricted ambient authority on the host machine or require heavy, multi-gigabyte virtual machines that cannot be embedded into real software products.
+## Why BrudOS
 
-Brud OS provides an embeddable, zero-trust microkernel substrate. The core engine holds zero built-in capabilities: it does not open files, run terminal commands, or maintain state on its own. Instead, it serves as a lightweight control plane that verifies component identities, restricts execution within virtual instruction sandboxes, and enforces strict capability boundaries—allowing you to embed safe, autonomous agent capabilities directly inside your own applications.
+- **Identity you cannot forge.** Every participant gets its identity from the kernel. Nobody can claim to be someone else.
+- **Every API has an owner.** The participant that offers an API decides who may call it and what each caller receives. The kernel enforces that answer.
+- **No shared internals.** Participants reach each other only through declared APIs, never by importing each other's code.
+- **Untrusted code stays caged.** A participant that is not declared official runs inside a WebAssembly sandbox with no access to the operating system.
+- **Small enough to understand.** The kernel is a handful of core services, with no runtime dependencies.
 
----
+## Packages
 
-## Key Features
+| Package | Use it to |
+|:--|:--|
+| [`@brud/kernel`](https://www.npmjs.com/package/@brud/kernel) | Embed the kernel and run participants |
+| [`@brud/sdk`](https://www.npmjs.com/package/@brud/sdk) | Write and test participants |
+| [`@brud/daemon`](https://www.npmjs.com/package/@brud/daemon) | Host kernels in a local background process that editors, agents and scripts connect to |
+| [`@brud/protocol`](https://www.npmjs.com/package/@brud/protocol) | The message types shared by the daemon and its clients |
 
-- **Amnesiac Microkernel Substrate:** The core engine holds execution mechanism only; all functional capabilities (file I/O, terminal execution, storage) exist as modular, removable services.
-- **Virtual Instruction Sandboxing:** Untrusted third-party tools and plugins run in an isolated WebAssembly environment with zero ambient operating system access.
-- **Cryptographic Identity Verification:** Every participant in the system is bound to a kernel-issued token derived from verified bytecode hashes rather than human-readable names.
-- **Fractal Capability Attenuation:** Permissions delegated to sub-agents or child tools are strictly constrained to subsets of the parent's capabilities, preventing privilege escalation.
-- **Lightweight & Embeddable:** Ships as an embedded library with minimal memory footprint—no heavy container runtimes or virtual machines required.
+Requires Node.js 22 or newer. Prebuilt sandbox binaries are included for Linux (x64, arm64), macOS (x64, arm64) and Windows (x64).
 
----
-
-## Installation / Getting Started
-
-### Prerequisites
-
-- **Runtime:** Node.js `>= 20.0.0`
-- **Operating Systems:** Linux, macOS, or Windows
-
-### Installation
-
-Install the runtime package using your preferred package manager:
+## Quick start
 
 ```bash
-npm install @brud/os
+npm install @brud/kernel @brud/sdk
 ```
 
----
+Write a participant that offers one API, `acme.greet`:
 
-## Quickstart
+```js
+// greeter.mjs
+import { defineParticipant } from '@brud/sdk/participant';
 
-Initialize and boot the runtime using a declarative configuration manifest:
-
-```javascript
-import { bootKernel } from "@brud/os";
-
-// 1. Declare your distribution composition
-const config = {
-  root: true,
-  services: [
-    // Include only the services your application requires
-    { module: "@brud/service-filesystem", official: true }
-  ],
-  plugins: []
-};
-
-// 2. Boot the engine
-async function main() {
-  const kernel = await bootKernel(config);
-  console.log("Brud OS runtime running safely.");
+class Greeter {
+  greet(name) {
+    return `hello, ${name}`;
+  }
 }
 
-main().catch(console.error);
+export const createService = defineParticipant({
+  id: 'acme.greeter',
+  description: 'Says hello',
+  create: () => new Greeter(),
+  exposes: {
+    'acme.greet': {
+      version: 1,
+      scope: 'any',
+      handle: (caller, ctx) => ({
+        greet: (name) => `${ctx.instance.greet(name)} (asked by ${caller.callerClass})`,
+      }),
+    },
+  },
+});
 ```
 
----
+Boot a kernel that runs it, and call the API as a host:
 
-## Documentation Directory
+```js
+// boot.mjs
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  bootKernel,
+  provisionIdentityRegistryStorage,
+  ExposedApiRegistryToken,
+} from '@brud/kernel';
 
-For in-depth guides and architectural specifications, consult the following:
+const state = await mkdtemp(join(tmpdir(), 'brud-hello-'));
+const hardcores = ['identityRegistry', 'exposedApiRegistry', 'parser', 'router', 'wasmCage', 'events', 'interception']
+  .map((name) => ({ path: `kernel:serviceModules/${name}.js`, official: true }));
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — System layers, microkernel invariants, capability routing, and execution lifecycles.
-- [SECURITY.md](SECURITY.md) — Formal threat models, cryptographic protocols, and vulnerability reporting procedures.
-- [PRIVACY.md](PRIVACY.md) — Local-first guarantees, telemetry boundaries, and data-handling commitments.
-- [CONTRIBUTING.md](CONTRIBUTING.md) — Repository structure, test suites, and pull request guidelines.
+const configPath = join(state, 'brud.config.json');
+await writeFile(configPath, JSON.stringify({
+  services: [...hardcores, { path: join(import.meta.dirname, 'greeter.mjs'), official: true }],
+}));
 
----
+const registryFile = join(state, 'identity.json');
+provisionIdentityRegistryStorage(registryFile);
 
-## Project Status
+const kernel = await bootKernel(configPath, {
+  options: { 'identity.registry.path': registryFile },
+});
 
-Brud OS is currently in **Developer Preview**. 
+const answer = kernel.runHostCall({ capabilities: [] }, () => {
+  const registry = kernel.requestAccess(
+    { callerId: 'my.host', tier: 'core', options: {} },
+    ExposedApiRegistryToken,
+  );
+  const greeter = registry.resolve('acme.greet');
+  return greeter === null ? 'refused' : greeter.greet('world');
+});
 
-Public interfaces, capability contracts, and configuration schemas are stabilizing toward `v1.0.0`. Breaking changes may occur between minor versions prior to the stable release.
+console.log(answer);
+await kernel.shutdown();
+```
 
----
+```bash
+node boot.mjs
+# hello, world (asked by host)
+```
 
-## License
-
-Brud OS is open-source software licensed under the [Apache License 2.0](LICENSE).
+The [getting-started tutorials](docs-next/02-getting-started) explain every line, then show how to accept text commands, test a participant against a real kernel, and run it all behind the daemon.
 
 ## Running as a daemon
 
-A daemon can host kernels out of process. Copy `examples/daemon/` (operator `daemon.json` plus the Foundation composition) into the daemon home. See `docs/daemon/README.md` for the protocol and `DaemonClient` usage.
+The daemon boots kernels from an operator-owned composition and serves them to other programs over an authenticated, encrypted local connection. UIs and AI agents get separate caller tiers, so an agent can be given less authority than a human-facing UI.
+
+```bash
+npm install @brud/daemon
+npx brud-daemon --home ~/.brud --foreground
+```
+
+See [Run the daemon](docs-next/05-daemon/run-the-daemon.md) and [Connect a client](docs-next/05-daemon/connect-a-client.md).
+
+## Documentation
+
+- [BrudOS documentation](docs-next): introduction, tutorials, concepts, guides, daemon, security and reference.
+- [What is BrudOS?](docs-next/01-introduction/what-is-brudos.md) and [Core ideas](docs-next/01-introduction/core-ideas.md)
+- [Security model](docs-next/06-security/security-model.md)
+- [ARCHITECTURE.md](ARCHITECTURE.md): layers, invariants and call routing.
+- [PRIVACY.md](PRIVACY.md): local-first guarantees and data handling.
+- [CONTRIBUTING.md](CONTRIBUTING.md): repository layout, tests and pull requests.
+- [Releases](https://github.com/rahatarch/brud/releases) and the [changelog](CHANGELOG.md)
+
+## License
+
+[Apache License 2.0](LICENSE)
