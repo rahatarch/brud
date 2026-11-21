@@ -41,9 +41,11 @@ function finish() {
 
 const work = mkdtempSync(join(tmpdir(), 'brud-smoke-'));
 const home = join(work, 'home');
-const scratch = join(work, 'tmp');
-mkdirSync(scratch, { recursive: true });
 // A private TMPDIR keeps this daemon's socket and lock away from any other daemon on the machine.
+// Unix socket paths are limited to about 100 bytes (macOS runners have long temp folders),
+// so on macOS and Linux the scratch folder is created under /tmp, where the path stays short.
+const scratch = process.platform === 'win32' ? join(work, 'tmp') : mkdtempSync('/tmp/bs-');
+mkdirSync(scratch, { recursive: true });
 const env = { HOME: home, USERPROFILE: home, TMPDIR: scratch, TEMP: scratch, TMP: scratch, npm_config_update_notifier: 'false', npm_config_fund: 'false' };
 const installSpecs = fromRegistry
   ? packages.map((p) => `${p.name}@${version}`)
@@ -127,5 +129,7 @@ step('the daemon starts and serves a call', () => {
   assertRouted(r.stdout);
 });
 
-try { rmSync(work, { recursive: true, force: true }); } catch { /* best effort */ }
+for (const d of [work, scratch]) {
+  try { rmSync(d, { recursive: true, force: true }); } catch { /* best effort */ }
+}
 finish();
