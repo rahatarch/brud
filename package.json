@@ -3,7 +3,7 @@
   "description": "Brud foundation: kernel, daemon, services, plugins, protocols, and contracts.",
   "author": "Rahat Hasan",
   "license": "Apache-2.0",
-  "version": "0.1.6",
+  "version": "0.0.1",
   "repository": {
     "type": "git",
     "url": "https://github.com/rahatarch/brud.git"

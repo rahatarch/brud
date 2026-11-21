@@ -1,6 +1,6 @@
 {
   "name": "@brud/service-workspace",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Brud workspace service",
   "type": "module",
   "main": "dist/index.js",

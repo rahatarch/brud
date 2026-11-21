@@ -32,8 +32,8 @@
   },
   "peerDependencies": {
     "@brud/daemon": "^0.0.1",
-    "@brud/kernel": "^0.1.4",
-    "@brud/sdk": "^0.1.0"
+    "@brud/kernel": "^0.0.1",
+    "@brud/sdk": "^0.0.1"
   },
   "peerDependenciesMeta": {
     "@brud/daemon": {

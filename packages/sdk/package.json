@@ -1,6 +1,6 @@
 {
   "name": "@brud/sdk",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "The BrudOS SDK: define, compose, test and ship participants on the Brud kernel",
   "type": "module",
   "main": "dist/index.js",
@@ -35,7 +35,7 @@
     "test": "node --import tsx --test __tests__/*.test.ts"
   },
   "peerDependencies": {
-    "@brud/kernel": "^0.1.4"
+    "@brud/kernel": "^0.0.1"
   },
   "devDependencies": {
     "@types/node": "22.x"

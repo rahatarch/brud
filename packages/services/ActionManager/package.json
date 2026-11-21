@@ -1,6 +1,6 @@
 {
   "name": "@brud/service-actions",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Brud action registry and dispatch service",
   "type": "module",
   "main": "dist/index.js",

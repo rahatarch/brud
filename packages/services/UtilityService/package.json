@@ -1,6 +1,6 @@
 {
   "name": "@brud/service-utility",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Brud utility service",
   "type": "module",
   "main": "dist/index.js",
