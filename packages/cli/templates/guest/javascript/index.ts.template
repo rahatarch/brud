@@ -1,0 +1,14 @@
+import type { BrudRequest } from './brud';
+
+// Your participant. The cage calls this for every call to one of its exposures.
+// Return any JSON value. Throw an Error (optionally with a `code`) to refuse the call.
+// brud.call(name, method, args) asks the kernel to call another exposure as this participant.
+// There is no Node here: no process, no files, no network, no console.
+// Types are removed when you build, not checked: `npm run typecheck` checks them.
+export default function handler(request: BrudRequest): unknown {
+  if (request.method === 'hello') {
+    return `hello from the cage, ${request.caller.identity}`;
+  }
+
+  throw Object.assign(new Error(`unknown method ${request.method}`), { code: 'UNKNOWN_METHOD' });
+}

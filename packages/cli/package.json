@@ -18,16 +18,17 @@
   },
   "files": [
     "dist",
-    "templates"
+    "templates",
+    "runtime/quickjs.wasm"
   ],
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "build": "node scripts/sync-templates.mjs && tsc -p tsconfig.json && node scripts/mark-bin.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && node scripts/sync-templates.mjs && tsc -p tsconfig.json && node scripts/mark-bin.mjs",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
     "sync:templates": "node scripts/sync-templates.mjs",
-    "test": "node --import tsx --test __tests__/*.test.ts"
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "peerDependencies": {
     "@brud/daemon": "^0.0.1",

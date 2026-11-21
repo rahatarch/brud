@@ -15,7 +15,7 @@ npx brud --help
 
 | Command | What it does |
 |---|---|
-| `brud init [name]` | Creates a structured project: `brud.config.json`, `src/participants/<name>/`, `test/participants/`, `config/` (a daemon operator-config example), `docs/`, a CI workflow, `package.json` scripts, a README, `.editorconfig`, `.nvmrc` and `.gitignore`. `--kind` scaffolds a participant that owns a kind and routes Brud text, with a sample document in `examples/`. `--no-install` skips `npm install`. It writes only inside the target folder and never overwrites a file |
+| `brud init [name]` | Creates a structured project: `brud.config.json`, `src/participants/<name>/`, `test/participants/`, `config/` (a daemon operator-config example), `docs/`, a CI workflow, `package.json` scripts, a README, `.editorconfig`, `.nvmrc` and `.gitignore`. `--kind` scaffolds a participant that owns a kind and routes Brud text, with a sample document in `examples/`. `--guest [--lang as|js|ts]` scaffolds a caged guest project instead. `--no-install` skips `npm install`. It writes only inside the target folder and never overwrites a file |
 | `brud doctor [config]` | Read-only. Checks Node, the installed packages and their versions, the cage binary, the hardcore services, your composition and the daemon home. Every failure gets one line of cause and one line of fix |
 | `brud check [config]` | Boots the composition in a scratch state and reports every problem. Exits 1 on any failure. Use it in CI |
 | `brud run [config]` | Boots a kernel and routes each Brud document read from stdin (a document ends at a `[/BRUD]` line). `--daemon` starts the daemon in this process and goes through it |
@@ -49,19 +49,55 @@ The `--kind` scaffold owns the `note` kind (see [Own a kind and route text](own-
 
 ## `brud pack` (experimental)
 
-For the beta, `pack` supports one guest language, AssemblyScript, or a prebuilt `.wasm`. It bundles no compiler: it uses the `assemblyscript` package of your own project.
+`pack` turns a guest folder into a participant package the WASM cage can run. A guest can be written in:
+
+| Language | How it runs | Speed |
+|---|---|---|
+| **AssemblyScript** (`.ts` under `assembly/`) | Compiled ahead of time to WebAssembly with the `assemblyscript` package of your own project | About native speed (measured at 1.1x to 1.5x of V8) |
+| **JavaScript or TypeScript** (`.js`, `.mjs`, `.ts` with `"language": "javascript"`) | Bundled (types removed) with your project's `esbuild` into a prebuilt JavaScript runtime (QuickJS) that ships with the CLI. It runs as an interpreter inside the cage | Much slower on heavy work: see the numbers below |
+| A prebuilt `.wasm` | Used as is | Whatever you built |
 
 ```bash
-npx brud init guest-demo --guest      # a guest project: assembly/, brud.participant.src.json
+npx brud init guest-demo --guest --lang ts   # or --lang js, or --lang as (the default)
 cd guest-demo && npm install
 npx brud pack --verify
 ```
 
-`brud.participant.src.json` holds the participant's `id`, its `manifest`, the cage `limits` (`fuel`, `maxMemoryBytes`, optional `deadlineMs`), and the guest: `{ "source": "assembly/index.ts" }` or `{ "module": "guest.wasm" }`. `pack` writes `dist/participant.wasm` and `dist/brud.participant.json` with the module's SHA-256. `--verify` boots the package in a scratch kernel, as a participant that is not official, and checks that each exposure resolves only for callers holding the capabilities its policy asks for.
+`brud.participant.src.json` holds the participant's `id`, its `manifest`, the cage `limits` (`fuel`, `maxMemoryBytes`, optional `deadlineMs`), and the guest: `{ "source": "assembly/index.ts" }`, `{ "source": "src/index.ts", "language": "javascript" }`, or `{ "module": "guest.wasm" }`. A `.js` or `.mjs` source is JavaScript by itself; a `.ts` source is AssemblyScript unless it says `"language": "javascript"`. `pack` writes `dist/participant.wasm` and `dist/brud.participant.json` with the module's SHA-256. `--verify` boots the package in a scratch kernel, as a participant that is not official, and checks that each exposure resolves only for callers holding the capabilities its policy asks for.
 
-Limits of this beta:
+### Writing a JavaScript or TypeScript guest
 
-- The guest library (`assembly/brud.ts`) handles the memory convention (`brud_alloc`, `brud_invoke`, `brud.call`) with raw JSON text. Parse it with a JSON library of your choice.
+```js
+// src/index.js
+export default function handler(request) {
+  // request: { kind, exposure, method, args, caller: { identity, callerClass, official, capabilities, origin } }
+  if (request.method === 'add') {
+    return request.args[0] + request.args[1];
+  }
+
+  throw Object.assign(new Error('unknown method'), { code: 'UNKNOWN_METHOD' });
+}
+```
+
+Return any JSON value; throw to refuse (a `code` on the error is kept). `brud.call(name, method, args)` asks the kernel to call another exposure as this participant, with exactly what its manifest requested and the givers allow. There is no Node in the cage: no `process`, files, network, `console` or clock, and importing a Node built-in fails the build. Handlers are synchronous. Types are removed, not checked (run `tsc --noEmit`). The bundled script may be up to 256 KiB.
+
+What it costs, measured in the real cage on one Linux x64 machine (Node 22; your numbers will differ):
+
+| Work | Native JS (V8) | AssemblyScript in the cage | JavaScript in the cage |
+|---|---|---|---|
+| Empty call | 0.001 ms | 0.005 ms | 0.014 ms |
+| fib(20) | 0.06 ms | 0.07 ms | 1.7 ms |
+| 1 million loop steps | 0.9 ms | 1.3 ms | 168 ms |
+| 10 million loop steps | 9 ms | 10 ms | 1,670 ms |
+| Starting the participant | none | about 11 ms | about 650 ms |
+
+The interpreter spends about 2,000 units of cage fuel per simple loop step (AssemblyScript: about 22), so give JavaScript guests a large `limits.fuel` (the scaffolded project uses 3,000,000,000) and at least 16 MiB of `maxMemoryBytes`. The benchmark and its method are in `benchmarks/cage-languages/`.
+
+The runtime is a prebuilt, digest-pinned file in the CLI package. `pack` refuses it if it does not match the digest in the CLI's code. Maintainers rebuild it with `packages/cli/runtime/quickjs/build.sh` (it needs a wasi-sdk; users do not).
+
+### Limits of this beta
+
+- The AssemblyScript guest library (`assembly/brud.ts`) handles the memory convention (`brud_alloc`, `brud_invoke`, `brud.call`) with raw JSON text. Parse it with a JSON library of your choice.
 - A package that declares `requires` (it must run official) cannot be a caged module. `pack` refuses it, with `PACK_REQUIRES_OFFICIAL`.
 - The kernel enforces fuel, memory and response-size limits. `--verify` does not try to break them. See [The WASM cage](../03-concepts/the-wasm-cage.md).
 

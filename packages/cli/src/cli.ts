@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createProcessIo } from './io.js';
+import { createProcessIo } from './core/io.js';
 import { main } from './main.js';
 
 main(process.argv.slice(2), createProcessIo()).then(

@@ -45,7 +45,7 @@ Behavior you can rely on: a valid package boots and its exposures resolve like a
 
 ## Write a guest
 
-A guest is a WebAssembly module with a small, fixed interface. This beta ships no compiler or template for it: you produce the `.wasm` with your own toolchain (or by hand, as below).
+A guest is a WebAssembly module with a small, fixed interface. You produce the `.wasm` with your own toolchain (or by hand, as below), or let [`brud pack`](../02-getting-started/the-brud-cli.md) build it from AssemblyScript, JavaScript or TypeScript.
 
 | Export or import | Signature | Role |
 |---|---|---|

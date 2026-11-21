@@ -1,16 +1,16 @@
-import { parseArgs, UsageError, type FlagSpec, type ParsedArgs } from './args.js';
-import { CommandError, describeError } from './errors.js';
-import type { Io } from './io.js';
-import { readOwnPackage } from './project.js';
-import { styleFrom, type Style } from './report.js';
-import { ADD_FLAGS, runAdd } from './commands/add.js';
-import { CALL_FLAGS, runCall } from './commands/call.js';
-import { CHECK_FLAGS, runCheck } from './commands/check.js';
-import { DOCTOR_FLAGS, runDoctor } from './commands/doctor.js';
-import { INIT_FLAGS, runInit } from './commands/init.js';
-import { INSPECT_FLAGS, runInspect } from './commands/inspect.js';
-import { PACK_FLAGS, runPack } from './commands/pack.js';
-import { RUN_FLAGS, runRun } from './commands/run.js';
+import { parseArgs, UsageError, type FlagSpec, type ParsedArgs } from './core/args.js';
+import { CommandError, describeError } from './core/errors.js';
+import type { Io } from './core/io.js';
+import { readOwnPackage } from './core/project.js';
+import { styleFrom, type Style } from './core/report.js';
+import { ADD_FLAGS, runAdd } from './commands/add/index.js';
+import { CALL_FLAGS, runCall } from './commands/call/index.js';
+import { CHECK_FLAGS, runCheck } from './commands/check/index.js';
+import { DOCTOR_FLAGS, runDoctor } from './commands/doctor/index.js';
+import { INIT_FLAGS, runInit } from './commands/init/index.js';
+import { INSPECT_FLAGS, runInspect } from './commands/inspect/index.js';
+import { PACK_FLAGS, runPack } from './commands/pack/index.js';
+import { RUN_FLAGS, runRun } from './commands/run/index.js';
 
 interface Command {
   readonly summary: string;

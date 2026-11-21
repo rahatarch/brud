@@ -1,0 +1,128 @@
+{
+  "node": "v22.23.4",
+  "platform": "linux-x64",
+  "results": [
+    {
+      "name": "native JS (V8)",
+      "compileMs": null,
+      "instantiateMs": null,
+      "firstCallMs": null,
+      "rows": [
+        {
+          "method": "empty",
+          "calls": 2000,
+          "note": "empty handler (call overhead)",
+          "medianMs": 0.0012290002778172493,
+          "value": 0,
+          "fuel": null
+        },
+        {
+          "method": "tiny",
+          "calls": 500,
+          "note": "fib(20), about 22k calls",
+          "medianMs": 0.06320500001311302,
+          "value": 6765,
+          "fuel": null
+        },
+        {
+          "method": "h1m",
+          "calls": 10,
+          "note": "1 million loop steps",
+          "medianMs": 0.8965430008247495,
+          "value": 3499360,
+          "fuel": null
+        },
+        {
+          "method": "h10m",
+          "calls": 3,
+          "note": "10 million loop steps",
+          "medianMs": 8.964641000144184,
+          "value": 35000329,
+          "fuel": null
+        }
+      ]
+    },
+    {
+      "name": "assemblyscript.wasm (in the WASM cage)",
+      "sizeBytes": 4338,
+      "compileMs": 11.319234000518918,
+      "instantiateMs": 0.142408000305295,
+      "firstCallMs": 0.029044000431895256,
+      "rows": [
+        {
+          "method": "empty",
+          "calls": 2000,
+          "note": "empty handler (call overhead)",
+          "medianMs": 0.004795999266207218,
+          "value": 0,
+          "fuel": 8367
+        },
+        {
+          "method": "tiny",
+          "calls": 500,
+          "note": "fib(20), about 22k calls",
+          "medianMs": 0.07204900030046701,
+          "value": 6765,
+          "fuel": 227603
+        },
+        {
+          "method": "h1m",
+          "calls": 10,
+          "note": "1 million loop steps",
+          "medianMs": 1.3493999997153878,
+          "value": 3499360,
+          "fuel": 22008919
+        },
+        {
+          "method": "h10m",
+          "calls": 3,
+          "note": "10 million loop steps",
+          "medianMs": 10.271518000401556,
+          "value": 35000329,
+          "fuel": 220009113
+        }
+      ]
+    },
+    {
+      "name": "quickjs (handler.js in the shipped runtime) (in the WASM cage)",
+      "sizeBytes": 1488887,
+      "compileMs": 654.1904740007594,
+      "instantiateMs": 0.2136490000411868,
+      "firstCallMs": 0.6676660003140569,
+      "rows": [
+        {
+          "method": "empty",
+          "calls": 2000,
+          "note": "empty handler (call overhead)",
+          "medianMs": 0.014387999661266804,
+          "value": 0,
+          "fuel": 64321
+        },
+        {
+          "method": "tiny",
+          "calls": 500,
+          "note": "fib(20), about 22k calls",
+          "medianMs": 1.6757119996473193,
+          "value": 6765,
+          "fuel": 19974848
+        },
+        {
+          "method": "h1m",
+          "calls": 10,
+          "note": "1 million loop steps",
+          "medianMs": 168.3168069999665,
+          "value": 3499360,
+          "fuel": 1947132206
+        },
+        {
+          "method": "h10m",
+          "calls": 3,
+          "note": "10 million loop steps",
+          "medianMs": 1670.2230780003592,
+          "value": 35000329,
+          "fuel": 19471733024
+        }
+      ]
+    }
+  ]
+}

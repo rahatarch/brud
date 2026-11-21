@@ -4,7 +4,7 @@ Status: beta implemented in `packages/cli` (`@brud/cli` 0.0.1). Owner: maintaine
 
 ## Implementation status
 
-Shipped: `doctor`, `init` (default, `--kind`, `--guest`), `check`, `run`, `call`, `kinds`, `inspect`, `pack` (experimental). Differences from the plan below, each forced by the code as it is today:
+Shipped: `doctor`, `init` (default, `--kind`, `--guest [--lang as|js|ts]`), `check`, `run`, `call`, `kinds`, `inspect`, `add`, `pack` (experimental). Differences from the plan below, each forced by the code as it is today:
 
 - **No `brud mcp`.** The daemon's MCP transport was removed (ledger decision `daemon_pure_host`). Milestone 5 is open until a tested transport exists.
 - **No `brud trust` yet** (the plan marked it "later").
@@ -13,7 +13,9 @@ Shipped: `doctor`, `init` (default, `--kind`, `--guest`), `check`, `run`, `call`
 - **`run`/`call` and the daemon.** The daemon admits only its spawning host, so `--daemon` starts the daemon inside the CLI process and connects with the ordinary client. A separate `brud` process cannot attach to a running daemon, so `call` boots its own kernel (or daemon) per invocation rather than reaching "a running kernel".
 - **`run` reads Brud documents from stdin** (each ends at `[/BRUD]`).
 - **`inspect`** lists participants and kinds from the kernel's public surface and exposures from package data files. Native participants' exposures are not listable through any public API, so they are not shown. Who-can-resolve is probed with `--cap`.
-- **`pack`:** AssemblyScript through the project's own `asc` or a prebuilt `.wasm`. A source that declares `requires` is refused (a package that must run official cannot be a caged module). The guest library handles memory and the call-out with raw JSON text; there is no `invoke(exposure, method, args, caller)` helper because it needs a JSON parser the CLI does not bundle. `--verify` boots the package and checks each exposure resolves only with its policy's capabilities; the kernel's hostile-path limits are enforced by the kernel and not probed.
+- **`pack`:** AssemblyScript through the project's own `asc`, JavaScript or TypeScript bundled with the project's `esbuild` into a prebuilt, digest-pinned QuickJS runtime that ships in the CLI (an interpreter inside the cage; see the measured costs in the CLI doc), or a prebuilt `.wasm`. A source that declares `requires` is refused (a package that must run official cannot be a caged module). The guest library handles memory and the call-out with raw JSON text; there is no `invoke(exposure, method, args, caller)` helper because it needs a JSON parser the CLI does not bundle. `--verify` boots the package and checks each exposure resolves only with its policy's capabilities; the kernel's hostile-path limits are enforced by the kernel and not probed.
+- **`add`:** inspects a package's tarball without running its code (data file, hash, kernel range, collisions, scratch boot), installs with `--ignore-scripts`, and never declares anything official.
+- **Layout:** the source is split by concern (`core/`, `composition/`, `commands/<name>/`) with each test file next to the module it tests.
 - **Docs:** `docs-next/02-getting-started/the-brud-cli.md`.
 
 ## Why

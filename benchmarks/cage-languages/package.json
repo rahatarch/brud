@@ -1,0 +1,13 @@
+{
+  "name": "brud-cage-language-benchmarks",
+  "private": true,
+  "type": "module",
+  "description": "Benchmarks of guest languages in the Brud WASM cage. Not part of the workspace or the build.",
+  "scripts": {
+    "build:as": "mkdir -p build && asc assembly/index.ts --outFile build/assemblyscript.wasm --optimize --runtime stub --use abort=",
+    "bench": "node run.mjs --out results.json"
+  },
+  "devDependencies": {
+    "assemblyscript": "^0.28.0"
+  }
+}

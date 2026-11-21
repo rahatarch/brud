@@ -1,0 +1,21 @@
+/** What the cage passes to your handler for every call. */
+export interface BrudRequest {
+  readonly kind: 'invoke';
+  readonly exposure: string;
+  readonly method: string;
+  readonly args: readonly unknown[];
+  readonly caller: {
+    readonly identity: string;
+    readonly callerClass: string;
+    readonly official: boolean;
+    readonly capabilities: readonly string[];
+    readonly origin: string;
+  };
+}
+
+declare global {
+  /** The guest's only way out: asks the kernel to call another exposure as this participant. Throws when refused. */
+  const brud: {
+    call(name: string, method: string, args?: readonly unknown[], version?: number | string): unknown;
+  };
+}
