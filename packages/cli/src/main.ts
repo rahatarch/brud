@@ -3,6 +3,7 @@ import { CommandError, describeError } from './errors.js';
 import type { Io } from './io.js';
 import { readOwnPackage } from './project.js';
 import { styleFrom, type Style } from './report.js';
+import { ADD_FLAGS, runAdd } from './commands/add.js';
 import { CALL_FLAGS, runCall } from './commands/call.js';
 import { CHECK_FLAGS, runCheck } from './commands/check.js';
 import { DOCTOR_FLAGS, runDoctor } from './commands/doctor.js';
@@ -26,6 +27,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   call: { summary: 'Send one Brud document and print the route result', usage: 'brud call <text|-> [--file path] [--config path] [--daemon] [--tier ui|ai] [--cap c]', flags: CALL_FLAGS, run: runCall },
   kinds: { summary: 'List the kinds and operations a composition owns', usage: 'brud kinds [config]', flags: INSPECT_FLAGS, run: (io, style, args) => runInspect(io, style, args, 'kinds') },
   inspect: { summary: 'List participants, kinds, exposures, requirements and who can resolve each', usage: 'brud inspect [config] [--cap c]', flags: INSPECT_FLAGS, run: (io, style, args) => runInspect(io, style, args, 'all') },
+  add: { summary: 'Add a Brud participant package (inspected before it is installed)', usage: 'brud add <name[@version] | ./file.tgz | ./folder> [--dry-run] [--write] [--allow-scripts] [--config path]', flags: ADD_FLAGS, run: runAdd },
   pack: { summary: 'Build a caged participant package (experimental)', usage: 'brud pack [dir] [--out dir] [--verify]', flags: PACK_FLAGS, run: runPack },
 };
 

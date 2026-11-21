@@ -91,6 +91,10 @@ export function readOwnPackage(): { readonly version: string; readonly engines: 
 
 /** Whether `version` satisfies a simple `^x.y.z` or `>=x` range (the only forms Brud packages publish). */
 export function satisfies(version: string, range: string): boolean {
+  if (/^\s*(\*|x)?\s*$/iu.test(range)) {
+    return true;
+  }
+
   const parse = (text: string): number[] => text.replace(/^[\^>=~\s]+/u, '').split('.').map((part) => Number.parseInt(part, 10) || 0);
   const have = parse(version);
   const want = parse(range);
