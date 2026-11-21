@@ -32,7 +32,7 @@ npm run release:tag -- 0.0.2 --push
 ## One-time setup (needs a human)
 
 1. **GitHub environment.** Repo Settings > Environments > New environment `release`. Add yourself (and any co-maintainer) under *Required reviewers*. Without a reviewer the gate does nothing.
-2. **npm trusted publishing**, for each of `@brud/protocol`, `@brud/kernel`, `@brud/sdk`, `@brud/daemon`: npmjs.com > the package > Settings > *Trusted publisher* > GitHub Actions, organization/user `rahatarch`, repository `brud`, workflow filename `release.yml`, environment `release`. Then set each package's publishing access to *Require two-factor authentication and disallow tokens*.
+2. **npm trusted publishing**, for each of `@brud/protocol`, `@brud/kernel`, `@brud/sdk`, `@brud/daemon`: npmjs.com > the package > Settings > *Trusted publishing* > GitHub Actions. Organization or user `rahatarch`, repository `brud`, workflow filename `release.yml`, environment `release`, and under *Allowed actions* tick **`npm publish`** (the workflow uses it). Names are case-sensitive and npm does not validate them when you save, so a typo shows up only at publish time. **A new configuration expires unless a publish succeeds within 2 days**, so do this just before you push a release tag. Then, per package, Settings > *Publishing access* > *Require two-factor authentication and disallow tokens*.
 3. **Tag protection.** Settings > Rules > Rulesets: restrict creating and deleting tags matching `v*` to maintainers, and block tag updates.
 4. **Branch protection** on `main`: require the Cross-Platform Tests check.
 5. Optional: sign tags (`release:tag -- <version> --sign`); enable Dependabot (already configured) so action versions stay current.
