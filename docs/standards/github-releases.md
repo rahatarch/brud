@@ -25,6 +25,7 @@ It follows what established projects do: [Semantic Versioning](https://semver.or
 - **Notes** (section 4) in the release body.
 - **Tarballs:** the exact `.tgz` files that were published to npm, one per package.
 - **`SHA256SUMS`:** SHA-256 of every attached file (Node.js ships the same).
+- **`release-manifest.json`:** package names, versions, sizes and integrity hashes.
 - **Tag** on the release commit.
 
 **Optional, add when available**
@@ -34,45 +35,29 @@ GitHub's automatic source archives stay but are not the supported artifact.
 
 ## 4. Release notes
 
-Notes live in `docs/release-notes/v<version>.md`. The GitHub Release body is a copy.
+You write the notes in `docs/release-notes/v<version>.md`. The pipeline checks them, appends the **Packages** and **Verification** sections itself, and uses the result as the GitHub Release body. Do not write those two sections by hand; the check rejects them.
 
-Always present:
+You write:
 
 | Section | Contents |
 |:--|:--|
 | **Summary** | Two to four sentences: what this release is and who should care. For a security release, say so in the first line. |
-| **Changes** | Grouped under Keep a Changelog headings: **Added, Changed, Deprecated, Removed, Fixed, Security**. Leave out empty groups. |
-| **Packages** | Table of published packages and versions. Add one line with the supported Node.js range. |
-| **Verification** | The release commit, and a pointer to the attached `SHA256SUMS`. |
+| **Changes** | Grouped under Keep a Changelog headings: **Added, Changed, Deprecated, Removed, Fixed, Security**. Leave out empty groups. Optional on the very first release. |
 
-Present only when it applies:
+Only when it applies: **Breaking changes** (any change that needs user action, with the exact migration step), **Notable changes** (large releases, three to five items), **Upgrade notes**, **Known issues** (with a workaround).
 
-| Section | When |
-|:--|:--|
-| **Breaking changes** | Any change that needs user action. Put it first, right after the Summary, with the exact migration step. |
-| **Notable changes** | Large releases only: three to five items worth a paragraph. |
-| **Upgrade notes** | Steps are needed beyond `npm update`. |
-| **Known issues** | An open problem affects users. Give the workaround. |
+The pipeline adds: a **Packages** table (versions and integrity hashes), the Node.js requirement, **Verification** (release commit, workflow run, how to check the checksums and provenance), and the Full Changelog compare link.
 
 Writing rules:
 
 - One line per change, past tense, starting with the component in bold: `**kernel:** Rejected ...`. End with the PR or commit link.
 - Security items name the advisory or CVE ID once it is public, and a severity if known.
-- End with GitHub's generated "Full Changelog" compare link (`vPREV...vNEW`). Do not hand-write a contributor list.
-- No internal ledger paths, private links, secrets or machine paths.
+- No internal ledger paths, private links, secrets, machine paths, placeholders or TODOs. The check fails on them.
 - Summarise; do not paste commit messages.
-- The first release needs only Summary, Packages and Verification.
 
 ## 5. Process
 
-1. **Freeze.** CI is green on the release commit, including the full Test Matrix.
-2. **Version check.** All `@brud/*` versions, internal ranges, `SDK_VERSION`, `SDK_TARGET_KERNEL` and the lockfile agree.
-3. **Install check.** Pack the tarballs, install them into an empty folder, boot a kernel, an SDK participant, a caged participant and the daemon.
-4. **Notes.** Write the notes file and review it in a pull request.
-5. **npm publish,** in dependency order: protocol, kernel, sdk, daemon, then services. Confirm each on the registry.
-6. **Tag** the release commit and push it.
-7. **GitHub Release.** Create it as a draft from the tag with notes, tarballs and `SHA256SUMS`, check it, then publish.
-8. **Post-publish check.** Install from the registry into an empty folder and rerun the install check.
+The release is automated. See [`releasing.md`](releasing.md) for the exact steps, the one-time setup and recovery. In short: write the notes, run `release:prepare`, push, run `release:tag --push`, then approve the run in GitHub.
 
 ## 6. Corrections
 
@@ -99,29 +84,4 @@ Writing rules:
 
 ## Upgrade notes           <!-- only if needed -->
 ## Known issues            <!-- only if any -->
-
-## Packages
-| Package | Version |
-|:--|:--|
-| `@brud/kernel` | <version> |
-| `@brud/sdk` | <version> |
-| `@brud/protocol` | <version> |
-| `@brud/daemon` | <version> |
-
-Requires Node.js >=22.
-
-## Verification
-Release commit `<sha>`. Checksums are in the attached `SHA256SUMS`.
-
-**Full Changelog:** <compare link>
 ````
-
-## 8. Checklist
-
-- [ ] CI and Test Matrix green on the release commit
-- [ ] Versions, ranges, `SDK_VERSION`, `SDK_TARGET_KERNEL` and lockfile agree
-- [ ] Install check passed from packed tarballs
-- [ ] Notes reviewed and merged, with no secrets or private links
-- [ ] Published to npm in dependency order and confirmed
-- [ ] Tag pushed; draft release has tarballs and `SHA256SUMS`; Pre-release flag is right
-- [ ] Post-publish install from the registry passed

@@ -37,7 +37,12 @@
     "build:services": "node scripts/build-services.mjs",
     "docs:api": "cd docs/kernel-api && typedoc --options typedoc.json && node --import tsx tools/generate-catalogue.ts",
     "test:cli": "npm run test --workspace @brud/cli",
-    "build:cli": "npm run build --workspace @brud/cli"
+    "build:cli": "npm run build --workspace @brud/cli",
+    "test:release": "node --test \"scripts/release/test/*.test.mjs\"",
+    "release:verify": "node scripts/release/verify.mjs",
+    "release:prepare": "node scripts/release/prepare.mjs",
+    "release:tag": "node scripts/release/tag.mjs",
+    "release:pack": "node scripts/release/pack.mjs"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",
