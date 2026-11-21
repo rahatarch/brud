@@ -15,7 +15,7 @@ npx brud --help
 
 | Command | What it does |
 |---|---|
-| `brud init [name]` | Creates a project: one participant, a test, a composition, scripts. `--kind` scaffolds a participant that owns a kind and routes Brud text. `--no-install` skips `npm install`. It writes only inside the target folder and never overwrites a file |
+| `brud init [name]` | Creates a structured project: `brud.config.json`, `src/participants/<name>/`, `test/participants/`, `config/` (a daemon operator-config example), `docs/`, a CI workflow, `package.json` scripts, a README, `.editorconfig`, `.nvmrc` and `.gitignore`. `--kind` scaffolds a participant that owns a kind and routes Brud text, with a sample document in `examples/`. `--no-install` skips `npm install`. It writes only inside the target folder and never overwrites a file |
 | `brud doctor [config]` | Read-only. Checks Node, the installed packages and their versions, the cage binary, the hardcore services, your composition and the daemon home. Every failure gets one line of cause and one line of fix |
 | `brud check [config]` | Boots the composition in a scratch state and reports every problem. Exits 1 on any failure. Use it in CI |
 | `brud run [config]` | Boots a kernel and routes each Brud document read from stdin (a document ends at a `[/BRUD]` line). `--daemon` starts the daemon in this process and goes through it |
@@ -34,8 +34,8 @@ Global options: `--json` (machine-readable output), `--home <dir>` (daemon home)
 npx @brud/cli init my-notes --kind
 cd my-notes
 npm test
-npx brud doctor
-npx brud call $'[BRUD]\n[CALL note add]\ntext: buy milk\n[END]\n[CALL note list]\n[END]\n[/BRUD]'
+npm run doctor
+npm run call -- --file examples/notes.brud
 ```
 
 The `--kind` scaffold owns the `note` kind (see [Own a kind and route text](own-a-kind-and-route-text.md)). Without `--kind` you get a participant that gives a capability-gated API and a test for it, and no kinds.

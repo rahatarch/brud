@@ -41,7 +41,9 @@ export async function runInitGuest(io: Io, style: Style, args: ParsedArgs): Prom
     'assembly/brud.ts': readFileSync(join(GUEST, 'brud.ts.template'), 'utf8'),
     'assembly/index.ts': readFileSync(join(GUEST, 'index.ts.template'), 'utf8'),
     'assembly/tsconfig.json': readFileSync(join(GUEST, 'tsconfig.json'), 'utf8'),
-    '.gitignore': 'node_modules\ndist\n',
+    '.gitignore': 'node_modules\ndist\n*.log\n.DS_Store\n',
+    '.editorconfig': 'root = true\n\n[*]\ncharset = utf-8\nend_of_line = lf\nindent_style = space\nindent_size = 2\ninsert_final_newline = true\ntrim_trailing_whitespace = true\n',
+    'README.md': `# ${name}\n\nA caged BrudOS participant (experimental). The guest is written in AssemblyScript and compiled to WebAssembly for the Brud WASM cage.\n\n## Layout\n\n| Path | What it is |\n|---|---|\n| \`brud.participant.src.json\` | The participant's id, manifest, cage limits and guest entry |\n| \`assembly/index.ts\` | Your guest: exports \`brud_invoke\` |\n| \`assembly/brud.ts\` | The small guest interface (\`brud_alloc\`, \`readRequest\`, \`reply\`, \`callHost\`) |\n| \`dist/\` | Build output: \`participant.wasm\` and \`brud.participant.json\` (git-ignored) |\n\n## Build\n\n\`\`\`bash\nnpm install\nnpm run pack     # brud pack --verify\n\`\`\`\n\nThen list \`dist/brud.participant.json\` in a composition with \`"official": false\`. The CLI never changes who is official.\n\nNotes: the guest receives and returns raw JSON text; add a JSON library for AssemblyScript to parse requests. The kernel enforces fuel, memory and response-size limits. See the [WASM cage](https://github.com/rahatarch/brud/blob/main/docs-next/03-concepts/the-wasm-cage.md).\n`,
   };
   const existing = Object.keys(files).filter((file) => existsSync(join(dir, file)));
 

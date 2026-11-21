@@ -49,8 +49,36 @@ test('init scaffolds a project that passes doctor, check and its own tests', asy
   const dir = await scaffold(t, 'demo');
   const files = listTree(dir);
 
-  assert.deepEqual(files, ['.gitignore', 'README.md', 'brud.config.json', 'package.json', 'participants/demo.mjs', 'test/demo.test.mjs']);
-  assert.match(readFileSync(join(dir, 'participants', 'demo.mjs'), 'utf8'), /id: 'demo\.vault'/u);
+  assert.deepEqual(files, [
+    '.editorconfig',
+    '.github/workflows/ci.yml',
+    '.gitignore',
+    '.nvmrc',
+    'README.md',
+    'brud.config.json',
+    'config/daemon.example.json',
+    'docs/architecture.md',
+    'package.json',
+    'src/participants/demo/index.mjs',
+    'test/participants/demo.test.mjs',
+  ].sort());
+  assert.match(readFileSync(join(dir, 'src', 'participants', 'demo', 'index.mjs'), 'utf8'), /id: 'demo\.vault'/u);
+
+  const manifest = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { scripts: Record<string, string>; engines: { node: string }; dependencies: Record<string, string> };
+
+  assert.deepEqual(Object.keys(manifest.scripts).sort(), ['call', 'check', 'doctor', 'inspect', 'start', 'test']);
+  assert.equal(manifest.engines.node, '>=22');
+  assert.ok(manifest.dependencies['@brud/kernel'] !== undefined && manifest.dependencies['@brud/sdk'] !== undefined);
+  assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /^# demo\n/u);
+  assert.match(readFileSync(join(dir, 'brud.config.json'), 'utf8'), /\.\/src\/participants\/demo\/index\.mjs/u);
+
+  // The shipped operator-config example is valid once copied into a daemon home.
+  mkdirSync(join(dir, '.brud', 'daemon'), { recursive: true });
+  writeFileSync(join(dir, '.brud', 'daemon', 'daemon.json'), readFileSync(join(dir, 'config', 'daemon.example.json'), 'utf8'));
+
+  const daemonDoctor = await brud(dir, ['doctor', '--home', join(dir, '.brud', 'daemon')]);
+
+  assert.match(daemonDoctor.out, /daemon\.json is valid and its composition resolves/u);
 
   const doctor = await brud(dir, ['doctor', '--json', '--home', join(dir, 'no-daemon-home')]);
 
@@ -68,6 +96,13 @@ test('init --kind scaffolds a kind owner that routes Brud text and passes its ow
 
   assert.equal(runNodeTests(dir).status, 0);
   assert.match((await brud(dir, ['kinds'])).out, /note - Keep short notes/u);
+  assert.ok(existsSync(join(dir, 'examples', 'notes.brud')));
+  assert.match(readFileSync(join(dir, 'README.md'), 'utf8'), /owns the `note` kind/u);
+
+  const sample = await brud(dir, ['call', '--file', 'examples/notes.brud', '--state', join(dir, 'state')]);
+
+  assert.equal(sample.code, 0, sample.err);
+  assert.match(sample.out, /"status": "success"/u);
 });
 
 test('init never overwrites and rejects names a participant cannot have', async (t) => {
