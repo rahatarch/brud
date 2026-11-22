@@ -1,0 +1,242 @@
+name: Release CLI
+
+# Standalone, tag-driven release of the Brud CLI (@brud/cli). It is a separate pipeline from
+# the BrudOS release (release.yml): it shares no job, script or concurrency group with it, and
+# it reacts only to tags that start with cli-v (the BrudOS pipeline reacts only to v*).
+# A human pushes an annotated tag (cli-v<version>); this workflow verifies, builds and tests the
+# tarball once, installs it on three operating systems (globally and into a project), WAITS FOR A
+# HUMAN TO APPROVE, publishes that same tarball to npm with provenance, checks the registry copy,
+# and only then creates the GitHub Release (never marked "Latest", so BrudOS keeps that badge).
+# Run it by hand (workflow_dispatch) with a tag to rehearse everything except the publish.
+# Setup and recovery: docs/standards/releasing-cli.md
+
+on:
+  push:
+    tags: ['cli-v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to rehearse (for example cli-v0.0.2). Nothing is published.'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-cli
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+  CHECKOUT_REF: ${{ github.event_name == 'push' && github.ref || format('refs/tags/{0}', inputs.tag) }}
+
+jobs:
+  verify:
+    name: Verify the CLI release
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+      version: ${{ steps.meta.outputs.version }}
+      prerelease: ${{ steps.meta.outputs.prerelease }}
+      dist_tag: ${{ steps.meta.outputs.dist_tag }}
+      previous_tag: ${{ steps.meta.outputs.previous_tag }}
+      adopt: ${{ steps.meta.outputs.adopt }}
+    steps:
+      - name: Check the tag name
+        run: |
+          if ! [[ "$TAG" =~ ^cli-v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::'$TAG' is not a CLI release tag (expected cli-v1.2.3 or cli-v1.2.3-beta.1)"; exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+          fetch-depth: 0
+      - name: Fetch the annotated tag and main
+        run: |
+          git fetch origin "+refs/tags/${TAG}:refs/tags/${TAG}" --force
+          git fetch origin main:refs/remotes/origin/main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: CLI release script tests
+        run: npm run test:release-cli
+      - name: Verify version, notes, tag and registry state
+        id: meta
+        run: |
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          node scripts/release-cli/verify.mjs --ci --tag "$TAG" --github-output "$GITHUB_OUTPUT"
+      - name: Refuse if a GitHub Release already exists for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$TAG" --json isDraft --jq '.isDraft' 2>/dev/null | grep -q false; then
+            echo "::error::A published GitHub Release for $TAG already exists. Never reuse a tag; release a new version."; exit 1
+          fi
+
+  package:
+    name: Build, test and pack
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build (the CLI's tests run against the real kernel, so it is built first)
+        run: npm run build:protocol && npm run build:kernel && npm run build:sdk && npm run build:services && npm run build:daemon && npm run build:cli
+      - name: Tests and checks
+        run: |
+          npm run test:cli
+          npm run check:boundaries
+          npx eslint packages/cli
+      - name: Pack the tarball (once; this exact file is tested and published)
+        if: needs.verify.outputs.adopt != 'true'
+        run: node scripts/release-cli/pack.mjs --out dist-release-cli
+      - name: Fetch the already-published tarball (this version is on npm already)
+        if: needs.verify.outputs.adopt == 'true'
+        run: node scripts/release-cli/pack.mjs --from-registry "${{ needs.verify.outputs.version }}" --out dist-release-cli
+      - name: Attest build provenance
+        if: needs.verify.outputs.adopt != 'true'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist-release-cli/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cli-release-tarball
+          path: dist-release-cli
+          if-no-files-found: error
+          retention-days: 30
+
+  smoke:
+    name: Smoke test (${{ matrix.os }}, Node ${{ matrix.node }})
+    needs: [verify, package]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-release-tarball
+          path: dist-release-cli
+      - name: Install the tarball globally and into a project, then run it
+        run: node scripts/release-cli/smoke.mjs --dir dist-release-cli
+
+  publish:
+    name: Publish to npm (needs approval)
+    if: github.event_name == 'push'
+    needs: [verify, package, smoke]
+    runs-on: ubuntu-latest
+    # The `release-cli` environment must require a reviewer: that approval is the human gate.
+    environment:
+      name: release-cli
+      url: https://www.npmjs.com/package/@brud/cli
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Use an npm that supports trusted publishing
+        run: |
+          npm install -g npm@^11.5.1
+          node -e "const [a,b,c]=require('child_process').execSync('npm --version').toString().trim().split('.').map(Number); if (a<11 || (a===11 && (b<5 || (b===5 && c<1)))) { console.error('npm is too old for trusted publishing'); process.exit(1); } console.log('npm', a+'.'+b+'.'+c)"
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-release-tarball
+          path: dist-release-cli
+      - name: Publish the tested tarball
+        if: needs.verify.outputs.adopt != 'true'
+        run: node scripts/release-cli/publish.mjs --dir dist-release-cli
+      - name: Nothing to publish
+        if: needs.verify.outputs.adopt == 'true'
+        run: echo "This version of @brud/cli is already on npm. Skipping publish; the GitHub Release will attach the registry copy."
+
+  registry-check:
+    name: Install from the registry
+    needs: [verify, publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-release-tarball
+          path: dist-release-cli
+      - name: Install @brud/cli@${{ needs.verify.outputs.version }} from npm and run it
+        run: |
+          for attempt in 1 2 3 4; do
+            node scripts/release-cli/smoke.mjs --dir dist-release-cli --from-registry && exit 0
+            echo "Attempt $attempt failed; the registry may still be catching up. Waiting 60 s."; sleep 60
+          done
+          exit 1
+
+  github-release:
+    name: Create the GitHub Release
+    needs: [verify, package, registry-check]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CHECKOUT_REF }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          name: cli-release-tarball
+          path: dist-release-cli
+      - name: Build the release body
+        run: |
+          node scripts/release-cli/body.mjs --dir dist-release-cli --tag "$TAG" --commit "$GITHUB_SHA" \
+            --run-url "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" \
+            --repo "$GITHUB_REPOSITORY" --previous "${{ needs.verify.outputs.previous_tag }}" --out release-body.md
+      - name: Create the release as a draft, attach the assets, verify, then publish it
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.verify.outputs.version }}
+          PRERELEASE: ${{ needs.verify.outputs.prerelease }}
+        run: |
+          # A leftover draft from an earlier failed run is safe to replace; a published release is never touched.
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            [ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" = "true" ] || { echo "::error::$TAG is already published"; exit 1; }
+            gh release delete "$TAG" --yes
+          fi
+          # --latest=false: a CLI release must never take the "Latest" badge from the BrudOS releases.
+          flags=(--verify-tag --draft --latest=false --title "Brud CLI $VERSION" --notes-file release-body.md)
+          if [ "$PRERELEASE" = "true" ]; then flags+=(--prerelease); fi
+          assets=(dist-release-cli/*.tgz dist-release-cli/SHA256SUMS dist-release-cli/release-manifest.json)
+          gh release create "$TAG" "${flags[@]}" "${assets[@]}"
+          want=${#assets[@]}
+          have=$(gh release view "$TAG" --json assets --jq '.assets | length')
+          [ "$have" = "$want" ] || { echo "::error::expected $want assets, found $have"; exit 1; }
+          gh release edit "$TAG" --draft=false --latest=false
+          echo "Released $TAG: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$TAG" >> "$GITHUB_STEP_SUMMARY"

@@ -19,3 +19,6 @@ BRUD_STUDIO.md
 # Personal notes (never committed)
 RELEASE_PLAYBOOK.local.md
 *.local.md
+
+# CLI release pipeline output
+/dist-release-cli/

@@ -42,7 +42,12 @@
     "release:verify": "node scripts/release/verify.mjs",
     "release:prepare": "node scripts/release/prepare.mjs",
     "release:tag": "node scripts/release/tag.mjs",
-    "release:pack": "node scripts/release/pack.mjs"
+    "release:pack": "node scripts/release/pack.mjs",
+    "test:release-cli": "node --test \"scripts/release-cli/test/*.test.mjs\"",
+    "release:cli:verify": "node scripts/release-cli/verify.mjs",
+    "release:cli:prepare": "node scripts/release-cli/prepare.mjs",
+    "release:cli:tag": "node scripts/release-cli/tag.mjs",
+    "release:cli:pack": "node scripts/release-cli/pack.mjs"
   },
   "dependencies": {
     "@fontsource/outfit": "^5.3.0",
