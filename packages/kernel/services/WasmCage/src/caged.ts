@@ -11,7 +11,13 @@ import { ExposedApiRegistryToken, withExposureBindings } from '../../ExposedApiR
 import type { ExposedApiBinding, ExposedApiCaller } from '../../ExposedApiRegistry/index.js';
 import { InterceptionBlockedError } from '../../Interception/index.js';
 import { loadVerifiedNative } from './native.js';
-import type { IInterceptionService, InterceptedCall, InterceptionVerdict } from '../../Interception/index.js';
+import type {
+  IInterceptionService,
+  InterceptedCall,
+  InterceptedResult,
+  InterceptionOutputVerdict,
+  InterceptionVerdict,
+} from '../../Interception/index.js';
 
 /**
  * Caged participants: code running inside the WASM cage with full participant
@@ -25,7 +31,10 @@ import type { IInterceptionService, InterceptedCall, InterceptionVerdict } from 
  * - `brud_alloc(len: i32) -> i32` — returns a pointer to `len` writable bytes;
  * - `brud_invoke(ptr: i32, len: i32) -> i64` — a call on one of its exposures;
  * - `brud_intercept(ptr: i32, len: i32) -> i64` — an interception verdict
- *   (only when the manifest declares `interceptions`);
+ *   (only when the manifest declares an `interceptions` entry with the input
+ *   stage, which is the default);
+ * - `brud_intercept_result(ptr: i32, len: i32) -> i64` — an output-stage verdict
+ *   (only when an `interceptions` entry declares the output stage);
  * - optionally `brud_start(ptr: i32, len: i32) -> i64` — called once when the
  *   participant starts running, with `{ kind: 'start', token }`; it answers
  *   `{ ok: true }` or `{ ok: false, error }` (a failure fails the start).
@@ -54,6 +63,9 @@ import type { IInterceptionService, InterceptedCall, InterceptionVerdict } from 
  *   Response: `{ ok: true, value }` or `{ ok: false, error: { code, message } }`.
  * - `brud_intercept` request: the {@link InterceptedCall} as JSON. Response:
  *   an {@link InterceptionVerdict}.
+ * - `brud_intercept_result` request: the {@link InterceptedResult} as JSON.
+ *   Response: `{ verdict: 'none' }` or `{ verdict: 'append', content }`; a guest
+ *   can only add content, never change or remove the result.
  *
  * ## Security properties
  *
@@ -311,6 +323,16 @@ function plainCaller(caller: ExposedApiCaller): Record<string, unknown> {
   };
 }
 
+function isOutputVerdict(value: unknown): value is InterceptionOutputVerdict {
+  if (value === null || typeof value !== 'object') {
+    return false;
+  }
+
+  const verdict = value as { verdict?: unknown; content?: unknown };
+
+  return verdict.verdict === 'none' || (verdict.verdict === 'append' && verdict.content !== undefined);
+}
+
 function isVerdict(value: unknown): value is InterceptionVerdict {
   if (value === null || typeof value !== 'object') {
     return false;
@@ -551,6 +573,31 @@ export function createCagedParticipant(options: CagedParticipantOptions): Servic
 
           throw new CagedGuestError(`caged call "${exposure}.${method}" failed: ${message}`, code);
         };
+        // The output stage, for a point this participant owns: interceptors may append to the
+        // result; the caller then receives the envelope. Without one the result is as it was.
+        const finish = (raw: unknown): unknown => {
+          const value = settle(raw);
+
+          if (!points.has(name)) {
+            return value;
+          }
+
+          if (evaluator === null) {
+            throw new InterceptionBlockedError(exposure, 'interception unavailable');
+          }
+
+          const staged = evaluator.evaluateResult(exposure, method, callArgs, value, { caller });
+
+          if (!staged.applied) {
+            return value;
+          }
+
+          if (!staged.allowed) {
+            throw new InterceptionBlockedError(exposure, staged.reason, staged.interceptor);
+          }
+
+          return staged.envelope;
+        };
         const outcome = run('brud_invoke', {
           kind: 'invoke',
           exposure,
@@ -559,7 +606,7 @@ export function createCagedParticipant(options: CagedParticipantOptions): Servic
           caller: plainCaller(caller),
         }, true);
 
-        return outcome instanceof Promise ? outcome.then(settle) : settle(outcome);
+        return outcome instanceof Promise ? outcome.then(finish) : finish(outcome);
       };
       const bindings: Record<string, ExposedApiBinding> = {};
 
@@ -594,7 +641,25 @@ export function createCagedParticipant(options: CagedParticipantOptions): Servic
         },
       };
 
-      if ((manifest.interceptions ?? []).length > 0) {
+      const declaresStage = (stage: 'input' | 'output'): boolean =>
+        (manifest.interceptions ?? []).some((entry) => (entry.stages ?? ['input']).includes(stage));
+
+      if (declaresStage('output')) {
+        Object.defineProperty(instance, 'interceptResult', {
+          value: (call: InterceptedResult): InterceptionOutputVerdict => {
+            const verdict = run('brud_intercept_result', call, false);
+
+            if (!isOutputVerdict(verdict)) {
+              throw new CagedGuestError('invalid output verdict');
+            }
+
+            return deepFreeze(verdict);
+          },
+          enumerable: false,
+        });
+      }
+
+      if (declaresStage('input')) {
         Object.defineProperty(instance, 'intercept', {
           value: (call: InterceptedCall): InterceptionVerdict => {
             const verdict = run('brud_intercept', call, false);

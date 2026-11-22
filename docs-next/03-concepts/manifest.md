@@ -11,8 +11,8 @@ The manifest accepts exactly these top-level keys. Any other key refuses the boo
 | `requests` | What this participant asks for. Today: `{ capabilities: [...] }` |
 | `exposures` | The APIs it gives: `name`, `version`, `scope`, `policy` |
 | `events` | Events it can emit: `name`, `version`, `scope`, `policy`, `payloadSchema` |
-| `interceptions` | Giver calls it wants to intercept: `target`, `version` |
-| `interceptionPoints` | Its own exposures it lets others intercept: `exposure`, `version`, `admit` |
+| `interceptions` | Giver calls it wants to intercept: `target`, `version`, `stages` (`input`, `output`) |
+| `interceptionPoints` | Its own exposures it lets others intercept: `exposure`, `version`, `admit`, `outputLimits` |
 | `kinds` | Operation kinds it owns: `kind`, `exposure`, `version`, `description`, `operations` |
 
 Inside `kinds[].operations`, each operation has `description` and `input`. The exact accepted keys per section are generated into [`docs/kernel-api/catalogue/manifest.md`](../../docs/kernel-api/catalogue/manifest.md).

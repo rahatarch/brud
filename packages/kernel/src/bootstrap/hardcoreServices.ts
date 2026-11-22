@@ -24,25 +24,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '11d532f6c01c39e4a57da33960d4d3bb60db0efeb71015afff422cb402429031';
+  '14315e7941b7f70bb8b8841d47fb56322b3f88e9fda4835b144a8b3effe4441f';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'a0cf63cf7868cc5c2712fa9072a321f52df551a550899a82e74b3df839185935';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  'fce36a6f4fd36d754624a1a16ab9b20338939a8a0e656a746b49a79e0c69785b';
+  '78bdba7b8898b0b35ff91c679c16e64b654eaae86c81691370447ff026819635';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '1611d0706c145878d644f0549cab89856423c07351ebef5b209c26874677f8b0';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '2f1ec6dbcfe0b42d1be966b89bddc0a299f4abc47ed43cfef66c4edbb62fc3a4';
+  '7bf0455f35c4a8d77d9a3a564085542f4a62639cab5122147af38b602f932bdb';
 const PARSER_BUILT_HASH =
   '2b2520552e7652a0992677bd8607cbe0d4b798e4e629963a4a27727a851e3c37';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '7c32572b7405160cf822c9ef32b61d7567b5a7a5543cfc424161f3e32e32306a';
+  '5166094667367dc83f7bc88d9d90862e66bc0e641f6dd844cd3bfebe160283a4';
 const ROUTER_BUILT_HASH =
   '507d52f6aeda039cea065953c3b42d5bd0fe37ebd4437706ae5f62044e4d1039';
 
@@ -56,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '57e45e1b59b95e917c5a351479c9ebfceab29c57fd749933524ec57cc306be07';
+  '66d4b832c97bb738d99329f7bf57f39d543371db5c551b423a07b075aebc679e';
 const WASM_CAGE_BUILT_HASH =
-  '28b8cca8c4523c49b415267ecfac4cc76dfbe8a460e671720c81c299460e9ac8';
+  '6d88434b741177c24dfec5eb002083a4322bb953935bb78c670e255421d5e97d';
 
 /**
  * Pinned digests of the events hardcore package.
@@ -70,12 +70,12 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  '7b8c6f02c2a8da7a54dbdd3002aff5ba63358b4812b4329b00179e24d8fc2353';
+  '63d5cf2b10c18743779f5848a106867e2d8119b76c9425bb40dbd72b2b47cb4c';
 const INTERCEPTION_BUILT_HASH =
-  '740663df8336895983dad902a4519947494332a36afdd877a435f5c6672b6982';
+  '4e88dce0bff0b4891a518c293b22c53a16f2187f1158bf9f9c00bfb9dc650589';
 
 const EVENTS_SOURCE_HASH =
-  'b3c33c9b2dd4ea37f3d2e434882950f769dc4f14619e0bfafa9f83120198f1dd';
+  'c63b172e96137fb3884a095c7bebd26d1d4f359d97c8ff6b4156c799d72ec171';
 const EVENTS_BUILT_HASH =
   'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 
@@ -314,7 +314,7 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     expectedContentHash: INTERCEPTION_SOURCE_HASH,
     expectedBuiltContentHash: INTERCEPTION_BUILT_HASH,
     contractVersion: '1.0.0',
-    contractInterface: ['evaluate', 'list'],
+    contractInterface: ['evaluate', 'evaluateResult', 'list'],
     // Interception is a mechanism: the giver of an interception point and the
     // admitted interceptors are the participants; the hardcore only pairs them
     // at boot and runs the verdicts.

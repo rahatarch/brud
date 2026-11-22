@@ -12,4 +12,4 @@ The compiled hardcore list, in boot order. Each hardcore is verified against its
 | 4 | `brud.core.router` | 2.0.0 | `register`, `closeRegistration`, `isRegistrationOpen`, `registeredKinds`, `kinds`, `route`, `dispatch` | no |
 | 5 | `brud.core.wasmCage` | 1.0.0 | `resolve` | yes |
 | 6 | `brud.core.events` | 1.0.0 | `emit`, `pull`, `close`, `list`, `subscribe` | yes |
-| 7 | `brud.core.interception` | 1.0.0 | `evaluate`, `list` | yes |
+| 7 | `brud.core.interception` | 1.0.0 | `evaluate`, `evaluateResult`, `list` | yes |

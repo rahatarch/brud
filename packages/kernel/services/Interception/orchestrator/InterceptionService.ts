@@ -4,16 +4,23 @@ import type {
   KernelCallAuthority,
 } from '../../../src/contracts/index.js';
 import { compileJsonSchema } from '../../../src/validation/jsonSchema/index.js';
-import { freezeJsonCopy } from '../../../src/validation/jsonSchema/jsonValue.js';
+import { freezeJsonCopy, inspectJsonValue } from '../../../src/validation/jsonSchema/jsonValue.js';
 import type { ExposedApiCaller } from '../../ExposedApiRegistry/contracts/types.js';
 import { InterceptionDeclarationError } from '../contracts/errors.js';
-import type {
-  IInterceptionService,
-  IInterceptor,
-  InterceptedCall,
-  InterceptionEvaluateOptions,
-  InterceptionOutcome,
-  InterceptionVerdict,
+import {
+  INTERCEPTION_OUTPUT_CEILINGS,
+  type IInterceptionService,
+  type IInterceptor,
+  type InterceptedCall,
+  type InterceptedResult,
+  type InterceptionAddition,
+  type InterceptionEvaluateOptions,
+  type InterceptionOutcome,
+  type InterceptionOutputVerdict,
+  type InterceptionResultOutcome,
+  type InterceptionStage,
+  type InterceptionVerdict,
+  type IResultInterceptor,
 } from '../contracts/IInterceptionService.js';
 
 /** Source name the interception hardcore records observations under. */
@@ -41,6 +48,15 @@ export interface InterceptionParticipant {
 interface AdmittedInterceptor {
   readonly token: string;
   readonly identity: string;
+  /** The stages it declared; `input` unless it said otherwise. */
+  readonly stages: readonly InterceptionStage[];
+}
+
+/** The output-stage limits in force at one point, in bytes of canonical JSON. */
+interface OutputLimits {
+  readonly maxResultBytes: number;
+  readonly maxAdditionBytes: number;
+  readonly maxTotalBytes: number;
 }
 
 /** One interception point: a giver's exposure and its ordered interceptors. */
@@ -48,6 +64,7 @@ interface InterceptionPoint {
   readonly key: string;
   readonly owner: string;
   readonly interceptors: readonly AdmittedInterceptor[];
+  readonly limits: OutputLimits;
 }
 
 function majorOf(version: number | string | undefined): number {
@@ -64,6 +81,46 @@ function pointKey(name: string, version: number | string | undefined): string {
 
 function isInterceptor(value: unknown): value is IInterceptor {
   return typeof (value as { intercept?: unknown } | null)?.intercept === 'function';
+}
+
+function isResultInterceptor(value: unknown): value is IResultInterceptor {
+  return typeof (value as { interceptResult?: unknown } | null)?.interceptResult === 'function';
+}
+
+/** Largest value shape the output stage will carry: plain JSON of ordinary size. */
+const OUTPUT_JSON_LIMITS = Object.freeze({ maxDepth: 64, maxNodes: 100_000 });
+
+function jsonBytes(value: unknown): number {
+  return Buffer.byteLength(JSON.stringify(value), 'utf8');
+}
+
+/**
+ * Reads a point's `outputLimits`: any of the three limits may be lowered,
+ * none may be raised above its kernel ceiling, and one addition may not be
+ * allowed to exceed all additions together.
+ */
+function parseOutputLimits(owner: string, key: string, declared: Readonly<Record<string, number>> | undefined): OutputLimits {
+  const limits: Record<keyof OutputLimits, number> = { ...INTERCEPTION_OUTPUT_CEILINGS };
+
+  for (const [name, value] of Object.entries(declared ?? {})) {
+    if (!(name in INTERCEPTION_OUTPUT_CEILINGS)) {
+      throw new InterceptionDeclarationError(owner, `outputLimits of "${key}" has an unknown limit "${name}"`);
+    }
+
+    const ceiling = INTERCEPTION_OUTPUT_CEILINGS[name as keyof OutputLimits];
+
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > ceiling) {
+      throw new InterceptionDeclarationError(owner, `outputLimits.${name} of "${key}" must be a whole number from 1 to ${String(ceiling)}`);
+    }
+
+    limits[name as keyof OutputLimits] = value;
+  }
+
+  if (limits.maxAdditionBytes > limits.maxTotalBytes) {
+    throw new InterceptionDeclarationError(owner, `outputLimits of "${key}" allow one addition to exceed all additions together`);
+  }
+
+  return Object.freeze(limits);
 }
 
 function isValidArgs(value: unknown): value is readonly unknown[] {
@@ -144,10 +201,17 @@ export class InterceptionService implements IInterceptionService {
             throw new InterceptionDeclarationError(token, 'is admitted as an interceptor but has no kernel identity');
           }
 
-          return Object.freeze({ token, identity: interceptor.identity });
+          const declared = interceptor.manifest.interceptions.find((entry) => pointKey(entry.target, entry.version) === key);
+
+          return Object.freeze({ token, identity: interceptor.identity, stages: Object.freeze([...(declared?.stages ?? ['input'])]) });
         });
 
-        this.#points.set(key, Object.freeze({ key, owner, interceptors: Object.freeze(interceptors) }));
+        this.#points.set(key, Object.freeze({
+          key,
+          owner,
+          interceptors: Object.freeze(interceptors),
+          limits: parseOutputLimits(participant.token, key, point.outputLimits),
+        }));
       }
     }
 
@@ -226,6 +290,10 @@ export class InterceptionService implements IInterceptionService {
     const modifiedBy: string[] = [];
 
     for (const interceptor of point.interceptors) {
+      if (!interceptor.stages.includes('input')) {
+        continue;
+      }
+
       let verdict: InterceptionVerdict;
 
       try {
@@ -263,6 +331,149 @@ export class InterceptionService implements IInterceptionService {
     }
 
     return Object.freeze({ allowed: true, args: call.args, modifiedBy: Object.freeze(modifiedBy) });
+  }
+
+  public evaluateResult(
+    target: string,
+    method: string,
+    args: readonly unknown[],
+    result: unknown,
+    options?: InterceptionEvaluateOptions,
+  ): InterceptionResultOutcome {
+    const context = this.authority?.current();
+    const caller = context === undefined ? undefined : { ...context.caller, origin: context.origin };
+
+    return this.evaluateResultAs(caller, target, method, args, result, options);
+  }
+
+  /**
+   * Runs the output stage for `resolver`, which must be the point's owner. The
+   * interceptors that declared the stage run in the giver's admitted order,
+   * each as itself and each seeing only the original result; each may append
+   * one piece of content and nothing else. Any failure withholds the result.
+   */
+  public evaluateResultAs(
+    resolver: ExposedApiCaller | undefined,
+    target: string,
+    method: string,
+    args: readonly unknown[],
+    result: unknown,
+    options?: InterceptionEvaluateOptions,
+  ): InterceptionResultOutcome {
+    const key = target.includes('@') ? target : `${target}@1`;
+    const point = this.#points.get(key);
+    const authority = this.authority;
+
+    if (authority === undefined) {
+      return this.#refuseResult(key, 'interception is not bound');
+    }
+
+    if (point === undefined) {
+      return this.#refuseResult(key, 'unknown interception point');
+    }
+
+    if (resolver?.identity === null || resolver?.identity === undefined || resolver.identity !== point.owner) {
+      return this.#refuseResult(key, 'only the interception point owner may evaluate it');
+    }
+
+    const taking = point.interceptors.filter((interceptor) => interceptor.stages.includes('output'));
+
+    if (taking.length === 0) {
+      return Object.freeze({ applied: false });
+    }
+
+    if (typeof method !== 'string' || method.length === 0 || !isValidArgs(args)) {
+      return this.#refuseResult(key, 'method must be a non-empty string and args a plain JSON array');
+    }
+
+    if (inspectJsonValue(result, OUTPUT_JSON_LIMITS) !== null) {
+      return this.#refuseResult(key, 'the result must be plain JSON to take part in the output stage');
+    }
+
+    const resultBytes = result === undefined ? 0 : jsonBytes(result);
+
+    if (resultBytes > point.limits.maxResultBytes) {
+      return this.#refuseResult(key, `the result is ${String(resultBytes)} bytes; the limit is ${String(point.limits.maxResultBytes)}`);
+    }
+
+    const caller = options?.caller ?? resolver;
+    const frozenResult = freezeJsonCopy(result);
+    const call: InterceptedResult = Object.freeze({
+      target: key,
+      method,
+      args: freezeJsonCopy(args),
+      caller: Object.freeze({
+        identity: caller.identity,
+        callerClass: caller.callerClass,
+        official: caller.official,
+        capabilities: createCapabilitySet(caller.capabilities ?? []),
+        origin: caller.origin,
+      }),
+      result: frozenResult,
+    });
+    const additions: InterceptionAddition[] = [];
+    const ran: string[] = [];
+    let total = 0;
+
+    for (const interceptor of taking) {
+      let verdict: InterceptionOutputVerdict;
+
+      try {
+        const instance = authority.instanceOf(interceptor.identity);
+
+        if (!isResultInterceptor(instance)) {
+          throw new Error('the interceptor does not implement interceptResult');
+        }
+
+        verdict = authority.runAs(interceptor.identity, () => instance.interceptResult(call));
+      } catch (error) {
+        return this.#failResult(key, interceptor.token, error instanceof Error ? error.message : 'interceptor threw');
+      }
+
+      ran.push(interceptor.token);
+
+      if (verdict?.verdict === 'none') {
+        authority.observe(OBSERVATION_SOURCE, 'interception.result.unchanged', { target: key, method, interceptor: interceptor.token });
+        continue;
+      }
+
+      if (verdict?.verdict !== 'append' || inspectJsonValue(verdict.content, OUTPUT_JSON_LIMITS) !== null || verdict.content === undefined) {
+        return this.#failResult(key, interceptor.token, 'invalid output verdict');
+      }
+
+      const bytes = jsonBytes(verdict.content);
+
+      if (bytes > point.limits.maxAdditionBytes) {
+        return this.#failResult(key, interceptor.token, `the addition is ${String(bytes)} bytes; the limit is ${String(point.limits.maxAdditionBytes)}`);
+      }
+
+      total += bytes;
+
+      if (total > point.limits.maxTotalBytes) {
+        return this.#failResult(key, interceptor.token, `the additions together exceed ${String(point.limits.maxTotalBytes)} bytes`);
+      }
+
+      additions.push(Object.freeze({ interceptor: interceptor.token, content: freezeJsonCopy(verdict.content) }));
+      authority.observe(OBSERVATION_SOURCE, 'interception.result.appended', { target: key, method, interceptor: interceptor.token, bytes });
+    }
+
+    return Object.freeze({
+      applied: true,
+      allowed: true,
+      envelope: Object.freeze({ result: frozenResult, additions: Object.freeze(additions), interceptedBy: Object.freeze(ran) }),
+    });
+  }
+
+  #refuseResult(key: string, reason: string): InterceptionResultOutcome {
+    this.authority?.observe(OBSERVATION_SOURCE, 'interception.result.refused', { target: key, reason });
+
+    return Object.freeze({ applied: true, allowed: false, reason });
+  }
+
+  #failResult(key: string, interceptor: string, reason: string): InterceptionResultOutcome {
+    this.authority?.observe(OBSERVATION_SOURCE, 'interception.result.failed', { target: key, interceptor, reason });
+
+    return Object.freeze({ applied: true, allowed: false, reason: `interceptor-failed: ${reason}`, interceptor });
   }
 
   #refuse(key: string, reason: string): InterceptionOutcome {

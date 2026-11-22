@@ -72,6 +72,14 @@ export interface InterceptionDeclaration {
 
   /** Major version of the target; defaults to 1. */
   readonly version?: number | string;
+
+  /**
+   * The stages this interceptor takes part in: `'input'` (it sees a call's
+   * arguments before the giver runs) and `'output'` (it may append content to
+   * the giver's result). Defaults to `['input']`. A declared stage must be
+   * implemented, or the call fails closed.
+   */
+  readonly stages?: readonly ('input' | 'output')[];
 }
 
 /**
@@ -96,6 +104,13 @@ export interface InterceptionPointDeclaration {
 
   /** Service tokens of the admitted interceptors, in run order. */
   readonly admit: readonly string[];
+
+  /**
+   * Lowers the kernel's output-stage limits for this point, in bytes of
+   * canonical JSON. The Interception primitive validates the values; a value
+   * can lower a kernel ceiling and never raise it.
+   */
+  readonly outputLimits?: Readonly<Record<string, number>>;
 }
 
 /**
@@ -203,8 +218,8 @@ const KIND_PATTERN = /^[a-z][a-z0-9_-]*$/u;
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
 const EVENT_KEYS = new Set(['name', 'version', 'scope', 'policy', 'payloadSchema']);
-const INTERCEPTION_KEYS = new Set(['target', 'version']);
-const INTERCEPTION_POINT_KEYS = new Set(['exposure', 'version', 'admit']);
+const INTERCEPTION_KEYS = new Set(['target', 'version', 'stages']);
+const INTERCEPTION_POINT_KEYS = new Set(['exposure', 'version', 'admit', 'outputLimits']);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
@@ -458,7 +473,22 @@ function admitInterceptions(value: unknown, participant: string): readonly Inter
 
     assertVersion(entry.version, path, participant);
 
-    return Object.freeze(entry as unknown as InterceptionDeclaration);
+    const stages: unknown = entry.stages;
+
+    if (
+      stages !== undefined
+      && (!Array.isArray(stages)
+        || stages.length === 0
+        || new Set(stages).size !== stages.length
+        || stages.some((stage) => stage !== 'input' && stage !== 'output'))
+    ) {
+      throw new ParticipantManifestError(participant, `${path}.stages must be a non-empty list of unique "input" or "output"`);
+    }
+
+    return Object.freeze({
+      ...(entry as unknown as InterceptionDeclaration),
+      ...(stages === undefined ? {} : { stages: Object.freeze([...stages as ('input' | 'output')[]]) }),
+    });
   }));
 }
 
@@ -611,6 +641,14 @@ function admitInterceptionPoints(value: unknown, participant: string): readonly 
       throw new ParticipantManifestError(participant, `${path}.admit must be an array of unique non-empty service tokens`);
     }
 
-    return Object.freeze({ ...(entry as unknown as InterceptionPointDeclaration), admit: Object.freeze([...admit as string[]]) });
+    if (entry.outputLimits !== undefined && !isPlainObject(entry.outputLimits)) {
+      throw new ParticipantManifestError(participant, `${path}.outputLimits must be an object`);
+    }
+
+    return Object.freeze({
+      ...(entry as unknown as InterceptionPointDeclaration),
+      admit: Object.freeze([...admit as string[]]),
+      ...(entry.outputLimits === undefined ? {} : { outputLimits: Object.freeze({ ...(entry.outputLimits as Record<string, number>) }) }),
+    });
   }));
 }

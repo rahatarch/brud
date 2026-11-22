@@ -6,13 +6,14 @@ import type {
   IInterceptionService,
   InterceptionEvaluateOptions,
   InterceptionOutcome,
+  InterceptionResultOutcome,
 } from '../contracts/IInterceptionService.js';
 import { InterceptionService } from '../orchestrator/index.js';
 import { InterceptionToken } from './tokens.js';
 
 export const INTERCEPTION_SERVICE_TIER: ServiceTier = 'core';
 export const INTERCEPTION_CONTRACT_VERSION = '1.0.0';
-export const INTERCEPTION_CONTRACT_METHODS = ['evaluate', 'list'] as const;
+export const INTERCEPTION_CONTRACT_METHODS = ['evaluate', 'evaluateResult', 'list'] as const;
 
 /**
  * Per-exposure projection bindings. Each projection captures the resolver's
@@ -29,6 +30,13 @@ function interceptionExposureBindings(instance: InterceptionService): Record<str
           args: readonly unknown[],
           options?: InterceptionEvaluateOptions,
         ): InterceptionOutcome => instance.evaluateAs(caller, target, method, args, options),
+        evaluateResult: (
+          target: string,
+          method: string,
+          args: readonly unknown[],
+          result: unknown,
+          options?: InterceptionEvaluateOptions,
+        ): InterceptionResultOutcome => instance.evaluateResultAs(caller, target, method, args, result, options),
       }),
     },
     'interception.list@1': { projection: () => ({ list: (): readonly string[] => instance.list() }) },

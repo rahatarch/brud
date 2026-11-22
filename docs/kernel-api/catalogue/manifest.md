@@ -12,5 +12,5 @@ The keys `admitParticipantManifest` accepts. Any other key is refused (`PARTICIP
 | `REQUEST` | `capabilities` |
 | `EXPOSURE` | `name`, `version`, `scope`, `policy` |
 | `EVENT` | `name`, `version`, `scope`, `policy`, `payloadSchema` |
-| `INTERCEPTION` | `target`, `version` |
-| `INTERCEPTION_POINT` | `exposure`, `version`, `admit` |
+| `INTERCEPTION` | `target`, `version`, `stages` |
+| `INTERCEPTION_POINT` | `exposure`, `version`, `admit`, `outputLimits` |

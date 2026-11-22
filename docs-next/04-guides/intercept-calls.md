@@ -34,6 +34,8 @@ Read [Interception](../03-concepts/interception.md). Interception needs two part
 - A thrown error counts as a block.
 - `modify` changes arguments only, and the new arguments must be plain JSON.
 
+To add content to a giver's result instead, declare `stages: ['output']` and implement `interceptResult(call)`; see [Interception](../03-concepts/interception.md#the-output-stage-appending-to-a-result).
+
 > **Important**
 > Interception is cooperative. A giver that opens no point cannot be intercepted.
 

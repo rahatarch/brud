@@ -28,6 +28,8 @@ export interface FixtureParticipant {
   readonly interceptionPoints?: readonly Readonly<Record<string, unknown>>[];
   /** Source of an `intercept(call)` function, attached non-enumerably like `provideExposure`. */
   readonly intercept?: string;
+  /** Source of an `interceptResult(call)` function (the output stage), attached the same way. */
+  readonly interceptResult?: string;
   /** A complete participant module source; when set, it replaces the generated module. */
   readonly source?: string;
   /**
@@ -139,6 +141,7 @@ export function createService() {
         enumerable: false,
       });
       ${participant.intercept === undefined ? '' : `Object.defineProperty(instance, 'intercept', { value: ${participant.intercept}, enumerable: false });`}
+      ${participant.interceptResult === undefined ? '' : `Object.defineProperty(instance, 'interceptResult', { value: ${participant.interceptResult}, enumerable: false });`}
       return instance;
     },
   };

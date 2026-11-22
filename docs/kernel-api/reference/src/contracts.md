@@ -1207,6 +1207,7 @@ it is not an exposure and is not reachable through `resolve`.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
+| <a id="property-stages"></a> `stages?` | `readonly` | readonly (`"input"` \| `"output"`)[] | The stages this interceptor takes part in: `'input'` (it sees a call's arguments before the giver runs) and `'output'` (it may append content to the giver's result). Defaults to `['input']`. A declared stage must be implemented, or the call fails closed. |
 | <a id="property-target"></a> `target` | `readonly` | `string` | Exposure name to intercept. |
 | <a id="property-version-2"></a> `version?` | `readonly` | `string` \| `number` | Major version of the target; defaults to 1. |
 
@@ -1225,6 +1226,7 @@ One interception point a giver declares on one of its own exposures, naming
 | <a id="property-description-2"></a> `description?` | `readonly` | `string` | Optional public description of the kind (shown to remote clients). |
 | <a id="property-exposure"></a> `exposure` | `readonly` | `string` | The giver's own exposure name. |
 | <a id="property-operations"></a> `operations?` | `readonly` | `Readonly`\<`Record`\<`string`, `KindOperationDescription`\>\> | Optional public operations of the kind: name → description and a JSON Schema for its input. Plain JSON data; the owner may serve more. |
+| <a id="property-outputlimits"></a> `outputLimits?` | `readonly` | `Readonly`\<`Record`\<`string`, `number`\>\> | Lowers the kernel's output-stage limits for this point, in bytes of canonical JSON. The Interception primitive validates the values; a value can lower a kernel ceiling and never raise it. |
 | <a id="property-version-3"></a> `version?` | `readonly` | `string` \| `number` | Major version of the exposure; defaults to 1. |
 
 ***
