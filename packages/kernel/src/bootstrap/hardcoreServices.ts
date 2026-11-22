@@ -24,25 +24,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '697dd6de587273cdcdb55c69ad8a77ecc5fc31bc62b8a5476e02b45da5792204';
+  '11d532f6c01c39e4a57da33960d4d3bb60db0efeb71015afff422cb402429031';
 const IDENTITY_REGISTRY_BUILT_HASH =
-  'e169f2b42cfdc6d277bb01a164f569d29c03687bcfc50ccdce9f6ebf4f7f1895';
+  'a0cf63cf7868cc5c2712fa9072a321f52df551a550899a82e74b3df839185935';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '15392842f877658ad52bc15adf635c5166264f4f1229d76a5138fcd74c904735';
+  'fce36a6f4fd36d754624a1a16ab9b20338939a8a0e656a746b49a79e0c69785b';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '1611d0706c145878d644f0549cab89856423c07351ebef5b209c26874677f8b0';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '96eb4d7c89321421d059008a25543b084441aee73d3259603d2cb735c68d261f';
+  '2f1ec6dbcfe0b42d1be966b89bddc0a299f4abc47ed43cfef66c4edbb62fc3a4';
 const PARSER_BUILT_HASH =
   '2b2520552e7652a0992677bd8607cbe0d4b798e4e629963a4a27727a851e3c37';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '6fbe006dae580b910703691ca1e2d45260ed0ab2c3a3e9ea8338536bb8922d5e';
+  'e00fb6fc0e56a8b7cbcdd87f9ade388f30304257c52c996e3508f65ff2c371c7';
 const ROUTER_BUILT_HASH =
   '0915e4ab2b1da3e66a30f803a044a22ecb44278a40621abd1a6a4483036941ca';
 
@@ -56,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '999f2978f640110b368200abbd0d2870c42c5a308933d743ea1fee87a1955f39';
+  '34b982389f4c912294e97af9aa90deb4808393dc3cd5235964deb96cfe81c8c8';
 const WASM_CAGE_BUILT_HASH =
-  '97b02437471f57dc89ffccb6fefa17b25fa6af3a0af650ba522fa80fe8cb77db';
+  '1557c1b0b08882fb70e8372b8f8d29ec18ff12d4dc21186da4552958cdb99936';
 
 /**
  * Pinned digests of the events hardcore package.
@@ -70,12 +70,12 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  '9a4a968a598feba2c09cd9bc0fa7cc2313597d492a101de3c7290e808a8c3c00';
+  '9f8129656c0aeaadf25ecb1031d71a416b51dd49bfb580a1268a35e7814c269a';
 const INTERCEPTION_BUILT_HASH =
   '372361ad9c50b00e5956319891b615f5f3397d911a0fd168438a34985153d960';
 
 const EVENTS_SOURCE_HASH =
-  'cbc872da0a8b31d60956fc2672c5e76aa522b53423806fd65bc3bf9608cfa752';
+  '4620f8042dbe4b5d4379b759989c26d5e73b845e75f53c14d27b1f3a62db3c9d';
 const EVENTS_BUILT_HASH =
   'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 

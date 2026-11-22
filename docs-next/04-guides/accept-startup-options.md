@@ -4,7 +4,7 @@ Let the host configure your participant at boot, for example with an `acme.greet
 
 ## Before you begin
 
-Read [Boot and lifecycle](../03-concepts/boot-and-lifecycle.md) for how pruning works.
+Read [Boot and lifecycle](../03-concepts/boot-and-lifecycle.md) for how a missing required field refuses the boot.
 
 ## Steps
 
@@ -45,7 +45,7 @@ export function createService(context) {
 }
 ```
 
-   - `required: true` means the participant is pruned if the host does not supply the value.
+   - `required: true` means the boot is refused if the host does not supply the value.
    - Field types are `string`, `number`, `boolean` and `object`.
 
 2. **Pass the value at boot.** The host sets it in the `options` bag of `bootKernel`.
@@ -105,11 +105,10 @@ Run `node startup-options.mjs`. The output is:
 
 ```text
 with the option:    howdy, world
-without the option: not available
-kernel warnings:    yes
+without the option: boot refused, missing acme.greeting
 ```
 
-When the required value is missing, the kernel logs a warning and the participant's exposure does not exist. The kernel refuses to boot only if a hardcore or another participant depends on the pruned one.
+When a required value is missing, the kernel refuses the boot, for every participant, official or not, and whether or not anything depends on it. The error names every missing field, its scope, the participant and the module, so one failed boot tells the host everything it must supply. A value under the wrong key or in the wrong shape counts as missing, and a flat alias such as `acmeGreeting` is reported as an un-namespaced option. If a field is genuinely optional, declare it without `required: true` and handle its absence in your code.
 
 ## Next steps
 

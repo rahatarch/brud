@@ -354,6 +354,32 @@ get isLocked(): boolean;
 
 #### Methods
 
+##### assertNamespaced()
+
+```ts
+assertNamespaced(options): void;
+```
+
+Refuses a string option that is not a dotted namespace path.
+
+String-valued options are contract fields. Flat aliases have no service
+owner and cannot be read, so one is reported as that, not as a missing
+field.
+
+###### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `options` | `Readonly`\<`Record`\<`string`, `unknown`\>\> | Host-supplied values. |
+
+###### Returns
+
+`void`
+
+###### Throws
+
+When a flat string option is present.
+
 ##### declare()
 
 ```ts
@@ -444,26 +470,6 @@ Validates an options bag against every accepted declaration.
 
 When a required field is missing or a value
 has the wrong type.
-
-##### withdraw()
-
-```ts
-withdraw(ownerId): void;
-```
-
-Withdraws every declaration one owner made.
-
-Used when admission prunes an optional participant before boot.
-
-###### Parameters
-
-| Parameter | Type | Description |
-| ------ | ------ | ------ |
-| `ownerId` | `string` | Stable identity of the declaring module. |
-
-###### Returns
-
-`void`
 
 ***
 

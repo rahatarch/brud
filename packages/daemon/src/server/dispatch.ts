@@ -296,7 +296,7 @@ export class RequestDispatcher {
 
     const { instance, reused } = await this.registry.boot(toJson(options), session.connectionId);
 
-    return { instance: describe(instance), reused, pruned: toJson(instance.pruned) };
+    return { instance: describe(instance), reused };
   }
 
   private attach(params: Record<string, unknown>, session: DispatchSession): KernelStatusResult {

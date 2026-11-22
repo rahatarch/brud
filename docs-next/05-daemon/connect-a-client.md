@@ -25,7 +25,7 @@ The tier (`ui` or `ai`) is fixed by the authenticated session. A request cannot 
 ## Typical flow
 
 1. `kernel.requirements` shows which fields you may set.
-2. `kernel.boot` with `{ options }` returns the instance, `reused`, and any `pruned` participants.
+2. `kernel.boot` with `{ options }` returns the instance and `reused`. A missing required startup field refuses the boot with an error naming the field and the participant.
 3. `kernel.kinds` lists what the composition understands.
 4. `kernel.route` with `{ instanceId, text }` runs Brud syntax.
 5. `kernel.dispose` when finished. Kernels belong to the connection that booted them.

@@ -344,20 +344,7 @@ export class ContextContract {
    * has the wrong type.
    */
   validate(options: Readonly<Record<string, unknown>>): void {
-    for (const [key, value] of Object.entries(options)) {
-      if (this.fields.has(key)) {
-        continue;
-      }
-
-      // String-valued options are contract fields. Every one must be a dotted
-      // namespace path; flat aliases have no service owner and cannot be read.
-      if (typeof value === 'string' && !key.includes('.')) {
-        throw new ContextContractError(
-          `Un-namespaced string context option "${key}" is forbidden; use a dotted service namespace.`,
-          { field: key, actualType: 'string' },
-        );
-      }
-    }
+    this.assertNamespaced(options);
 
     for (const field of this.fields.values()) {
       const value = options[field.name];
@@ -393,6 +380,31 @@ export class ContextContract {
   }
 
   /**
+   * Refuses a string option that is not a dotted namespace path.
+   *
+   * String-valued options are contract fields. Flat aliases have no service
+   * owner and cannot be read, so one is reported as that, not as a missing
+   * field.
+   *
+   * @param options - Host-supplied values.
+   * @throws {ContextContractError} When a flat string option is present.
+   */
+  assertNamespaced(options: Readonly<Record<string, unknown>>): void {
+    for (const [key, value] of Object.entries(options)) {
+      if (this.fields.has(key)) {
+        continue;
+      }
+
+      if (typeof value === 'string' && !key.includes('.')) {
+        throw new ContextContractError(
+          `Un-namespaced string context option "${key}" is forbidden; use a dotted service namespace.`,
+          { field: key, actualType: 'string' },
+        );
+      }
+    }
+  }
+
+  /**
    * Lists, per declaring owner, the required fields the bag does not carry.
    *
    * @param options - Host-supplied values.
@@ -412,33 +424,6 @@ export class ContextContract {
     }
 
     return missing;
-  }
-
-  /**
-   * Withdraws every declaration one owner made.
-   *
-   * Used when admission prunes an optional participant before boot.
-   *
-   * @param ownerId - Stable identity of the declaring module.
-   */
-  withdraw(ownerId: string): void {
-    if (this.locked) {
-      throw new ContextContractError(
-        'Context contract is locked; declarations cannot be withdrawn after the kernel reached RUNNING.',
-      );
-    }
-
-    for (const [name, field] of [...this.fields]) {
-      if (field.ownerId === ownerId) {
-        this.fields.delete(name);
-      }
-    }
-
-    for (const [scope, owner] of [...this.owners]) {
-      if (owner === ownerId) {
-        this.owners.delete(scope);
-      }
-    }
   }
 
   /** Prevents any further declaration. */

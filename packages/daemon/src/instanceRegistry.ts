@@ -22,31 +22,12 @@ export const EXPOSED_API_SCOPE_RECORD_FIELD = 'exposedApi.scopeRecord.path';
 /** Lifecycle of one hosted kernel. */
 export type KernelInstanceState = 'booting' | 'running' | 'shutting-down' | 'disposed';
 
-/** A participant the kernel left out because required startup fields were missing. */
-export interface PrunedParticipants {
-  readonly participants: readonly string[];
-  readonly path: string;
-  readonly missingFields: readonly string[];
-}
-
 type KernelLogger = { warn(message: string, meta?: Record<string, unknown>): void };
 
-/** A boot logger that records the kernel's pruning reports and forwards the rest. */
-function pruneRecorder(forward: KernelLogger | undefined): { readonly logger: KernelLogger & Record<string, unknown>; readonly pruned: PrunedParticipants[] } {
-  const pruned: PrunedParticipants[] = [];
-  const logger = {
+/** A boot logger that swallows the kernel's progress output and forwards its warnings and errors. */
+function forwardingLogger(forward: KernelLogger | undefined): KernelLogger & Record<string, unknown> {
+  return {
     warn(message: string, meta?: Record<string, unknown>): void {
-      const detail = meta as Partial<PrunedParticipants> | undefined;
-
-      if (detail !== undefined && Array.isArray(detail.participants) && Array.isArray(detail.missingFields)) {
-        pruned.push({
-          participants: [...(detail.participants as readonly string[])],
-          path: String(detail.path ?? ''),
-          missingFields: [...(detail.missingFields as readonly string[])],
-        });
-        return;
-      }
-
       forward?.warn(message, meta);
     },
     info: (): void => undefined,
@@ -55,8 +36,6 @@ function pruneRecorder(forward: KernelLogger | undefined): { readonly logger: Ke
       forward?.warn(message, meta);
     },
   };
-
-  return { logger, pruned };
 }
 
 /** One kernel the daemon hosts. */
@@ -75,8 +54,6 @@ export interface KernelInstance {
   readonly clients: Set<string>;
   state: KernelInstanceState;
   lastUsedAt: Date;
-  /** Participants the kernel left out at boot (missing required fields). */
-  readonly pruned: readonly PrunedParticipants[];
 }
 
 /** A required startup field, as collected from the composition. */
@@ -197,12 +174,12 @@ export class KernelInstanceRegistry {
   async requirements(): Promise<readonly RequirementField[]> {
     const kernelModule = await loadKernelModule();
     const scratch = join(this.home, 'requirements', randomUUID());
-    const recorder = pruneRecorder(undefined);
+    const logger = forwardingLogger(undefined);
     const kernel = kernelModule.createDeferredKernel(this.operator.composition, {});
     let schema: ContextSchema = { locked: false, fields: [] };
 
     try {
-      await kernel.boot({ options: this.kernelOptions(scratch, {}, kernelModule), logger: recorder.logger as never });
+      await kernel.boot({ options: this.kernelOptions(scratch, {}, kernelModule), logger: logger as never });
       schema = kernel.getContextSchema();
       await kernel.shutdown().catch(() => undefined);
     } catch {
@@ -219,16 +196,6 @@ export class KernelInstanceRegistry {
       ...(field.description === undefined ? {} : { description: field.description }),
       service: field.service,
     }));
-
-    // Fields of participants the kernel left out are withdrawn from the
-    // schema; the pruning report still names them.
-    for (const entry of recorder.pruned) {
-      for (const name of entry.missingFields) {
-        if (!fields.some((field) => field.name === name)) {
-          fields.push({ name, type: 'unknown', required: true, service: entry.path });
-        }
-      }
-    }
 
     return fields;
   }
@@ -298,15 +265,13 @@ export class KernelInstanceRegistry {
   private async create(key: string, clientOptions: Readonly<Record<string, unknown>>): Promise<KernelInstance> {
     const stateName = this.reserveState(key);
     let kernel: BrudKernel;
-    let recorder: ReturnType<typeof pruneRecorder>;
 
     try {
       const kernelModule = await loadKernelModule();
 
-      recorder = pruneRecorder(this.logger);
       kernel = await kernelModule.bootKernel(this.operator.composition, {
         options: this.kernelOptions(join(this.home, 'kernels', stateName), clientOptions, kernelModule),
-        logger: recorder.logger as never,
+        logger: forwardingLogger(this.logger) as never,
       });
     } catch (error: unknown) {
       this.reservedStates.delete(stateName);
@@ -321,7 +286,6 @@ export class KernelInstanceRegistry {
       clients: new Set(),
       state: 'running',
       lastUsedAt: new Date(this.now()),
-      pruned: Object.freeze([...recorder.pruned]),
     };
 
     this.instances.set(instance.id, instance);

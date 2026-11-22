@@ -29,7 +29,7 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-/** Boot warnings the kernel reports (participant pruning is reported here). */
+/** Boot warnings the kernel reports. */
 interface Warning {
   readonly message: string;
   readonly meta: Readonly<Record<string, unknown>> | undefined;
@@ -126,22 +126,28 @@ describe('dynamic context contract', () => {
     }
   });
 
-  it('prunes a participant whose required field is missing, reports it, and still boots', async () => {
+  it('refuses boot when a required field is missing, naming the field, the owner, the participant and the module', async () => {
     const warnings: Warning[] = [];
-    const kernel = await bootWith([workspaceRootDeclaration()], {}, warnings);
 
-    try {
-      assert.equal(kernel.lifecycleState, 'RUNNING');
-
-      const pruned = warnings.find((warning) => Array.isArray(warning.meta?.['missingFields']));
-
-      assert.ok(pruned !== undefined, 'the pruning is reported to the host');
-      assert.deepEqual(pruned.meta?.['missingFields'], ['workspace.root']);
-      // The pruned participant's field is withdrawn from the schema.
-      assert.equal(kernel.getContextSchema().fields.some((field) => field.name === 'workspace.root'), false);
-    } finally {
-      await kernel.shutdown();
-    }
+    await assert.rejects(
+      bootWith([workspaceRootDeclaration()], {}, warnings),
+      (error: unknown) => {
+        assert.ok(error instanceof ContextContractError);
+        assert.equal(error.field, 'workspace.root');
+        assert.match(error.service ?? '', /contextContractService/u, 'the declaring owner is carried on the error');
+        assert.match(error.message, /Boot refused/u);
+        assert.match(error.message, /scope "workspace"/u);
+        assert.match(error.message, /workspace\.root/u);
+        assert.match(error.message, /test\.context\.contract/u, 'the participant is named');
+        assert.match(error.message, /contextContractService/u, 'the module path is named');
+        return true;
+      },
+    );
+    assert.equal(
+      warnings.some((warning) => Array.isArray(warning.meta?.['missingFields'])),
+      false,
+      'nothing is reported as pruned: there is no pruning',
+    );
   });
 
   it('refuses boot when a hardcore service\'s required field is missing and names it', async () => {
@@ -269,14 +275,13 @@ describe('dynamic context contract', () => {
       }],
     };
 
-    // Without the field the third-party participant is pruned, never run.
-    const withoutField = await bootWith([declaration]);
-
-    try {
-      assert.equal(withoutField.getContextSchema().fields.some((field) => field.name === 'photoshop.licenseKey'), false);
-    } finally {
-      await withoutField.shutdown();
-    }
+    // Without the field the third-party participant refuses the boot; it never runs.
+    await assert.rejects(
+      bootWith([declaration]),
+      (error: unknown) => error instanceof ContextContractError
+        && error.field === 'photoshop.licenseKey'
+        && /Boot refused.*scope "photoshop"/u.test(error.message),
+    );
 
     // A wrong type is enforced for a declared field.
     await assert.rejects(

@@ -68,15 +68,17 @@ describe('daemon — neutral kernel host', () => {
     assert.equal(label.clientSettable, true);
   });
 
-  it('reports participants the kernel left out for missing fields (the kernel decides, not the daemon)', async () => {
-    const boot = await ui.request<KernelBootResult>(Protocol.KERNEL_BOOT, { options: {} });
+  it('refuses to boot, naming the participant and the field, when a required field is missing (the kernel decides, not the daemon)', async () => {
+    await assert.rejects(
+      ui.request(Protocol.KERNEL_BOOT, { options: {} }),
+      (error: unknown) => error instanceof DaemonRpcError
+        && /probe\.label/u.test(error.message)
+        && /acme\.probe/u.test(error.message),
+    );
 
-    assert.deepEqual(boot.pruned.flatMap((entry) => entry.missingFields), ['probe.label']);
-    assert.deepEqual(boot.pruned.flatMap((entry) => entry.participants), ['acme.probe']);
+    const list = await ui.request<{ instances: readonly unknown[] }>(Protocol.KERNEL_LIST, {});
 
-    const kinds = await ui.request<KernelKindsResult>(Protocol.KERNEL_KINDS, { instanceId: boot.instance.instanceId });
-    assert.deepEqual(kinds.kinds, [], 'the pruned probe owns no kind');
-    await ui.request(Protocol.KERNEL_DISPOSE, { instanceId: boot.instance.instanceId });
+    assert.deepEqual(list.instances, [], 'a refused boot leaves no instance behind');
   });
 
   it('refuses a startup field the operator did not allow clients to set', async () => {
@@ -92,7 +94,6 @@ describe('daemon — neutral kernel host', () => {
 
     assert.equal(boot.instance.state, 'running');
     assert.equal(boot.reused, false);
-    assert.deepEqual(boot.pruned, []);
 
     const kinds = await ui.request<KernelKindsResult>(Protocol.KERNEL_KINDS, { instanceId });
 

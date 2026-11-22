@@ -23,7 +23,7 @@ If a hardcore is missing or broken, composed participants never start. If a comp
 
 This is by design.
 
-- **During admission**, a participant that nothing depends on can be **pruned**: left out, with a warning to the logger, and boot continues. The usual cause is a required startup field that was not supplied.
+- **During admission**, a required startup field that the host did not supply **refuses the boot**, for every participant. There is no pruning: a participant is never left out silently.
 - **During construction and initialization**, any failure rolls back everything, hardcores included.
 
 Admission decides *who participates*. Initialization decides *whether that set can finish starting*.
@@ -120,11 +120,10 @@ Output:
 
 ```text
 with the option:    howdy, world
-without the option: not available
-kernel warnings:    yes
+without the option: boot refused, missing acme.greeting
 ```
 
-When the required field is missing, the participant is pruned: its exposure does not exist, so `resolve` returns `null`, and the kernel logs a warning. The kernel refuses the boot instead only if the pruned participant is a hardcore or something else depends on it.
+When the required field is missing, the kernel refuses the boot and the error names the field, its scope, the participant and the module. This holds for every participant, official or not, hardcore or not, depended on or not.
 
 Field types are `string`, `number`, `boolean` or `object`. A participant may only declare fields in its own namespace, and only before the kernel reaches `RUNNING`. The namespace is a single segment (letters, digits, `_` or `-`, starting with a letter), such as `acme`. Each field name is that namespace followed by a dot and a key, such as `acme.greeting`.
 

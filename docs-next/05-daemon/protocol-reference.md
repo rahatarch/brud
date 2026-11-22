@@ -10,7 +10,7 @@ JSON-RPC 2.0 over a Noise-secured local channel. Protocol version `1.0.0`. Types
 | `daemon.ping` | `nonce?` | Connection id, timestamp, nonce |
 | `daemon.info` | none | Name, version, protocol version, pid, uptime |
 | `kernel.requirements` | none | `fields[]`: name, type, required, description, declaring service, `clientSettable` |
-| `kernel.boot` | `options?` | `instance`, `reused`, `pruned[]` |
+| `kernel.boot` | `options?` | `instance`, `reused` |
 | `kernel.attach` | `instanceId` | Status |
 | `kernel.list` | none | Instances this connection is attached to |
 | `kernel.status` | `instanceId` | Instance or `null` |

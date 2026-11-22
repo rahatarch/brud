@@ -31,7 +31,7 @@ They boot in this order.
 
 1. **Read the config.** The kernel loads your composition file and checks its shape.
 2. **Verify and start the hardcores.** Each is checked against a content hash compiled into the kernel. If one is missing or wrong, boot stops.
-3. **Admit participants.** Each manifest is validated. A participant that nothing depends on and that cannot start because a required startup field is missing is *pruned*: left out, with a report. The kernel refuses the boot only when a hardcore or a depended-on participant is affected.
+3. **Admit participants.** Each manifest is validated. A required startup field that the host did not supply refuses the boot, for every participant; the error names the field and the participant.
 4. **Initialize.** Participants are constructed and initialized in dependency order. If any of them fails, everything that already started is rolled back and boot fails.
 5. **Running.** The kernel enters `RUNNING`. Configuration is frozen. Participants' `onRunning` hooks fire and `resolve` becomes live.
 

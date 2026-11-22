@@ -246,20 +246,7 @@ export function createDeferredKernel(
         }
       }
 
-      const composed = pruneForMissingContext(
-        owned,
-        contextContract,
-        contextOptions,
-        (participants, path, fields) => {
-          const detail = { participants, path, missingFields: fields };
-
-          (contextLogger ?? DEFAULT_KERNEL_LOGGER).warn(
-            `Participant pruned before boot: required context field(s) ${fields.join(', ')} missing and nothing depends on it`,
-            detail,
-          );
-          kernel.recordObservation('kernel.admission', 'participant-pruned', detail);
-        },
-      );
+      const composed = refuseMissingContext(owned, contextContract, contextOptions);
 
       // The hardcore gate runs after descriptors exist and before any service
       // is registered or initialized. A failure here never reaches the
@@ -325,68 +312,46 @@ export function createDeferredKernel(
 }
 
 /**
- * Applies the missing-required-field rules before boot.
+ * Refuses the boot when any required context field is missing.
  *
- * A participant whose required context fields are missing is pruned with a
- * clear reason when it is optional: it is not hardcore and nothing else in the
- * composition depends on it. A hardcore participant, or one another
- * participant depends on, refuses boot instead.
+ * The rule is the same for every participant, official or not, hardcore or
+ * not, depended on or not: a participant that declared a field as required
+ * cannot run without it, and leaving it out would give a composition whose
+ * exposures disappear without a reason. The error names every missing field,
+ * the declaring owner, the participants it covers and the module path, so one
+ * failed boot tells the host everything it must supply.
  *
- * @returns The composed descriptors that remain.
+ * @returns The composed descriptors, unchanged.
  */
-function pruneForMissingContext(
+function refuseMissingContext(
   owned: readonly { readonly ownerId: string; readonly service: ComposedServiceDescriptor }[],
   contextContract: ContextContract,
   options: Readonly<Record<string, unknown>>,
-  onPruned: (participants: readonly string[], path: string, fields: readonly string[]) => void,
 ): readonly ComposedServiceDescriptor[] {
+  // A value in the wrong shape or under a flat alias is reported as that, before
+  // the field it was meant for is reported as missing.
+  contextContract.assertNamespaced(options);
+
   const missing = contextContract.missingRequiredByOwner(options);
 
-  if (missing.size === 0) {
-    return owned.map((entry) => entry.service);
-  }
+  if (missing.size > 0) {
+    const scopeOf = new Map(contextContract.schema().fields.map((field) => [field.name, field.service]));
+    const parts = [...missing].map(([ownerId, fields]) => {
+      const services = owned.filter((entry) => entry.ownerId === ownerId);
+      const participants = services.map((entry) => entry.service.descriptor.token.id);
+      const path = services[0]?.service.path;
 
-  const hardcoreTokens = new Set(HARDCORE_SERVICES.map((service) => service.token));
-  const pruned = new Set<string>();
+      return `${fields.join(', ')} (scope "${scopeOf.get(fields[0] ?? '') ?? ownerId}"${participants.length === 0 ? '' : `, participant ${participants.join(', ')}`}${path === undefined ? '' : `, module ${path}`})`;
+    });
+    const first = [...missing][0] as [string, readonly string[]];
 
-  for (const [ownerId, fields] of missing) {
-    const services = owned.filter((entry) => entry.ownerId === ownerId);
-    const tokens = new Set(services.map((entry) => entry.service.descriptor.token.id));
-    const isHardcore = [...tokens].some((token) => hardcoreTokens.has(token));
-    const dependedOn = owned.some((entry) =>
-      entry.ownerId !== ownerId
-      && entry.service.descriptor.dependencies.some((dependency) => tokens.has(dependency.id)));
-
-    if (services.length === 0 || isHardcore || dependedOn) {
-      const reason = isHardcore
-        ? 'it is hardcore'
-        : dependedOn
-          ? 'another participant depends on it'
-          : 'it declared no participant';
-
-      throw new ContextContractError(
-        `Required context field(s) ${fields.join(', ')} declared by "${ownerId}" are missing and ${reason}; boot refused.`,
-        { field: fields[0], service: ownerId, actualType: 'missing' },
-      );
-    }
-
-    pruned.add(ownerId);
-  }
-
-  for (const ownerId of pruned) {
-    const services = owned.filter((entry) => entry.ownerId === ownerId);
-
-    contextContract.withdraw(ownerId);
-    onPruned(
-      services.map((entry) => entry.service.descriptor.token.id),
-      services[0]?.service.path ?? ownerId,
-      missing.get(ownerId) ?? [],
+    throw new ContextContractError(
+      `Boot refused: required context field(s) missing: ${parts.join('; ')}. Supply them in the boot options.`,
+      { field: first[1][0], service: first[0], actualType: 'missing' },
     );
   }
 
-  return owned
-    .filter((entry) => !pruned.has(entry.ownerId))
-    .map((entry) => entry.service);
+  return owned.map((entry) => entry.service);
 }
 
 function descriptorsFromModule(

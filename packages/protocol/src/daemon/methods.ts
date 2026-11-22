@@ -127,12 +127,6 @@ export interface KernelBootResult {
   readonly instance: KernelInstanceDescriptor;
   /** True when an existing kernel with identical options was reused. */
   readonly reused: boolean;
-  /**
-   * Participants the kernel left out because required startup fields were
-   * missing. The kernel prunes them instead of refusing the boot (it refuses
-   * only for hardcore services or participants others depend on).
-   */
-  readonly pruned: readonly { readonly participants: readonly string[]; readonly path: string; readonly missingFields: readonly string[] }[];
 }
 
 export interface KernelListResult {

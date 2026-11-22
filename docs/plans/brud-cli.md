@@ -49,7 +49,7 @@ The beta trial of BrudOS as an installed package showed that the hard parts for 
 |---|---|---|
 | `brud doctor` | Read-only environment and composition check (below) | Beta |
 | `brud init [name]` | Scaffolds a project: one native participant, a test, a composition, scripts | Beta |
-| `brud check [config]` | Boots the composition in a scratch state and reports pruned participants, exposure collisions, owner-pin conflicts, missing capabilities and `official` problems. Exit code is non-zero on any error | Beta |
+| `brud check [config]` | Boots the composition in a scratch state and reports a missing required startup field, exposure collisions, owner-pin conflicts, missing capabilities and `official` problems. Exit code is non-zero on any error | Beta |
 | `brud run [config]` | Boots a kernel (or starts the daemon with `--daemon`) from a composition | Beta |
 | `brud call <text>` | Sends Brud text to a running kernel or daemon and prints the route result. Takes `--tier ui\|ai` and `--cap <capability>` | Beta |
 | `brud kinds` / `brud inspect` | Lists kinds, operations, exposures and their policies, and who can resolve each | Beta |
