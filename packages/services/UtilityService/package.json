@@ -35,5 +35,24 @@
   },
   "devDependencies": {
     "@types/node": "22.x"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rahatarch/brud.git",
+    "directory": "packages/services/UtilityService"
+  },
+  "homepage": "https://github.com/rahatarch/brud/tree/main/docs-next",
+  "bugs": {
+    "url": "https://github.com/rahatarch/brud/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "brud": {
+    "role": "participant"
   }
 }
