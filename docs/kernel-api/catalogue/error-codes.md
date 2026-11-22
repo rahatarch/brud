@@ -46,6 +46,7 @@ Every stable, machine-readable `code` a kernel error class carries. Match on `co
 | `PARSER_DISPOSED` | `ParserDisposedError` | `packages/kernel/services/Parser/contracts/errors.ts` |
 | `PARTICIPANT_MANIFEST_INVALID` | `ParticipantManifestError` | `packages/kernel/src/contracts/manifest.ts` |
 | `ROUTER_DISPOSED` | `RouterDisposedError` | `packages/kernel/services/Router/contracts/errors.ts` |
+| `ROUTER_INVALID_DECLARATION` | `RouterInvalidDeclarationError` | `packages/kernel/services/Router/contracts/errors.ts` |
 | `ROUTER_INVALID_KIND` | `RouterInvalidKindError` | `packages/kernel/services/Router/contracts/errors.ts` |
 | `ROUTER_KIND_COLLISION` | `RouterKindCollisionError` | `packages/kernel/services/Router/contracts/errors.ts` |
 | `ROUTER_REGISTRATION_CLOSED` | `RouterRegistrationClosedError` | `packages/kernel/services/Router/contracts/errors.ts` |

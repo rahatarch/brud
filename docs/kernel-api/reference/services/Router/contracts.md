@@ -59,6 +59,7 @@ Base class for every Router domain failure.
 #### Extended by
 
 - [`RouterDisposedError`](#routerdisposederror)
+- [`RouterInvalidDeclarationError`](#routerinvaliddeclarationerror)
 - [`RouterInvalidKindError`](#routerinvalidkinderror)
 - [`RouterKindCollisionError`](#routerkindcollisionerror)
 - [`RouterRegistrationClosedError`](#routerregistrationclosederror)
@@ -96,6 +97,61 @@ abstract readonly code: RouterErrorCode;
 ```
 
 Stable, machine-readable error code.
+
+***
+
+### RouterInvalidDeclarationError
+
+Raised when a kind's operations or permissions are missing or invalid. Refuses boot.
+
+#### Extends
+
+- [`RouterError`](#abstract-routererror)
+
+#### Constructors
+
+##### Constructor
+
+```ts
+new RouterInvalidDeclarationError(kind, reason): RouterInvalidDeclarationError;
+```
+
+###### Parameters
+
+| Parameter | Type | Description |
+| ------ | ------ | ------ |
+| `kind` | `string` | Kind whose declaration was refused. |
+| `reason` | `string` | What is wrong with it. |
+
+###### Returns
+
+[`RouterInvalidDeclarationError`](#routerinvaliddeclarationerror)
+
+###### Overrides
+
+[`RouterError`](#abstract-routererror).[`constructor`](#constructor-1)
+
+#### Properties
+
+##### code
+
+```ts
+readonly code: "ROUTER_INVALID_DECLARATION";
+```
+
+Stable, machine-readable error code.
+
+###### Overrides
+
+[`RouterError`](#abstract-routererror).[`code`](#code-1)
+
+##### kind
+
+```ts
+readonly kind: string;
+```
+
+Kind whose declaration was refused.
 
 ***
 
@@ -338,6 +394,33 @@ Context handed to a kind owner's dispatch exposure for one operation.
 
 ***
 
+### BrudKindOperation
+
+One declared operation of a kind.
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-description"></a> `description?` | `readonly` | `string` | - |
+| <a id="property-input"></a> `input?` | `readonly` | `Readonly`\<`Record`\<`string`, `unknown`\>\> | - |
+| <a id="property-permission"></a> `permission?` | `readonly` | `Readonly`\<`Record`\<`string`, `unknown`\>\> | Who may call it (a Layer 1 policy object). Falls back to the kind's. |
+
+***
+
+### BrudPublicKindOperation
+
+One operation as remote clients see it. The permission is not public.
+
+#### Properties
+
+| Property | Modifier | Type |
+| ------ | ------ | ------ |
+| <a id="property-description-1"></a> `description?` | `readonly` | `string` |
+| <a id="property-input-1"></a> `input?` | `readonly` | `Readonly`\<`Record`\<`string`, `unknown`\>\> |
+
+***
+
 ### BrudRouteOptions
 
 Options for one route request. Caller identity and capabilities are not
@@ -364,10 +447,11 @@ kernel call chain.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-description"></a> `description?` | `readonly` | `string` | Public description declared with the kind. |
+| <a id="property-description-2"></a> `description?` | `readonly` | `string` | Public description declared with the kind. |
 | <a id="property-exposure"></a> `exposure` | `readonly` | `string` | Name of the owner's dispatch exposure (`name`, major `version`). |
 | <a id="property-kind"></a> `kind` | `readonly` | `string` | - |
-| <a id="property-operations"></a> `operations?` | `readonly` | `Readonly`\<`Record`\<`string`, \{ `description?`: `string`; `input?`: `Readonly`\<`Record`\<`string`, `unknown`\>\>; \}\>\> | Public operations declared with the kind. |
+| <a id="property-operations"></a> `operations` | `readonly` | \| `"open"` \| `Readonly`\<`Record`\<`string`, [`BrudKindOperation`](#brudkindoperation)\>\> | Every operation the kind serves. Required: an operation not listed here is refused before the owner is reached. |
+| <a id="property-permission-1"></a> `permission?` | `readonly` | `Readonly`\<`Record`\<`string`, `unknown`\>\> | Default permission for operations that declare none (a Layer 1 policy object). Required when `operations` is `'open'`: the owner defines the names, and this permission is enforced on every call. |
 | <a id="property-version"></a> `version?` | `readonly` | `number` | - |
 
 ***
@@ -581,7 +665,14 @@ Outcome of routing one parsed operation.
 ### RoutedOperationStatus
 
 ```ts
-type RoutedOperationStatus = "success" | "failed" | "skipped" | "aborted" | "kind_not_registered";
+type RoutedOperationStatus = 
+  | "success"
+  | "failed"
+  | "skipped"
+  | "aborted"
+  | "kind_not_registered"
+  | "operation_not_declared"
+  | "permission_denied";
 ```
 
 Terminal status of one routed operation.
@@ -595,6 +686,7 @@ type RouterErrorCode =
   | "ROUTER_REGISTRATION_CLOSED"
   | "ROUTER_KIND_COLLISION"
   | "ROUTER_INVALID_KIND"
+  | "ROUTER_INVALID_DECLARATION"
   | "ROUTER_UNKNOWN_SERVICE"
   | "ROUTER_DISPOSED";
 ```

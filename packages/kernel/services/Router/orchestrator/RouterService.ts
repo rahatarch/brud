@@ -1,4 +1,10 @@
 import type { KernelCallAuthority } from '../../../src/contracts/callChain.js';
+import type { CallOrigin, CallerClass } from '../../../src/contracts/callChain.js';
+import {
+  evaluateExposedApiPolicy,
+  parseExposedApiPolicy,
+  type ExposedApiPolicy,
+} from '../../ExposedApiRegistry/contracts/policy.js';
 import { isValidRouterKind } from '../contracts/kind.js';
 import type { OperationResult } from '../../../src/contracts/handler.js';
 import type { IServiceLifecycle } from '../../../src/contracts/lifecycle.js';
@@ -9,6 +15,7 @@ import type {
 } from '../../Parser/contracts/index.js';
 import {
   RouterDisposedError,
+  RouterInvalidDeclarationError,
   RouterInvalidKindError,
   RouterKindCollisionError,
   RouterRegistrationClosedError,
@@ -18,6 +25,7 @@ import type {
   BrudDispatchCaller,
   BrudDispatchContext,
   BrudKindDispatcher,
+  BrudPublicKindOperation,
   BrudRouteOptions,
   BrudKindInfo,
   BrudRouteRegistration,
@@ -46,6 +54,12 @@ export interface RouterDependencies {
  */
 export class RouterService implements IRouterService, IServiceLifecycle {
   private readonly registrations = new Map<string, BrudRouteRegistration & { readonly owner?: string }>();
+
+  /** The parsed permission of every declared operation, by kind then operation. Frozen at registration. */
+  private readonly permissions = new Map<string, ReadonlyMap<string, ExposedApiPolicy>>();
+
+  /** The one permission of every kind whose owner defines its operation names. */
+  private readonly openKinds = new Map<string, ExposedApiPolicy>();
 
   private authority: KernelCallAuthority | undefined;
 
@@ -118,14 +132,16 @@ export class RouterService implements IRouterService, IServiceLifecycle {
     readonly exposure: string;
     readonly version?: number | string;
     readonly description?: string;
-    readonly operations?: BrudRouteRegistration['operations'];
+    readonly operations: BrudRouteRegistration['operations'];
+    readonly permission?: BrudRouteRegistration['permission'];
   }): void {
     this.register({
       kind: declaration.kind,
       exposure: declaration.exposure,
       ...(declaration.version === undefined ? {} : { version: Number(declaration.version) }),
       ...(declaration.description === undefined ? {} : { description: declaration.description }),
-      ...(declaration.operations === undefined ? {} : { operations: declaration.operations }),
+      operations: declaration.operations,
+      ...(declaration.permission === undefined ? {} : { permission: declaration.permission }),
     }, owner);
   }
 
@@ -152,7 +168,71 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       throw new RouterInvalidKindError(registration.kind);
     }
 
+    const compiled = this.compilePermissions(registration);
+
     this.registrations.set(registration.kind, Object.freeze({ ...registration, ...(owner === undefined ? {} : { owner }) }));
+
+    if (compiled instanceof Map) {
+      this.permissions.set(registration.kind, compiled);
+    } else {
+      this.openKinds.set(registration.kind, compiled as ExposedApiPolicy);
+    }
+  }
+
+  /**
+   * Builds the operation registry for one kind: every operation must be
+   * declared and carry a valid permission, its own or the kind's. Refuses the
+   * declaration, and so the boot, otherwise.
+   */
+  private compilePermissions(registration: BrudRouteRegistration): ReadonlyMap<string, ExposedApiPolicy> | ExposedApiPolicy {
+    const refuse = (reason: string): never => {
+      throw new RouterInvalidDeclarationError(registration.kind, reason);
+    };
+    const operations: unknown = registration.operations;
+
+    if (operations === 'open') {
+      if (registration.permission === undefined) {
+        return refuse('an open operation vocabulary needs a kind-level permission');
+      }
+    } else if (typeof operations !== 'object' || operations === null || Array.isArray(operations) || Object.keys(operations).length === 0) {
+      return refuse('it must declare every operation it serves');
+    }
+
+    const parse = (value: unknown, where: string): ExposedApiPolicy => {
+      let policy: ExposedApiPolicy;
+
+      try {
+        policy = parseExposedApiPolicy(value);
+      } catch (error: unknown) {
+        return refuse(`${where} permission is invalid (${describe(error)})`);
+      }
+
+      if (policy.parentCallerClasses !== undefined) {
+        return refuse(`${where} permission cannot use parentCallerClasses: the Router does not know the caller's parent`);
+      }
+
+      return policy;
+    };
+    const fallback = registration.permission === undefined ? undefined : parse(registration.permission, 'the kind');
+
+    if (registration.operations === 'open') {
+      return fallback as ExposedApiPolicy;
+    }
+
+    const compiled = new Map<string, ExposedApiPolicy>();
+
+    for (const [name, operation] of Object.entries(registration.operations)) {
+      const own = operation.permission === undefined ? undefined : parse(operation.permission, `operation "${name}"`);
+      const effective = own ?? fallback;
+
+      if (effective === undefined) {
+        return refuse(`operation "${name}" has no permission and the kind declares none`);
+      }
+
+      compiled.set(name, effective);
+    }
+
+    return compiled;
   }
 
   closeRegistration(): void {
@@ -176,7 +256,13 @@ export class RouterService implements IRouterService, IServiceLifecycle {
     return Object.freeze(Array.from(this.registrations.values(), (registration) => Object.freeze({
       kind: registration.kind,
       ...(registration.description === undefined ? {} : { description: registration.description }),
-      ...(registration.operations === undefined ? {} : { operations: registration.operations }),
+      ...(registration.operations === 'open' ? { open: true as const } : { operations: Object.freeze(Object.fromEntries(Object.entries(registration.operations).map(([name, operation]): [string, BrudPublicKindOperation] => [
+        name,
+        Object.freeze({
+          ...(operation.description === undefined ? {} : { description: operation.description }),
+          ...(operation.input === undefined ? {} : { input: operation.input }),
+        }),
+      ]))) }),
     })));
   }
 
@@ -256,6 +342,27 @@ export class RouterService implements IRouterService, IServiceLifecycle {
           name: operation.name,
           status: 'kind_not_registered',
           error: `KIND_NOT_REGISTERED: kind "${operation.kind}" has no registered service`,
+        });
+
+        if (stopOnFailure) {
+          appendRemaining(outcomes, operations, sequence + 1, 'skipped');
+          break;
+        }
+
+        continue;
+      }
+
+      const refusal = this.refuseBeforeOwner(registration.kind, operation, routeCaller);
+
+      if (refusal !== undefined) {
+        failed += 1;
+        outcomes.push({
+          operationIndex: operation.index,
+          sequence,
+          kind: operation.kind,
+          name: operation.name,
+          status: refusal.status,
+          error: refusal.error,
         });
 
         if (stopOnFailure) {
@@ -348,6 +455,67 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       dispatched,
       failed,
     };
+  }
+
+  /**
+   * The operation registry check, run before the owner is resolved: the
+   * operation must be declared for its kind, and the caller must hold the
+   * operation's permission. The reason a permission is denied goes to the
+   * observation stream, never to the caller.
+   */
+  private refuseBeforeOwner(
+    kind: string,
+    operation: BrudOperation,
+    caller: BrudDispatchCaller,
+  ): { readonly status: 'operation_not_declared' | 'permission_denied'; readonly error: string } | undefined {
+    const policy = this.openKinds.get(kind) ?? this.permissions.get(kind)?.get(operation.name);
+
+    if (policy === undefined) {
+      this.observeRefusal('operation-not-declared', kind, operation.name, caller, undefined);
+
+      return {
+        status: 'operation_not_declared',
+        error: `OPERATION_NOT_DECLARED: kind "${kind}" does not declare operation "${operation.name}"`,
+      };
+    }
+
+    const decision = evaluateExposedApiPolicy(policy, 'any', {
+      origin: caller.origin as CallOrigin,
+      caller: {
+        callerClass: caller.callerClass as CallerClass,
+        identity: caller.identity,
+        official: caller.official,
+        capabilities: new Set(caller.capabilities),
+      },
+    });
+
+    if (decision.allowed) {
+      return undefined;
+    }
+
+    this.observeRefusal('permission-denied', kind, operation.name, caller, decision.reason);
+
+    return {
+      status: 'permission_denied',
+      error: `PERMISSION_DENIED: the caller may not call operation "${operation.name}" of kind "${kind}"`,
+    };
+  }
+
+  private observeRefusal(
+    event: string,
+    kind: string,
+    name: string,
+    caller: BrudDispatchCaller,
+    reason: string | undefined,
+  ): void {
+    this.authority?.observe('router', event, {
+      kind,
+      operation: name,
+      ...(reason === undefined ? {} : { reason }),
+      callerIdentity: caller.identity,
+      callerClass: caller.callerClass,
+      origin: caller.origin,
+    });
   }
 
   private resolveParser(): IBrudParserService {

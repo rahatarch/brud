@@ -7,8 +7,8 @@ The keys `admitParticipantManifest` accepts. Any other key is refused (`PARTICIP
 | Key set | Accepted keys |
 | --- | --- |
 | `MANIFEST` | `requests`, `exposures`, `events`, `interceptions`, `interceptionPoints`, `kinds` |
-| `KIND` | `kind`, `exposure`, `version`, `description`, `operations` |
-| `KIND_OPERATION` | `description`, `input` |
+| `KIND` | `kind`, `exposure`, `version`, `description`, `operations`, `permission` |
+| `KIND_OPERATION` | `description`, `input`, `permission` |
 | `REQUEST` | `capabilities` |
 | `EXPOSURE` | `name`, `version`, `scope`, `policy` |
 | `EVENT` | `name`, `version`, `scope`, `policy`, `payloadSchema` |

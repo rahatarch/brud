@@ -70,6 +70,7 @@ export function createProbeDescriptor(
         kind: spec.kind,
         exposure,
         description: `Kernel test probe (${spec.kind})`,
+        permission: { policyVersion: 2 },
         operations: {
           echo: { description: 'Echo parameters', input: { type: 'object' } },
           fail: { description: 'Always fails' },

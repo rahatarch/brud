@@ -107,6 +107,12 @@ export interface KindOperationDescription {
   readonly description?: string;
   /** JSON Schema of the operation's input (plain JSON). */
   readonly input?: Readonly<Record<string, unknown>>;
+  /**
+   * Who may call this operation: a Layer 1 policy object, in the same
+   * language as an exposure's `policy`. Falls back to the kind's `permission`.
+   * The Router validates and evaluates it; admission checks only its shape.
+   */
+  readonly permission?: Readonly<Record<string, unknown>>;
 }
 
 export interface KindDeclaration {
@@ -118,6 +124,23 @@ export interface KindDeclaration {
 
   /** Major version of the exposure; defaults to 1. */
   readonly version?: number | string;
+
+  /** Public description of the kind. */
+  readonly description?: string;
+
+  /**
+   * Every operation the kind serves, by name. Required: the kernel refuses an
+   * operation that is not listed, before the owner is reached.
+   *
+   * `'open'` declares that the owner defines the operation names itself (for
+   * example from a registry filled at runtime), so the kernel cannot list them.
+   * It must be written out, and the kind's `permission` is then required and is
+   * enforced on every call; the owner decides which names exist.
+   */
+  readonly operations: Readonly<Record<string, KindOperationDescription>> | 'open';
+
+  /** Default permission for operations that declare none; required when `operations` is `'open'`. */
+  readonly permission?: Readonly<Record<string, unknown>>;
 }
 
 /** A participant's manifest. */
@@ -173,8 +196,9 @@ export class ParticipantManifestError extends Error {
 }
 
 const MANIFEST_KEYS = new Set(['requests', 'exposures', 'events', 'interceptions', 'interceptionPoints', 'kinds']);
-const KIND_KEYS = new Set(['kind', 'exposure', 'version', 'description', 'operations']);
-const KIND_OPERATION_KEYS = new Set(['description', 'input']);
+const KIND_KEYS = new Set(['kind', 'exposure', 'version', 'description', 'operations', 'permission']);
+const KIND_OPERATION_KEYS = new Set(['description', 'input', 'permission']);
+const KIND_OPERATION_PATTERN = /^[A-Za-z][A-Za-z0-9_.-]*$/u;
 const KIND_PATTERN = /^[a-z][a-z0-9_-]*$/u;
 const REQUEST_KEYS = new Set(['capabilities']);
 const EXPOSURE_KEYS = new Set(['name', 'version', 'scope', 'policy']);
@@ -440,7 +464,9 @@ function admitInterceptions(value: unknown, participant: string): readonly Inter
 
 /**
  * Admits `manifest.kinds`. Each kind names one of the participant's own
- * declared exposures; a kind may be claimed once per manifest.
+ * declared exposures, lists every operation it serves, and gives each
+ * operation a permission (its own, or the kind's); a kind may be claimed once
+ * per manifest. The Router validates and evaluates the permissions.
  */
 function admitKinds(
   value: unknown,
@@ -491,27 +517,58 @@ function admitKinds(
       throw new ParticipantManifestError(participant, `${path}.description must be a string`);
     }
 
-    if (entry.operations !== undefined) {
-      if (!isPlainObject(entry.operations)) {
-        throw new ParticipantManifestError(participant, `${path}.operations must be an object`);
+    if (entry.permission !== undefined && !isPlainObject(entry.permission)) {
+      throw new ParticipantManifestError(participant, `${path}.permission must be a policy object`);
+    }
+
+    if (entry.operations === 'open') {
+      if (entry.permission === undefined) {
+        throw new ParticipantManifestError(
+          participant,
+          `${path}.permission is required when operations is "open"; write { "policyVersion": 2 } to allow every routing caller`,
+        );
       }
 
-      for (const [name, operation] of Object.entries(entry.operations)) {
-        const at = `${path}.operations.${name}`;
+      return Object.freeze(JSON.parse(JSON.stringify(entry)) as KindDeclaration);
+    }
 
-        if (!isPlainObject(operation)) {
-          throw new ParticipantManifestError(participant, `${at} must be an object`);
-        }
+    if (!isPlainObject(entry.operations) || Object.keys(entry.operations).length === 0) {
+      throw new ParticipantManifestError(
+        participant,
+        `${path}.operations is required: declare every operation the kind serves, or write "open" if its owner defines the names at runtime`,
+      );
+    }
 
-        assertKnownKeys(operation, KIND_OPERATION_KEYS, at, participant);
+    for (const [name, operation] of Object.entries(entry.operations)) {
+      const at = `${path}.operations.${name}`;
 
-        if (operation.description !== undefined && typeof operation.description !== 'string') {
-          throw new ParticipantManifestError(participant, `${at}.description must be a string`);
-        }
+      if (!KIND_OPERATION_PATTERN.test(name)) {
+        throw new ParticipantManifestError(participant, `${at}: operation names start with a letter and use letters, digits, "_", "-" and "."`);
+      }
 
-        if (operation.input !== undefined && !isPlainObject(operation.input)) {
-          throw new ParticipantManifestError(participant, `${at}.input must be a JSON Schema object`);
-        }
+      if (!isPlainObject(operation)) {
+        throw new ParticipantManifestError(participant, `${at} must be an object`);
+      }
+
+      assertKnownKeys(operation, KIND_OPERATION_KEYS, at, participant);
+
+      if (operation.description !== undefined && typeof operation.description !== 'string') {
+        throw new ParticipantManifestError(participant, `${at}.description must be a string`);
+      }
+
+      if (operation.input !== undefined && !isPlainObject(operation.input)) {
+        throw new ParticipantManifestError(participant, `${at}.input must be a JSON Schema object`);
+      }
+
+      if (operation.permission !== undefined && !isPlainObject(operation.permission)) {
+        throw new ParticipantManifestError(participant, `${at}.permission must be a policy object`);
+      }
+
+      if (operation.permission === undefined && entry.permission === undefined) {
+        throw new ParticipantManifestError(
+          participant,
+          `${at}.permission is required, or declare a kind-level permission; write { "policyVersion": 2 } to allow every routing caller`,
+        );
       }
     }
 

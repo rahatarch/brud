@@ -1779,8 +1779,11 @@ One record on the kernel's observation stream.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
+| <a id="property-description-3"></a> `description?` | `readonly` | `string` | Public description of the kind. |
 | <a id="property-exposure-1"></a> `exposure` | `readonly` | `string` | The participant's own exposure name that dispatches the kind. |
 | <a id="property-kind"></a> `kind` | `readonly` | `string` | The kind word written after `[CALL`, e.g. `tool`. |
+| <a id="property-operations-1"></a> `operations` | `readonly` | `"open"` \| `Readonly`\<`Record`\<`string`, `KindOperationDescription`\>\> | Every operation the kind serves, by name. Required: the kernel refuses an operation that is not listed, before the owner is reached. `'open'` declares that the owner defines the operation names itself (for example from a registry filled at runtime), so the kernel cannot list them. It must be written out, and the kind's `permission` is then required and is enforced on every call; the owner decides which names exist. |
+| <a id="property-permission"></a> `permission?` | `readonly` | `Readonly`\<`Record`\<`string`, `unknown`\>\> | Default permission for operations that declare none; required when `operations` is `'open'`. |
 | <a id="property-version-4"></a> `version?` | `readonly` | `string` \| `number` | Major version of the exposure; defaults to 1. |
 
 ***
@@ -1892,7 +1895,7 @@ What a participant requests. A request is not a grant; the giver decides.
 
 | Property | Modifier | Type |
 | ------ | ------ | ------ |
-| <a id="property-description-3"></a> `description` | `readonly` | `string` |
+| <a id="property-description-4"></a> `description` | `readonly` | `string` |
 | <a id="property-examples"></a> `examples?` | `readonly` | readonly `string`[] |
 | <a id="property-syntaxguide"></a> `syntaxGuide?` | `readonly` | `string` |
 | <a id="property-systempromptfragment"></a> `systemPromptFragment?` | `readonly` | `string` |
@@ -1984,7 +1987,7 @@ Read-only metadata describing a registered service.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-description-4"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
+| <a id="property-description-5"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
 | <a id="property-id"></a> `id` | `readonly` | `string` | Stable identifier of the service. |
 | <a id="property-initialized"></a> `initialized` | `readonly` | `boolean` | Whether the service has completed initialization. |
 | <a id="property-tier-2"></a> `tier` | `readonly` | [`ServiceTier`](#servicetier) | Privilege tier the service belongs to. |
@@ -2010,7 +2013,7 @@ exists purely to carry `TService` through registration and lookup.
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-_brand"></a> `_brand` | `readonly` | readonly \[`TService`\] | Phantom brand preserving `TService` for strict type inference. |
-| <a id="property-description-5"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
+| <a id="property-description-6"></a> `description` | `readonly` | `string` | Short explanation of what the service provides. |
 | <a id="property-id-1"></a> `id` | `readonly` | `string` | Stable, human-readable identifier used for diagnostics and policies. |
 
 ## Type Aliases

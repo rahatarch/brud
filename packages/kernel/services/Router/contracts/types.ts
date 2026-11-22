@@ -11,7 +11,9 @@ export type RoutedOperationStatus =
   | 'failed'
   | 'skipped'
   | 'aborted'
-  | 'kind_not_registered';
+  | 'kind_not_registered'
+  | 'operation_not_declared'
+  | 'permission_denied';
 
 /**
  * The real caller of a routed operation, captured by the Router from the
@@ -94,15 +96,40 @@ export interface BrudRouteRegistration {
   readonly version?: number;
   /** Public description declared with the kind. */
   readonly description?: string;
-  /** Public operations declared with the kind. */
-  readonly operations?: Readonly<Record<string, { readonly description?: string; readonly input?: Readonly<Record<string, unknown>> }>>;
+  /**
+   * Every operation the kind serves. Required: an operation not listed here is
+   * refused before the owner is reached.
+   */
+  readonly operations: Readonly<Record<string, BrudKindOperation>> | 'open';
+  /**
+   * Default permission for operations that declare none (a Layer 1 policy
+   * object). Required when `operations` is `'open'`: the owner defines the
+   * names, and this permission is enforced on every call.
+   */
+  readonly permission?: Readonly<Record<string, unknown>>;
+}
+
+/** One declared operation of a kind. */
+export interface BrudKindOperation {
+  readonly description?: string;
+  readonly input?: Readonly<Record<string, unknown>>;
+  /** Who may call it (a Layer 1 policy object). Falls back to the kind's. */
+  readonly permission?: Readonly<Record<string, unknown>>;
+}
+
+/** One operation as remote clients see it. The permission is not public. */
+export interface BrudPublicKindOperation {
+  readonly description?: string;
+  readonly input?: Readonly<Record<string, unknown>>;
 }
 
 /** One kind as remote clients see it: the public vocabulary of Brud syntax. */
 export interface BrudKindInfo {
   readonly kind: BrudOperationKind;
   readonly description?: string;
-  readonly operations?: BrudRouteRegistration['operations'];
+  readonly operations?: Readonly<Record<string, BrudPublicKindOperation>>;
+  /** True when the owner defines the operation names itself, so none are listed. */
+  readonly open?: true;
 }
 
 /** The surface a kind owner's dispatch exposure must provide. */

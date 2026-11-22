@@ -27,7 +27,7 @@ export function createService() {
         { name: 'acme.exists', version: 1, scope: 'any', policy: OFFICIAL },
         { name: 'acme.kind', version: 1, scope: 'any', policy: OFFICIAL },
       ],
-      kinds: [{ kind: 'acme', exposure: 'acme.kind' }],
+      kinds: [{ kind: 'acme', exposure: 'acme.kind', permission: { policyVersion: 2 }, operations: { hello: { description: 'Says hello' } } }],
       events: [],
     },
     factory: () => {

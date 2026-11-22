@@ -84,13 +84,27 @@ manifest: {
     kind: 'photo',
     exposure: 'acme.photo.dispatch',          // must be one of your own exposures
     description: 'Edit images in the library',   // optional, public
-    operations: {                               // optional, public
-      resize: { description: 'Resize an image', input: { type: 'object', properties: { width: { type: 'number' } } } },
+    permission: { policyVersion: 2 },           // default for operations that declare none
+    operations: {                               // required: every operation the kind serves
+      resize: {
+        description: 'Resize an image',         // optional, public
+        input: { type: 'object', properties: { width: { type: 'number' } } },  // optional, public
+      },
+      publish: { permission: { policyVersion: 2, capabilities: ['photo:publish'] } },  // its own permission
     },
   }],
 },
 ```
-The dispatch exposure provides `dispatch(operation, context)`. Clients list kinds through the Router (`syntax.route` → `kinds()`), which returns each kind with its declared description and operations. What lives inside a kind is the owner's business: other participants contribute through the owner's own API, and by convention an owner may answer a `describe` operation (`[CALL photo describe]`) listing what its kind offers right now.
+The dispatch exposure provides `dispatch(operation, context)`. Clients list kinds through the Router (`syntax.route` → `kinds()`), which returns each kind with its declared description and operations. The permissions are not listed.
+
+### Operations and permissions
+The kernel keeps a registry of the operations under each kind and the permission to call each one, and refuses a call **before your handler is reached**.
+- **Every operation is declared.** A kind with no `operations` refuses the boot. A call to a name you did not list comes back with status `operation_not_declared`.
+- **Every operation has a permission.** It is its own `permission`, or the kind's `permission` as a default. A kind or operation with neither refuses the boot. `{ policyVersion: 2 }` is the explicit "every routing caller".
+- **The permission is a Layer 1 policy**, the same language as an exposure's `policy`: `origins`, `callerClasses`, `capabilities`, `official`. `parentCallerClasses` is not supported here. A caller the permission does not admit gets status `permission_denied`; what the permission required is never returned to the caller, and the kernel records the reason on its observation stream.
+- **If you define the operation names yourself at runtime** (for example from a registry that plugins fill), write `operations: 'open'` and give the kind a `permission`. The kernel then enforces that one permission on every call and cannot check the names: your handler decides which names exist. An open kind is listed as `open: true` with no operation names.
+
+What lives inside a kind is the owner's business: other participants contribute through the owner's own API, and by convention an owner may answer a `describe` operation (`[CALL photo describe]`, declared like any other) listing what its kind offers right now.
 
 ## Checklist
 - Declare everything in the manifest; unknown keys refuse the boot (`PARTICIPANT_MANIFEST_INVALID`).

@@ -5,6 +5,8 @@ export type { IRouterRegistrant } from './registrant.js';
 export { isRouterRegistrant } from './registrant.js';
 export type {
   BrudDispatchContext,
+  BrudKindOperation,
+  BrudPublicKindOperation,
   BrudRouteOptions,
   BrudRouteRegistration,
   BrudRouteResult,
@@ -16,6 +18,7 @@ export type { RouterErrorCode } from './errors.js';
 export {
   RouterDisposedError,
   RouterError,
+  RouterInvalidDeclarationError,
   RouterInvalidKindError,
   RouterKindCollisionError,
   RouterRegistrationClosedError,

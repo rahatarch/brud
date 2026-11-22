@@ -59,6 +59,7 @@ export async function createService(context: KernelServiceModuleContext): Promis
         kind: 'probe',
         exposure: 'acme.probe.dispatch',
         description: 'Daemon test probe',
+        permission: { policyVersion: 2 },
         operations: {
           echo: { description: 'Echo parameters', input: { type: 'object' } },
           sleep: { description: 'Wait, honouring cancellation' },

@@ -17,3 +17,4 @@ Events the kernel records on its observation stream (`KernelCallAuthority.observ
 | `interception.modified` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `interception.refused` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `invoke-refused` | `brud.core.exposedApiRegistry` | `packages/kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.ts` |
+| `router` | `(caller-supplied)` | `packages/kernel/services/Router/orchestrator/RouterService.ts` |

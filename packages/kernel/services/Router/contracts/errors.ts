@@ -3,6 +3,7 @@ export type RouterErrorCode =
   | 'ROUTER_REGISTRATION_CLOSED'
   | 'ROUTER_KIND_COLLISION'
   | 'ROUTER_INVALID_KIND'
+  | 'ROUTER_INVALID_DECLARATION'
   | 'ROUTER_UNKNOWN_SERVICE'
   | 'ROUTER_DISPOSED';
 
@@ -30,6 +31,24 @@ export class RouterRegistrationClosedError extends RouterError {
   constructor(kind: string) {
     super(`Router registration window is closed; kind "${kind}" was rejected`);
     this.name = 'RouterRegistrationClosedError';
+    this.kind = kind;
+  }
+}
+
+/** Raised when a kind's operations or permissions are missing or invalid. Refuses boot. */
+export class RouterInvalidDeclarationError extends RouterError {
+  public readonly code = 'ROUTER_INVALID_DECLARATION' as const;
+
+  /** Kind whose declaration was refused. */
+  public readonly kind: string;
+
+  /**
+   * @param kind - Kind whose declaration was refused.
+   * @param reason - What is wrong with it.
+   */
+  constructor(kind: string, reason: string) {
+    super(`Kind "${kind}" declaration refused: ${reason}`);
+    this.name = 'RouterInvalidDeclarationError';
     this.kind = kind;
   }
 }

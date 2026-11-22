@@ -137,7 +137,10 @@ export class ActionManagerService implements IActionManager, IServiceLifecycle {
    * on the kernel call chain and passes the kernel-derived caller.
    */
   registerWithRouter(router: IRouterService): void {
-    router.register({ kind: BRUD_KIND_ACTION, exposure: ACTION_MANAGER_DISPATCH_EXPOSURE, version: 1 });
+    // The operation names are action ids registered at runtime, so the vocabulary is open. The kind-level
+    // permission lets every routing caller reach the dispatcher; the per-operation permission check
+    // stays with this service, which evaluates the caller's capabilities for each action.
+    router.register({ kind: BRUD_KIND_ACTION, exposure: ACTION_MANAGER_DISPATCH_EXPOSURE, version: 1, operations: 'open', permission: { policyVersion: 2 } });
   }
 
   /**

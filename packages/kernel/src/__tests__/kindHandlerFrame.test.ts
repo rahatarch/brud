@@ -37,6 +37,7 @@ export function createService() {
         kind: 'peeker',
         exposure: 'acme.kindowner.dispatch',
         description: 'resolves a gated exposure from its handler',
+        permission: { policyVersion: 2 },
         operations: { peek: { description: 'Resolve the gated exposure' } },
       }],
       events: [],

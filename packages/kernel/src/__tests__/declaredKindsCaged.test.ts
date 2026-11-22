@@ -32,6 +32,7 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
         kind: 'caged',
         exposure: 'caged.kind',
         description: 'A caged demo kind',
+        permission: { policyVersion: 2 },
         operations: { hello: { description: 'Says hello', input: { type: 'object' } } },
       }],
       events: [],
