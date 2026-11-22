@@ -142,6 +142,15 @@ A commit that changes behaviour or touches more than one file explains itself. U
 
 A trivial commit (a typo, a version bump) needs only the subject line.
 
+### Writing the message
+
+A commit message describes the final state of the change, for a reader who has no memory of the work.
+
+- **Stand on its own.** Write nothing that only makes sense with the conversation, plan or tracker in hand. Do not cite item, step, phase or ticket numbers ("item 13", "step 4"), earlier discussions, or who decided what. Name the behaviour instead: write "an official participant with a missing required field now refuses the boot instead of being left out", not "fixes item 13".
+- **Say what is true now.** Describe the code as it ends up, not the route taken to it. Leave out dead ends, failed attempts, test runs that went wrong, and corrections made along the way, unless a future maintainer needs them: a constraint that shaped the design, a limitation they will hit, or a decision they might be tempted to undo.
+- **Avoid relative words.** "As before", "now", "the old", "still" and "no longer" are fine only when they say what changed in the product, never what changed during the work. Prefer concrete names, behaviours and numbers.
+- **Link only what lasts.** Refer to files, functions, error codes, documents in the repository, or public issue numbers. Do not refer to private notes or local ledgers.
+
 ### Rules
 
 - One logical change per commit.

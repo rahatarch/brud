@@ -43,3 +43,5 @@ Rules:
 Never add AI co-author or attribution lines (for example `Co-Authored-By:` or session links) to commit messages or pull request descriptions.
 
 Follow the commit message standard in [CONTRIBUTING.md](CONTRIBUTING.md#commit-message-guidelines): a `type(scope): summary` subject of 72 characters or fewer, and a structured body (why, what is new, what is fixed, security or compatibility, tests added and updated, docs, verification) for any change beyond trivial. It is enforced by the `commit-msg` hook (`npm run hooks:install`) and by CI.
+
+Write a commit message for a reader with no memory of the work. Describe the final state of the change, not the story of getting there: no item, step or ticket numbers, no "as discussed" or "as decided", no dead ends, failed attempts or corrections made along the way. Name the behaviour, file, function or error code instead. Mention a difficulty only when a future maintainer needs it (a constraint, a limitation, a decision they might undo). See "Writing the message" in CONTRIBUTING.md.
