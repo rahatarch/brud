@@ -7,6 +7,8 @@ npm install --save-dev @brud/cli
 npx brud doctor
 ```
 
+Requires Node.js 22 or newer.
+
 | Command | Purpose |
 |---|---|
 | `brud init [name]` | Scaffold a project that passes `doctor` and `npm test` (with `--no-install`, run `npm install` and then `brud init --finish` to write `brud.config.json`) |
@@ -14,6 +16,7 @@ npx brud doctor
 | `brud check` | Boot the composition in a scratch state and report problems |
 | `brud run` / `brud call` | Boot and route Brud text, in-process or through the daemon |
 | `brud kinds` / `brud inspect` | Show kinds, exposures, requirements and who can resolve each |
+| `brud add <package>` | Add a Brud participant package, inspected before it is installed |
 | `brud pack` | Build a caged participant package (experimental) |
 
-The CLI loads `@brud/kernel`, `@brud/sdk` and `@brud/daemon` from your project, never from a private copy. Nothing in Brud depends on it, and it never changes who is official. Full documentation: [`docs-next/02-getting-started/the-brud-cli.md`](../../docs-next/02-getting-started/the-brud-cli.md).
+The CLI loads `@brud/kernel`, `@brud/sdk` and `@brud/daemon` from your project, never from a private copy. Nothing in Brud depends on it, and it never changes who is official. Full documentation: [The Brud CLI](https://github.com/rahatarch/brud/blob/main/docs-next/02-getting-started/the-brud-cli.md).
