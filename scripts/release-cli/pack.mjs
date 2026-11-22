@@ -10,7 +10,8 @@ import { failIfAny, run } from './lib/exec.mjs';
 import { CLI_NAME, loadCli } from './lib/cli.mjs';
 import { sha256Hex, sriSha512, verifySums, writeSums } from './lib/integrity.mjs';
 
-const args = parseArgs(process.argv.slice(2));
+// --from-registry takes a version here (smoke.mjs uses it as a plain flag, so it is not in the default boolean list).
+const args = parseArgs(process.argv.slice(2), ['ci', 'push', 'dry-run', 'sign']);
 const out = resolve(args.out ?? join(ROOT, 'dist-release-cli'));
 const fromRegistry = args['from-registry'];
 const cli = loadCli(ROOT);
