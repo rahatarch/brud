@@ -22,3 +22,4 @@ RELEASE_PLAYBOOK.local.md
 
 # CLI release pipeline output
 /dist-release-cli/
+/dist-release-participant/

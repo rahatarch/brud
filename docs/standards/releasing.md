@@ -2,7 +2,7 @@
 
 How a BrudOS release works end to end: what to run, what each step does, and how to fix the things that go wrong. What a release must contain (notes, assets, versioning) is defined in [`github-releases.md`](github-releases.md).
 
-**Scope.** Only the kernel, SDK, daemon and protocol are released this way (`@brud/kernel`, `@brud/sdk`, `@brud/daemon`, `@brud/protocol`), in lockstep at one version. The CLI, plugins and composed services are not part of it.
+**Scope.** Only the kernel, SDK, daemon and protocol are released this way (`@brud/kernel`, `@brud/sdk`, `@brud/daemon`, `@brud/protocol`), in lockstep at one version. The CLI (`releasing-cli.md`) and the composed participants (`releasing-participants.md`) are not part of it.
 
 ## 1. The short version
 
