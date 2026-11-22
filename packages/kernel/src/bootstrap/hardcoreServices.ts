@@ -42,9 +42,9 @@ const PARSER_BUILT_HASH =
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  'e00fb6fc0e56a8b7cbcdd87f9ade388f30304257c52c996e3508f65ff2c371c7';
+  '7c32572b7405160cf822c9ef32b61d7567b5a7a5543cfc424161f3e32e32306a';
 const ROUTER_BUILT_HASH =
-  '0915e4ab2b1da3e66a30f803a044a22ecb44278a40621abd1a6a4483036941ca';
+  '507d52f6aeda039cea065953c3b42d5bd0fe37ebd4437706ae5f62044e4d1039';
 
 /**
  * Pinned digests of the WASM cage package.
@@ -56,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '34b982389f4c912294e97af9aa90deb4808393dc3cd5235964deb96cfe81c8c8';
+  '57e45e1b59b95e917c5a351479c9ebfceab29c57fd749933524ec57cc306be07';
 const WASM_CAGE_BUILT_HASH =
-  '1557c1b0b08882fb70e8372b8f8d29ec18ff12d4dc21186da4552958cdb99936';
+  '28b8cca8c4523c49b415267ecfac4cc76dfbe8a460e671720c81c299460e9ac8';
 
 /**
  * Pinned digests of the events hardcore package.
@@ -70,12 +70,12 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  '9f8129656c0aeaadf25ecb1031d71a416b51dd49bfb580a1268a35e7814c269a';
+  '7b8c6f02c2a8da7a54dbdd3002aff5ba63358b4812b4329b00179e24d8fc2353';
 const INTERCEPTION_BUILT_HASH =
-  '372361ad9c50b00e5956319891b615f5f3397d911a0fd168438a34985153d960';
+  '740663df8336895983dad902a4519947494332a36afdd877a435f5c6672b6982';
 
 const EVENTS_SOURCE_HASH =
-  '4620f8042dbe4b5d4379b759989c26d5e73b845e75f53c14d27b1f3a62db3c9d';
+  'b3c33c9b2dd4ea37f3d2e434882950f769dc4f14619e0bfafa9f83120198f1dd';
 const EVENTS_BUILT_HASH =
   'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 

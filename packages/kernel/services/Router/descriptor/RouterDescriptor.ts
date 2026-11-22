@@ -100,7 +100,7 @@ export function createRouterDescriptor(
               identity: caller.identity,
               callerClass: caller.callerClass,
               official: caller.official,
-              capabilities: Object.freeze([...caller.capabilities].sort()),
+              capabilities: caller.capabilities,
               origin: caller.origin,
             });
 

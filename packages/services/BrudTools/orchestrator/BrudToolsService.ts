@@ -192,7 +192,7 @@ export class BrudToolsService implements IBrudToolsService, IServiceLifecycle {
   dispatchRouted(operation: BrudOperation, context: BrudDispatchContext): Promise<OperationResult> {
     const callerContext: IPluginExecutionContext = {
       callerId: dispatchCallerId(context.caller),
-      ...{ permissions: context.caller.capabilities },
+      ...{ permissions: [...context.caller.capabilities] },
       ...(context.signal === undefined ? {} : { signal: context.signal }),
       origin: context.caller.origin,
     } as IPluginExecutionContext;

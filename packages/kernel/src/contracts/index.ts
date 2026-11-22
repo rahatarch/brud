@@ -94,3 +94,5 @@ export {
 export type { MiddlewareNext, Middleware, IExecutionPipeline } from './pipeline.js';
 
 export type { IOperationRegistry } from './registry.js';
+
+export { NO_CAPABILITIES, createCapabilitySet, isCapabilitySet, withPlainCapabilities } from './capabilitySet.js';

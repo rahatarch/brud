@@ -1,3 +1,4 @@
+import { withPlainCapabilities } from '../../../src/contracts/capabilitySet.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type {
   IKernelAccessBroker,
@@ -512,7 +513,9 @@ export function createCagedParticipant(options: CagedParticipantOptions): Servic
       const routed: RoutedCallback = (request, signal) => serveRoutedCall(registry, request, signal);
       const run = createScheduler(guest, routed, deadlineMs);
 
-      const invoke = (exposure: string, method: string, args: readonly unknown[], caller: ExposedApiCaller): unknown => {
+      const invoke = (exposure: string, method: string, rawArgs: readonly unknown[], caller: ExposedApiCaller): unknown => {
+        // Capability views are carried as sorted arrays: the guest sees plain JSON.
+        const args = withPlainCapabilities(rawArgs) as readonly unknown[];
         const validation = argsSchema.validate(args);
 
         if (!validation.valid) {

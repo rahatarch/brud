@@ -17,12 +17,12 @@ Every call the kernel mediates runs inside a **call chain**. The chain carries:
 | `caller.identity` | The caller's kernel identity. `null` for the kernel itself and for a host session |
 | `caller.callerClass` | `participant`, `kernel`, or `host` |
 | `caller.official` | Whether the composition owner declared this caller official |
-| `caller.capabilities` | The capabilities the caller requested. See the note below: a `ReadonlySet` in the kernel's own call chain, a sorted array in a kind dispatcher |
+| `caller.capabilities` | The capabilities the caller requested, as one read-only set (see the note below) |
 | `caller.parentIdentity` | For a caged child, the identity of the participant that loaded it |
 | `origin` | Where the chain began: `kernel`, `runtime`, or `host` |
 
-> **Set or array?**
-> The kernel's own caller (`KernelCaller`, what policies and projections see) holds `capabilities` as a `ReadonlySet<string>`. A kind owner's `dispatch(operation, context)` receives a different, plain view, `DispatchCallerView`, whose `capabilities` is a frozen, sorted `string[]`, so that it is serializable and identical for every transport. Use `context.caller.capabilities.includes('tasks:write')` there, not `.has`. Both types are exported from `@brud/kernel`: `import type { DispatchContextView } from '@brud/kernel'`.
+> **One shape everywhere.**
+> Wherever a caller is described to a participant, `capabilities` is the same read-only view of a set: in an exposure's projection, in a kind owner's `dispatch(operation, context)` (`context.caller.capabilities`), and in an interceptor's call (`call.caller.capabilities`). It has `has`, `size`, `forEach`, `keys`, `values`, `entries` and iteration, in sorted order, so `caller.capabilities.has('tasks:write')` and `[...caller.capabilities]` work in all three places. It has no `add`, `delete` or `clear`, and it cannot be changed: it is a view over a private copy, not a `Set` (a frozen `Set` can still be changed). It is not an array, so there is no `.includes`; use `.has`. `JSON.stringify` writes it as its sorted array. A caged guest, which receives plain JSON, gets the same capabilities as a sorted array. The types are `ReadonlySet<string>` and are exported from `@brud/kernel`, for example `import type { DispatchContextView } from '@brud/kernel'`.
 
 These are fixed when the participant is admitted (or, for a host, when the host call starts). A participant cannot change them mid-flight.
 

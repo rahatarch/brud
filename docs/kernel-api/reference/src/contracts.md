@@ -2235,6 +2235,16 @@ const DEFAULT_KERNEL_CALL_LIMITS: KernelCallLimits;
 
 Limits used when the host does not supply its own.
 
+***
+
+### NO\_CAPABILITIES
+
+```ts
+const NO_CAPABILITIES: ReadonlySet<string>;
+```
+
+The capability view of a caller that holds none.
+
 ## Functions
 
 ### admitParticipantManifest()
@@ -2258,6 +2268,24 @@ the manifest. An absent manifest admits no requests and no exposures.
 #### Returns
 
 [`AdmittedManifest`](#admittedmanifest)
+
+***
+
+### createCapabilitySet()
+
+```ts
+function createCapabilitySet(values): ReadonlySet<string>;
+```
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `values` | `Iterable`\<`string`\> |
+
+#### Returns
+
+`ReadonlySet`\<`string`\>
 
 ***
 
@@ -2315,6 +2343,26 @@ registers into it yet.
 #### Returns
 
 [`Token`](#token)\<`T`\>
+
+***
+
+### isCapabilitySet()
+
+```ts
+function isCapabilitySet(value): value is ReadonlySet<string>;
+```
+
+Reports whether a value is a capability view made by [createCapabilitySet](#createcapabilityset).
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `value` | `unknown` |
+
+#### Returns
+
+`value is ReadonlySet<string>`
 
 ***
 
@@ -2396,3 +2444,26 @@ The string value.
 
 When the value is absent or not a non-empty
 string.
+
+***
+
+### withPlainCapabilities()
+
+```ts
+function withPlainCapabilities(value, depth?): unknown;
+```
+
+Copies a value for a boundary that carries only plain JSON, replacing every
+capability view in it with its sorted array. Everything else is left as it
+is, so a boundary's own plain-value check still refuses what is not plain.
+
+#### Parameters
+
+| Parameter | Type | Default value | Description |
+| ------ | ------ | ------ | ------ |
+| `value` | `unknown` | `undefined` | The value to carry across. |
+| `depth?` | `number` | `0` | - |
+
+#### Returns
+
+`unknown`

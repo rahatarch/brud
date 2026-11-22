@@ -282,7 +282,7 @@ The plain caller view an interceptor sees.
 | Property | Modifier | Type |
 | ------ | ------ | ------ |
 | <a id="property-callerclass"></a> `callerClass` | `readonly` | `string` |
-| <a id="property-capabilities"></a> `capabilities` | `readonly` | readonly `string`[] |
+| <a id="property-capabilities"></a> `capabilities` | `readonly` | `ReadonlySet`\<`string`\> |
 | <a id="property-identity"></a> `identity` | `readonly` | `string` \| `null` |
 | <a id="property-official"></a> `official` | `readonly` | `boolean` |
 | <a id="property-origin"></a> `origin` | `readonly` | `string` |

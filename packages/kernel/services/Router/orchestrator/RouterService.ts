@@ -96,7 +96,7 @@ export class RouterService implements IRouterService, IServiceLifecycle {
       identity: context.caller.identity,
       callerClass: context.caller.callerClass,
       official: context.caller.official,
-      capabilities: Object.freeze([...context.caller.capabilities].sort()),
+      capabilities: context.caller.capabilities,
       origin: context.origin,
     });
   }
@@ -485,7 +485,7 @@ export class RouterService implements IRouterService, IServiceLifecycle {
         callerClass: caller.callerClass as CallerClass,
         identity: caller.identity,
         official: caller.official,
-        capabilities: new Set(caller.capabilities),
+        capabilities: caller.capabilities,
       },
     });
 

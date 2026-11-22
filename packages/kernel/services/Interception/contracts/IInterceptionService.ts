@@ -5,7 +5,7 @@ export interface InterceptedCaller {
   readonly identity: string | null;
   readonly callerClass: string;
   readonly official: boolean;
-  readonly capabilities: readonly string[];
+  readonly capabilities: ReadonlySet<string>;
   readonly origin: string;
 }
 

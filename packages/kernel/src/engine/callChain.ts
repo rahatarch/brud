@@ -1,3 +1,4 @@
+import { NO_CAPABILITIES, createCapabilitySet } from '../contracts/capabilitySet.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   DEFAULT_KERNEL_CALL_LIMITS,
@@ -27,14 +28,13 @@ const frames = new AsyncLocalStorage<Frame>();
 /** Largest number of records the observation stream retains. */
 const OBSERVATION_CAPACITY = 1_000;
 
-const EMPTY_CAPABILITIES: ReadonlySet<string> = Object.freeze(new Set<string>());
 
 /** The kernel itself as a caller. */
 export const KERNEL_CALLER: KernelCaller = Object.freeze({
   callerClass: 'kernel',
   identity: null,
   official: true,
-  capabilities: EMPTY_CAPABILITIES,
+  capabilities: NO_CAPABILITIES,
 });
 
 /** A participant the kernel has not assigned an identity to. */
@@ -42,7 +42,7 @@ export const UNIDENTIFIED_PARTICIPANT: KernelCaller = Object.freeze({
   callerClass: 'participant',
   identity: null,
   official: false,
-  capabilities: EMPTY_CAPABILITIES,
+  capabilities: NO_CAPABILITIES,
 });
 
 /** One admitted participant as the call chain records it. */
@@ -143,19 +143,15 @@ export class KernelCallChain implements KernelCallAuthority {
    * @param operation - Work performed inside the chain.
    */
   runHost<T>(session: KernelHostSession, operation: () => T): T {
-    const capabilities = new Set<string>();
-
-    for (const capability of session.capabilities ?? []) {
-      if (typeof capability === 'string' && capability.length > 0) {
-        capabilities.add(capability);
-      }
-    }
+    const capabilities = createCapabilitySet(
+      [...(session.capabilities ?? [])].filter((capability) => typeof capability === 'string' && capability.length > 0),
+    );
 
     const caller: KernelCaller = Object.freeze({
       callerClass: 'host',
       identity: null,
       official: false,
-      capabilities: Object.freeze(capabilities),
+      capabilities,
     });
 
     return this.runRoot('host', caller, operation);

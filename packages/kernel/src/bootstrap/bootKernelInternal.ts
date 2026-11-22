@@ -1,3 +1,4 @@
+import { createCapabilitySet } from '../contracts/capabilitySet.js';
 import { existsSync, readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, relative as relativePath, resolve as resolvePath } from 'node:path';
@@ -154,7 +155,7 @@ export function createDeferredKernel(
           callerClass: 'participant',
           identity: identities.get(entry.token) ?? null,
           official: entry.official,
-          capabilities: Object.freeze(new Set(entry.manifest.capabilities)),
+          capabilities: createCapabilitySet(entry.manifest.capabilities),
           ...(entry.parentIdentity === undefined
             ? {}
             : { parentIdentity: entry.parentIdentity }),

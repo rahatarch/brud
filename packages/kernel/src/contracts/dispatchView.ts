@@ -1,13 +1,13 @@
 /**
  * The caller of a routed operation, as recorded on the kernel call chain.
- * It is never taken from the request. `capabilities` is a sorted array here,
- * unlike the `ReadonlySet` of the kernel's own caller.
+ * It is never taken from the request. `capabilities` is the same read-only
+ * view every participant sees for a caller.
  */
 export interface DispatchCallerView {
   readonly identity: string | null;
   readonly callerClass: string;
   readonly official: boolean;
-  readonly capabilities: readonly string[];
+  readonly capabilities: ReadonlySet<string>;
   readonly origin: string;
 }
 

@@ -1,3 +1,4 @@
+import { createCapabilitySet } from '../../../src/contracts/capabilitySet.js';
 import type {
   AdmittedManifest,
   KernelCallAuthority,
@@ -217,7 +218,8 @@ export class InterceptionService implements IInterceptionService {
         identity: caller.identity,
         callerClass: caller.callerClass,
         official: caller.official,
-        capabilities: Object.freeze(Array.from(caller.capabilities ?? []).sort()),
+        // The giver names the caller it is intercepting for; whatever it passes, the interceptor sees the one read-only shape.
+        capabilities: createCapabilitySet(caller.capabilities ?? []),
         origin: caller.origin,
       }),
     });
