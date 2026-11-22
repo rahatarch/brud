@@ -9,7 +9,7 @@ npx brud doctor
 
 | Command | Purpose |
 |---|---|
-| `brud init [name]` | Scaffold a project that passes `doctor` and `npm test` |
+| `brud init [name]` | Scaffold a project that passes `doctor` and `npm test` (with `--no-install`, run `npm install` and then `brud init --finish` to write `brud.config.json`) |
 | `brud doctor` | Read-only check of the machine, the composition and the daemon |
 | `brud check` | Boot the composition in a scratch state and report problems |
 | `brud run` / `brud call` | Boot and route Brud text, in-process or through the daemon |

@@ -1,17 +1,19 @@
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join, relative } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { join, relative } from 'node:path';
 import { flagOn, type ParsedArgs } from '../../core/args.js';
-import { hardcoreModulePaths, type KernelPackage } from '../../composition/load.js';
+import type { KernelPackage } from '../../composition/load.js';
 import { CommandError } from '../../core/errors.js';
 import type { Io } from '../../core/io.js';
 import { loadPackage } from '../../core/project.js';
 import { printData, type Style } from '../../core/report.js';
-import { participantPath, projectFiles } from './scaffold.js';
+import { compositionText, findKernel, write, type KernelLoader } from './config.js';
+import { runInitFinish } from './finish.js';
+import { projectFiles } from './scaffold.js';
 import { initTarget } from './target.js';
 
-export const INIT_FLAGS = { boolean: ['kind', 'guest', 'no-install'], value: ['lang'] } as const;
+export const INIT_FLAGS = { boolean: ['kind', 'guest', 'no-install', 'finish'], value: ['lang'] } as const;
 
 function installDependencies(dir: string): Promise<void> {
   return new Promise((done, fail) => {
@@ -22,25 +24,27 @@ function installDependencies(dir: string): Promise<void> {
       if (code === 0) {
         done();
       } else {
-        fail(new CommandError('INIT_INSTALL_FAILED', `npm install exited with ${String(code)}; your files are in place, run \`npm install\` yourself`));
+        fail(new CommandError('INIT_INSTALL_FAILED', `npm install exited with ${String(code)}; your files are in place. Run \`npm install\` in ${dir}, then \`npx brud init --finish\` there to write brud.config.json`));
       }
     });
   });
 }
 
-async function write(dir: string, file: string, text: string): Promise<void> {
-  const path = join(dir, file);
-
-  await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, text, { encoding: 'utf8', flag: 'wx' });
-}
+const loadOwnKernel: KernelLoader = (dir) => loadPackage<KernelPackage['module']>('@brud/kernel', dir);
 
 /**
- * `brud init [name]`: scaffolds a project that passes `brud doctor` and
- * `npm test` on first run. It writes only inside the target folder and
- * refuses to overwrite anything that is already there.
+ * `brud init [name]`: scaffolds a project that passes `brud doctor` and `npm test` on first run.
+ * It writes only inside the target folder and refuses to overwrite anything that is already there.
+ *
+ * `brud.config.json` lists the kernel's services, so it is written once the project's kernel is
+ * installed. With `--no-install` (no kernel yet) the project is created without it and init exits 0,
+ * telling the user to run `npm install` and then `brud init --finish`, which writes only that file.
  */
-export async function runInit(io: Io, style: Style, args: ParsedArgs): Promise<number> {
+export async function runInit(io: Io, style: Style, args: ParsedArgs, load: KernelLoader = loadOwnKernel): Promise<number> {
+  if (flagOn(args, 'finish')) {
+    return runInitFinish(io, style, args, load);
+  }
+
   if (flagOn(args, 'guest')) {
     const { runInitGuest } = await import('./guest/index.js');
 
@@ -66,22 +70,29 @@ export async function runInit(io: Io, style: Style, args: ParsedArgs): Promise<n
     await installDependencies(dir);
   }
 
-  let kernel: KernelPackage;
+  const installed = !flagOn(args, 'no-install');
+  const kernel = await findKernel(load, dir);
+  const where = relative(io.cwd, dir) || '.';
+  const cd = where === '.' ? '' : `  cd ${where}\n`;
 
-  try {
-    kernel = await loadPackage('@brud/kernel', dir);
-  } catch {
-    throw new CommandError('PACKAGE_NOT_FOUND', `files written, but @brud/kernel is not installed in ${dir}, so the composition could not list its hardcore services. Run \`npm install\` there, then \`brud init\` again in a new folder, or write brud.config.json from the docs`);
+  if (kernel === undefined) {
+    if (installed) {
+      throw new CommandError('PACKAGE_NOT_FOUND', `npm install finished but @brud/kernel is not in ${where}. Check the project's package.json, run \`npm install\`, then \`npx brud init --finish\` there to write brud.config.json`);
+    }
+
+    // --no-install: the composition lists the kernel's services, so it can only be written once the kernel is installed.
+    const pending = Object.keys(files).sort();
+
+    printData(io, style, { dir, name, kind, files: pending, configWritten: false }, () => `Created ${name} in ${where}:\n${pending.map((file) => `  ${file}`).join('\n')}\n\nNot finished: brud.config.json lists the kernel's services, so it is written once the kernel is installed.\n\nNext:\n${cd}  npm install\n  npx brud init --finish\n  npm test\n`);
+
+    return 0;
   }
 
-  const services = [...hardcoreModulePaths(kernel.root).map((path) => ({ path, official: true })), { path: `./${participantPath(name)}`, official: true }];
-
-  await write(dir, 'brud.config.json', `${JSON.stringify({ services }, null, 2)}\n`);
+  await write(dir, 'brud.config.json', compositionText(kernel, name));
 
   const created = [...Object.keys(files), 'brud.config.json'].sort();
-  const where = relative(io.cwd, dir) || '.';
 
-  printData(io, style, { dir, name, kind, files: created }, () => `Created ${name} in ${where}:\n${created.map((file) => `  ${file}`).join('\n')}\n\nNext:\n${where === '.' ? '' : `  cd ${where}\n`}  npm test\n  npm run doctor\n  npm run check\n  npm start\n`);
+  printData(io, style, { dir, name, kind, files: created, configWritten: true }, () => `Created ${name} in ${where}:\n${created.map((file) => `  ${file}`).join('\n')}\n\nNext:\n${cd}  npm test\n  npm run doctor\n  npm run check\n  npm start\n`);
 
   return 0;
 }
