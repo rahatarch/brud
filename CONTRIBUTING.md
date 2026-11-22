@@ -115,26 +115,51 @@ Please respond constructively to review feedback.
 
 ## Commit Message Guidelines
 
-Use the Conventional Commits format:
+Every commit message follows the Conventional Commits format, with a structured body for anything beyond a trivial change.
 
-`<type>(<scope>): <description>`
+### Subject line (required, enforced)
 
-Common types include:
+`<type>(<scope>): <summary>`
 
-- `feat` — A new feature.
-- `fix` — A bug fix.
-- `docs` — Documentation changes.
-- `refactor` — Code restructuring.
-- `test` — Test-related changes.
-- `chore` — Maintenance and tooling changes.
+- **type** is one of `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`, `revert`.
+- **scope** is the package or area, lower case, for example `kernel`, `sdk`, `cli`, `daemon`, `release`. It is optional.
+- **summary** is imperative ("add", not "added"), lower case, no trailing period.
+- The whole subject is 72 characters or fewer.
+- A breaking change adds `!` after the scope (`feat(kernel)!: ...`) and a `BREAKING CHANGE: <what breaks>` line in the body.
+- Leave one blank line between the subject and the body.
+
+### Body (a convention, not a gate)
+
+A commit that changes behaviour or touches more than one file explains itself. Use only the sections that apply, in this order, each with a plain heading line:
+
+1. **Why**: the problem in a few lines, and the issue or defect it addresses.
+2. **What is new**
+3. **What is fixed**
+4. **Security or compatibility**: what is kept, changed, or at risk.
+5. **Tests added**: what each test proves. **Tests updated**: and why.
+6. **Docs**: what changed, and what was regenerated.
+7. **Verification**: the commands run, the results, and what was not covered.
+
+A trivial commit (a typo, a version bump) needs only the subject line.
+
+### Rules
+
+- One logical change per commit.
+- No AI attribution lines (`Co-Authored-By` naming an AI tool, "Generated with ...", session links). Human co-authors are welcome.
+- No secrets, credentials, or private keys.
+
+### Enforcement
+
+- **Locally:** run `npm run hooks:install` once per clone. A `commit-msg` hook then rejects a message whose subject or attribution breaks the rules.
+- **In CI:** the "Commit Standard" workflow checks every commit in a pull request with the same code. It enforces the subject and attribution rules only.
+- **By hand:** `npm run check:commits` checks your commits against `origin/main`.
 
 Examples:
 
-- `feat: add new functionality`
-- `fix: resolve an unexpected error`
-- `docs: update installation guide`
-- `refactor: simplify implementation`
-- `test: add regression coverage`
+- `feat(kernel): explain a refused resolve with lastRefusal()`
+- `fix(cli): run npx directly on Windows in the smoke test`
+- `docs: update the installation guide`
+- `test(kernel): pin kind handler identity`
 
 ## Security Issues
 

@@ -41,3 +41,5 @@ Rules:
 ## Commit Messages
 
 Never add AI co-author or attribution lines (for example `Co-Authored-By:` or session links) to commit messages or pull request descriptions.
+
+Follow the commit message standard in [CONTRIBUTING.md](CONTRIBUTING.md#commit-message-guidelines): a `type(scope): summary` subject of 72 characters or fewer, and a structured body (why, what is new, what is fixed, security or compatibility, tests added and updated, docs, verification) for any change beyond trivial. It is enforced by the `commit-msg` hook (`npm run hooks:install`) and by CI.

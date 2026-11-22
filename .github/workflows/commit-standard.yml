@@ -1,0 +1,27 @@
+name: Commit Standard
+
+# Checks every commit in a pull request against the commit message standard (CONTRIBUTING.md,
+# "Commit Message Guidelines"): subject format, length, no AI attribution lines. Only the subject and
+# attribution rules are enforced here; the body sections are a convention, not a gate.
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  commit-messages:
+    name: Commit messages follow the standard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test the checker
+        run: npm run test:commit-standard
+      - name: Check the pull request commits
+        run: node scripts/commit-standard/check.mjs --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"

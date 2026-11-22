@@ -1,0 +1,3 @@
+#!/bin/sh
+# Enforces the commit message standard locally. Enable once per clone: npm run hooks:install
+exec node "$(dirname "$0")/../scripts/commit-standard/check.mjs" --file "$1"
