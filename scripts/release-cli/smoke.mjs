@@ -44,8 +44,14 @@ function finish() {
 
 // Run one command line through the shell with every part quoted, so paths with spaces work on all systems.
 const q = (s) => (win ? `"${String(s).replace(/"/g, '\\"')}"` : `'${String(s).replace(/'/g, `'\\''`)}'`);
+// On Windows npm is started as `node npm-cli.js`, with no shell: the npm.cmd shim cannot find npm when the
+// working folder has a space in its name (the smoke test's folder does, deliberately).
+const npmCli = join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js');
 function sh(parts, { cwd, env, check = true } = {}) {
-  const r = spawnSync(parts.map(q).join(' '), { cwd, env: { ...process.env, ...env }, shell: true, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+  const direct = win && parts[0] === 'npm' && existsSync(npmCli);
+  const r = direct
+    ? spawnSync(process.execPath, [npmCli, ...parts.slice(1)], { cwd, env: { ...process.env, ...env }, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 })
+    : spawnSync(parts.map(q).join(' '), { cwd, env: { ...process.env, ...env }, shell: true, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
   const out = { status: r.status ?? 1, stdout: r.stdout ?? '', stderr: r.stderr ?? '' };
   if (check && out.status !== 0) throw new Error(`${parts.join(' ')} exited ${out.status}\n${`${out.stdout}\n${out.stderr}`.trim().split('\n').slice(-15).join('\n')}`);
   return out;
