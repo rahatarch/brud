@@ -60,6 +60,19 @@ if (greeter !== null) greeter.greet('world');
 ```
 `resolve` returns `null` when scope or policy refuses you. Hold the handle and call it later; each call is re-checked against the chain that makes it.
 
+### Finding out why `resolve` returned `null`
+`registry.lastRefusal()` (or `ctx.lastRefusal()` with the SDK) tells you why the most recent `resolve` in the current call frame returned `null`, or returns `null` when it succeeded. It gives a stable `code`, a short `message` for your log, and your own `callerOrigin` and `callerClass`.
+
+| Code | Meaning |
+|---|---|
+| `no-call-context` | There is no active kernel call. Exposures are not attached yet, so every `resolve` in a synchronous `create` is refused. Resolve in `onRunning` or later. |
+| `registry-closed` | The resolution primitive has shut down. |
+| `limit-exceeded` | Too many calls in the window, or the request was too large. |
+| `malformed-request` | The name or version is malformed. |
+| `unavailable` | The exposure is not available to you. It may not exist, or its policy may not admit your origin, class or capabilities. For example, a call that started in the host cannot resolve a `runtime`-scoped exposure. |
+
+`unavailable` is deliberately a single answer: a refusal never tells you whether an exposure exists, or what its policy requires. The detail stays on the kernel's observation stream.
+
 ## Owning a kind (Brud syntax)
 Kinds are the public vocabulary remote clients use: `[CALL <kind> <operation>]`. The Parser reads the text, the Router sends the operation to the kind's owner, and the owner decides what to do with it. A kind has one owner per composition; a second claim refuses the boot.
 

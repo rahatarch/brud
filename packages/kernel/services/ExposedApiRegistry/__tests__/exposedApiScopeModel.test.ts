@@ -478,7 +478,7 @@ describe('universal exposed API scope model', () => {
         catch (error) { report.register = error instanceof TypeError ? 'absent' : String(error); }`,
     }]);
 
-    assert.deepEqual(reports()['model.late'], { keys: ['resolve'], register: 'absent' });
+    assert.deepEqual(reports()['model.late'], { keys: ['resolve', 'lastRefusal'], register: 'absent' });
   });
 
   it('applies the per-identity call and size limits to resolve', async () => {

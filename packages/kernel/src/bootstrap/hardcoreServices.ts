@@ -30,19 +30,19 @@ const IDENTITY_REGISTRY_BUILT_HASH =
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '1f90bc7913dbf4de5448fbb33631966a4508fd73289aa4d510ec6b4eefe3d00f';
+  'b5b0b64ecc7c05a98622d91b4a9b184b616ca5123cdb16d43bc349e5f5c5b34b';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
-  '1be233d60e6ae4d136531be3198bf5033f8b34b0cd4d8af9ca8a2563420b793f';
+  '1611d0706c145878d644f0549cab89856423c07351ebef5b209c26874677f8b0';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '32f5efdf99cb14cf1a1d1ed35180aabcce3f16fd51d9fcd44f3c184ca3b0cbe6';
+  'eacb44cf2647259b1495e1f054658d1be810ad27c8ad34b370dbd7bbcc18f9e2';
 const PARSER_BUILT_HASH =
   '2b2520552e7652a0992677bd8607cbe0d4b798e4e629963a4a27727a851e3c37';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '4050d73a4bc998f6f38c51524b801b1dca2ed27881d944b9d08daab95afa6a5c';
+  '5d076ad7eb8648866388c9f1563012d0a63a470b4402031d9fa2a94e5e75b457';
 const ROUTER_BUILT_HASH =
   '502d309405265145cfb2cf39e28f044b088e36e6ac917ffa477a241454d253c4';
 
@@ -56,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '4160218f3ee904370cf2972b725511e65b50704a88f4d88547fb536cc0b5e0ff';
+  '5f4c0020c04b428374182dd1e96b3a3cc3d43f08b1707304bb3d05fea25a258b';
 const WASM_CAGE_BUILT_HASH =
-  '579ec2449e6a73e28ea9c88095d7750f01b1eb787e729c5ef7054758125f4873';
+  '485622ca252863249c75ec9ee96058de198529c96ef12ff31fd0eb6c72dd96ab';
 
 /**
  * Pinned digests of the events hardcore package.
@@ -70,12 +70,12 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  'ad319b6ad6828bb3e5eed4411c79294a093b2740880e20f942f280ffda0b7da3';
+  'c991646f4d361dc834cd6fbcde3d42880900b1cf795cd95e328e23081ebd7204';
 const INTERCEPTION_BUILT_HASH =
   '372361ad9c50b00e5956319891b615f5f3397d911a0fd168438a34985153d960';
 
 const EVENTS_SOURCE_HASH =
-  'a79dde9ab18890ec10b47fd6c0570edeab15cc29ea3c0341373662bef4c0cc41';
+  '3a7eccac9bb2c32734ba071e9aeafdd6c1e55c4e4ea66a3fc7e8baca70826078';
 const EVENTS_BUILT_HASH =
   'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 
@@ -164,7 +164,7 @@ export const HARDCORE_SERVICES: readonly HardcoreService[] = [
     expectedContentHash: EXPOSED_API_REGISTRY_SOURCE_HASH,
     expectedBuiltContentHash: EXPOSED_API_REGISTRY_BUILT_HASH,
     contractVersion: '1.0.0',
-    contractInterface: ['register', 'resolve'],
+    contractInterface: ['lastRefusal', 'register', 'resolve'],
     // Admission. Attaches the kernel's call authority and the composition's
     // name pins, registers every exposure each participant's manifest declares
     // under that participant's kernel identity, and seals the window before

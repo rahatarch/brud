@@ -783,7 +783,7 @@ describe('six real hardcore services through one generic mechanism', () => {
       );
 
       // Registration is the kernel's alone: every caller's view is resolve.
-      assert.deepEqual(Object.keys(registry), ['resolve']);
+      assert.deepEqual(Object.keys(registry), ['resolve', 'lastRefusal']);
       assert.equal(kernel.runHostCall({}, () => registry.resolve('test.unregistered')), null);
 
       const records = loadIdentityRegistryStorage(storagePath).records;

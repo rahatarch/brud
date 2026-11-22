@@ -1,5 +1,5 @@
 import type { ExposureDeclaration } from '../../../src/contracts/manifest.js';
-import type { ExposedApiResolveOptions } from './types.js';
+import type { ExposedApiRefusal, ExposedApiResolveOptions } from './types.js';
 
 /**
  * The resolution primitive, as every participant sees it.
@@ -26,6 +26,19 @@ export interface IExposedApiRegistry {
    * @returns The handle, or `null`.
    */
   resolve<T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null;
+
+  /**
+   * Why the most recent `resolve` in the current call frame returned `null`.
+   *
+   * Returns `null` when that resolve succeeded or none was made in this
+   * frame. Outside any call frame (for example during a participant's
+   * synchronous `create`) it returns `no-call-context`: exposures are not
+   * attached yet, so every resolve is refused. The answer is scoped to the
+   * frame, so no other caller's refusal is ever visible. It keeps the
+   * indistinguishability above: reasons that depend on policy or on other
+   * participants all read as `unavailable`.
+   */
+  lastRefusal(): ExposedApiRefusal | null;
 }
 
 /**

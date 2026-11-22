@@ -4,6 +4,7 @@ import {
   withExposureBindings,
   type ExposedApiBinding,
   type ExposedApiCaller,
+  type ExposedApiRefusal,
   type ExposedApiResolveOptions,
   type IExposedApiRegistry,
   type IKernelAccessBroker,
@@ -17,6 +18,12 @@ import { assertMajor, assertName, exposureKey } from '../core/names.js';
 
 /** Who may reach an exposure, by call origin (kernel scope semantics). */
 export type ExposureScope = 'kernel' | 'runtime' | 'host' | 'any';
+
+/** What `lastRefusal` reports before the registry is attached. */
+const NOT_ATTACHED: ExposedApiRefusal = Object.freeze({
+  code: 'no-call-context',
+  message: 'no kernel call context: exposures are not attached yet (for example during synchronous create)',
+});
 
 /** What a participant's code sees: its id, options, instance, and `resolve`. */
 export interface ParticipantContext<TInstance extends object> {
@@ -37,6 +44,12 @@ export interface ParticipantContext<TInstance extends object> {
    * scope or policy refuses, and before the participant is running.
    */
   resolve<T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null;
+  /**
+   * Why the most recent `resolve` returned `null`, or `null` when it succeeded.
+   * Before the participant is running (for example in `create`) exposures are
+   * not attached yet, so this reports `no-call-context`.
+   */
+  lastRefusal(): ExposedApiRefusal | null;
 }
 
 /**
@@ -147,6 +160,8 @@ export function defineParticipant<TInstance extends object>(
         },
         resolve: <T>(name: string, options?: ExposedApiResolveOptions): T | null =>
           registry === undefined ? null : registry.resolve<T>(name, options),
+        lastRefusal: (): ExposedApiRefusal | null =>
+          registry === undefined ? NOT_ATTACHED : registry.lastRefusal(),
       };
 
       const created = definition.create(ctx);

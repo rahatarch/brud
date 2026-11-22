@@ -36,6 +36,8 @@ import {
   isExposedApiVersion,
   type ExposedApiBinding,
   type ExposedApiCaller,
+  type ExposedApiRefusal,
+  type ExposedApiRefusalCode,
   type ExposedApiResolveOptions,
   type ExposedApiScope,
 } from '../contracts/types.js';
@@ -100,6 +102,25 @@ function withParentCallerClass(
     : { ...context, parentCallerClass: parent.callerClass };
 }
 
+const REFUSAL_MESSAGES: Readonly<Record<ExposedApiRefusalCode, string>> = Object.freeze({
+  'no-call-context': 'no kernel call context: exposures are not attached yet (for example during synchronous create)',
+  'registry-closed': 'the resolution primitive is closed',
+  'limit-exceeded': 'the call or request size limit was exceeded',
+  'malformed-request': 'the name or version is malformed',
+  unavailable: 'the exposure is not available to this caller (it does not exist, or policy does not admit this caller)',
+});
+
+/** Builds a refusal. Carries only what the refused caller already knows about itself. */
+function refusalOf(code: ExposedApiRefusalCode, context?: KernelCallContext): ExposedApiRefusal {
+  return Object.freeze({
+    code,
+    message: REFUSAL_MESSAGES[code],
+    ...(context === undefined
+      ? {}
+      : { callerOrigin: context.origin, callerClass: context.caller.callerClass }),
+  });
+}
+
 /** Default projection: the giver's instance itself. */
 function identityProjection(service: unknown): unknown {
   return service;
@@ -133,6 +154,9 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
 
   readonly #bindings = new Map<string, ExposedApiBinding>();
 
+  /** The last refusal per call frame. Weak: an entry dies with its frame. */
+  readonly #refusals = new WeakMap<KernelCallContext, ExposedApiRefusal>();
+
   readonly #scopes = new Map<string, ScopeRecordEntry>();
 
   readonly #storagePath: string | undefined;
@@ -151,7 +175,7 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
 
   #dirty = false;
 
-  /** The only view a participant receives: `resolve`. */
+  /** The only view a participant receives: `resolve` and `lastRefusal`. */
   readonly publicView: IExposedApiRegistry;
 
   constructor(dependencies: ExposedApiRegistryDependencies = {}) {
@@ -159,6 +183,7 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
     this.publicView = Object.freeze({
       resolve: <T = unknown>(name: string, options?: ExposedApiResolveOptions): T | null =>
         this.resolve<T>(name, options),
+      lastRefusal: (): ExposedApiRefusal | null => this.lastRefusal(),
     });
   }
 
@@ -348,8 +373,10 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
       return this.#refuse(authority, undefined, 'resolve-refused', {
         name: typeof name === 'string' ? name : null,
         reason: 'no kernel call context',
-      });
+      }, this.#disposed ? 'registry-closed' : 'no-call-context');
     }
+
+    this.#refusals.delete(context);
 
     const expectedOwner = options?.expectedOwner;
     const requestBytes = Buffer.byteLength(String(name), 'utf8')
@@ -360,7 +387,7 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
       return this.#refuse(authority, context, 'resolve-refused', {
         name: String(name),
         reason: 'call or size limit exceeded',
-      });
+      }, 'limit-exceeded');
     }
 
     const version = options?.version ?? 1;
@@ -369,7 +396,7 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
       return this.#refuse(authority, context, 'resolve-refused', {
         name: String(name),
         reason: 'malformed request',
-      });
+      }, 'malformed-request');
     }
 
     const entry = this.#entries.get(scopeRecordIdentityKey(name, exposedApiMajor(version)));
@@ -421,7 +448,32 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
     const projection = binding.projection ?? identityProjection;
     const value = authority.runAs(entry.owner, () => projection(instance, callerView(context)));
 
+    if (value === null || value === undefined) {
+      // The giver declined to project for this caller. The caller sees the
+      // same refusal as for any other policy decision, and the stream records it.
+      return this.#refuse(authority, context, 'resolve-refused', {
+        name,
+        reason: 'giver projection declined this caller',
+      });
+    }
+
     return this.#handle(authority, entry, value) as T;
+  }
+
+  /**
+   * Why the most recent `resolve` in the current call frame returned `null`.
+   *
+   * Reads only the current frame's own record, so no other caller's refusal is
+   * visible. Outside any frame the only possible refusal is the absence of one.
+   */
+  lastRefusal(): ExposedApiRefusal | null {
+    const context = this.#authority?.current();
+
+    if (context === undefined) {
+      return refusalOf(this.#disposed ? 'registry-closed' : 'no-call-context');
+    }
+
+    return this.#refusals.get(context) ?? null;
   }
 
   /** Records a refusal on the observation stream and returns the uniform refusal. */
@@ -430,7 +482,12 @@ implements IExposedApiRegistry, IExposedApiAdmission, IServiceLifecycle {
     context: KernelCallContext | undefined,
     event: string,
     detail: Readonly<Record<string, unknown>>,
+    code: ExposedApiRefusalCode = 'unavailable',
   ): null {
+    if (context !== undefined) {
+      this.#refusals.set(context, refusalOf(code, context));
+    }
+
     authority?.observe(OBSERVATION_SOURCE, event, {
       ...detail,
       callerIdentity: context?.caller.identity ?? null,

@@ -1698,11 +1698,11 @@ describe('BC-11: the resolution primitive carries no participant, caller id, or 
     const instance = descriptor.factory(context, undefined as never);
     const view = descriptor.project?.(instance, context);
 
-    assert.deepEqual([...EXPOSED_API_REGISTRY_CONTRACT_METHODS].sort(), ['register', 'resolve']);
-    assert.deepEqual([...(entry?.contractInterface ?? [])].sort(), ['register', 'resolve']);
+    assert.deepEqual([...EXPOSED_API_REGISTRY_CONTRACT_METHODS].sort(), ['lastRefusal', 'register', 'resolve']);
+    assert.deepEqual([...(entry?.contractInterface ?? [])].sort(), ['lastRefusal', 'register', 'resolve']);
     assert.equal(descriptor.accessPolicy, undefined);
     assert.ok(view !== undefined);
-    assert.deepEqual(Object.keys(view), ['resolve']);
+    assert.deepEqual(Object.keys(view), ['resolve', 'lastRefusal']);
     assert.equal('register' in view, false);
   });
 

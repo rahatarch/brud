@@ -7,7 +7,7 @@ The compiled hardcore list, in boot order. Each hardcore is verified against its
 | # | Token | Contract version | Contract interface | Mechanism |
 | --- | --- | --- | --- | --- |
 | 1 | `brud.core.identityRegistry` | 1.0.0 | `issue`, `resolve`, `retire`, `revoke` | no |
-| 2 | `brud.core.exposedApiRegistry` | 1.0.0 | `register`, `resolve` | no |
+| 2 | `brud.core.exposedApiRegistry` | 1.0.0 | `lastRefusal`, `register`, `resolve` | no |
 | 3 | `brud.core.parser` | 1.0.0 | `parse` | no |
 | 4 | `brud.core.router` | 2.0.0 | `register`, `closeRegistration`, `isRegistrationOpen`, `registeredKinds`, `kinds`, `route`, `dispatch` | no |
 | 5 | `brud.core.wasmCage` | 1.0.0 | `resolve` | yes |

@@ -973,6 +973,21 @@ A validated Layer 1 policy.
 
 ***
 
+### ExposedApiRefusal
+
+A refusal as the refused caller may read it.
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-callerclass-1"></a> `callerClass?` | `readonly` | `"host"` \| `"kernel"` \| `"participant"` | The refused caller's own class, when a call frame exists. |
+| <a id="property-callerorigin"></a> `callerOrigin?` | `readonly` | `"host"` \| `"kernel"` \| `"runtime"` | The refused caller's own root origin, when a call frame exists. |
+| <a id="property-code"></a> `code` | `readonly` | [`ExposedApiRefusalCode`](#exposedapirefusalcode) | Stable code. |
+| <a id="property-message"></a> `message` | `readonly` | `string` | Short fixed message for logs. Never names an exposure, owner, policy or capability. |
+
+***
+
 ### ExposedApiResolveOptions
 
 Options for one resolve.
@@ -1027,6 +1042,26 @@ chain's root origin from the kernel-provided execution context and evaluates
 the giver's declared Layer 1 policy.
 
 #### Methods
+
+##### lastRefusal()
+
+```ts
+lastRefusal(): ExposedApiRefusal | null;
+```
+
+Why the most recent `resolve` in the current call frame returned `null`.
+
+Returns `null` when that resolve succeeded or none was made in this
+frame. Outside any call frame (for example during a participant's
+synchronous `create`) it returns `no-call-context`: exposures are not
+attached yet, so every resolve is refused. The answer is scoped to the
+frame, so no other caller's refusal is ever visible. It keeps the
+indistinguishability above: reasons that depend on policy or on other
+participants all read as `unavailable`.
+
+###### Returns
+
+[`ExposedApiRefusal`](#exposedapirefusal) \| `null`
 
 ##### resolve()
 
@@ -1172,6 +1207,27 @@ because Layer 1 is evaluated again on every use of the handle.
 #### Returns
 
 `unknown`
+
+***
+
+### ExposedApiRefusalCode
+
+```ts
+type ExposedApiRefusalCode = 
+  | "no-call-context"
+  | "registry-closed"
+  | "limit-exceeded"
+  | "malformed-request"
+  | "unavailable";
+```
+
+Why the last `resolve` in a call frame returned `null`.
+
+`unavailable` deliberately covers every reason that depends on another
+participant or on policy (no such exposure, policy refuses, owner not live,
+owner mismatch, owner code does not provide it): a caller cannot learn from
+it whether an exposure exists. The other codes depend only on the caller's
+own request or state.
 
 ***
 

@@ -151,6 +151,37 @@ export interface ExposedApiBinding {
   readonly projection?: ExposedApiProjection;
 }
 
+/**
+ * Why the last `resolve` in a call frame returned `null`.
+ *
+ * `unavailable` deliberately covers every reason that depends on another
+ * participant or on policy (no such exposure, policy refuses, owner not live,
+ * owner mismatch, owner code does not provide it): a caller cannot learn from
+ * it whether an exposure exists. The other codes depend only on the caller's
+ * own request or state.
+ */
+export type ExposedApiRefusalCode =
+  | 'no-call-context'
+  | 'registry-closed'
+  | 'limit-exceeded'
+  | 'malformed-request'
+  | 'unavailable';
+
+/** A refusal as the refused caller may read it. */
+export interface ExposedApiRefusal {
+  /** Stable code. */
+  readonly code: ExposedApiRefusalCode;
+
+  /** Short fixed message for logs. Never names an exposure, owner, policy or capability. */
+  readonly message: string;
+
+  /** The refused caller's own root origin, when a call frame exists. */
+  readonly callerOrigin?: ExposedApiOrigin;
+
+  /** The refused caller's own class, when a call frame exists. */
+  readonly callerClass?: CallerClass;
+}
+
 /** Options for one resolve. */
 export interface ExposedApiResolveOptions {
   /** API version: a major version or a semantic version. Defaults to 1. */

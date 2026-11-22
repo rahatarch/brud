@@ -67,6 +67,25 @@ describe('@brud/sdk participant layer on the real kernel', () => {
     assert.equal(r['sdk.notes']?.label, 'my notes');
   });
 
+  it('explains a refused resolve: not attached in create, unavailable when running, null after a success', async (t) => {
+    delete (globalThis as { __sdkTest?: unknown }).__sdkTest;
+    await bootTestKernel(t, [
+      { source: notes },
+      { source: module(`defineParticipant({
+  id: 'sdk.asker', requests: [],
+  create: (ctx) => { const early = ctx.resolve('sdk.notes'); report('sdk.asker').early = early; report('sdk.asker').earlyWhy = ctx.lastRefusal(); return {}; },
+  onRunning: (ctx) => { const r = report('sdk.asker'); r.handle = ctx.resolve('sdk.notes'); r.why = ctx.lastRefusal(); ctx.resolve('sdk.nothing'); r.missing = ctx.lastRefusal(); ctx.resolve('sdk.greet-not-declared'); r.ok = ctx.lastRefusal(); },
+})`) },
+    ]);
+    const r = reports()['sdk.asker'];
+
+    assert.equal(r?.early, null);
+    assert.equal((r?.earlyWhy as { code?: string } | undefined)?.code, 'no-call-context');
+    assert.equal(r?.handle, null);
+    assert.equal((r?.why as { code?: string } | undefined)?.code, 'unavailable');
+    assert.deepEqual(r?.why, r?.missing, 'a missing exposure and a refused one explain identically');
+  });
+
   it('builds the descriptor the kernel expects, and rejects invalid definitions', () => {
     const descriptor = defineParticipant({ id: 'acme.notes', exposes: { 'acme.notes': { version: 2, handle: () => ({}) } }, create: () => ({}) })();
 

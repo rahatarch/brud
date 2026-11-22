@@ -29,6 +29,8 @@ export type {
   ExposedApiIdentity,
   ExposedApiOrigin,
   ExposedApiProjection,
+  ExposedApiRefusal,
+  ExposedApiRefusalCode,
   ExposedApiResolveOptions,
   ExposedApiScope,
   ExposedApiVersion,

@@ -16,11 +16,11 @@ export const EXPOSED_API_REGISTRY_CONTRACT_VERSION = '1.0.0';
 /**
  * Methods declared for the Registry interface.
  *
- * `resolve` is open to every participant. `register` is kernel-only: the
+ * `resolve` and `lastRefusal` are open to every participant. `register` is kernel-only: the
  * kernel calls it during admission, and it is never part of the view a
  * participant receives.
  */
-export const EXPOSED_API_REGISTRY_CONTRACT_METHODS = ['register', 'resolve'] as const;
+export const EXPOSED_API_REGISTRY_CONTRACT_METHODS = ['lastRefusal', 'register', 'resolve'] as const;
 
 /**
  * Optional context field holding the absolute protected scope-record path.

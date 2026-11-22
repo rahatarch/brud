@@ -36,7 +36,7 @@ const EXPOSED_API_TOKEN = 'brud.core.exposedApiRegistry';
 
 const IDENTITY_METHODS = ['issue', 'resolve', 'retire', 'revoke'] as const;
 
-const EXPOSED_API_METHODS = ['register', 'resolve'] as const;
+const EXPOSED_API_METHODS = ['lastRefusal', 'register', 'resolve'] as const;
 
 /** Hardcores declared `mechanism: true`; the kernel maps them to non-official. */
 const MECHANISM_PATHS = new Set([
@@ -697,7 +697,7 @@ describe('hardcore service enforcement production mirror', () => {
         assert.equal(error.check, 'contract');
         assert.match(
           error.found,
-          /\(missing register\)/u,
+          /\(missing lastRefusal, register\)/u,
           error.found,
         );
         return true;
