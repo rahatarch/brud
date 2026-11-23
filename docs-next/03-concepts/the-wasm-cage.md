@@ -89,6 +89,8 @@ What the kernel enforces, tested with hostile guests:
 
 The error message names the limit and carries no backtrace; the engine's full text is on the error's `detail`.
 
+A caged participant has no timers, so it does work only when it is called. To give it recurring work, have a participant that keeps time call it: see [Schedule work for a caged participant](../04-guides/schedule-work-for-a-caged-participant.md).
+
 Calls into one guest instance run one at a time. Up to 64 more may wait in line, and a call made from inside the same instance's own call is refused. In every case the kernel stays running.
 
 ## What the cage gives caged code
