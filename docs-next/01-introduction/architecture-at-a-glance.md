@@ -9,9 +9,17 @@ This page is the map. Details are in [Concepts](../03-concepts/README.md).
 | **Host** | The program that boots and talks to a kernel: your app, a test, or the daemon | You |
 | **Kernel** | The engine: call chain, access broker, lifecycle, config loader | BrudOS |
 | **Hardcores** | Seven built-in services the kernel will not boot without | BrudOS |
-| **Participants** | Everything else: services, tools, plugins | You and others |
+| **Composed Participants** | System services and domain tools sealed by the composition builder | You or distribution authors |
+| **End-User Participants** | Dynamic tools and extensions loaded at runtime by the user | Third parties and end users |
 
 The hardcores are Level-1 services that ship with the kernel. They are called *hardcore* because they are compiled in and pinned: you cannot remove or replace them. They are not part of the kernel's engine code.
+
+## Participant categories
+
+Beyond the seven hardcores, every capability in BrudOS is provided by a **Participant**. Participants fall into two operational categories:
+
+1. **Composed Participants**: Pre-configured and sealed by the builder of the composition (for example, official foundation services like `@brud/filesystem` or your application's core modules). They are validated against the build seal at boot; if a composed participant fails, boot is refused.
+2. **End-User (Loaded) Participants**: Configured by the end user at runtime. These include third-party tools, extensions, and sandboxed code running safely inside the [WASM cage](../03-concepts/the-wasm-cage.md). If an end-user participant cannot start, it is cleanly left out and reported while the kernel continues booting.
 
 ## The seven hardcores
 

@@ -4,7 +4,7 @@ Eight ideas explain almost everything in BrudOS. Read them once before the rest 
 
 ## 1. Everything is a participant
 
-A service, a tool, a plugin, an app piece: they are all participants. The kernel treats them the same way, whoever wrote them.
+A service, a tool, an extension, an app piece: they are all participants. The kernel treats them the same way, whoever wrote them.
 
 ## 2. A manifest is a request, not a grant
 
@@ -47,7 +47,7 @@ Seven built-in services, the **hardcores**, start first and are checked against 
   +---------------------------------------------------+
       |  every call is routed to the giver
       v
-  participants: your services, tools, plugins
+  participants: composed services, tools, extensions
 ```
 
 **Next:** [Architecture at a glance](architecture-at-a-glance.md)
