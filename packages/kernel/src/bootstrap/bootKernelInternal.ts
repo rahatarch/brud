@@ -17,6 +17,7 @@ import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js'
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';
+import { checkSeal } from './seal.js';
 import { abandonment, culpritOf, LoadedParticipantFailure, type AbandonedParticipant } from './loaded.js';
 import { KernelReloadError, refuseFrozenChange, type ReloadableKernel, type ReloadOptions } from './reload.js';
 import {
@@ -366,16 +367,32 @@ function assembleKernel(
       const raw = await readConfig(configPath);
       const config = parseBrudConfig(raw, configPath);
 
+      // With a build seal, the official participants must be exactly those the
+      // builder sealed. One that declares itself official without being sealed
+      // is not part of the build, so it is left out and named.
+      const sealCheck = options.seal === undefined ? undefined : checkSeal(options.seal, config, configPath);
+
       if (baseline !== undefined) {
-        refuseFrozenChange(baseline, config, configPath);
+        refuseFrozenChange(baseline, config, configPath, sealCheck?.sealed);
         acceptConfigChange(configPath);
+      }
+
+      const unsealed = sealCheck?.unsealed ?? new Set<string>();
+      const newlyUnsealed = [...unsealed].filter((path) => !skip.has(path));
+
+      if (newlyUnsealed.length > 0) {
+        throw new LoadedParticipantFailure(newlyUnsealed.map((path): AbandonedParticipant => ({
+          path,
+          code: 'PARTICIPANT_NOT_SEALED',
+          reason: 'it declares itself official, but the build did not seal it; only a rebuild can make a participant official',
+        })));
       }
 
       recordConfigRead(configPath, raw);
       protectConfigFile(configPath);
       protectedThisKernel = true;
       composedConfig = config;
-      const services = await loadServiceModules(config.services.filter((entry) => entry.official === true || !skip.has(entry.path)), configPath, raw);
+      const services = await loadServiceModules(config.services.filter((entry) => !(skip.has(entry.path) && (entry.official !== true || unsealed.has(entry.path)))), configPath, raw);
       const contextOptions: Record<string, unknown> = {
         ...(options.options ?? {}),
         ...(bootOptions.options ?? {}),
@@ -886,7 +903,7 @@ async function importModule(
   }
 }
 
-function resolveModuleId(declaredPath: string, configPath: string): string {
+export function resolveModuleId(declaredPath: string, configPath: string): string {
   if (declaredPath.startsWith('kernel:')) {
     return resolveExisting(
       fileURLToPath(new URL(declaredPath.slice('kernel:'.length), KERNEL_PACKAGE_ROOT)),

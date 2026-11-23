@@ -10,6 +10,7 @@ import { DOCTOR_FLAGS, runDoctor } from './commands/doctor/index.js';
 import { INIT_FLAGS, runInit } from './commands/init/index.js';
 import { INSPECT_FLAGS, runInspect } from './commands/inspect/index.js';
 import { PACK_FLAGS, runPack } from './commands/pack/index.js';
+import { SEAL_FLAGS, runSeal } from './commands/seal/index.js';
 import { RUN_FLAGS, runRun } from './commands/run/index.js';
 
 interface Command {
@@ -29,6 +30,7 @@ const COMMANDS: Readonly<Record<string, Command>> = {
   inspect: { summary: 'List participants, kinds, exposures, requirements and who can resolve each', usage: 'brud inspect [config] [--cap c]', flags: INSPECT_FLAGS, run: (io, style, args) => runInspect(io, style, args, 'all') },
   add: { summary: 'Add a Brud participant package (inspected before it is installed)', usage: 'brud add <name[@version] | ./file.tgz | ./folder> [--dry-run] [--write] [--allow-scripts] [--config path]', flags: ADD_FLAGS, run: runAdd },
   pack: { summary: 'Build a caged participant package (experimental)', usage: 'brud pack [dir] [--out dir] [--verify]', flags: PACK_FLAGS, run: runPack },
+  seal: { summary: 'Generate the build seal for a composition (a builder runs it once per release)', usage: 'brud seal [config] [--out file]', flags: SEAL_FLAGS, run: runSeal },
 };
 
 /** Exit codes, documented in `brud --help`. */

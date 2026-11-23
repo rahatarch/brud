@@ -6,9 +6,24 @@ import type {
 import type { IServiceLifecycle, KernelLogger } from '../contracts/lifecycle.js';
 
 /**
+ * The build seal: what a composition's builder shipped, fixed once per build.
+ *
+ * It lists every official participant in the order the build declared them,
+ * each with a content hash. The builder generates it at release time and the
+ * built product hands the kernel the seal file and its digest at boot, so the
+ * kernel can tell what the build shipped from anything added afterwards.
+ */
+export interface SealReference {
+  /** Path of the seal file. */
+  readonly path: string;
+  /** SHA-256 hex digest of the seal file, held by the built product, not next to the file. */
+  readonly digest: string;
+}
+
+/**
  * Generic options accepted by {@link bootKernel}.
  *
- * The core names exactly two fields: an open options bag and a logger. Every
+ * The core names three fields: an open options bag, a logger, and the build seal the host's product carries. Every
  * service-specific option lives inside {@link BootKernelOptions.options} and
  * is interpreted by the service module that owns it. The core never sees those
  * names or types.
@@ -19,6 +34,15 @@ export interface BootKernelOptions {
 
   /** Kernel diagnostic sink. Defaults to a console-backed sink. */
   readonly logger?: KernelLogger;
+
+  /**
+   * The build seal: the file the builder generated at release time and its
+   * digest, which the built product holds. When given, the official
+   * participants must be exactly those the seal lists, and an entry that
+   * declares itself official without being sealed is left out. When absent,
+   * the config's own `official` flags stand, which suits development.
+   */
+  readonly seal?: SealReference;
 }
 
 /** Options accepted by {@link createDeferredKernel}. */
@@ -28,6 +52,9 @@ export interface ComposeKernelOptions {
 
   /** Kernel diagnostic sink. Defaults to a console-backed sink. */
   readonly logger?: KernelLogger;
+
+  /** The build seal, as for {@link BootKernelOptions.seal}. */
+  readonly seal?: SealReference;
 }
 
 /**

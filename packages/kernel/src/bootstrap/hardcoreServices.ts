@@ -24,25 +24,25 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  '61c3e8b2315ea32c1636206c3b3d996a1fc42861c30f1d91dacf5572dc194d2d';
+  'fc33e3c28f33daba285d4a08236008111f46e2c482880954d07e36b6a4d9bd5f';
 const IDENTITY_REGISTRY_BUILT_HASH =
   'd30ee7fecfca06ad1f661a9125bb0eafa1d7750467c369ea59bd553bfe107fa1';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =
-  '60a1859f3413686af328a827caab6e054e74c1578bcd3ede3fa2142b3d672bba';
+  '3021673dfbd129fc06dda0d032c4e6cac1c6b39552632271f38c2a2ebdcc4a55';
 const EXPOSED_API_REGISTRY_BUILT_HASH =
   '1611d0706c145878d644f0549cab89856423c07351ebef5b209c26874677f8b0';
 
 /** Pinned digests of the parser package. */
 const PARSER_SOURCE_HASH =
-  '7de7188b16d27fce8b8170d31eab074a736031e56b2e7d2cb10cfdd79c1a6dc1';
+  '7ec389c04ef0a5361229653836b7f9298033dfaba76df03578ad85c954f1f314';
 const PARSER_BUILT_HASH =
   '2b2520552e7652a0992677bd8607cbe0d4b798e4e629963a4a27727a851e3c37';
 
 /** Pinned digests of the router package. */
 const ROUTER_SOURCE_HASH =
-  '7f102eac4088dd99a537ec0e2106c45ea17a205e705167a9a142cece892a42a2';
+  '85a74665f9415a7a4714def847a6af5565ff4b4c0396cff6ec566208b6b4d340';
 const ROUTER_BUILT_HASH =
   '1235a251dfddcf3c336341b15e5016c6d46f560c98f0f65f3c64bd285db3fc84';
 
@@ -56,7 +56,7 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '95837c4b9cfb11a168ad66150d8db2ed96bb2216db72db0889c5168da311817f';
+  '5df56820b53de23bba81cd0b828691016cae37079697694ff15e23cdab1dd5ff';
 const WASM_CAGE_BUILT_HASH =
   '5662890260013119bb2526915c5b3a62c832c39218139ffa73d92f6bf96ae163';
 
@@ -70,12 +70,12 @@ const WASM_CAGE_BUILT_HASH =
  */
 /** Pinned digests of the interception package (recomputed with computePackageContentHash). */
 const INTERCEPTION_SOURCE_HASH =
-  '042e0abd1c7b82ed38218a26eab0bdea64b61864a51a10ac38fc00bd5014ef08';
+  '949a4e746b09fb3b0a36be09904c40ee6a39e3522086e8a4e7c6b7ba1cfe66ef';
 const INTERCEPTION_BUILT_HASH =
   '4e88dce0bff0b4891a518c293b22c53a16f2187f1158bf9f9c00bfb9dc650589';
 
 const EVENTS_SOURCE_HASH =
-  'daf503ff6c46ea51edc27618e723942bc580b7b4b44902f2e523b9689e400237';
+  '5c3bf55427c572e1ac4a7862035db0bc3eae0246d3fc360b8c0d117196e9ceb0';
 const EVENTS_BUILT_HASH =
   'b91fc7107e7c7ba65304262ffd6daf35dd7d5e2f64c6d8ec707db74348a41cfa';
 

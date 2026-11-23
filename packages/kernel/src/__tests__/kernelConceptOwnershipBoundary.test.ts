@@ -682,9 +682,12 @@ export function interfaceMemberNames(source: string, interfaceName: string): rea
 /**
  * The only named fields a kernel boot options type may declare.
  *
- * The kernel owns the host-supplied options bag and the logger. Every other
- * named member is a service's option, whatever the service is called, and
- * belongs inside the bag where that service interprets it.
+ * The kernel owns the host-supplied options bag, the logger, and the build
+ * seal, which the kernel itself checks to tell what the builder shipped from
+ * what was added later. Every other named member is a service's option,
+ * whatever the service is called, and belongs inside the bag where that
+ * service interprets it. The seal is on the options a host passes to boot a
+ * kernel, not on the options the engine hands to a booting kernel.
  */
 /** Reports any officialness field declared on the service descriptor shape. */
 export function descriptorOfficialMembers(source: string): readonly string[] {
@@ -849,8 +852,8 @@ export function kindVocabularyViolations(source: string): readonly string[] {
  * belongs inside the bag where that service interprets it.
  */
 const KERNEL_OWNED_BOOT_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
-  ['BootKernelOptions', ['logger', 'options']],
-  ['ComposeKernelOptions', ['logger', 'options']],
+  ['BootKernelOptions', ['logger', 'options', 'seal']],
+  ['ComposeKernelOptions', ['logger', 'options', 'seal']],
   ['KernelBootOptions', ['logger', 'options']],
 ]);
 
@@ -972,11 +975,11 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
 
     assert.deepEqual(
       [...interfaceMemberNames(bootTypes, 'BootKernelOptions')].sort(),
-      ['logger', 'options'],
+      ['logger', 'options', 'seal'],
     );
     assert.deepEqual(
       [...interfaceMemberNames(bootTypes, 'ComposeKernelOptions')].sort(),
-      ['logger', 'options'],
+      ['logger', 'options', 'seal'],
     );
     assert.deepEqual(
       [...interfaceMemberNames(bootTypes, 'KernelServiceModuleContext')].sort(),

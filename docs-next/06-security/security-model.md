@@ -17,6 +17,7 @@ What BrudOS protects, how, and where the limits are.
 | Pinned hardcores | The seven core services are verified against content hashes at boot. Boot fails on a mismatch |
 | Owner-declared `official` | Only the composition's owner can mark a participant official. Packages cannot self-promote |
 | Frozen config | The composition cannot change while the kernel runs |
+| Build seal | The official participants are fixed once per build, and the seal's digest is held by the built product, so editing files on disk cannot make a participant official |
 | Private denial reasons | Refused callers get `null`. The reason goes only to the host's observation stream |
 
 ## The daemon channel

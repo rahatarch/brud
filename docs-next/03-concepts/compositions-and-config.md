@@ -49,6 +49,45 @@ The kernel builds an identity-to-official mapping from your config at boot. Give
 
 In this beta, a module that is not declared official cannot run as native code, and the kernel leaves it out. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is left out with the code `PARTICIPANT_TIER`. A package that cannot run caged (a filesystem service, for example) can declare `requires: { official: true }`; leaving such an entry unofficial is refused with `PARTICIPANT_REQUIRES_OFFICIAL`, and the owner decides whether to declare it official or remove it.
 
+## Three layers
+
+Every participant in a composition belongs to one of three layers.
+
+| Layer | Shipped and locked by | How it changes | If it fails |
+|---|---|---|---|
+| Hardcore | The Brud Foundation, compiled into the kernel release | A new kernel release | The boot is refused |
+| Composed | The builder of the composition, sealed once per build | A rebuild | The boot is refused |
+| Loaded | The end user | Edit the config and [reload](#reloading-a-composition) | The participant is left out and named |
+
+The pins guarantee the published release. Someone who clones the repository, changes it and re-pins has made a different build. The kernel does not try to stop that, and the one who rebuilds is the builder of that build. What the pins and the seal protect against is anyone who can edit files on disk but cannot rebuild.
+
+## The build seal
+
+The **seal** is how the builder fixes the composed layer, once per release. It lists every official participant in order, each with a content hash. Generate it after the build is final:
+
+```sh
+npx brud seal ./brud.config.json
+```
+
+The command writes `brud.seal.json` next to the config and prints its digest. The built product passes both to the kernel at boot:
+
+```js
+const kernel = await bootKernel('./brud.config.json', {
+  options,
+  seal: { path: './brud.seal.json', digest: '<the digest brud seal printed>' },
+});
+```
+
+Keep the digest inside the built product, not in a file next to the config. A person who can edit files can edit the seal too, but cannot change the digest the product carries, so they cannot promote a participant of their own to official.
+
+With a seal, the kernel checks at every boot, reload included:
+
+- The seal file matches its digest, or the boot is refused with `SEAL_MISMATCH`.
+- Every sealed participant is in the config, in order, with the content the build sealed, or the boot is refused with `SEAL_VIOLATION`.
+- An entry that declares itself official without being sealed is not part of the build. It is left out with `PARTICIPANT_NOT_SEALED`: only a rebuild can make a participant official.
+
+Without a seal, the config's own `official` flags stand. That suits development, and it means any entry in the file can claim to be official.
+
 ## Loaded participants
 
 An entry that is not declared official is a **loaded participant**. It always runs in the [WASM cage](the-wasm-cage.md) and it is never official. It is also the part of a composition an end user can change, by editing the config and [reloading](#reloading-a-composition).
@@ -92,7 +131,7 @@ const next = await kernel.reload({ configPath: './brud.config.next.json' });
 
 `reload` checks the new config, composes it, stops the current kernel and boots the new one with the same options. It returns the new running kernel, and the old one is disposed. `configPath` defaults to the path the kernel booted from, so a host can edit its config file while no kernel runs it, then reload.
 
-What a reload may change is every participant that is not official: which exist, their packages and their options. What it may not change is what the build froze: the official participants, in order, and the exposure owners. A config that changes those is refused with `CONFIG_RELOAD_FROZEN`; rebuild to change them. The hardcore services are re-verified against their compiled-in pins on every boot, reload included.
+What a reload may change is every loaded participant: which exist, their packages and their options. What it may not change is what the build froze: the official participants, in order, and the exposure owners. A config that changes those is refused with `CONFIG_RELOAD_FROZEN`; rebuild to change them. The hardcore services are re-verified against their compiled-in pins on every boot, reload included.
 
 A reload refused before the old kernel stops, because the config is invalid or touches the frozen part, changes nothing. A new loaded participant that cannot start does not refuse the reload: it is left out, the rest boot, and the returned kernel lists it in `abandoned`. Only a failure in the build itself, after the old kernel has stopped, makes `reload` throw `KERNEL_RELOAD_FAILED` with the cause and leaves the host with no running kernel. Handles that participants resolved before the reload stop working, and the new participants get new identities. Shutdown does not wait for calls in flight.
 
@@ -104,6 +143,9 @@ A reload refused before the old kernel stops, because the config is invalid or t
 | `CONFIG_PARSE` | The file is not valid JSON |
 | `CONFIG_SCHEMA` | The shape is wrong (unknown key, missing `services`) |
 | `CONFIG_INTEGRITY` | A protected config or state path was touched |
+| `SEAL_MISMATCH` | The seal file is not the one the built product holds the digest of |
+| `SEAL_VIOLATION` | A sealed participant is missing, out of order, or its content changed |
+| `PARTICIPANT_NOT_SEALED` | An entry declares itself official but the build did not seal it. It is left out |
 | `CONFIG_RELOAD_FROZEN` | A reload tried to change an official participant or an exposure owner |
 | `KERNEL_RELOAD_FAILED` | The new composition failed to boot, for a reason in the build, after the old kernel was stopped |
 | `MODULE_RESOLVE` | A module could not be found or imported, or a participant package failed its digest check |

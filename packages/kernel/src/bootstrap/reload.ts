@@ -49,9 +49,9 @@ export class KernelReloadError extends Error {
 }
 
 /** What a reload may not change: official entries in order, and exposure owners. */
-function frozenPart(config: BrudConfig): { readonly official: readonly string[]; readonly owners: Readonly<Record<string, string>> } {
+function frozenPart(config: BrudConfig, sealed: ReadonlySet<string> | undefined): { readonly official: readonly string[]; readonly owners: Readonly<Record<string, string>> } {
   return {
-    official: config.services.filter((entry) => entry.official === true).map((entry) => entry.path),
+    official: config.services.filter((entry) => entry.official === true && (sealed === undefined || sealed.has(entry.path))).map((entry) => entry.path),
     owners: Object.fromEntries(Object.entries(config.exposureOwners ?? {}).sort(([a], [b]) => a.localeCompare(b))),
   };
 }
@@ -61,9 +61,9 @@ function frozenPart(config: BrudConfig): { readonly official: readonly string[];
  *
  * @throws {BrudConfigError} `CONFIG_RELOAD_FROZEN`, naming every difference.
  */
-export function refuseFrozenChange(booted: BrudConfig, next: BrudConfig, configPath: string): void {
-  const before = frozenPart(booted);
-  const after = frozenPart(next);
+export function refuseFrozenChange(booted: BrudConfig, next: BrudConfig, configPath: string, sealed?: ReadonlySet<string>): void {
+  const before = frozenPart(booted, sealed);
+  const after = frozenPart(next, sealed);
   const problems: string[] = [];
 
   for (const path of before.official) {

@@ -14,6 +14,9 @@ Branch on `code`, never on the message. The complete generated list, with defini
 | `MODULE_CONTRACT` | No valid `createService` | Export what the loader expects |
 | `PARTICIPANT_TIER` | A plain module (or any hardcore) is not declared `official: true`, or the composition has no single participant-package loader. A loaded participant is left out and listed in `kernel.abandoned`; a hardcore refuses the boot | Mark it official, or ship it as a participant package (not for hardcores) |
 | `PARTICIPANT_REQUIRES_OFFICIAL` | A package says it must be official and the config does not declare it. The participant is left out and listed in `kernel.abandoned` | Add `"official": true` for that entry, or remove it |
+| `SEAL_MISMATCH` | The seal file is not the one the built product holds the digest of | Rebuild, or use the seal that belongs to this build |
+| `SEAL_VIOLATION` | A sealed participant is missing, out of order, or its content changed | Restore it, or rebuild and seal again |
+| `PARTICIPANT_NOT_SEALED` | An entry declares itself official but the build did not seal it. It is left out and listed in `kernel.abandoned` | Rebuild to make it official, or drop the flag to load it caged |
 | `HARDCORE_VERIFICATION` | Hardcore failed its pin | Reinstall the matching release |
 | `PARTICIPANT_MANIFEST_INVALID` | Manifest malformed | Check against [the manifest page](../03-concepts/manifest.md) |
 

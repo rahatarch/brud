@@ -426,13 +426,13 @@ describe('kernel core purity', () => {
 
     assert.deepEqual(
       [...interfacePropertyNames(bootTypes, 'BootKernelOptions')].sort(),
-      ['logger', 'options'],
-      'BootKernelOptions must contain only the generic options bag and a logger',
+      ['logger', 'options', 'seal'],
+      'BootKernelOptions must contain only the generic options bag, a logger, and the build seal',
     );
     assert.deepEqual(
       [...interfacePropertyNames(bootTypes, 'ComposeKernelOptions')].sort(),
-      ['logger', 'options'],
-      'ComposeKernelOptions must contain only the generic options bag and a logger',
+      ['logger', 'options', 'seal'],
+      'ComposeKernelOptions must contain only the generic options bag, a logger, and the build seal',
     );
     assert.deepEqual(
       [...interfacePropertyNames(kernelContract, 'KernelBootOptions')].sort(),

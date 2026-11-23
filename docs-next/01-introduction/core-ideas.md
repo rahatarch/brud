@@ -26,9 +26,9 @@ Each call runs inside a **call chain** the kernel tracks. The chain records the 
 
 To use an API you **resolve** it by name: `registry.resolve('acme.greet')`. You get back a handle shaped for you, or `null` if the giver refused. Every later use of the handle is checked again.
 
-## 7. Official is the composition owner's choice
+## 7. Official is the builder's choice
 
-Whether a participant is **official** is declared by the owner of the composition in its own config. A package never gets to say it is official. In this beta, a module that is not declared official is refused as native code; unofficial code is meant to run inside the WASM cage.
+Whether a participant is **official** is declared by the builder of the composition and sealed with the build (`brud seal`). A package never gets to say it is official, and neither can an end user who edits the config: only a rebuild changes what is official. In this beta, a module that is not declared official is refused as native code; unofficial code is meant to run inside the WASM cage.
 
 ## 8. The kernel boots as one sequence
 
