@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-workspace",
+  "name": "@brud/workspace",
   "version": "0.0.1",
   "description": "Brud workspace service",
   "type": "module",
@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-filesystem": "*",
-    "@brud/service-settings": "*",
-    "@brud/service-validation": "*"
+    "@brud/filesystem": "*",
+    "@brud/settings": "*",
+    "@brud/validation": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

@@ -4,6 +4,7 @@
     "rootDir": ".",
     "outDir": "dist",
     "declaration": true,
+    "sourceMap": false,
     "moduleResolution": "Node16",
     "types": [
       "node"

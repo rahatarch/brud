@@ -10,15 +10,15 @@ const sharedDist = join(servicesRoot, 'dist');
 const tsc = join(repositoryRoot, 'node_modules', 'typescript', 'bin', 'tsc');
 
 const dirToPackage = {
-  ActionManager: '@brud/service-actions',
-  BrudFileSystem: '@brud/service-filesystem',
-  BrudTools: '@brud/service-tools',
-  SettingsService: '@brud/service-settings',
-  TerminalService: '@brud/service-terminal',
-  UniversalHistory: '@brud/service-history',
-  UtilityService: '@brud/service-utility',
-  ValidationService: '@brud/service-validation',
-  WorkspaceService: '@brud/service-workspace',
+  ActionManager: '@brud/actions',
+  BrudFileSystem: '@brud/filesystem',
+  BrudTools: '@brud/tools',
+  SettingsService: '@brud/settings',
+  TerminalService: '@brud/terminal',
+  UniversalHistory: '@brud/history',
+  UtilityService: '@brud/utility',
+  ValidationService: '@brud/validation',
+  WorkspaceService: '@brud/workspace',
 };
 
 function walk(directory, out = []) {

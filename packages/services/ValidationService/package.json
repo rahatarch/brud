@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-validation",
+  "name": "@brud/validation",
   "version": "0.0.1",
   "description": "Brud validation service",
   "type": "module",
@@ -31,8 +31,8 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-settings": "*",
-    "@brud/service-workspace": "*"
+    "@brud/settings": "*",
+    "@brud/workspace": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

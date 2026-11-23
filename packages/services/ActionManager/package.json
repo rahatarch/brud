@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-actions",
+  "name": "@brud/actions",
   "version": "0.0.1",
   "description": "Brud action registry and dispatch service",
   "type": "module",
@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-tools": "*",
-    "@brud/service-settings": "*",
-    "@brud/service-validation": "*"
+    "@brud/tools": "*",
+    "@brud/settings": "*",
+    "@brud/validation": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-settings",
+  "name": "@brud/settings",
   "version": "0.0.1",
   "description": "Brud settings and settings reader service",
   "type": "module",

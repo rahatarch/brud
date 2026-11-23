@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-terminal",
+  "name": "@brud/terminal",
   "version": "0.0.1",
   "description": "Brud terminal service",
   "type": "module",
@@ -31,9 +31,9 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-settings": "*",
-    "@brud/service-validation": "*",
-    "@brud/service-workspace": "*"
+    "@brud/settings": "*",
+    "@brud/validation": "*",
+    "@brud/workspace": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

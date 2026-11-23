@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-utility",
+  "name": "@brud/utility",
   "version": "0.0.1",
   "description": "Brud utility service",
   "type": "module",
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-filesystem": "*"
+    "@brud/filesystem": "*"
   },
   "devDependencies": {
     "@types/node": "22.x"

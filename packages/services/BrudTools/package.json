@@ -1,5 +1,5 @@
 {
-  "name": "@brud/service-tools",
+  "name": "@brud/tools",
   "version": "0.0.1",
   "description": "Brud tool registry and dispatch service",
   "type": "module",
@@ -31,8 +31,8 @@
   },
   "dependencies": {
     "@brud/kernel": "*",
-    "@brud/service-settings": "*",
-    "@brud/service-validation": "*",
+    "@brud/settings": "*",
+    "@brud/validation": "*",
     "@brud/sdk": "*"
   },
   "devDependencies": {
