@@ -6,9 +6,13 @@ import {
   type ExposedApiCaller,
   type ExposedApiRefusal,
   type ExposedApiResolveOptions,
+  type EventDeclaration,
   type IExposedApiRegistry,
+  type InterceptionDeclaration,
+  type InterceptionPointDeclaration,
   type IKernelAccessBroker,
   type KernelServiceModuleContext,
+  type KindDeclaration,
   type ServiceContext,
   type ServiceDescriptor,
   type ServiceTier,
@@ -84,6 +88,14 @@ export interface ParticipantDefinition<TInstance extends object> {
   readonly requests?: readonly string[];
   /** Exposures, keyed by exposure name. */
   readonly exposes?: Readonly<Record<string, ExposureDefinition<TInstance>>>;
+  /** Events this participant declares it may emit. Validated by the kernel when the participant is admitted. */
+  readonly events?: readonly EventDeclaration[];
+  /** Exposures of other givers this participant intercepts. Implement `intercept` on the instance. */
+  readonly interceptions?: readonly InterceptionDeclaration[];
+  /** Interception points on this participant's own exposures, naming the interceptors it admits by token id. */
+  readonly interceptionPoints?: readonly InterceptionPointDeclaration[];
+  /** Syntax kinds this participant serves. Each names one of its own exposures, which dispatches the kind. */
+  readonly kinds?: readonly KindDeclaration[];
   /** Builds the participant's instance. */
   readonly create: (ctx: ParticipantContext<TInstance>) => TInstance;
   /** Runs once the kernel is running (`resolve` is live). */
@@ -131,7 +143,10 @@ export function defineParticipant<TInstance extends object>(
       scope: exposure.scope ?? 'runtime',
       ...(exposure.policy === undefined ? {} : { policy: exposure.policy }),
     })),
-    events: [],
+    events: [...(definition.events ?? [])],
+    ...(definition.interceptions === undefined ? {} : { interceptions: [...definition.interceptions] }),
+    ...(definition.interceptionPoints === undefined ? {} : { interceptionPoints: [...definition.interceptionPoints] }),
+    ...(definition.kinds === undefined ? {} : { kinds: [...definition.kinds] }),
   });
   const token = createServiceToken<TInstance>(id, definition.description ?? `Participant "${id}"`);
 

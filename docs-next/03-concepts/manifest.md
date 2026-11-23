@@ -40,6 +40,6 @@ manifest: {
 
 ## With `defineParticipant`
 
-`defineParticipant` writes the `requests` and `exposures` sections for you from its `requests` and `exposes` fields, and binds each exposure to its `handle`. For `kinds`, `events` and the interception keys, write the descriptor by hand. See [Own a kind](../04-guides/own-a-kind.md).
+`defineParticipant` writes the manifest for you from its `requests` and `exposes` fields, and binds each exposure to its `handle`. It also takes `events`, `interceptions`, `interceptionPoints` and `kinds`, written exactly as they are in the manifest; the kernel validates them when the participant is admitted. An interceptor implements `intercept` on its instance, and a kind is served by one of the participant's own exposures. See [Own a kind](../04-guides/own-a-kind.md).
 
 **Next:** [Identity and the call chain](identity-and-call-chain.md)

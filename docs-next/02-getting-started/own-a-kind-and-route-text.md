@@ -34,7 +34,7 @@ line two: with a colon
 
 ## The participant that owns `note`
 
-`defineParticipant` covers exposures. Owning a kind needs the `kinds` entry in the manifest, so this one is written as a plain descriptor:
+`defineParticipant` accepts a `kinds` list too. This example is written as a plain descriptor so every part is visible:
 
 ```js
 // notes.mjs
