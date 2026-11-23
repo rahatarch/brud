@@ -91,9 +91,23 @@ export async function analyzeComposition(kernel: KernelPackage, configPath: stri
   }
 
   try {
-    const view = await withScratchKernel(kernel, configPath, options, (booted) => viewKernel(kernel, booted));
+    const { view, left } = await withScratchKernel(kernel, configPath, options, async (booted) => ({
+      view: await viewKernel(kernel, booted),
+      left: (booted as { abandoned?: readonly { path: string; reason: string }[] }).abandoned ?? [],
+    }));
 
     findings.push({ id: 'composition.boot', title: `The composition boots in a scratch state (${String(view.services.length)} services, ${String(view.kinds.length)} kinds)`, status: 'pass' });
+
+    // The kernel starts without a participant it cannot load, so a boot that passes can still hide one.
+    for (const entry of left) {
+      findings.push({
+        id: 'composition.left-out',
+        title: `Entry ${entry.path} was left out of the boot`,
+        status: 'fail',
+        cause: entry.reason,
+        fix: 'Fix the cause above, or remove the entry. The kernel starts without it, so the product would run without this participant.',
+      });
+    }
 
     return { findings, entries, view };
   } catch (error: unknown) {

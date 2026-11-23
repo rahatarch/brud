@@ -60,3 +60,25 @@ test('a package that requires official is reported with the exact line to add, a
   assert.match(result.out, /"official": true/u);
   assert.match(readFileSync(join(dir, 'brud.config.json'), 'utf8'), /"official":false/u, 'the CLI must not edit the composition');
 });
+
+test('a participant the kernel leaves out is reported as a failure, although the composition boots', async (t) => {
+  const dir = await scaffold(t, 'demo');
+  const config = JSON.parse(readFileSync(join(dir, 'brud.config.json'), 'utf8')) as { services: unknown[] };
+
+  mkdirSync(join(dir, 'broken'));
+  writeFileSync(join(dir, 'broken', 'brud.participant.json'), JSON.stringify({
+    format: 1,
+    id: 'acme.broken',
+    manifest: { requests: { capabilities: [] }, exposures: [] },
+    cage: { module: 'participant.wasm', sha256: '0'.repeat(64), limits: { fuel: 1_000_000, maxMemoryBytes: 1_048_576 } },
+  }));
+  config.services.push({ path: './broken/brud.participant.json' });
+  writeFileSync(join(dir, 'brud.config.json'), JSON.stringify(config));
+
+  const result = await brud(dir, ['check']);
+
+  assert.equal(result.code, 1, result.out + result.err);
+  assert.match(result.out, /The composition boots/u);
+  assert.match(result.out, /Entry \.\/broken\/brud\.participant\.json was left out of the boot/u);
+  assert.match(result.out, /the product would run without this participant/u);
+});
