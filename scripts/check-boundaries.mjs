@@ -27,6 +27,9 @@ const IMPORT_PATTERN = /(?:from\s+|require\()\s*['"]([^'"]+)['"]/g;
 function walk(directory) {
   const entries = [];
   for (const name of readdirSync(directory)) {
+    if (name.startsWith('.')) {
+      continue;
+    }
     const full = join(directory, name);
     if (statSync(full).isDirectory()) {
       if (name !== '__tests__' && name !== 'dist' && name !== 'node_modules') {
@@ -120,7 +123,7 @@ function cliDependents() {
     for (const name of readdirSync(directory)) {
       const full = join(directory, name);
 
-      if (name === 'node_modules' || name === 'dist' || full === CLI_ROOT) {
+      if (name === 'node_modules' || name === 'dist' || name.startsWith('.') || full === CLI_ROOT) {
         continue;
       }
 
