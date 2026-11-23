@@ -41,7 +41,7 @@ Synchronous, giver-admitted interception of calls to a giver's exposure. [Refere
 
 **Declare**:
 - The interceptor: `manifest.interceptions: [{ target, version? }]`, and a non-enumerable `intercept(call)` method on its instance returning `{ verdict: 'allow' }`, `{ verdict: 'block', reason }`, or `{ verdict: 'modify', args }`.
-- The giver: `manifest.interceptionPoints: [{ exposure, version?, admit: [serviceToken, …] }]` on one of its own exposures; `admit` is also the run order.
+- The giver: `manifest.interceptionPoints: [{ exposure, version?, admit: [serviceTokenId, …] }]` on one of its own exposures; `admit` lists the interceptors' token id strings (a token's `id`, not the token object) and is also the run order.
 
 Boot is refused (`INTERCEPTION_DECLARATION_INVALID`) for an interception no giver admits, an admitted participant that does not declare the interception, a point on an exposure the declarer does not give, or an interception of a hardcore's exposure. Interceptors are never registered with the registry and cannot be resolved.
 

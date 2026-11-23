@@ -638,7 +638,10 @@ function admitInterceptionPoints(value: unknown, participant: string): readonly 
       || admit.some((token) => typeof token !== 'string' || token.length === 0)
       || new Set(admit).size !== admit.length
     ) {
-      throw new ParticipantManifestError(participant, `${path}.admit must be an array of unique non-empty service tokens`);
+      const object = Array.isArray(admit) ? admit.find((token) => isPlainObject(token) && typeof (token as { id?: unknown }).id === 'string') : undefined;
+      const hint = object === undefined ? '' : ` A token object was given; pass its id string ("${(object as { id: string }).id}") instead`;
+
+      throw new ParticipantManifestError(participant, `${path}.admit must be an array of unique non-empty service token id strings.${hint}`);
     }
 
     if (entry.outputLimits !== undefined && !isPlainObject(entry.outputLimits)) {

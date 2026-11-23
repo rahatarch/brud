@@ -9,7 +9,7 @@ Interception lets one participant inspect, change or block calls to another part
 
 ```js
 // giver manifest
-interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken] }]
+interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken.id] }]
 // interceptor manifest
 interceptions: [{ target: 'acme.greet', version: 1 }]
 // interceptor instance

@@ -11,7 +11,7 @@ Read [Interception](../03-concepts/interception.md). Interception needs two part
 1. **Open an interception point on the giver.** List the interceptors it admits. The order is the run order.
 
    ```js
-   interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken] }]
+   interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken.id] }]
    ```
 
 2. **Call the evaluator in the giver's projection**, before running the real method. Without this call, nothing is intercepted.
