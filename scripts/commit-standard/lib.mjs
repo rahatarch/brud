@@ -6,8 +6,8 @@ export const SUBJECT_MAX = 72;
 
 const SUBJECT = new RegExp(`^(${TYPES.join('|')})(\\([a-z0-9][a-z0-9._/-]*\\))?(!)?: \\S`);
 
-// Git writes these itself; they are not authored subjects.
-const GENERATED = /^(Merge |Revert "|fixup! |squash! |amend! )/;
+// Git or automated release scripts write these; they are not ordinary authored subjects.
+const GENERATED = /^(Merge |Revert "|fixup! |squash! |amend! |release(?::|\())/;
 
 // Attribution lines that must never appear in a commit message (AGENTS.md, CONTRIBUTING.md).
 const ATTRIBUTION = [

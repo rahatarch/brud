@@ -72,7 +72,10 @@ test('lets git-generated messages through but still refuses attribution in them'
   ok('Merge branch \'main\' into feature');
   ok('Revert "feat(kernel): add lastRefusal()"\n\nThis reverts commit abc123.');
   ok('fixup! feat(kernel): add lastRefusal()');
+  ok('release: v0.0.2\n\nBump the BrudOS packages (protocol, kernel, sdk, daemon) from 0.0.1 to 0.0.2.');
+  ok('release(cli): cli-v0.0.2\n\nBump @brud/cli from 0.0.1 to 0.0.2.');
   bad('Merge branch x\n\nCo-Authored-By: Claude <noreply@anthropic.com>', /AI attribution/);
+  bad('release: v0.0.2\n\nCo-Authored-By: Claude <noreply@anthropic.com>', /AI attribution/);
 });
 
 function run(args, cwd) {
