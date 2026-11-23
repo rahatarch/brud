@@ -1,6 +1,6 @@
 {
   "name": "@brud/cli",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "The Brud CLI: set up, check, run, call and package BrudOS participants",
   "type": "module",
   "bin": {
