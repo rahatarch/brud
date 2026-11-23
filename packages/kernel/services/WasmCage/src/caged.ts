@@ -127,12 +127,23 @@ export class CagedGuestError extends Error {
   /** The guest-reported error code, when the guest reported one. */
   public readonly guestCode: string | undefined;
 
-  constructor(message: string, guestCode?: string, options?: ErrorOptions) {
+  /** A stable reason when the cage itself stopped the guest at a limit; `undefined` for any other failure. */
+  public readonly reason: CagedLimitReason | undefined;
+
+  /** The engine's full text, backtrace included. Never part of `message`. */
+  public readonly detail: string | undefined;
+
+  constructor(message: string, guestCode?: string, options?: ErrorOptions & { reason?: CagedLimitReason; detail?: string }) {
     super(message, options);
     this.name = 'CagedGuestError';
     this.guestCode = guestCode;
+    this.reason = options?.reason;
+    this.detail = options?.detail;
   }
 }
+
+/** Why the cage stopped a guest at one of its limits. */
+export type CagedLimitReason = 'CAGE_FUEL_LIMIT' | 'CAGE_MEMORY_LIMIT';
 
 interface CallStep {
   readonly done: boolean;
@@ -193,10 +204,41 @@ function deepFreeze<T>(value: T): T {
 /** Serves one routed request; a Promise when the call it made was async. */
 type RoutedCallback = (request: string, signal: AbortSignal) => string | Promise<string>;
 
+const BACKTRACE_HEADER = /^\s*error while executing at wasm backtrace:\s*$/u;
+const BACKTRACE_FRAME = /^\s*\d+:\s+0x[0-9a-f]+\s+-\s/u;
+
+/** Names the limit the engine's text reports, or `undefined` when it reports none. */
+export function limitReason(text: string): CagedLimitReason | undefined {
+  if (/all fuel consumed/iu.test(text)) {
+    return 'CAGE_FUEL_LIMIT';
+  }
+
+  return /failed to grow memory|out of memory|memory (?:limit|minimum size|maximum size)|exceeds? .*memory/iu.test(text) ? 'CAGE_MEMORY_LIMIT' : undefined;
+}
+
+/** The engine's text without its backtrace frames: the part a caller can act on. */
+function withoutBacktrace(text: string): string {
+  return text.split('\n').filter((line) => !BACKTRACE_HEADER.test(line) && !BACKTRACE_FRAME.test(line)).join('\n').trim();
+}
+
+const LIMIT_TEXT: Record<CagedLimitReason, string> = {
+  CAGE_FUEL_LIMIT: 'used all of its fuel (limits.fuel)',
+  CAGE_MEMORY_LIMIT: 'passed its memory limit (limits.maxMemoryBytes)',
+};
+
 function guestFailure(exportName: string, error: unknown): CagedGuestError {
-  return error instanceof CagedGuestError
-    ? error
-    : new CagedGuestError(`caged guest "${exportName}" failed: ${(error as Error).message}`, undefined, { cause: error });
+  if (error instanceof CagedGuestError) {
+    return error;
+  }
+
+  const detail = (error as Error).message;
+  const reason = limitReason(detail);
+  const summary = reason === undefined ? withoutBacktrace(detail) : LIMIT_TEXT[reason];
+  const message = reason === undefined
+    ? `caged guest "${exportName}" failed${summary === '' ? '' : `: ${summary}`}`
+    : `caged guest "${exportName}" ${summary}`;
+
+  return new CagedGuestError(message, undefined, { cause: error, detail, ...(reason === undefined ? {} : { reason }) });
 }
 
 function step(exportName: string, run: () => CallStep): CallStep {

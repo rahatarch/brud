@@ -116,9 +116,9 @@ fn poll_once<F: Future + ?Sized>(future: Pin<&mut F>) -> Poll<F::Output> {
 /// Renders a Wasmtime error (unwrapping a trap's reason) as plain text.
 fn trap_text(e: wasmtime::Error) -> String {
     if let Some(trap) = e.downcast_ref::<wasmtime::Trap>() {
-        return format!("{}: {}", trap, e);
+        return format!("{}: {:#}", trap, e);
     }
-    format!("{e}")
+    format!("{e:#}")
 }
 
 /// One host-driven guest call in flight: owns the store until it completes.
@@ -485,9 +485,9 @@ impl CageInstance {
 /// consumed") is inside the `Trap`. This helper renders both.
 fn trap_err(e: wasmtime::Error) -> Error {
     if let Some(trap) = e.downcast_ref::<wasmtime::Trap>() {
-        return Error::new(Status::GenericFailure, format!("{}: {}", trap, e));
+        return Error::new(Status::GenericFailure, format!("{}: {:#}", trap, e));
     }
-    Error::new(Status::GenericFailure, format!("{e}"))
+    Error::new(Status::GenericFailure, format!("{e:#}"))
 }
 
 /// Renders a Wasmtime error as text.

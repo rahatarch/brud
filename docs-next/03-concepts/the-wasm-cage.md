@@ -81,11 +81,13 @@ What the kernel enforces, tested with hostile guests:
 
 | Guest behavior | Outcome |
 |---|---|
-| Infinite loop | Stopped when its fuel runs out (`WASM_CAGE_GUEST_FAILED`) |
+| Infinite loop | Stopped when its fuel runs out (`WASM_CAGE_GUEST_FAILED`, `reason` `CAGE_FUEL_LIMIT`) |
 | Trap | `WASM_CAGE_GUEST_FAILED` |
-| Memory past `maxMemoryBytes` | Refused (`WASM_CAGE_GUEST_FAILED`) |
+| Memory past `maxMemoryBytes` | Refused (`WASM_CAGE_GUEST_FAILED`, `reason` `CAGE_MEMORY_LIMIT`) |
 | Response over 1 MiB | Refused, "exceeds the size limit" |
 | Response that is not JSON | Refused, "malformed JSON" |
+
+The error message names the limit and carries no backtrace; the engine's full text is on the error's `detail`.
 
 Calls into one guest instance run one at a time. Up to 64 more may wait in line, and a call made from inside the same instance's own call is refused. In every case the kernel stays running.
 

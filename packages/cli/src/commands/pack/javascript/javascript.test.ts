@@ -96,7 +96,7 @@ test('a runaway guest is stopped by the cage fuel limit and the kernel stays up'
   const { project, dir } = await pack(t, { 'src/index.js': HANDLER }, 'src/index.js', {}, { ...LIMITS, fuel: 500_000_000 });
 
   await withPackage(project, dir, async (api) => {
-    assert.throws(() => api.spin?.(), (error: Error & { code?: string }) => error.code === 'WASM_CAGE_GUEST_FAILED');
+    assert.throws(() => api.spin?.(), (error: Error & { code?: string; reason?: string }) => error.code === 'WASM_CAGE_GUEST_FAILED' && error.reason === 'CAGE_FUEL_LIMIT' && !/backtrace|0x[0-9a-f]+/u.test(error.message) && error.message.length < 120);
     assert.equal(api.add?.(1, 1), 2);
   });
 });

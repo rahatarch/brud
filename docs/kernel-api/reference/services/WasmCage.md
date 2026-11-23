@@ -60,6 +60,22 @@ readonly guestCode: string | undefined;
 
 The guest-reported error code, when the guest reported one.
 
+##### reason
+
+```ts
+readonly reason: "CAGE_FUEL_LIMIT" | "CAGE_MEMORY_LIMIT" | undefined;
+```
+
+Set when the cage stopped the guest at a limit: `CAGE_FUEL_LIMIT` when its fuel ran out, `CAGE_MEMORY_LIMIT` when it passed `maxMemoryBytes`. The message names the limit and carries no backtrace.
+
+##### detail
+
+```ts
+readonly detail: string | undefined;
+```
+
+The engine's full text, backtrace included, for a failure the engine reported. It is never part of `message`.
+
 ***
 
 ### CageNativeError

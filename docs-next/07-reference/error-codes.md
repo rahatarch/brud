@@ -32,7 +32,7 @@ Branch on `code`, never on the message. The complete generated list, with defini
 
 | Code | Meaning |
 |---|---|
-| `WASM_CAGE_GUEST_FAILED` | The guest trapped, ran out of fuel, broke a limit, or returned a malformed or oversized response |
+| `WASM_CAGE_GUEST_FAILED` | The guest trapped, ran out of fuel, broke a limit, or returned a malformed or oversized response. When a limit stopped it, the error's `reason` is `CAGE_FUEL_LIMIT` or `CAGE_MEMORY_LIMIT` |
 | `WASM_CAGE_NATIVE_UNAVAILABLE` | No cage binary for this platform. The kernel boots, but caged participants are unavailable |
 
 ## Kinds and syntax
