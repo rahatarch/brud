@@ -7,9 +7,9 @@
  * binary whose digest is not listed here.
  */
 export const WASM_CAGE_NATIVE_DIGESTS: readonly (readonly [string, string])[] = Object.freeze([
-  ['darwin-arm64', 'aaeb94c102b3299a73914bc2b17a78d695bb8279d74612b07be663cae92c3e39'],
-  ['darwin-x64', '166123bf656caec62b96c3edff9efc024f4a9e17a866a8c8cba8098d79db2456'],
-  ['linux-arm64-gnu', 'bc57be8ce648c88cba8e1fa703c8ce74fc65d5bafa2dc70713389f31353fba73'],
-  ['linux-x64-gnu', '05b3ac5e3e616873419bd805d52ee5fb11746f5b9b681f767e28c47b181313a6'],
-  ['win32-x64-msvc', 'f3040c1233215f6ccfd2f767c9d1586aff2efe02a4cc1d5971e431277c0e4b10'],
+  ['darwin-arm64', '47af7e64c8481e42cd7b73bd89ac3f69da182591b64a1b656a33725cb5e64cad'],
+  ['darwin-x64', 'c833ad031943aa522720805a418edb36add03da0f79bf4421aa908d7644f324a'],
+  ['linux-arm64-gnu', '5c420e2cf34c26dbd15951d8e9d4c0444f89ac8c3e789637d0a75661699ed25c'],
+  ['linux-x64-gnu', '7c7d46dfe4b3c72c2612b9742bb474d97f05670332f175055a33d37e61ef5ffa'],
+  ['win32-x64-msvc', '5be0f4f1b82ab17284afa78b0248d300a8a1589ae288dacbfe2f628d9bed85e2'],
 ]);
