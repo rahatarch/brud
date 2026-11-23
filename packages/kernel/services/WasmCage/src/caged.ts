@@ -205,7 +205,8 @@ function deepFreeze<T>(value: T): T {
 type RoutedCallback = (request: string, signal: AbortSignal) => string | Promise<string>;
 
 const BACKTRACE_HEADER = /^\s*error while executing at wasm backtrace:\s*$/u;
-const BACKTRACE_FRAME = /^\s*\d+:\s+0x[0-9a-f]+\s+-\s/u;
+/** One backtrace frame. The engine appends the cause to the last frame, so it is captured. */
+const BACKTRACE_FRAME = /^\s*\d+:\s+0x[0-9a-f]+\s+-\s.*?<wasm function \d+>(?::\s*(.*))?$/u;
 
 /** Names the limit the engine's text reports, or `undefined` when it reports none. */
 export function limitReason(text: string): CagedLimitReason | undefined {
@@ -213,12 +214,20 @@ export function limitReason(text: string): CagedLimitReason | undefined {
     return 'CAGE_FUEL_LIMIT';
   }
 
-  return /failed to grow memory|out of memory|memory (?:limit|minimum size|maximum size)|exceeds? .*memory/iu.test(text) ? 'CAGE_MEMORY_LIMIT' : undefined;
+  return /growing memory|failed to grow memory|out of memory|memory (?:limit|minimum size|maximum size)|exceeds? .*memory/iu.test(text) ? 'CAGE_MEMORY_LIMIT' : undefined;
 }
 
 /** The engine's text without its backtrace frames: the part a caller can act on. */
 function withoutBacktrace(text: string): string {
-  return text.split('\n').filter((line) => !BACKTRACE_HEADER.test(line) && !BACKTRACE_FRAME.test(line)).join('\n').trim();
+  return text.split('\n').flatMap((line) => {
+    if (BACKTRACE_HEADER.test(line)) {
+      return [];
+    }
+
+    const frame = BACKTRACE_FRAME.exec(line);
+
+    return frame === null ? [line] : (frame[1] === undefined || frame[1] === '' ? [] : [frame[1]]);
+  }).join('\n').trim();
 }
 
 const LIMIT_TEXT: Record<CagedLimitReason, string> = {

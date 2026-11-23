@@ -56,9 +56,9 @@ const ROUTER_BUILT_HASH =
  * a kernel build replaces.
  */
 const WASM_CAGE_SOURCE_HASH =
-  '562db0e6747abc48a915f4c8249eaab23660a55bff4707971249b8ff4b66adab';
+  '61719cb5818fb23f97103f7ee77461e437220e6c7791b222d48d116d706da00a';
 const WASM_CAGE_BUILT_HASH =
-  'd53926bc5efadc89a4611de5a6b43dc1d1d03e3ced3bad6788288e26cced4167';
+  '2cf3f716e43e07879766e3e3d2623c44c4c052544cf3c5ecc38560506fdcb038';
 
 /**
  * Pinned digests of the events hardcore package.

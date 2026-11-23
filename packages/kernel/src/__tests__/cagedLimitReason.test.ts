@@ -12,6 +12,7 @@ describe('a cage limit is named by a stable reason', () => {
   it('names a refused memory growth, even when the backtrace comes first', () => {
     assert.equal(limitReason(`${BACKTRACE}: failed to grow memory by \`65536\``), 'CAGE_MEMORY_LIMIT');
     assert.equal(limitReason('InternalError: out of memory'), 'CAGE_MEMORY_LIMIT');
+    assert.equal(limitReason(`${BACKTRACE}: forcing trap when growing memory to 17432576 bytes`), 'CAGE_MEMORY_LIMIT');
   });
 
   it('names nothing for any other failure', () => {
