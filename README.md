@@ -25,6 +25,7 @@ The kernel has no abilities of its own: it does not read files, use the network 
 |:--|:--|
 | [`@brud/kernel`](https://www.npmjs.com/package/@brud/kernel) | Embed the kernel and run participants |
 | [`@brud/sdk`](https://www.npmjs.com/package/@brud/sdk) | Write and test participants |
+| [`@brud/cli`](https://www.npmjs.com/package/@brud/cli) | Scaffold projects, check compositions, seal builds, and package participants |
 | [`@brud/daemon`](https://www.npmjs.com/package/@brud/daemon) | Host kernels in a local background process that editors, agents and scripts connect to |
 | [`@brud/protocol`](https://www.npmjs.com/package/@brud/protocol) | The message types shared by the daemon and its clients |
 

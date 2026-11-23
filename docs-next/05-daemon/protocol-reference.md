@@ -58,4 +58,4 @@ Send `request.cancel` with the id of the in-flight request. The daemon answers w
 | `not-found` | Nothing in flight with that id |
 | `invalid` | The frame did not name a valid id |
 
-Route outcomes use four statuses: `success`, `failed`, `aborted`, `skipped`.
+Route outcomes use seven terminal statuses: `success`, `failed`, `aborted`, `skipped`, `kind_not_registered`, `operation_not_declared`, `permission_denied`.

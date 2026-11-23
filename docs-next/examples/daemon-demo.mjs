@@ -32,7 +32,7 @@ const routed = await client.request('kernel.route', {
   text: '[BRUD]\n[CALL note add]\ntext: from the daemon\n[END]\n[CALL note list]\n[END]\n[/BRUD]',
 });
 
-console.log(JSON.stringify({ requirements, state: boot.instance.state, reused: boot.reused, pruned: boot.pruned, kinds: kinds.kinds.map((k) => k.kind), status: routed.status, last: routed.operations.at(-1).result.data }));
+console.log(JSON.stringify({ requirements, state: boot.instance.state, reused: boot.reused, kinds: kinds.kinds.map((k) => k.kind), status: routed.status, last: routed.operations.at(-1).result.data }));
 
 await client.request('kernel.dispose', { instanceId });
 await client.close();

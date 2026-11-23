@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to BrudOS (`@brud/kernel`, `@brud/sdk`, `@brud/daemon` and `@brud/protocol`, released together at one version) are listed here. For the Brud CLI (`@brud/cli`), see [CHANGELOG-CLI.md](CHANGELOG-CLI.md). The full notes for each release, with checksums and the attached tarballs, are on [GitHub Releases](https://github.com/rahatarch/brud/releases).
+All notable changes to BrudOS (`@brud/kernel`, `@brud/sdk`, `@brud/daemon` and `@brud/protocol`, released together at one version) are listed here. For the Brud CLI (`@brud/cli`), see [packages/cli/CHANGELOG.md](packages/cli/CHANGELOG.md). The full notes for each release, with checksums and the attached tarballs, are on [GitHub Releases](https://github.com/rahatarch/brud/releases).
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 

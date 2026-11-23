@@ -17,6 +17,8 @@ Branch on `code`, never on the message. The complete generated list, with defini
 | `SEAL_MISMATCH` | The seal file is not the one the built product holds the digest of | Rebuild, or use the seal that belongs to this build |
 | `SEAL_VIOLATION` | A sealed participant is missing, out of order, or its content changed | Restore it, or rebuild and seal again |
 | `PARTICIPANT_NOT_SEALED` | An entry declares itself official but the build did not seal it. It is left out and listed in `kernel.abandoned` | Rebuild to make it official, or drop the flag to load it caged |
+| `CONFIG_RELOAD_FROZEN` | A reload tried to change frozen official participants or exposure owners | Rebuild the composition to change frozen participants |
+| `KERNEL_RELOAD_FAILED` | The new composition failed to boot after the old kernel stopped | Check the new composition error and fix startup issues |
 | `HARDCORE_VERIFICATION` | Hardcore failed its pin | Reinstall the matching release |
 | `PARTICIPANT_MANIFEST_INVALID` | Manifest malformed | Check against [the manifest page](../03-concepts/manifest.md) |
 

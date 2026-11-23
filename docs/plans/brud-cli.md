@@ -1,11 +1,14 @@
 # Brud CLI plan
 
-Status: beta implemented in `packages/cli` (`@brud/cli` 0.0.1). Owner: maintainers. See "Implementation status" for how it differs from this plan.
+Status: shipped in `packages/cli` (`@brud/cli` 0.0.2). Owner: maintainers. See "Implementation status" for how it differs from this plan.
 
 ## Implementation status
 
-Shipped: `doctor`, `init` (default, `--kind`, `--guest [--lang as|js|ts]`), `check`, `run`, `call`, `kinds`, `inspect`, `add`, `pack` (experimental). Differences from the plan below, each forced by the code as it is today:
+Shipped: `doctor`, `init` (default, `--kind`, `--guest [--lang as|js|ts]`, `--install`/`--no-install`), `check`, `run`, `call`, `kinds`, `inspect`, `add`, `seal`, `pack` (experimental). Differences from the plan below, each forced by the code as it is today:
 
+- **Build seal:** `brud seal` generates reproducible cryptographic seals for composed official participants with content digests.
+- **Reporting left-out participants:** `brud check` and `brud doctor` report any participant left out by the kernel in `kernel.abandoned` as an exit-1 failure.
+- **Interactive package installation:** `brud init` interactively prompts to install npm dependencies or takes `--install`/`--no-install`.
 - **No `brud mcp`.** The daemon's MCP transport was removed (ledger decision `daemon_pure_host`). Milestone 5 is open until a tested transport exists.
 - **No `brud trust` yet** (the plan marked it "later").
 - **`doctor` needs no new kernel export.** The kernel already exports what it needs; hardcore verification happens by booting a hardcore-only composition in a scratch state, and the hardcore module list is read from the installed kernel's `dist/serviceModules`.

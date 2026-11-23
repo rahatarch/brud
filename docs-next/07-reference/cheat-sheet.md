@@ -8,6 +8,7 @@ One-page summary of the APIs and rules used most often. Each section links to th
 defineParticipant({
   id: 'acme.greeter',
   exposes: { 'acme.greet': { version: 1, scope: 'any', handle: (caller, ctx) => ({ /* ... */ }) } },
+  // Optional: kinds, events, interceptions, interceptionPoints, requests, onRunning
 })
 ```
 
@@ -31,8 +32,10 @@ defineParticipant({
 ## Boot and call
 
 ```js
-const kernel = await bootKernel(configPath, { options });
+const kernel = await bootKernel(configPath, { options, seal });
 await kernel.runHostCall({ capabilities: [] }, async () => { /* resolve and use handles */ });
+// Inspect soft failures: kernel.abandoned
+// Dynamic reload: const next = await kernel.reload({ configPath });
 await kernel.shutdown();
 ```
 

@@ -16,6 +16,12 @@ For embedding a kernel and writing participants:
 npm install @brud/kernel @brud/sdk
 ```
 
+For the CLI developer harness:
+
+```bash
+npm install --save-dev @brud/cli
+```
+
 If you also want the daemon:
 
 ```bash

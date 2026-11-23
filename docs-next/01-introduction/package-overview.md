@@ -1,10 +1,11 @@
 # Package overview
 
-The core release is four npm packages. Install only what you need.
+The core release is five npm packages. Install only what you need.
 
 | You want to... | Install |
 |---|---|
 | Embed a kernel and write participants | `@brud/kernel` and `@brud/sdk` |
+| Scaffold, check, run, seal and package participants | `@brud/cli` |
 | Run kernels behind a local daemon | `@brud/daemon` (it brings `@brud/protocol`) |
 | Write a client for the daemon | `@brud/daemon` (for `connectToDaemon`) and `@brud/protocol` (for types) |
 
@@ -12,8 +13,9 @@ The core release is four npm packages. Install only what you need.
 
 The engine and the seven hardcore services.
 
-- `bootKernel(configPath, { options, logger })` reads a composition and returns a running kernel.
-- The kernel object has `lifecycleState`, `requestAccess`, `runHostCall`, `readObservations` and `shutdown`.
+- `bootKernel(configPath, { options, logger, seal })` reads a composition and returns a running kernel.
+- The kernel object has `lifecycleState`, `requestAccess`, `runHostCall`, `readObservations`, `shutdown`, `abandoned` and `reload`.
+- `createSeal(configPath, { out, cwd })` seals official participants into a reproducible seal with content digests.
 - Contracts you build against: `ParticipantManifest`, `ServiceDescriptor`, `createServiceToken`, `withExposureBindings`, `ExposedApiRegistryToken`.
 - `provisionIdentityRegistryStorage(path)` prepares the identity file a kernel needs.
 - Import the other hardcores' contracts from `@brud/kernel/services/<Name>/index.js` (`Events`, `Interception`, `Parser`, `Router`, `WasmCage`).
@@ -24,12 +26,21 @@ The kernel has no runtime dependencies. It knows nothing about files, tools, wor
 
 The friendly way to write participants.
 
-- `defineParticipant({...})` from `@brud/sdk/participant` builds a participant with an id, exposures and a `create` function. It handles tokens, manifests and bindings for you.
+- `defineParticipant({...})` from `@brud/sdk/participant` builds a participant with an id, exposures, kinds, events, interceptions, interception points and a `create` function. It handles tokens, manifests and bindings for you.
 - `byCapability({...})` from the same entry point shapes a handle by the caller's capabilities.
 - `bootTestKernel(t, entries)` from `@brud/sdk/testing` boots a real kernel for a test and cleans up afterwards.
 - Plain-JSON helpers: `isPlainJson`, `assertPlain`, `assertName`, `assertMajor`.
 
-`defineParticipant` covers exposures. If you need to own an operation kind or declare events and interceptions, write the descriptor by hand. [Own a kind](../04-guides/own-a-kind.md) shows how.
+## @brud/cli
+
+The command-line developer harness (`brud`).
+
+- `brud init [name]` scaffolds projects (capability-gated, `--kind` text-routing, or `--guest` caged).
+- `brud doctor [config]` and `brud check [config]` verify your environment and validate compositions (reporting missing options, unsealed participants, or left-out entries in `kernel.abandoned`).
+- `brud run [config]` and `brud call <text>` route Brud documents directly or through the daemon.
+- `brud kinds` and `brud inspect` list and probe kinds, exposures, requirements and caller access.
+- `brud seal [config]` generates the cryptographic build seal for a composition's official participants.
+- `brud pack [dir]` packages guest modules into WASM caged participants.
 
 ## @brud/daemon
 

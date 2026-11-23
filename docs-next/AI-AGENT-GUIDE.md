@@ -15,9 +15,11 @@ You are about to write code on BrudOS. Read this first, it is short.
 - `resolve` returns `null` for both "missing" and "refused". Handle both.
 - Use handles inside the call that produced them.
 - Never mark something `official` on your own initiative. Only the owner decides.
-- Do not invent exposure names or manifest keys. The valid keys are `requests`, `exposures`, `events`, `interceptions`, `interceptionPoints`, `kinds`.
-- Startup options belong in your own single-segment namespace (`acme`), with dotted field names (`acme.greeting`). Raw descriptors read them from `context.options`.
-- The composed services are separate packages and out of scope. This guide covers `@brud/kernel`, `@brud/protocol`, `@brud/sdk` and `@brud/daemon`.
+- Do not invent exposure names or manifest keys. The valid keys are `requests`, `exposures`, `events`, `interceptions`, `interceptionPoints`, `kinds`. Each kind in `manifest.kinds` must declare `operations` (an object or `'open'`) and a `permission`.
+- `caller.capabilities` is a read-only view (`.has()`, `.size`, iteration), not an array or a mutable `Set`.
+- Interceptors default to `stages: ['output']`; specify `stages: ['input']` explicitly to inspect or modify call arguments.
+- Startup options belong in your own single-segment namespace (`acme`), with dotted field names (`acme.greeting`). Raw descriptors read them from `context.options`. Missing required options refuse boot with a typed error.
+- The composed services are separate packages and out of scope. This guide covers `@brud/kernel`, `@brud/protocol`, `@brud/sdk`, `@brud/daemon` and `@brud/cli`.
 
 ## Verified examples
 

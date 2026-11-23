@@ -55,6 +55,8 @@ export function createService() {
         kind: 'note',
         exposure: 'acme.notes.dispatch',
         description: 'Keep short notes',
+        // Who may call an operation; { policyVersion: 2 } admits every routing caller.
+        permission: { policyVersion: 2 },
         operations: {
           add: { description: 'Add a note', input: { type: 'object', properties: { text: { type: 'string' } } } },
           list: { description: 'List every note' },
@@ -84,6 +86,7 @@ export function createService() {
 The key parts:
 
 - **`kinds`** in the manifest says: the kind `note`, dispatched through the exposure `acme.notes.dispatch`. The description and operations are public, so clients can discover what the kind offers.
+- **`permission`** sets who may call operations on this kind. Every operation needs a permission, either declared on the operation or inherited from this kind-level default. `{ policyVersion: 2 }` admits any caller who can route; narrow it with capabilities, origins or callerClasses as needed.
 - **`dispatch(operation, context)`** is called once per operation. `operation.name` is `add` or `list`. `operation.parameters` holds the parsed parameters. `context.caller` is the kernel's view of who sent it.
 - **The return value** is an operation result: `{ status: 'success', data }`, `{ status: 'failed', error }`, `{ status: 'skipped' }` or `{ status: 'aborted' }`.
 - **`policy: { policyVersion: 2, official: true }`** on the dispatch exposure means only official callers may call it. That keeps strangers from calling `dispatch` directly with a made-up context. The Router is official, so it can.

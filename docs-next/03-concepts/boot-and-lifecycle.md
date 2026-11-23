@@ -157,6 +157,30 @@ Call `ctx.resolve` lazily, when a method needs it, as in [Use another participan
 
 `kernel.shutdown()` moves to `SHUTTING_DOWN`, disposes participants, then reaches `DISPOSED`. Always shut down a kernel you booted. The test harness does it for you.
 
+## Reload
+
+A running kernel held by the host can be replaced without restarting the process:
+
+```js
+const nextKernel = await kernel.reload({ configPath?: './brud.config.json' });
+```
+
+`kernel.reload` reads and checks the new config, verifies that what the build froze (sealed/official participants in order and exposure owners) has not changed (`CONFIG_RELOAD_FROZEN` otherwise), composes the new kernel while the current one continues running, shuts down the running kernel, and boots the new one with the same options.
+
+Any loaded (non-official) participant that cannot be loaded or started is left out and reported in `nextKernel.abandoned`. See [Reloading a composition](compositions-and-config.md#reloading-a-composition).
+
+## Abandoned participants
+
+The host can inspect participants left out of the boot:
+
+```js
+for (const abandoned of kernel.abandoned) {
+  console.warn(abandoned.path, abandoned.code, abandoned.reason);
+}
+```
+
+A loaded participant is abandoned when it cannot be admitted or started, or depends on an abandoned participant. The kernel continues to run with the surviving participants. Hardcore and composed participants never fail soft: their failure stops boot immediately.
+
 ## Observations
 
 The kernel records detailed denial reasons in an observation stream. Only the holder of the kernel object can read it, with `kernel.readObservations()`. A refused caller never sees the reason. The event names are listed in [`docs/kernel-api/catalogue/observations.md`](../../docs/kernel-api/catalogue/observations.md).
