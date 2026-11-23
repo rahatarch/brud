@@ -261,14 +261,20 @@ export class BrudKernel implements IBrudKernel {
             ...(options.logger === undefined ? {} : { logger: options.logger }),
           };
 
-          const instance = descriptor.factory(context, this.accessBroker);
-          this.registry.setInstance(descriptor.token.id, instance);
+          try {
+            const instance = descriptor.factory(context, this.accessBroker);
+            this.registry.setInstance(descriptor.token.id, instance);
 
-          if (typeof instance.initialize === 'function') {
-            await instance.initialize(this.accessBroker);
+            if (typeof instance.initialize === 'function') {
+              await instance.initialize(this.accessBroker);
+            }
+
+            this.initializedServices.push({ tokenId: descriptor.token.id, instance });
+          } catch (error: unknown) {
+            tagFailingService(error, descriptor.token.id);
+
+            throw error;
           }
-
-          this.initializedServices.push({ tokenId: descriptor.token.id, instance });
         });
       };
 
@@ -341,7 +347,13 @@ export class BrudKernel implements IBrudKernel {
     try {
       for (const { tokenId, instance } of this.initializedServices) {
         if (typeof instance.onRunning === 'function') {
-          await this.runFor(tokenId, () => instance.onRunning?.(this.accessBroker));
+          try {
+            await this.runFor(tokenId, () => instance.onRunning?.(this.accessBroker));
+          } catch (error: unknown) {
+            tagFailingService(error, tokenId);
+
+            throw error;
+          }
         }
       }
     } catch (error: unknown) {
@@ -522,4 +534,25 @@ export class BrudKernel implements IBrudKernel {
 
     return { operations };
   }
+}
+
+/**
+ * Records, on an error thrown by a service's own lifecycle code, which service
+ * threw it. The mark is not enumerable and never replaces an earlier one, so
+ * the error keeps its type and message. A caller that must decide what to do
+ * about a failed boot reads it with `failingServiceOf`.
+ */
+function tagFailingService(error: unknown, tokenId: string): void {
+  if (error !== null && typeof error === 'object' && !(FAILING_SERVICE in error)) {
+    Object.defineProperty(error, FAILING_SERVICE, { value: tokenId, enumerable: false });
+  }
+}
+
+const FAILING_SERVICE = Symbol.for('brud.kernel.failingService');
+
+/** The token of the service whose lifecycle code threw `error`, when the kernel recorded it. */
+export function failingServiceOf(error: unknown): string | undefined {
+  const value = error !== null && typeof error === 'object' ? (error as Record<symbol, unknown>)[FAILING_SERVICE] : undefined;
+
+  return typeof value === 'string' ? value : undefined;
 }

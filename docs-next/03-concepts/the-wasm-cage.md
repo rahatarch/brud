@@ -4,7 +4,7 @@ The cage is the hardcore that runs untrusted code in isolation.
 
 ## Status in this beta
 
-Be clear about what ships. A module not declared official is refused as native code. The cage primitive exists and is verified, but it is a building block, not a finished plugin system. This page describes only what is verified.
+Be clear about what ships. A module not declared official cannot run as native code, and the kernel leaves it out. The cage primitive exists and is verified, but it is a building block, not a finished plugin system. This page describes only what is verified.
 
 ## How a participant reaches the cage
 
@@ -36,10 +36,10 @@ Participant code that is not official cannot be a plain JavaScript module. It mu
 | `id` | The participant's identity |
 | `manifest` | The same manifest a native participant declares |
 | `cage.module` | The `.wasm` file, which must stay inside the package folder |
-| `cage.sha256` | Digest of the module. A mismatch refuses the boot with `MODULE_RESOLVE` (digest check failed) |
+| `cage.sha256` | Digest of the module. A mismatch leaves the participant out, with the reason "digest check failed" |
 | `cage.limits` | `fuel` and `maxMemoryBytes` are required; `deadlineMs` is optional |
 | `native` | Optional. Used only when the composition declares the entry official |
-| `requires` | Optional. `{ "official": true, "powers": [...] }` makes the kernel refuse the entry unless the owner declares it official. `powers` may list `environment`, `filesystem`, `network` and `process`. It can only refuse a load, never make a package official |
+| `requires` | Optional. `{ "official": true, "powers": [...] }` makes the kernel leave the entry out unless the owner declares it official. `powers` may list `environment`, `filesystem`, `network` and `process`. It can only refuse a load, never make a package official |
 
 Behavior you can rely on: a valid package boots and its exposures resolve like any other. A module that is not a working guest fails at call time with `WASM_CAGE_GUEST_FAILED`.
 

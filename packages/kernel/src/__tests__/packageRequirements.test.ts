@@ -53,21 +53,19 @@ async function bootPackage(t: TestContext, requires: unknown, official: boolean)
 }
 
 describe('package requirements: a package can refuse to load unless it is official', () => {
-  it('refuses an entry the owner left unofficial, naming the powers it uses', async (t) => {
-    await assert.rejects(
-      bootPackage(t, { official: true, powers: ['process', 'filesystem', 'process'] }, false),
-      (error: unknown) => error instanceof BrudConfigError
-        && error.code === 'PARTICIPANT_REQUIRES_OFFICIAL'
-        && error.message.includes('It uses: filesystem, process.')
-        && error.message.includes('"official": true'),
-    );
+  it('leaves out an entry the owner left unofficial, naming the powers it uses', async (t) => {
+    const kernel = await bootPackage(t, { official: true, powers: ['process', 'filesystem', 'process'] }, false);
+    const left = kernel.abandoned[0];
+
+    assert.equal(left?.code, 'PARTICIPANT_REQUIRES_OFFICIAL');
+    assert.ok(left?.reason.includes('It uses: filesystem, process.'));
+    assert.ok(left?.reason.includes('"official": true'));
   });
 
-  it('refuses even when the package also ships a caged build', async (t) => {
-    await assert.rejects(
-      bootPackage(t, { official: true }, false),
-      (error: unknown) => error instanceof BrudConfigError && error.code === 'PARTICIPANT_REQUIRES_OFFICIAL',
-    );
+  it('leaves it out even when the package also ships a caged build', async (t) => {
+    const kernel = await bootPackage(t, { official: true }, false);
+
+    assert.equal(kernel.abandoned[0]?.code, 'PARTICIPANT_REQUIRES_OFFICIAL');
   });
 
   it('loads its native build once the owner declares the entry official', async (t) => {
@@ -75,11 +73,11 @@ describe('package requirements: a package can refuse to load unless it is offici
     assert.equal(kernel.lifecycleState, 'RUNNING');
   });
 
-  it('never grants officialness: a package without `requires` is unchanged', async (t) => {
-    await assert.rejects(
-      bootPackage(t, undefined, false),
-      (error: unknown) => !(error instanceof BrudConfigError && error.code === 'PARTICIPANT_REQUIRES_OFFICIAL'),
-    );
+  it('never grants officialness: a package without `requires` is left out for its own reason', async (t) => {
+    const kernel = await bootPackage(t, undefined, false);
+
+    assert.equal(kernel.abandoned.length, 1);
+    assert.notEqual(kernel.abandoned[0]?.code, 'PARTICIPANT_REQUIRES_OFFICIAL');
   });
 
   it('rejects a malformed requires section with a coded error', async (t) => {

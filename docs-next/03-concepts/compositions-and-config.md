@@ -47,7 +47,27 @@ These are independent, and the difference is important.
 
 The kernel builds an identity-to-official mapping from your config at boot. Giver policies can then require `official: true`.
 
-In this beta, a module that is not declared official is refused as native code. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is refused with `PARTICIPANT_TIER`. A package that cannot run caged (a filesystem service, for example) can declare `requires: { official: true }`; leaving such an entry unofficial is refused with `PARTICIPANT_REQUIRES_OFFICIAL`, and the owner decides whether to declare it official or remove it.
+In this beta, a module that is not declared official cannot run as native code, and the kernel leaves it out. Code you have not declared official is meant to run only inside the [WASM cage](the-wasm-cage.md), as a [participant package](the-wasm-cage.md#how-a-participant-reaches-the-cage). A plain JavaScript module that is not official is left out with the code `PARTICIPANT_TIER`. A package that cannot run caged (a filesystem service, for example) can declare `requires: { official: true }`; leaving such an entry unofficial is refused with `PARTICIPANT_REQUIRES_OFFICIAL`, and the owner decides whether to declare it official or remove it.
+
+## Loaded participants
+
+An entry that is not declared official is a **loaded participant**. It always runs in the [WASM cage](the-wasm-cage.md) and it is never official. It is also the part of a composition an end user can change, by editing the config and [reloading](#reloading-a-composition).
+
+A loaded participant never stops the kernel. If it cannot be loaded (its path does not resolve, its package is not valid, its module does not match its digest), cannot be admitted (its manifest is invalid, it needs a boot option that was not supplied, it needs to be official), or cannot start, the kernel leaves it out and boots without it. If every loaded participant fails, the kernel boots as the build shipped it.
+
+Every participant left out is named, with its reason, in two places: the `abandoned` list on the kernel, and one warning to the logger.
+
+```js
+const kernel = await bootKernel('./brud.config.json', { options });
+
+for (const left of kernel.abandoned) {
+  console.log(left.path, left.code, left.reason);
+}
+```
+
+A loaded participant that depends on one that was left out (for example, a giver that admits an interceptor that failed) is left out too, with its own reason. If a boot fails for a reason the kernel cannot trace to one loaded participant, it leaves out every loaded participant once and tries again. If it still fails, the cause is in the build and the boot is refused.
+
+A hardcore or composed participant is different: a failure in one refuses the boot, as before.
 
 ## Trust is a content hash
 
@@ -74,7 +94,7 @@ const next = await kernel.reload({ configPath: './brud.config.next.json' });
 
 What a reload may change is every participant that is not official: which exist, their packages and their options. What it may not change is what the build froze: the official participants, in order, and the exposure owners. A config that changes those is refused with `CONFIG_RELOAD_FROZEN`; rebuild to change them. The hardcore services are re-verified against their compiled-in pins on every boot, reload included.
 
-A reload refused before the old kernel stops, because the config is invalid or touches the frozen part, changes nothing. If the new composition passes those checks but then fails to boot, the old kernel is already stopped: `reload` throws `KERNEL_RELOAD_FAILED` with the cause and the host has no running kernel. The kernel does not restart the old composition. Handles that participants resolved before the reload stop working, and the new participants get new identities. Shutdown does not wait for calls in flight.
+A reload refused before the old kernel stops, because the config is invalid or touches the frozen part, changes nothing. A new loaded participant that cannot start does not refuse the reload: it is left out, the rest boot, and the returned kernel lists it in `abandoned`. Only a failure in the build itself, after the old kernel has stopped, makes `reload` throw `KERNEL_RELOAD_FAILED` with the cause and leaves the host with no running kernel. Handles that participants resolved before the reload stop working, and the new participants get new identities. Shutdown does not wait for calls in flight.
 
 ## Errors you may see while loading
 
@@ -85,7 +105,7 @@ A reload refused before the old kernel stops, because the config is invalid or t
 | `CONFIG_SCHEMA` | The shape is wrong (unknown key, missing `services`) |
 | `CONFIG_INTEGRITY` | A protected config or state path was touched |
 | `CONFIG_RELOAD_FROZEN` | A reload tried to change an official participant or an exposure owner |
-| `KERNEL_RELOAD_FAILED` | The new composition failed to boot after the old kernel was stopped |
+| `KERNEL_RELOAD_FAILED` | The new composition failed to boot, for a reason in the build, after the old kernel was stopped |
 | `MODULE_RESOLVE` | A module could not be found or imported, or a participant package failed its digest check |
 | `MODULE_CONTRACT` | A module does not export a valid `createService` |
 | `PARTICIPANT_TIER` | A participant claims a tier it may not have, or a plain module is not declared official |

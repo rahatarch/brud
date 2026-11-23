@@ -70,7 +70,7 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
     assert.deepEqual(result.operations[0]?.result, { status: 'success', data: { caged: true } });
   });
 
-  it('refuses a kind whose exposure the participant does not declare', async (t) => {
+  it('leaves out a participant whose kind names an exposure it does not declare', async (t) => {
     const root = await mkdtemp(join(tmpdir(), 'brud-declared-kinds-'));
     t.after(() => rm(root, { recursive: true, force: true }));
     const identity = join(root, 'identity.json');
@@ -81,13 +81,17 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
     const config = join(root, 'brud.config.json');
     await writeFile(config, JSON.stringify({ services: [...HARDCORES, { path: packagePath }] }), 'utf8');
 
-    await assert.rejects(
-      bootKernel(config, { options: { 'identity.registry.path': identity } }),
-      (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_MANIFEST_INVALID',
-    );
+    const kernel = await bootKernel(config, { options: { 'identity.registry.path': identity } });
+
+    try {
+      assert.equal(kernel.abandoned.length, 1);
+      assert.equal(kernel.abandoned[0]?.code, 'PARTICIPANT_MANIFEST_INVALID');
+    } finally {
+      await kernel.shutdown();
+    }
   });
 
-  it('refuses a kind whose description is not plain data', async (t) => {
+  it('leaves out a participant whose kind description is not plain data', async (t) => {
     const root = await mkdtemp(join(tmpdir(), 'brud-declared-kinds-'));
     t.after(() => rm(root, { recursive: true, force: true }));
     const identity = join(root, 'identity.json');
@@ -101,9 +105,13 @@ describe('declared kinds (manifest.kinds) — production mirror', () => {
     const config = join(root, 'brud.config.json');
     await writeFile(config, JSON.stringify({ services: [...HARDCORES, { path: packagePath }] }), 'utf8');
 
-    await assert.rejects(
-      bootKernel(config, { options: { 'identity.registry.path': identity } }),
-      (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_MANIFEST_INVALID',
-    );
+    const kernel = await bootKernel(config, { options: { 'identity.registry.path': identity } });
+
+    try {
+      assert.equal(kernel.abandoned.length, 1);
+      assert.equal(kernel.abandoned[0]?.code, 'PARTICIPANT_MANIFEST_INVALID');
+    } finally {
+      await kernel.shutdown();
+    }
   });
 });

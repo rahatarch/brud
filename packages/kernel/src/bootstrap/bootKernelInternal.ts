@@ -17,6 +17,7 @@ import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js'
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
 import { LifecycleStateError } from '../engine/errors.js';
+import { abandonment, culpritOf, LoadedParticipantFailure, type AbandonedParticipant } from './loaded.js';
 import { KernelReloadError, refuseFrozenChange, type ReloadableKernel, type ReloadOptions } from './reload.js';
 import {
   acceptConfigChange,
@@ -100,14 +101,10 @@ export async function bootKernel(
   configPath: string,
   options: BootKernelOptions,
 ): Promise<ReloadableKernel> {
-  const kernel = createDeferredKernel(configPath, options);
-
-  await kernel.boot({
+  return startTolerant(configPath, options, {
     ...(options.options === undefined ? {} : { options: options.options }),
     ...(options.logger === undefined ? {} : { logger: options.logger }),
-  });
-
-  return kernel;
+  }, undefined);
 }
 
 /**
@@ -125,6 +122,139 @@ export function createDeferredKernel(
   return assembleKernel(configPath, options, undefined).kernel;
 }
 
+/**
+ * Boots a kernel, leaving out loaded participants that cannot start.
+ *
+ * A loaded participant is any config entry not declared official. One that
+ * fails to load, to be admitted, or to start is left out and the boot is tried
+ * again without it, so a bad loaded participant never stops the kernel. A
+ * failure in a hardcore or composed participant still refuses the boot.
+ *
+ * A failure while composing names its loaded participants itself. A failure
+ * while booting is traced to the participant it names, or to the service that
+ * threw it. When it cannot be traced to a loaded participant, every loaded
+ * participant is left out once and the boot is tried again; if that fails
+ * too, the failure was in the build and is thrown.
+ *
+ * @param baseline - The booted config this one replaces, for a reload.
+ * @param beforeFirstBoot - Runs once, after the new composition is checked and
+ *   before anything boots: a reload stops the running kernel here.
+ * @param wrap - Turns a failure after `beforeFirstBoot` into the error thrown.
+ */
+async function startTolerant(
+  configPath: string,
+  options: ComposeKernelOptions,
+  bootOptions: KernelBootOptions,
+  baseline: BrudConfig | undefined,
+  beforeFirstBoot?: () => Promise<void>,
+  wrap?: (error: unknown) => unknown,
+): Promise<ReloadableKernel> {
+  const left = new Map<string, AbandonedParticipant>();
+  let stopped = false;
+  let sweptAll = false;
+
+  for (;;) {
+    const attempt = assembleKernel(configPath, options, baseline, new Set(left.keys()));
+    let phase: 'compose' | 'boot' = 'compose';
+
+    try {
+      await attempt.validate(bootOptions);
+
+      if (!stopped) {
+        stopped = true;
+
+        try {
+          await beforeFirstBoot?.();
+        } catch (error: unknown) {
+          attempt.abandon();
+
+          throw error;
+        }
+      }
+
+      phase = 'boot';
+      await attempt.kernel.boot(bootOptions);
+    } catch (error: unknown) {
+      const fresh = blamedLoaded(attempt, error, phase, left, sweptAll);
+
+      if (fresh === undefined) {
+        throw stopped && wrap !== undefined ? wrap(error) : error;
+      }
+
+      sweptAll ||= fresh.swept;
+
+      for (const entry of fresh.entries) {
+        left.set(entry.path, entry);
+      }
+
+      continue;
+    }
+
+    attempt.setAbandoned([...left.values()]);
+    reportAbandoned(bootOptions.logger ?? options.logger ?? DEFAULT_KERNEL_LOGGER, left);
+
+    return attempt.kernel;
+  }
+}
+
+/** The loaded participants to leave out after a failed attempt, or `undefined` when the failure is not theirs. */
+function blamedLoaded(
+  attempt: AssembledKernel,
+  error: unknown,
+  phase: 'compose' | 'boot',
+  left: ReadonlyMap<string, AbandonedParticipant>,
+  sweptAll: boolean,
+): { readonly entries: readonly AbandonedParticipant[]; readonly swept: boolean } | undefined {
+  if (error instanceof LoadedParticipantFailure) {
+    const entries = error.participants.filter((entry) => !left.has(entry.path));
+
+    return entries.length === 0 ? undefined : { entries, swept: false };
+  }
+
+  if (phase === 'compose') {
+    return undefined;
+  }
+
+  const token = culpritOf(error);
+  const path = token === undefined ? undefined : attempt.loadedPathOf(token);
+
+  if (path !== undefined && !left.has(path)) {
+    return { entries: [abandonment(path, error, token)], swept: false };
+  }
+
+  if (sweptAll) {
+    return undefined;
+  }
+
+  const remaining = attempt.config().services.filter((entry) => entry.official !== true && !left.has(entry.path));
+
+  if (remaining.length === 0) {
+    return undefined;
+  }
+
+  const why = error instanceof Error ? error.message : String(error);
+
+  return {
+    swept: true,
+    entries: remaining.map((entry): AbandonedParticipant => ({
+      path: entry.path,
+      reason: `the kernel could not start with the loaded participants and the cause could not be traced to one of them (${why})`,
+    })),
+  };
+}
+
+function reportAbandoned(logger: KernelLogger, left: ReadonlyMap<string, AbandonedParticipant>): void {
+  if (left.size === 0) {
+    return;
+  }
+
+  const lines = [...left.values()].map((entry) => `${entry.path}: ${entry.reason}`);
+
+  logger.warn(`Left out ${String(left.size)} loaded participant(s); the kernel started without them:\n${lines.join('\n')}`, {
+    abandoned: [...left.values()],
+  });
+}
+
 /** A kernel being assembled, with the steps a reload runs on it before the old kernel stops. */
 interface AssembledKernel {
   readonly kernel: ReloadableKernel;
@@ -132,6 +262,12 @@ interface AssembledKernel {
   validate(bootOptions: KernelBootOptions): Promise<void>;
   /** Releases the config protection of a kernel that will never boot. */
   abandon(): void;
+  /** The config this kernel read, once it has read it. */
+  config(): BrudConfig;
+  /** The config path of the loaded participant that owns a service token. */
+  loadedPathOf(token: string): string | undefined;
+  /** Records which loaded participants were left out, for the host to read. */
+  setAbandoned(list: readonly AbandonedParticipant[]): void;
 }
 
 /**
@@ -145,8 +281,11 @@ function assembleKernel(
   configPath: string,
   options: ComposeKernelOptions,
   baseline: BrudConfig | undefined,
+  skip: ReadonlySet<string> = new Set(),
 ): AssembledKernel {
   let lastBootOptions: KernelBootOptions = {};
+  let abandonedList: readonly AbandonedParticipant[] = [];
+  const loadedTokens = new Map<string, string>();
   let loadedServices: readonly LoadedService[] = [];
   let serviceContext: KernelServiceModuleContext | undefined;
   let hardcoreBootEntries: readonly HardcoreBootEntry[] = [];
@@ -236,7 +375,7 @@ function assembleKernel(
       protectConfigFile(configPath);
       protectedThisKernel = true;
       composedConfig = config;
-      const services = await loadServiceModules(config.services, configPath, raw);
+      const services = await loadServiceModules(config.services.filter((entry) => entry.official === true || !skip.has(entry.path)), configPath, raw);
       const contextOptions: Record<string, unknown> = {
         ...(options.options ?? {}),
         ...(bootOptions.options ?? {}),
@@ -255,33 +394,73 @@ function assembleKernel(
 
       const owned: { readonly ownerId: string; readonly service: ComposedServiceDescriptor }[] = [];
 
+      const failedLoaded: AbandonedParticipant[] = [];
+
       for (const loaded of services) {
         activeServiceOwner = `${String(loaded.index)}:${loaded.entry.path}`;
 
-        for (const descriptor of await descriptorsFromModule(
-          loaded.module,
-          loaded.entry,
-          loaded.index,
-          context,
-          configPath,
-          raw,
-        )) {
-          owned.push({
-            ownerId: activeServiceOwner,
-            service: {
-              descriptor,
-              path: loaded.entry.path,
-              ...(loaded.entry.official === undefined ? {} : { official: loaded.entry.official }),
-              resolvedPath: loaded.resolvedId,
-              // The manifest is admitted from declared data only; the
-              // participant's factory is not invoked.
-              manifest: admitParticipantManifest(descriptor.token.id, descriptor.manifest),
-            },
-          });
+        try {
+          const own: { readonly ownerId: string; readonly service: ComposedServiceDescriptor }[] = [];
+
+          for (const descriptor of await descriptorsFromModule(
+            loaded.module,
+            loaded.entry,
+            loaded.index,
+            context,
+            configPath,
+            raw,
+          )) {
+            own.push({
+              ownerId: activeServiceOwner,
+              service: {
+                descriptor,
+                path: loaded.entry.path,
+                ...(loaded.entry.official === undefined ? {} : { official: loaded.entry.official }),
+                resolvedPath: loaded.resolvedId,
+                // The manifest is admitted from declared data only; the
+                // participant's factory is not invoked.
+                manifest: admitParticipantManifest(descriptor.token.id, descriptor.manifest),
+              },
+            });
+          }
+
+          owned.push(...own);
+        } catch (error: unknown) {
+          if (loaded.entry.official === true) {
+            throw error;
+          }
+
+          failedLoaded.push(abandonment(loaded.entry.path, error));
         }
       }
 
+      if (failedLoaded.length > 0) {
+        throw new LoadedParticipantFailure(failedLoaded);
+      }
+
+      // A loaded participant that lacks a required boot option is left out. If
+      // any hardcore or composed participant lacks one, the boot is refused as
+      // before, naming every missing field.
+      contextContract.assertNamespaced(contextOptions);
+      const missing = contextContract.missingRequiredByOwner(contextOptions);
+      const pathOf = (ownerId: string): string => ownerId.slice(ownerId.indexOf(':') + 1);
+      const loadedPaths = new Set(owned.filter((entry) => entry.service.official !== true).map((entry) => entry.service.path));
+
+      if (missing.size > 0 && [...missing.keys()].every((ownerId) => loadedPaths.has(pathOf(ownerId)))) {
+        throw new LoadedParticipantFailure([...missing].map(([ownerId, fields]): AbandonedParticipant => ({
+          path: pathOf(ownerId),
+          code: 'CONTEXT_FIELD_MISSING',
+          reason: `required boot option(s) not supplied: ${fields.join(', ')}`,
+        })));
+      }
+
       const composed = refuseMissingContext(owned, contextContract, contextOptions);
+
+      for (const entry of owned) {
+        if (entry.service.official !== true) {
+          loadedTokens.set(entry.service.descriptor.token.id, entry.service.path);
+        }
+      }
 
       // The hardcore gate runs after descriptors exist and before any service
       // is registered or initialized. A failure here never reaches the
@@ -362,37 +541,38 @@ function assembleKernel(
     }
   };
 
-  kernel.reload = async (reloadOptions: ReloadOptions = {}): Promise<ReloadableKernel> => {
+  kernel.reload = (reloadOptions: ReloadOptions = {}): Promise<ReloadableKernel> => {
     if (kernel.lifecycleState !== 'RUNNING') {
-      throw new LifecycleStateError('reload', kernel.lifecycleState, 'RUNNING');
+      return Promise.reject(new LifecycleStateError('reload', kernel.lifecycleState, 'RUNNING'));
     }
 
     const target = reloadOptions.configPath ?? configPath;
-    const bootOptions = lastBootOptions;
-    const successor = assembleKernel(target, options, composedConfig);
 
-    // Everything that can be checked without running anything is checked
-    // here, while this kernel still runs. A refusal changes nothing.
-    await successor.validate(bootOptions);
-
-    try {
-      await kernel.shutdown();
-    } catch (error: unknown) {
-      successor.abandon();
-
-      throw error;
-    }
-
-    try {
-      await successor.kernel.boot(bootOptions);
-    } catch (error: unknown) {
-      throw new KernelReloadError(target, error);
-    }
-
-    return successor.kernel;
+    // The new composition is read, checked against the frozen part and
+    // composed while this kernel still runs; a refusal changes nothing. Only
+    // then is this kernel stopped and the new one booted.
+    return startTolerant(
+      target,
+      options,
+      lastBootOptions,
+      composedConfig,
+      () => kernel.shutdown(),
+      (error) => new KernelReloadError(target, error),
+    );
   };
 
-  return { kernel, validate, abandon };
+  Object.defineProperty(kernel, 'abandoned', { get: () => abandonedList, enumerable: true });
+
+  return {
+    kernel,
+    validate,
+    abandon,
+    config: () => composedConfig,
+    loadedPathOf: (token) => loadedTokens.get(token),
+    setAbandoned: (list) => {
+      abandonedList = list;
+    },
+  };
 }
 
 /**
@@ -566,13 +746,28 @@ async function loadServiceModules(
   configPath: string,
   raw: string,
 ): Promise<readonly LoadedService[]> {
-  const resolved = entries.map((entry, index) => ({
-    index,
-    entry,
-    resolvedId: resolveModuleId(entry.path, configPath),
-    label: `services[${String(index)}]`,
-    line: lineOf(raw, entry.path),
-  }));
+  const unresolvable: AbandonedParticipant[] = [];
+  const resolved = entries.flatMap((entry, index) => {
+    try {
+      return [{
+        index,
+        entry,
+        resolvedId: resolveModuleId(entry.path, configPath),
+        label: `services[${String(index)}]`,
+        line: lineOf(raw, entry.path),
+      }];
+    } catch (error: unknown) {
+      // A loaded participant whose path does not resolve is left out; the same
+      // failure in a hardcore or composed entry refuses the boot.
+      if (entry.official === true) {
+        throw error;
+      }
+
+      unresolvable.push(abandonment(entry.path, error));
+
+      return [];
+    }
+  });
   const official = new Map<number, unknown>();
 
   await Promise.all(resolved.map(async (item) => {
@@ -587,7 +782,7 @@ async function loadServiceModules(
     return typeof loader === 'function' ? [loader as ParticipantPackageLoader] : [];
   });
 
-  return Promise.all(resolved.map(async (item) => {
+  const outcomes = await Promise.allSettled(resolved.map(async (item) => {
     const { index, entry, resolvedId, label, line } = item;
 
     if (official.has(index)) {
@@ -646,6 +841,30 @@ async function loadServiceModules(
       );
     }
   }));
+
+  const loaded: LoadedService[] = [];
+  const left: AbandonedParticipant[] = [...unresolvable];
+
+  for (const [position, outcome] of outcomes.entries()) {
+    if (outcome.status === 'fulfilled') {
+      loaded.push(outcome.value);
+      continue;
+    }
+
+    const entry = (resolved[position] as (typeof resolved)[number]).entry;
+
+    if (entry.official === true) {
+      throw outcome.reason;
+    }
+
+    left.push(abandonment(entry.path, outcome.reason));
+  }
+
+  if (left.length > 0) {
+    throw new LoadedParticipantFailure(left);
+  }
+
+  return loaded;
 }
 
 async function importModule(

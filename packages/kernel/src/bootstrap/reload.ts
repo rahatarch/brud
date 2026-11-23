@@ -1,5 +1,6 @@
 import type { BrudKernel } from '../engine/BrudKernel.js';
 import { BrudConfigError, type BrudConfig } from './config/types.js';
+import type { AbandonedParticipant } from './loaded.js';
 
 /** Options for {@link ReloadableKernel.reload}. */
 export interface ReloadOptions {
@@ -9,21 +10,26 @@ export interface ReloadOptions {
 
 /** A kernel the host can reload. Only the host holds it; no participant receives it. */
 export type ReloadableKernel = BrudKernel & {
+  /** The loaded participants this kernel left out when it booted, each with the reason. Empty when none. */
+  readonly abandoned: readonly AbandonedParticipant[];
+
   /**
    * Replaces the running composition with the one in a config file: it
    * checks the new config against the frozen part, composes it, shuts this
    * kernel down, and boots the new one with the same options.
    *
-   * Everything outside the frozen part may change: which participants exist,
-   * their packages and their options. The frozen part is every official entry
-   * in order, and the exposure owners; changing it needs a rebuild.
+   * Everything outside the frozen part may change: which loaded participants
+   * exist, their packages and their options. The frozen part is every official
+   * entry in order, and the exposure owners; changing it needs a rebuild. A
+   * loaded participant that cannot start is left out and named in
+   * `abandoned` of the returned kernel; it never stops the reload.
    *
    * @returns The new running kernel. This one is disposed.
    * @throws {BrudConfigError} `CONFIG_RELOAD_FROZEN` when the frozen part
    *   differs, or any config error the new composition raises. Nothing has
    *   been stopped in either case.
-   * @throws {KernelReloadError} When the new kernel failed to boot after this
-   *   one was stopped.
+   * @throws {KernelReloadError} When the new kernel failed to boot for a reason
+   *   in the build, not in a loaded participant, after this one was stopped.
    * @throws {LifecycleStateError} When this kernel is not running.
    */
   reload(options?: ReloadOptions): Promise<ReloadableKernel>;

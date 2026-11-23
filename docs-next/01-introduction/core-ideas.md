@@ -32,7 +32,7 @@ Whether a participant is **official** is declared by the owner of the compositio
 
 ## 8. The kernel boots as one sequence
 
-Seven built-in services, the **hardcores**, start first and are checked against pinned content hashes. Then your participants start. If anything fails, everything rolls back. The configuration is frozen once the kernel is running.
+Seven built-in services, the **hardcores**, start first and are checked against pinned content hashes. Then your composed participants start. If any of those fails, everything rolls back. Participants the end user loads, the ones not declared official, are different: one that cannot start is left out and named, and the kernel boots with the rest. The configuration is frozen once the kernel is running.
 
 ## How they fit together
 

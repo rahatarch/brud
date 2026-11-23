@@ -151,15 +151,16 @@ describe('Caged participants (I-07 parity)', () => {
     assert.match(result.error, /fuel/iu);
   });
 
-  it('refuses a caged guest whose memory exceeds its limit', async (t) => {
+  it('leaves out a caged guest whose memory exceeds its limit', async (t) => {
     const composition = await writeComposition(t, [
       caged('caged.hog', exposure, constantGuest('brud_invoke', '{"ok":true,"value":1}', 32), { fuel: 100_000, maxMemoryBytes: 1 << 20 }),
     ]);
 
-    await assert.rejects(
-      bootKernel(composition.configPath, { options: composition.options }),
-      (error: unknown) => /growing memory/u.test(String((error as Error).message) + String((error as { cause?: Error }).cause?.message)),
-    );
+    const kernel = await bootKernel(composition.configPath, { options: composition.options });
+
+    composition.kernels.push(kernel);
+    assert.equal(kernel.abandoned.length, 1);
+    assert.match(kernel.abandoned[0]?.reason ?? '', /growing memory/u);
   });
 
   it('a caged participant calls out through brud.call as itself, from brud_start and while serving a call', async (t) => {
@@ -303,24 +304,25 @@ describe('Caged participants (I-07 parity)', () => {
   });
 
   describe('tier rule (W-01)', () => {
-    it('refuses a non-official native module at boot', async (t) => {
+    it('leaves out a non-official native module at boot', async (t) => {
       const composition = await writeComposition(t, [{ token: 'w01.native', official: false }]);
 
-      await assert.rejects(
-        bootKernel(composition.configPath, { options: composition.options }),
-        (error: unknown) => (error as { code?: string }).code === 'PARTICIPANT_TIER',
-      );
+      const kernel = await bootKernel(composition.configPath, { options: composition.options });
+
+      composition.kernels.push(kernel);
+      assert.equal(kernel.abandoned[0]?.code, 'PARTICIPANT_TIER');
     });
 
-    it('refuses a participant package whose module fails its digest check', async (t) => {
+    it('leaves out a participant package whose module fails its digest check', async (t) => {
       const composition = await writeComposition(t, [caged('w01.tampered', exposure, ECHO_GUEST)]);
       const module = join(dirname(composition.configPath), 'participant-0', 'participant.wasm');
 
       await writeFile(module, `${await readFile(module, 'utf8')} `, 'utf8');
-      await assert.rejects(
-        bootKernel(composition.configPath, { options: composition.options }),
-        (error: unknown) => /digest check/u.test(String((error as Error).message)),
-      );
+      const kernel = await bootKernel(composition.configPath, { options: composition.options });
+
+      composition.kernels.push(kernel);
+      assert.equal(kernel.abandoned.length, 1);
+      assert.match(kernel.abandoned[0]?.reason ?? '', /digest check/u);
     });
   });
 });

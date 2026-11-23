@@ -15,6 +15,8 @@ Boot is a single, ordered sequence.
 
 If a hardcore is missing or broken, composed participants never start. If a composed participant fails to construct or initialize, everything that already started is rolled back and the boot fails.
 
+A loaded participant, any entry not declared official, is the exception. If it cannot be loaded, admitted or started, the kernel leaves it out, boots again without it, and reports it in `kernel.abandoned` and in a warning. A loaded participant that depends on one that was left out is left out too. See [Loaded participants](compositions-and-config.md#loaded-participants).
+
 ## States
 
 `UNINITIALIZED` then `BOOTING` then `RUNNING` then `SHUTTING_DOWN` then `DISPOSED`. Read the current one from `kernel.lifecycleState`.

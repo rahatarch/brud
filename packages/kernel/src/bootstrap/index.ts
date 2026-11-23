@@ -26,6 +26,7 @@ export {
   isHardcoreToken,
 } from './hardcoreServices.js';
 export { KernelReloadError } from './reload.js';
+export type { AbandonedParticipant } from './loaded.js';
 export type { ReloadOptions, ReloadableKernel } from './reload.js';
 export type {
   BootKernelOptions,

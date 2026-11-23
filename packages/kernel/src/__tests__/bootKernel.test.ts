@@ -136,21 +136,19 @@ describe('bootKernel config composition', () => {
     );
   });
 
-  it('refuses a native module that is not declared official', async (t) => {
+  it('leaves out a native module that is not declared official', async (t) => {
     const root = await workspace(t);
     const configPath = await writeConfig(root, {
-      services: [{ path: 'kernel:serviceModules/router.js' }],
-      plugins: [],
+      services: [...HARDCORES, { path: 'kernel:serviceModules/router.js' }],
     });
+    const kernel = await bootKernel(configPath, { options: { ...workspaceContextOptions(root) } });
 
-    await assert.rejects(
-      bootKernel(configPath, { options: { ...workspaceContextOptions(root) } }),
-      (error: unknown) => {
-        assert.ok(error instanceof BrudConfigError);
-        assert.equal(error.code, 'PARTICIPANT_TIER');
-        assert.match(error.message, /not declared official/u);
-        return true;
-      },
-    );
+    try {
+      assert.equal(kernel.abandoned.length, 1);
+      assert.equal(kernel.abandoned[0]?.code, 'PARTICIPANT_TIER');
+      assert.match(kernel.abandoned[0]?.reason ?? '', /not declared official/u);
+    } finally {
+      await kernel.shutdown();
+    }
   });
 });
