@@ -101,6 +101,16 @@ test('a runaway guest is stopped by the cage fuel limit and the kernel stays up'
   });
 });
 
+test('a guest that outgrows its memory limit is stopped with a stable reason and the kernel stays up', async (t) => {
+  const source = "export default function handler(request) { if (request.method === 'hog') { const kept = []; for (;;) kept.push(new Array(100000).fill(1)); } return request.args[0] + request.args[1]; }\n";
+  const { project, dir } = await pack(t, { 'src/index.js': source }, 'src/index.js', {}, { ...LIMITS, maxMemoryBytes: 16 * MiB });
+
+  await withPackage(project, dir, async (api) => {
+    assert.throws(() => api.hog?.(), (error: Error & { code?: string; reason?: string }) => error.code === 'WASM_CAGE_GUEST_FAILED' && error.reason === 'CAGE_MEMORY_LIMIT' && !/backtrace|0x[0-9a-f]+/u.test(error.message) && error.message.length < 120);
+    assert.equal(api.add?.(1, 1), 2);
+  });
+});
+
 test('a TypeScript guest is bundled with its imports and its types removed', async (t) => {
   const { project, dir } = await pack(t, {
     'src/helper.ts': 'export const double = (value: number): number => value * 2;\n',
@@ -141,3 +151,4 @@ test('a low fuel budget gets a warning that explains the interpreter cost', asyn
   assert.equal(result.code, 0, result.err);
   assert.match(result.out, /limits\.fuel 1000000 is low for JavaScript/u);
 });
+
