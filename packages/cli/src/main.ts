@@ -1,6 +1,7 @@
 import { parseArgs, UsageError, type FlagSpec, type ParsedArgs } from './core/args.js';
 import { CommandError, describeError } from './core/errors.js';
 import type { Io } from './core/io.js';
+import { about, logo, showsBrand } from './core/brand.js';
 import { readOwnPackage } from './core/project.js';
 import { styleFrom, type Style } from './core/report.js';
 import { ADD_FLAGS, runAdd } from './commands/add/index.js';
@@ -36,11 +37,11 @@ const COMMANDS: Readonly<Record<string, Command>> = {
 /** Exit codes, documented in `brud --help`. */
 export const EXIT = { ok: 0, failure: 1, usage: 2 } as const;
 
-function helpText(): string {
+function helpText(brand = ''): string {
   const width = Math.max(...Object.keys(COMMANDS).map((name) => name.length));
   const rows = Object.entries(COMMANDS).map(([name, command]) => `  ${name.padEnd(width)}  ${command.summary}`);
 
-  return `brud ${readOwnPackage().version} - set up, check, run, call and package BrudOS participants\n\nUsage: brud <command> [options]\n\nCommands:\n${rows.join('\n')}\n\nGlobal options:\n  --json        machine-readable output\n  --home <dir>  daemon home (default: $BRUD_DAEMON_HOME or ~/.brud)\n  --no-color    plain output\n  --help        show help (also \`brud <command> --help\`)\n  --version     show the version\n\nExit codes: 0 success, 1 a problem was found or the command failed, 2 the command line was wrong.\n`;
+  return `${brand}brud ${readOwnPackage().version} - set up, check, run, call and package BrudOS participants\n\nUsage: brud <command> [options]\n\nCommands:\n${rows.join('\n')}\n\nGlobal options:\n  --json        machine-readable output\n  --home <dir>  daemon home (default: $BRUD_DAEMON_HOME or ~/.brud)\n  --no-color    plain output\n  --help        show help (also \`brud <command> --help\`)\n  --version     show the version\n\nExit codes: 0 success, 1 a problem was found or the command failed, 2 the command line was wrong.\n`;
 }
 
 /**
@@ -51,13 +52,14 @@ export async function main(argv: readonly string[], io: Io): Promise<number> {
   const [name, ...rest] = argv;
 
   if (name === undefined || name === '--help' || name === '-h' || name === 'help') {
-    io.out(helpText());
+    io.out(helpText(showsBrand(io, argv) ? `${logo(io, argv)}\n` : ''));
 
     return EXIT.ok;
   }
 
   if (name === '--version' || name === '-v') {
-    io.out(`${readOwnPackage().version}\n`);
+    // A person at a terminal sees the brand, the licence and the credits; a script gets the bare version.
+    io.out(showsBrand(io, argv) ? `${logo(io, argv)}\n${about()}` : `${readOwnPackage().version}\n`);
 
     return EXIT.ok;
   }

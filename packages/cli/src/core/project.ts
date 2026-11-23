@@ -84,7 +84,7 @@ export function isInstalled(name: string, cwd: string): boolean {
 }
 
 /** This CLI's own package.json (engines, version, peer ranges). */
-export function readOwnPackage(): { readonly version: string; readonly engines: { readonly node: string }; readonly peerDependencies: Readonly<Record<string, string>> } {
+export function readOwnPackage(): { readonly version: string; readonly license?: string; readonly homepage?: string; readonly engines: { readonly node: string }; readonly peerDependencies: Readonly<Record<string, string>> } {
   const text = readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf8');
 
   return JSON.parse(text) as ReturnType<typeof readOwnPackage>;
