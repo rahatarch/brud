@@ -28,6 +28,5 @@
       "path": "kernel:serviceModules/interception.js",
       "official": true
     }
-  ],
-  "plugins": []
+  ]
 }

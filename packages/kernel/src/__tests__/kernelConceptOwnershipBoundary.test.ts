@@ -1071,7 +1071,6 @@ describe('BC-2: no service-specific option name in a kernel boot type', () => {
 const KNOWN_EXPORT_PARTICIPANT_FINDINGS = new Set<string>([
   // Filled from the first real run; each entry is a contract the decision
   // record has not yet ruled on. They are recorded for their own cleanup steps.
-  'src/contracts/handler.ts:PluginMetadata: name',
 ]);
 
 describe('BC-5: kernel source carries no plugin-manager key', () => {

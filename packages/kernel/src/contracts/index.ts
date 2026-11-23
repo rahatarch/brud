@@ -77,7 +77,7 @@ export {
   requireContextString,
 } from './contextContract.js';
 
-export type { OperationResult, OperationHandler, PromptDescriptor, PluginMetadata } from './handler.js';
+export type { OperationResult, OperationHandler, PromptDescriptor } from './handler.js';
 
 export type { CapabilityToken } from './capability.js';
 export {

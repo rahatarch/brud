@@ -49,8 +49,8 @@ export interface RouterDependencies {
  * guard for alternate compositions.
  *
  * Dispatch resolves every target through the access broker with the token the
- * owning service supplied, so access policies still apply and a plugin can
- * never be a routing target.
+ * owning service supplied, so access policies still apply and only the
+ * owning service can be a routing target.
  */
 export class RouterService implements IRouterService, IServiceLifecycle {
   private readonly registrations = new Map<string, BrudRouteRegistration & { readonly owner?: string }>();

@@ -508,7 +508,7 @@ Level-1 Brud kind Router.
 
 Accepts boot-time kind registrations from kernel services, resolves the
 owning service through the kernel access broker with its `ServiceToken`, and
-dispatches parsed operations. It never routes to a plugin directly.
+dispatches parsed operations. It routes only to the service that owns a kind.
 
 #### Methods
 

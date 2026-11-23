@@ -1810,7 +1810,6 @@ One record on the kernel's observation stream.
 | Property | Modifier | Type |
 | ------ | ------ | ------ |
 | <a id="property-kind-1"></a> `kind` | `readonly` | `string` |
-| <a id="property-metadata-1"></a> `metadata?` | `readonly` | [`PluginMetadata`](#pluginmetadata) |
 | <a id="property-promptdescriptor"></a> `promptDescriptor?` | `readonly` | [`PromptDescriptor`](#promptdescriptor) |
 | <a id="property-requiredcapabilities"></a> `requiredCapabilities?` | `readonly` | readonly [`Token`](#token)\<`unknown`\>[] |
 
@@ -1884,19 +1883,6 @@ What a participant requests. A request is not a grant; the giver decides.
 
 ***
 
-### PluginMetadata
-
-#### Properties
-
-| Property | Modifier | Type |
-| ------ | ------ | ------ |
-| <a id="property-author"></a> `author?` | `readonly` | `string` |
-| <a id="property-isofficial"></a> `isOfficial?` | `readonly` | `boolean` |
-| <a id="property-permissions"></a> `permissions?` | `readonly` | readonly `string`[] |
-| <a id="property-version-5"></a> `version?` | `readonly` | `string` |
-
-***
-
 ### PromptDescriptor
 
 #### Properties
@@ -1954,7 +1940,7 @@ it does not interpret any method.
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-methods"></a> `methods` | `readonly` | readonly `string`[] | Method names the service implements for this contract. |
-| <a id="property-version-6"></a> `version` | `readonly` | `string` | Contract version the service implements. |
+| <a id="property-version-5"></a> `version` | `readonly` | `string` | Contract version the service implements. |
 
 ***
 

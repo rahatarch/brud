@@ -34,7 +34,7 @@ new CagedGuestError(
 | ------ | ------ |
 | `message` | `string` |
 | `guestCode?` | `string` |
-| `options?` | `ErrorOptions` |
+| `options?` | `ErrorOptions` & `object` |
 
 ###### Returns
 
@@ -52,6 +52,14 @@ new CagedGuestError(
 readonly code: "WASM_CAGE_GUEST_FAILED";
 ```
 
+##### detail
+
+```ts
+readonly detail: string | undefined;
+```
+
+The engine's full text, backtrace included. Never part of `message`.
+
 ##### guestCode
 
 ```ts
@@ -63,18 +71,10 @@ The guest-reported error code, when the guest reported one.
 ##### reason
 
 ```ts
-readonly reason: "CAGE_FUEL_LIMIT" | "CAGE_MEMORY_LIMIT" | undefined;
+readonly reason: CagedLimitReason | undefined;
 ```
 
-Set when the cage stopped the guest at a limit: `CAGE_FUEL_LIMIT` when its fuel ran out, `CAGE_MEMORY_LIMIT` when it passed `maxMemoryBytes`. The message names the limit and carries no backtrace.
-
-##### detail
-
-```ts
-readonly detail: string | undefined;
-```
-
-The engine's full text, backtrace included, for a failure the engine reported. It is never part of `message`.
+A stable reason when the cage itself stopped the guest at a limit; `undefined` for any other failure.
 
 ***
 
@@ -296,7 +296,10 @@ author JavaScript is loaded. `brud.participant.json`:
 ```
 
 `native` is optional and used only when the composition declares the entry
-official; the kernel's loader reads it, never this module.
+official; the kernel's loader reads it, never this module. `requires` is
+optional too: `{ "official": true, "powers": [...] }` makes the kernel refuse
+the entry unless the composition declares it official. The kernel's loader
+enforces it; this module only accepts the key.
 
 ***
 
