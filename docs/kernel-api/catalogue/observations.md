@@ -17,8 +17,9 @@ Events the kernel records on its observation stream (`KernelCallAuthority.observ
 | `interception.modified` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `interception.refused` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `interception.result.appended` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
-| `interception.result.failed` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `interception.result.refused` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
+| `interception.result.skipped` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
+| `interception.result.stage-skipped` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `interception.result.unchanged` | `brud.core.interception` | `packages/kernel/services/Interception/orchestrator/InterceptionService.ts` |
 | `invoke-refused` | `brud.core.exposedApiRegistry` | `packages/kernel/services/ExposedApiRegistry/orchestrator/ExposedApiRegistryService.ts` |
 | `router` | `(caller-supplied)` | `packages/kernel/services/Router/orchestrator/RouterService.ts` |

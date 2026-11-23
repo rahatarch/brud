@@ -14,6 +14,7 @@ import {
   type InterceptedCall,
   type InterceptedResult,
   type InterceptionAddition,
+  type InterceptionSkipped,
   type InterceptionEvaluateOptions,
   type InterceptionOutcome,
   type InterceptionOutputVerdict,
@@ -386,14 +387,16 @@ export class InterceptionService implements IInterceptionService {
       return this.#refuseResult(key, 'method must be a non-empty string and args a plain JSON array');
     }
 
+    // A result the output stage cannot carry is the giver's own data, never an
+    // interceptor's doing. The stage is skipped and the giver ships its result.
     if (inspectJsonValue(result, OUTPUT_JSON_LIMITS) !== null) {
-      return this.#refuseResult(key, 'the result must be plain JSON to take part in the output stage');
+      return this.#skipStage(key, 'the result must be plain JSON to take part in the output stage');
     }
 
     const resultBytes = result === undefined ? 0 : jsonBytes(result);
 
     if (resultBytes > point.limits.maxResultBytes) {
-      return this.#refuseResult(key, `the result is ${String(resultBytes)} bytes; the limit is ${String(point.limits.maxResultBytes)}`);
+      return this.#skipStage(key, `the result is ${String(resultBytes)} bytes; the limit is ${String(point.limits.maxResultBytes)}`);
     }
 
     const caller = options?.caller ?? resolver;
@@ -413,9 +416,17 @@ export class InterceptionService implements IInterceptionService {
     });
     const additions: InterceptionAddition[] = [];
     const ran: string[] = [];
+    const skipped: InterceptionSkipped[] = [];
     let total = 0;
 
+    // The output stage can only append, so an interceptor that misbehaves is
+    // skipped and the result is delivered without its contribution. It must
+    // never be able to withhold the giver's result by failing.
     for (const interceptor of taking) {
+      const skip = (reason: string): void => {
+        skipped.push(Object.freeze({ interceptor: interceptor.token, reason }));
+        authority.observe(OBSERVATION_SOURCE, 'interception.result.skipped', { target: key, method, interceptor: interceptor.token, reason });
+      };
       let verdict: InterceptionOutputVerdict;
 
       try {
@@ -427,32 +438,35 @@ export class InterceptionService implements IInterceptionService {
 
         verdict = authority.runAs(interceptor.identity, () => instance.interceptResult(call));
       } catch (error) {
-        return this.#failResult(key, interceptor.token, error instanceof Error ? error.message : 'interceptor threw');
+        skip(error instanceof Error ? error.message : 'interceptor threw');
+        continue;
       }
 
-      ran.push(interceptor.token);
-
       if (verdict?.verdict === 'none') {
+        ran.push(interceptor.token);
         authority.observe(OBSERVATION_SOURCE, 'interception.result.unchanged', { target: key, method, interceptor: interceptor.token });
         continue;
       }
 
       if (verdict?.verdict !== 'append' || inspectJsonValue(verdict.content, OUTPUT_JSON_LIMITS) !== null || verdict.content === undefined) {
-        return this.#failResult(key, interceptor.token, 'invalid output verdict');
+        skip('invalid output verdict: the output stage can only append');
+        continue;
       }
 
       const bytes = jsonBytes(verdict.content);
 
       if (bytes > point.limits.maxAdditionBytes) {
-        return this.#failResult(key, interceptor.token, `the addition is ${String(bytes)} bytes; the limit is ${String(point.limits.maxAdditionBytes)}`);
+        skip(`the addition is ${String(bytes)} bytes; the limit is ${String(point.limits.maxAdditionBytes)}`);
+        continue;
+      }
+
+      if (total + bytes > point.limits.maxTotalBytes) {
+        skip(`the additions together would exceed ${String(point.limits.maxTotalBytes)} bytes`);
+        continue;
       }
 
       total += bytes;
-
-      if (total > point.limits.maxTotalBytes) {
-        return this.#failResult(key, interceptor.token, `the additions together exceed ${String(point.limits.maxTotalBytes)} bytes`);
-      }
-
+      ran.push(interceptor.token);
       additions.push(Object.freeze({ interceptor: interceptor.token, content: freezeJsonCopy(verdict.content) }));
       authority.observe(OBSERVATION_SOURCE, 'interception.result.appended', { target: key, method, interceptor: interceptor.token, bytes });
     }
@@ -460,7 +474,12 @@ export class InterceptionService implements IInterceptionService {
     return Object.freeze({
       applied: true,
       allowed: true,
-      envelope: Object.freeze({ result: frozenResult, additions: Object.freeze(additions), interceptedBy: Object.freeze(ran) }),
+      envelope: Object.freeze({
+        result: frozenResult,
+        additions: Object.freeze(additions),
+        interceptedBy: Object.freeze(ran),
+        skipped: Object.freeze(skipped),
+      }),
     });
   }
 
@@ -470,10 +489,10 @@ export class InterceptionService implements IInterceptionService {
     return Object.freeze({ applied: true, allowed: false, reason });
   }
 
-  #failResult(key: string, interceptor: string, reason: string): InterceptionResultOutcome {
-    this.authority?.observe(OBSERVATION_SOURCE, 'interception.result.failed', { target: key, interceptor, reason });
+  #skipStage(key: string, reason: string): InterceptionResultOutcome {
+    this.authority?.observe(OBSERVATION_SOURCE, 'interception.result.stage-skipped', { target: key, reason });
 
-    return Object.freeze({ applied: true, allowed: false, reason: `interceptor-failed: ${reason}`, interceptor });
+    return Object.freeze({ applied: false });
   }
 
   #refuse(key: string, reason: string): InterceptionOutcome {

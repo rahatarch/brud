@@ -635,7 +635,7 @@ export function createCagedParticipant(options: CagedParticipantOptions): Servic
           }
 
           if (!staged.allowed) {
-            throw new InterceptionBlockedError(exposure, staged.reason, staged.interceptor);
+            throw new InterceptionBlockedError(exposure, staged.reason);
           }
 
           return staged.envelope;

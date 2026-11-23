@@ -85,26 +85,40 @@ export interface InterceptionAddition {
   readonly content: unknown;
 }
 
+/** An output-stage interceptor the kernel skipped, and why. */
+export interface InterceptionSkipped {
+  /** Service token of the interceptor that was skipped. */
+  readonly interceptor: string;
+  /** What it did wrong: it threw, returned anything but an append, or exceeded a limit. */
+  readonly reason: string;
+}
+
 /**
  * What a caller of an intercepted exposure receives: the giver's result
- * exactly as returned, the additions in the order the interceptors ran, and
- * the interceptors that ran.
+ * exactly as returned, the additions in the order the interceptors ran, the
+ * interceptors whose contribution was taken, and the interceptors that were
+ * skipped because they misbehaved.
  */
 export interface InterceptionEnvelope {
   readonly result: unknown;
   readonly additions: readonly InterceptionAddition[];
   readonly interceptedBy: readonly string[];
+  readonly skipped: readonly InterceptionSkipped[];
 }
 
 /**
- * The outcome of the output stage. `applied: false` means no admitted
- * interceptor takes part in it, so the giver returns its result as it always
- * did. `allowed: false` withholds the result.
+ * The outcome of the output stage. `applied: false` means the giver returns
+ * its result as it always did: no admitted interceptor takes part in the
+ * stage, or the result is one the stage cannot carry. An interceptor that
+ * misbehaves never withholds the result: it is skipped and listed in
+ * `envelope.skipped`. `allowed: false` is returned only when the giver itself
+ * called the stage wrongly (it is not the point's owner, the point is
+ * unknown, or the arguments are not plain data).
  */
 export type InterceptionResultOutcome =
   | { readonly applied: false }
   | { readonly applied: true; readonly allowed: true; readonly envelope: InterceptionEnvelope }
-  | { readonly applied: true; readonly allowed: false; readonly reason: string; readonly interceptor?: string };
+  | { readonly applied: true; readonly allowed: false; readonly reason: string };
 
 /** Options the giver passes to `evaluate`. */
 export interface InterceptionEvaluateOptions {

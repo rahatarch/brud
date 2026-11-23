@@ -28,7 +28,7 @@ Verdicts: `{ verdict: 'allow' }`, `{ verdict: 'block', reason }`, `{ verdict: 'm
 
 ## The output stage: appending to a result
 
-An interceptor can also add content to what the giver returns, and nothing else. It cannot change, replace, remove or withhold the result.
+An interceptor can also add content to what the giver returns, and nothing else. It cannot change, replace, remove or withhold the result, and it cannot make the call fail: an interceptor that misbehaves is skipped, and the caller still gets the giver's result.
 
 ```js
 // interceptor manifest: take part in the output stage (the default is ['input'])
@@ -37,17 +37,17 @@ interceptions: [{ target: 'acme.greet', version: 1, stages: ['output'] }]
 interceptResult(call) { return { verdict: 'append', content: { note: 'reviewed' } }; } // or { verdict: 'none' }
 ```
 
-- `stages` lists `'input'`, `'output'` or both. An interceptor takes part only in the stages it declares, and must implement each one (`intercept`, `interceptResult`), or the call fails closed.
+- `stages` lists `'input'`, `'output'` or both. An interceptor takes part only in the stages it declares, and must implement each one (`intercept`, `interceptResult`). One that does not is skipped at the output stage.
 - `call` has `target`, `method`, `args` (as finally passed), the real caller, and `result`: the giver's result as a deep-frozen copy. Each interceptor sees only the original result, never another's addition.
-- The verdict is `{ verdict: 'none' }` or `{ verdict: 'append', content }`, where `content` is plain JSON. Anything else, a throw, a missing method, or a limit breach withholds the result (fail closed).
-- Interceptors run in the giver's `admit` order. The result the caller receives is an envelope: `{ result, additions: [{ interceptor, content }], interceptedBy }`, with `result` exactly as the giver returned it, the additions in run order, and every interceptor that ran. When no admitted interceptor declares the output stage, the giver returns its result as before.
-- The result must be plain JSON to take part, and is limited, with kernel ceilings of 1 MiB for the result, 64 KiB for one addition and 256 KiB for all additions. The giver may lower any of them with `outputLimits` on the point (`maxResultBytes`, `maxAdditionBytes`, `maxTotalBytes`) and can never raise one. A value above a ceiling refuses the boot.
-- Every step is recorded on the kernel's observation stream (`interception.result.appended`, `.unchanged`, `.failed`, `.refused`), never with the content.
+- The verdict is `{ verdict: 'none' }` or `{ verdict: 'append', content }`, where `content` is plain JSON. Anything else (a replace, a block, a modify, a missing `content`), a throw, a missing method, or a limit breach skips that interceptor: its contribution is dropped, the other interceptors still run, and the result is delivered. The skipped interceptor and the reason are listed in `skipped`. The input stage is different: there a throw or an invalid verdict still blocks, because an input interceptor may be a guard.
+- Interceptors run in the giver's `admit` order. The result the caller receives is an envelope: `{ result, additions: [{ interceptor, content }], interceptedBy, skipped: [{ interceptor, reason }] }`, with `result` exactly as the giver returned it, the additions in run order, the interceptors whose contribution was taken, and the interceptors that were skipped. When no admitted interceptor declares the output stage, the giver returns its result as before.
+- The result must be plain JSON to take part, and is limited, with kernel ceilings of 1 MiB for the result, 64 KiB for one addition and 256 KiB for all additions. The giver may lower any of them with `outputLimits` on the point (`maxResultBytes`, `maxAdditionBytes`, `maxTotalBytes`) and can never raise one. A value above a ceiling refuses the boot. A result that is not plain JSON, or is over its ceiling, skips the output stage: `applied` is `false` and the giver ships its result as it always did.
+- Every step is recorded on the kernel's observation stream (`interception.result.appended`, `.unchanged`, `.skipped`, `.stage-skipped`, `.refused`), never with the content.
 
 ```ts
 const staged = evaluate.evaluateResult('acme.greet@1', 'greet', args, result, { caller });
 if (!staged.applied) return result;
-if (!staged.allowed) throw new InterceptionBlockedError('acme.greet@1', staged.reason, staged.interceptor);
+if (!staged.allowed) throw new InterceptionBlockedError('acme.greet@1', staged.reason); // the giver called the stage wrongly
 return staged.envelope;
 ```
 

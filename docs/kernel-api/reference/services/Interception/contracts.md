@@ -361,8 +361,9 @@ One piece of content an interceptor appended, attributed to it.
 ### InterceptionEnvelope
 
 What a caller of an intercepted exposure receives: the giver's result
-exactly as returned, the additions in the order the interceptors ran, and
-the interceptors that ran.
+exactly as returned, the additions in the order the interceptors ran, the
+interceptors whose contribution was taken, and the interceptors that were
+skipped because they misbehaved.
 
 #### Properties
 
@@ -371,6 +372,7 @@ the interceptors that ran.
 | <a id="property-additions"></a> `additions` | `readonly` | readonly [`InterceptionAddition`](#interceptionaddition)[] |
 | <a id="property-interceptedby"></a> `interceptedBy` | `readonly` | readonly `string`[] |
 | <a id="property-result-1"></a> `result` | `readonly` | `unknown` |
+| <a id="property-skipped"></a> `skipped` | `readonly` | readonly [`InterceptionSkipped`](#interceptionskipped)[] |
 
 ***
 
@@ -383,6 +385,19 @@ Options the giver passes to `evaluate`.
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
 | <a id="property-caller-2"></a> `caller?` | `readonly` | [`ExposedApiCaller`](../ExposedApiRegistry/contracts.md#exposedapicaller) | The caller view the giver's projection received (delegation by the owner). |
+
+***
+
+### InterceptionSkipped
+
+An output-stage interceptor the kernel skipped, and why.
+
+#### Properties
+
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-interceptor-1"></a> `interceptor` | `readonly` | `string` | Service token of the interceptor that was skipped. |
+| <a id="property-reason"></a> `reason` | `readonly` | `string` | What it did wrong: it threw, returned anything but an append, or exceeded a limit. |
 
 ***
 
@@ -474,14 +489,17 @@ type InterceptionResultOutcome =
   | {
   allowed: false;
   applied: true;
-  interceptor?: string;
   reason: string;
 };
 ```
 
-The outcome of the output stage. `applied: false` means no admitted
-interceptor takes part in it, so the giver returns its result as it always
-did. `allowed: false` withholds the result.
+The outcome of the output stage. `applied: false` means the giver returns
+its result as it always did: no admitted interceptor takes part in the
+stage, or the result is one the stage cannot carry. An interceptor that
+misbehaves never withholds the result: it is skipped and listed in
+`envelope.skipped`. `allowed: false` is returned only when the giver itself
+called the stage wrongly (it is not the point's owner, the point is
+unknown, or the arguments are not plain data).
 
 ***
 

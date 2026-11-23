@@ -56,7 +56,7 @@ type Outcome = {
   allowed?: boolean;
   reason?: string;
   interceptor?: string;
-  envelope?: { result: unknown; additions: { interceptor: string; content: unknown }[]; interceptedBy: string[] };
+  envelope?: { result: unknown; additions: { interceptor: string; content: unknown }[]; interceptedBy: string[]; skipped: { interceptor: string; reason: string }[] };
 };
 
 async function run(t: Parameters<typeof writeComposition>[0], participants: readonly FixtureParticipant[], ask = "report.out = registry.resolve('" + POINT + "').rate('x');") {
@@ -130,7 +130,7 @@ describe('Output interception: append only', () => {
     assert.deepEqual(report.out.envelope?.additions[1]?.content, ['args', 'caller', 'method', 'result', 'target']);
   });
 
-  it('has no way to block, replace or remove: any other verdict withholds the result', async (t) => {
+  it('has no way to block, replace or remove: any other verdict is skipped and the result is delivered', async (t) => {
     for (const verdict of [
       `{ verdict: 'block', reason: 'no' }`,
       `{ verdict: 'replace', result: 1 }`,
@@ -143,10 +143,11 @@ describe('Output interception: append only', () => {
     ]) {
       const { report } = await run(t, [output('acme.bad', `() => (${verdict})`), giver(['acme.bad'])]);
 
-      assert.equal(report.out.allowed, false, verdict);
-      assert.equal(report.out.interceptor, 'acme.bad', verdict);
-      assert.match(report.out.reason ?? '', /interceptor-failed/, verdict);
-      assert.equal(report.out.envelope, undefined, 'nothing of the result is delivered');
+      assert.equal(report.out.allowed, true, verdict);
+      assert.deepEqual(report.out.envelope?.result, ORIGINAL, `${verdict}: the giver's result is delivered unchanged`);
+      assert.deepEqual(report.out.envelope?.additions, [], verdict);
+      assert.equal(report.out.envelope?.skipped[0]?.interceptor, 'acme.bad', verdict);
+      assert.match(report.out.envelope?.skipped[0]?.reason ?? '', /can only append/, verdict);
     }
   });
 });
@@ -178,14 +179,15 @@ describe('Output interception: stages and ownership', () => {
     assert.deepEqual((globalThis as { __stageCalls?: string[] }).__stageCalls, ['both:input', 'in:input', 'both:output', 'out:output']);
   });
 
-  it('fails closed when a declared output stage is not implemented', async (t) => {
+  it('skips an interceptor whose declared output stage is not implemented', async (t) => {
     const { report } = await run(t, [
       { token: 'acme.lazy', interceptions: [{ target: POINT, stages: ['output'] }] },
       giver(['acme.lazy']),
     ]);
 
-    assert.equal(report.out.allowed, false);
-    assert.match(report.out.reason ?? '', /does not implement interceptResult/);
+    assert.equal(report.out.allowed, true);
+    assert.deepEqual(report.out.envelope?.result, ORIGINAL);
+    assert.match(report.out.envelope?.skipped[0]?.reason ?? '', /does not implement interceptResult/);
   });
 
   it('refuses anyone but the point owner', async (t) => {
@@ -203,28 +205,32 @@ describe('Output interception: stages and ownership', () => {
 });
 
 describe('Output interception: fail closed and limits', () => {
-  it('withholds the result when an interceptor throws, naming it and appending nothing', async (t) => {
+  it('skips an interceptor that throws, naming it, and keeps the other additions and the result', async (t) => {
     const { report } = await run(t, [
       output('acme.fine', `() => ({ verdict: 'append', content: 'ok' })`),
       output('acme.boom', `() => { throw new Error('exploded'); }`),
       giver(['acme.fine', 'acme.boom']),
     ]);
 
-    assert.equal(report.out.allowed, false);
-    assert.equal(report.out.interceptor, 'acme.boom');
-    assert.match(report.out.reason ?? '', /exploded/);
-    assert.equal(report.out.envelope, undefined);
+    assert.equal(report.out.allowed, true);
+    assert.deepEqual(report.out.envelope?.result, ORIGINAL);
+    assert.deepEqual(report.out.envelope?.additions, [{ interceptor: 'acme.fine', content: 'ok' }]);
+    assert.deepEqual(report.out.envelope?.interceptedBy, ['acme.fine']);
+    assert.equal(report.out.envelope?.skipped[0]?.interceptor, 'acme.boom');
+    assert.match(report.out.envelope?.skipped[0]?.reason ?? '', /exploded/);
   });
 
-  it('refuses content that is not plain JSON', async (t) => {
+  it('skips content that is not plain JSON', async (t) => {
     for (const content of ['() => 1', 'undefined', 'NaN', 'new Date()', 'Symbol("s")', '10n', '{ get x() { return 1; } }']) {
       const { report } = await run(t, [output('acme.bad', `() => ({ verdict: 'append', content: ${content} })`), giver(['acme.bad'])]);
 
-      assert.equal(report.out.allowed, false, content);
+      assert.equal(report.out.allowed, true, content);
+      assert.deepEqual(report.out.envelope?.additions, [], content);
+      assert.equal(report.out.envelope?.skipped.length, 1, content);
     }
   });
 
-  it('refuses a result that is not plain JSON, before any interceptor sees it', async (t) => {
+  it('skips the stage for a result that is not plain JSON, before any interceptor sees it', async (t) => {
     resetFixtureReports();
     (globalThis as { __seen?: number }).__seen = 0;
 
@@ -234,9 +240,8 @@ describe('Output interception: fail closed and limits', () => {
     ], `report.out = registry.resolve('${POINT}').rateWith(() => 1);
        report.loop = (() => { const a = {}; a.self = a; return registry.resolve('${POINT}').rateWith(a); })();`);
 
-    assert.equal(report.out.allowed, false);
-    assert.match(report.out.reason ?? '', /plain JSON/);
-    assert.equal((report.loop as unknown as Outcome).allowed, false);
+    assert.equal(report.out.applied, false, 'the giver ships its own result');
+    assert.equal((report.loop as unknown as Outcome).applied, false);
     assert.equal((globalThis as { __seen?: number }).__seen, 0);
   });
 
@@ -245,26 +250,28 @@ describe('Output interception: fail closed and limits', () => {
 
     const oneTooBig = await run(t, [output('acme.a', big(70_000)), giver(['acme.a'])]);
 
-    assert.match(oneTooBig.report.out.reason ?? '', /addition is \d+ bytes; the limit is 65536/);
+    assert.match(oneTooBig.report.out.envelope?.skipped[0]?.reason ?? '', /addition is \d+ bytes; the limit is 65536/);
+    assert.deepEqual(oneTooBig.report.out.envelope?.result, ORIGINAL);
 
     const together = await run(t, [
       output('acme.a', big(60_000)), output('acme.b', big(60_000)), output('acme.c', big(60_000)),
       output('acme.d', big(60_000)), output('acme.e', big(60_000)), giver(['acme.a', 'acme.b', 'acme.c', 'acme.d', 'acme.e']),
     ]);
 
-    assert.equal(together.report.out.interceptor, 'acme.e', 'the addition that crosses the total is the one named');
-    assert.match(together.report.out.reason ?? '', /additions together exceed 262144/);
+    assert.deepEqual(together.report.out.envelope?.skipped.map((entry) => entry.interceptor), ['acme.e'], 'the addition that would cross the total is the one skipped');
+    assert.match(together.report.out.envelope?.skipped[0]?.reason ?? '', /additions together would exceed 262144/);
+    assert.equal(together.report.out.envelope?.additions.length, 4);
 
     const result = await run(t, [output('acme.a', `() => ({ verdict: 'none' })`), giver(['acme.a'])],
       `report.out = registry.resolve('${POINT}').rateWith({ blob: 'x'.repeat(1100000) });`);
 
-    assert.match(result.report.out.reason ?? '', /the result is \d+ bytes; the limit is 1048576/);
+    assert.equal(result.report.out.applied, false, 'a result over the ceiling skips the stage and is shipped as it is');
   });
 
   it('lets the point owner lower a limit, and refuses the boot for any value that would raise or break one', async (t) => {
     const lowered = await run(t, [output('acme.a', `() => ({ verdict: 'append', content: 'x'.repeat(50) })`), giver(['acme.a'], { maxAdditionBytes: 20 })]);
 
-    assert.match(lowered.report.out.reason ?? '', /the limit is 20/);
+    assert.match(lowered.report.out.envelope?.skipped[0]?.reason ?? '', /the limit is 20/);
 
     for (const limits of [
       { maxAdditionBytes: 65_537 }, { maxTotalBytes: 262_145 }, { maxResultBytes: 1_048_577 },
@@ -313,7 +320,7 @@ describe('Output interception: records and declarations', () => {
     assert.deepEqual(events.filter((event) => event.startsWith('interception.result.')), [
       'interception.result.appended:acme.a',
       'interception.result.unchanged:acme.b',
-      'interception.result.failed:acme.c',
+      'interception.result.skipped:acme.c',
     ]);
     assert.equal(JSON.stringify(records).includes('SECRET-CONTENT'), false);
     assert.equal(records.find((record) => record.event === 'interception.result.appended')?.detail.bytes, 16);
@@ -362,12 +369,13 @@ describe('Output interception: caged participants', () => {
     assert.deepEqual(report.out.envelope?.result, ORIGINAL);
   });
 
-  it('fails closed when a caged interceptor answers with anything but none or append', async (t) => {
+  it('skips a caged interceptor that answers with anything but none or append', async (t) => {
     for (const text of ['{"verdict":"block","reason":"x"}', '{"verdict":"append"}', '{"verdict":"replace","result":1}', '[]']) {
       const { report } = await run(t, [cagedInterceptor('caged.bad', text), giver(['caged.bad'])]);
 
-      assert.equal(report.out.allowed, false, text);
-      assert.equal(report.out.interceptor, 'caged.bad', text);
+      assert.equal(report.out.allowed, true, text);
+      assert.deepEqual(report.out.envelope?.result, ORIGINAL, text);
+      assert.equal(report.out.envelope?.skipped[0]?.interceptor, 'caged.bad', text);
     }
   });
 
