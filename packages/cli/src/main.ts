@@ -22,7 +22,7 @@ interface Command {
 
 const COMMANDS: Readonly<Record<string, Command>> = {
   doctor: { summary: 'Check this machine, the composition and the daemon (read-only)', usage: 'brud doctor [config] [--option key=value]', flags: DOCTOR_FLAGS, run: runDoctor },
-  init: { summary: 'Scaffold a project that passes doctor and npm test', usage: 'brud init [name] [--kind] [--guest] [--no-install] | brud init --finish [dir]', flags: INIT_FLAGS, run: runInit },
+  init: { summary: 'Scaffold a project that passes doctor and npm test', usage: 'brud init [name] [--kind] [--guest] [--install | --no-install] | brud init --finish [dir]', flags: INIT_FLAGS, run: runInit },
   check: { summary: 'Boot the composition in a scratch state and report problems', usage: 'brud check [config] [--option key=value]', flags: CHECK_FLAGS, run: runCheck },
   run: { summary: 'Boot a kernel (or the daemon) and route Brud text from stdin', usage: 'brud run [config] [--daemon] [--state dir] [--cap c] [--tier ui|ai]', flags: RUN_FLAGS, run: runRun },
   call: { summary: 'Send one Brud document and print the route result', usage: 'brud call <text|-> [--file path] [--config path] [--daemon] [--tier ui|ai] [--cap c]', flags: CALL_FLAGS, run: runCall },

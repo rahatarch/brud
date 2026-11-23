@@ -5,6 +5,7 @@ import { flagText, UsageError, type ParsedArgs } from '../../../core/args.js';
 import { CommandError } from '../../../core/errors.js';
 import type { Io } from '../../../core/io.js';
 import { printData, type Style } from '../../../core/report.js';
+import { installDependencies, wantsInstall } from '../install.js';
 import { initTarget } from '../target.js';
 import { assemblyScriptFiles } from './assemblyscript.js';
 import { javaScriptFiles } from './javascript.js';
@@ -32,7 +33,7 @@ function filesFor(name: string, lang: GuestLang): Record<string, string> {
  * native-speed WebAssembly; JavaScript and TypeScript run in an interpreter
  * inside the cage. Experimental.
  */
-export async function runInitGuest(io: Io, style: Style, args: ParsedArgs): Promise<number> {
+export async function runInitGuest(io: Io, style: Style, args: ParsedArgs, install: (dir: string) => Promise<void> = installDependencies): Promise<number> {
   const lang = langOf(args);
   const { dir, name } = initTarget(io, args.positionals[0]);
   const files = filesFor(name, lang);
@@ -51,7 +52,13 @@ export async function runInitGuest(io: Io, style: Style, args: ParsedArgs): Prom
 
   const where = relative(io.cwd, dir) || '.';
 
-  printData(io, style, { dir, name, guest: true, language: LANGUAGE_NAMES[lang], files: Object.keys(files).sort() }, () => `Created a ${LANGUAGE_NAMES[lang]} guest project ${name} in ${where} (experimental).\n\nNext:\n${where === '.' ? '' : `  cd ${where}\n`}  npm install\n  npm run pack\n\nThen list dist/brud.participant.json in a composition with "official": false.\n`);
+  const installed = await wantsInstall(io, style, args, where, false);
+
+  if (installed) {
+    await install(dir);
+  }
+
+  printData(io, style, { dir, name, guest: true, language: LANGUAGE_NAMES[lang], files: Object.keys(files).sort() }, () => `Created a ${LANGUAGE_NAMES[lang]} guest project ${name} in ${where} (experimental).\n\nNext:\n${where === '.' ? '' : `  cd ${where}\n`}${installed ? '' : '  npm install\n'}  npm run pack\n\nThen list dist/brud.participant.json in a composition with "official": false.\n`);
 
   return 0;
 }

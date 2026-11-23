@@ -14,7 +14,7 @@ import { initTarget } from './target.js';
  * project has a kernel. It touches no other file and never replaces an existing config.
  */
 export async function runInitFinish(io: Io, style: Style, args: ParsedArgs, load: KernelLoader): Promise<number> {
-  if (flagOn(args, 'guest') || flagOn(args, 'kind') || flagOn(args, 'no-install')) {
+  if (flagOn(args, 'guest') || flagOn(args, 'kind') || flagOn(args, 'no-install') || flagOn(args, 'install')) {
     throw new UsageError('`brud init --finish` takes only a folder; the other init flags apply to creating a project');
   }
 

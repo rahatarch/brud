@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
@@ -10,25 +9,11 @@ import { loadPackage } from '../../core/project.js';
 import { printData, type Style } from '../../core/report.js';
 import { compositionText, findKernel, write, type KernelLoader } from './config.js';
 import { runInitFinish } from './finish.js';
+import { installDependencies, wantsInstall } from './install.js';
 import { projectFiles } from './scaffold.js';
 import { initTarget } from './target.js';
 
-export const INIT_FLAGS = { boolean: ['kind', 'guest', 'no-install', 'finish'], value: ['lang'] } as const;
-
-function installDependencies(dir: string): Promise<void> {
-  return new Promise((done, fail) => {
-    const child = spawn('npm', ['install', '--no-audit', '--no-fund'], { cwd: dir, stdio: 'inherit', shell: process.platform === 'win32' });
-
-    child.once('error', fail);
-    child.once('exit', (code) => {
-      if (code === 0) {
-        done();
-      } else {
-        fail(new CommandError('INIT_INSTALL_FAILED', `npm install exited with ${String(code)}; your files are in place. Run \`npm install\` in ${dir}, then \`npx brud init --finish\` there to write brud.config.json`));
-      }
-    });
-  });
-}
+export const INIT_FLAGS = { boolean: ['kind', 'guest', 'install', 'no-install', 'finish'], value: ['lang'] } as const;
 
 const loadOwnKernel: KernelLoader = (dir) => loadPackage<KernelPackage['module']>('@brud/kernel', dir);
 
@@ -40,7 +25,7 @@ const loadOwnKernel: KernelLoader = (dir) => loadPackage<KernelPackage['module']
  * installed. With `--no-install` (no kernel yet) the project is created without it and init exits 0,
  * telling the user to run `npm install` and then `brud init --finish`, which writes only that file.
  */
-export async function runInit(io: Io, style: Style, args: ParsedArgs, load: KernelLoader = loadOwnKernel): Promise<number> {
+export async function runInit(io: Io, style: Style, args: ParsedArgs, load: KernelLoader = loadOwnKernel, install: (dir: string) => Promise<void> = installDependencies): Promise<number> {
   if (flagOn(args, 'finish')) {
     return runInitFinish(io, style, args, load);
   }
@@ -66,13 +51,14 @@ export async function runInit(io: Io, style: Style, args: ParsedArgs, load: Kern
     await write(dir, file, text);
   }
 
-  if (!flagOn(args, 'no-install')) {
-    await installDependencies(dir);
+  const where = relative(io.cwd, dir) || '.';
+  const installed = await wantsInstall(io, style, args, where, true);
+
+  if (installed) {
+    await install(dir);
   }
 
-  const installed = !flagOn(args, 'no-install');
   const kernel = await findKernel(load, dir);
-  const where = relative(io.cwd, dir) || '.';
   const cd = where === '.' ? '' : `  cd ${where}\n`;
 
   if (kernel === undefined) {
