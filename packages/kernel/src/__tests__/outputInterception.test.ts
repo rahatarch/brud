@@ -155,7 +155,7 @@ describe('Output interception: append only', () => {
 describe('Output interception: stages and ownership', () => {
   it('returns the result as before when no admitted interceptor declares the output stage', async (t) => {
     const { report } = await run(t, [
-      { token: 'acme.input-only', interceptions: [{ target: POINT }], intercept: `() => ({ verdict: 'allow' })` },
+      { token: 'acme.input-only', interceptions: [{ target: POINT, stages: ['input'] }], intercept: `() => ({ verdict: 'allow' })` },
       giver(['acme.input-only']),
     ]);
 
@@ -170,13 +170,32 @@ describe('Output interception: stages and ownership', () => {
     const calls = '(globalThis.__stageCalls ??= [])';
     const both = { token: 'acme.both', interceptions: [{ target: POINT, stages: ['input', 'output'] }], intercept: `() => { ${calls}.push('both:input'); return { verdict: 'allow' }; }`, interceptResult: `() => { ${calls}.push('both:output'); return { verdict: 'none' }; }` };
     const onlyOut = output('acme.out', `() => { ${calls}.push('out:output'); return { verdict: 'none' }; }`);
-    const onlyIn = { token: 'acme.in', interceptions: [{ target: POINT }], intercept: `() => { ${calls}.push('in:input'); return { verdict: 'allow' }; }`, interceptResult: `() => { ${calls}.push('in:WRONG'); return { verdict: 'none' }; }` };
+    const onlyIn = { token: 'acme.in', interceptions: [{ target: POINT, stages: ['input'] }], intercept: `() => { ${calls}.push('in:input'); return { verdict: 'allow' }; }`, interceptResult: `() => { ${calls}.push('in:WRONG'); return { verdict: 'none' }; }` };
     const point = giver(['acme.both', 'acme.out', 'acme.in']);
     const inputToo = { ...point, bindings: (point.bindings ?? '').replace("const outcome =", "report.evaluate.evaluate('" + POINT + "@1', 'rate', args, { caller }); const outcome =") };
 
     await bootComposition(await writeComposition(t, [both, onlyOut, onlyIn, inputToo, { token: 'acme.asker', onRunning: `registry.resolve('${POINT}').rate('x');` }]));
 
     assert.deepEqual((globalThis as { __stageCalls?: string[] }).__stageCalls, ['both:input', 'in:input', 'both:output', 'out:output']);
+  });
+
+  it('takes part in the output stage only when it declares no stages: input must be asked for', async (t) => {
+    resetFixtureReports();
+    (globalThis as { __stageCalls?: string[] }).__stageCalls = [];
+
+    const calls = '(globalThis.__stageCalls ??= [])';
+    const plain = {
+      token: 'acme.plain',
+      interceptions: [{ target: POINT }],
+      intercept: `() => { ${calls}.push('plain:input'); return { verdict: 'block', reason: 'no' }; }`,
+      interceptResult: `() => { ${calls}.push('plain:output'); return { verdict: 'none' }; }`,
+    };
+    const point = giver(['acme.plain']);
+    const inputToo = { ...point, bindings: (point.bindings ?? '').replace('const outcome =', "report.evaluate.evaluate('" + POINT + "@1', 'rate', args, { caller }); const outcome =") };
+
+    await bootComposition(await writeComposition(t, [plain, inputToo, { token: 'acme.asker', onRunning: `registry.resolve('${POINT}').rate('x');` }]));
+
+    assert.deepEqual((globalThis as { __stageCalls?: string[] }).__stageCalls, ['plain:output']);
   });
 
   it('skips an interceptor whose declared output stage is not implemented', async (t) => {
@@ -326,7 +345,7 @@ describe('Output interception: records and declarations', () => {
     assert.equal(records.find((record) => record.event === 'interception.result.appended')?.detail.bytes, 16);
   });
 
-  it('admits stages input and output, defaults to input, and refuses anything else', () => {
+  it('admits stages input and output, leaves the default to the kernel, and refuses anything else', () => {
     const declare = (interception: Record<string, unknown>): ReturnType<typeof admitParticipantManifest> =>
       admitParticipantManifest('acme.i', { interceptions: [{ target: POINT, ...interception }] });
 

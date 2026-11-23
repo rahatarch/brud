@@ -75,9 +75,11 @@ export interface InterceptionDeclaration {
 
   /**
    * The stages this interceptor takes part in: `'input'` (it sees a call's
-   * arguments before the giver runs) and `'output'` (it may append content to
-   * the giver's result). Defaults to `['input']`. A declared stage must be
-   * implemented, or the call fails closed.
+   * arguments before the giver runs, and may modify or block them) and
+   * `'output'` (it may append content to the giver's result). Defaults to
+   * `['output']`: seeing or changing arguments must be asked for explicitly.
+   * A declared stage must be implemented. An output interceptor that is not is
+   * skipped; an input interceptor that is not blocks the call.
    */
   readonly stages?: readonly ('input' | 'output')[];
 }
@@ -638,7 +640,7 @@ function admitInterceptionPoints(value: unknown, participant: string): readonly 
       || admit.some((token) => typeof token !== 'string' || token.length === 0)
       || new Set(admit).size !== admit.length
     ) {
-      const object = Array.isArray(admit) ? admit.find((token) => isPlainObject(token) && typeof (token as { id?: unknown }).id === 'string') : undefined;
+      const object = Array.isArray(admit) ? (admit as unknown[]).find((token) => isPlainObject(token) && typeof (token as { id?: unknown }).id === 'string') : undefined;
       const hint = object === undefined ? '' : ` A token object was given; pass its id string ("${(object as { id: string }).id}") instead`;
 
       throw new ParticipantManifestError(participant, `${path}.admit must be an array of unique non-empty service token id strings.${hint}`);

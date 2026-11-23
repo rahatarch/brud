@@ -11,7 +11,7 @@ Interception lets one participant inspect, change or block calls to another part
 // giver manifest
 interceptionPoints: [{ exposure: 'acme.greet', version: 1, admit: [AuditorToken.id] }]
 // interceptor manifest
-interceptions: [{ target: 'acme.greet', version: 1 }]
+interceptions: [{ target: 'acme.greet', version: 1, stages: ['input'] }]
 // interceptor instance
 intercept(call) { return { verdict: 'allow' }; }
 ```
@@ -31,13 +31,14 @@ Verdicts: `{ verdict: 'allow' }`, `{ verdict: 'block', reason }`, `{ verdict: 'm
 An interceptor can also add content to what the giver returns, and nothing else. It cannot change, replace, remove or withhold the result, and it cannot make the call fail: an interceptor that misbehaves is skipped, and the caller still gets the giver's result.
 
 ```js
-// interceptor manifest: take part in the output stage (the default is ['input'])
+// interceptor manifest: take part in the output stage (the default)
 interceptions: [{ target: 'acme.greet', version: 1, stages: ['output'] }]
 // interceptor instance
 interceptResult(call) { return { verdict: 'append', content: { note: 'reviewed' } }; } // or { verdict: 'none' }
 ```
 
-- `stages` lists `'input'`, `'output'` or both. An interceptor takes part only in the stages it declares, and must implement each one (`intercept`, `interceptResult`). One that does not is skipped at the output stage.
+- `stages` lists `'input'`, `'output'` or both. **The default is `['output']`**: seeing or changing a call's arguments must be asked for explicitly with `stages: ['input']`. An interceptor takes part only in the stages it declares, and must implement each one (`intercept`, `interceptResult`). One that does not is skipped at the output stage, and blocks the call at the input stage.
+- An interceptor that declares no stages but implements only `intercept` never sees an argument. At the output stage it is skipped, and the skip names the missing method and the stage to declare.
 - `call` has `target`, `method`, `args` (as finally passed), the real caller, and `result`: the giver's result as a deep-frozen copy. Each interceptor sees only the original result, never another's addition.
 - The verdict is `{ verdict: 'none' }` or `{ verdict: 'append', content }`, where `content` is plain JSON. Anything else (a replace, a block, a modify, a missing `content`), a throw, a missing method, or a limit breach skips that interceptor: its contribution is dropped, the other interceptors still run, and the result is delivered. The skipped interceptor and the reason are listed in `skipped`. The input stage is different: there a throw or an invalid verdict still blocks, because an input interceptor may be a guard.
 - Interceptors run in the giver's `admit` order. The result the caller receives is an envelope: `{ result, additions: [{ interceptor, content }], interceptedBy, skipped: [{ interceptor, reason }] }`, with `result` exactly as the giver returned it, the additions in run order, the interceptors whose contribution was taken, and the interceptors that were skipped. When no admitted interceptor declares the output stage, the giver returns its result as before.

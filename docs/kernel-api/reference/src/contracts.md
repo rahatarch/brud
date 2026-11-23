@@ -1207,7 +1207,7 @@ it is not an exposure and is not reachable through `resolve`.
 
 | Property | Modifier | Type | Description |
 | ------ | ------ | ------ | ------ |
-| <a id="property-stages"></a> `stages?` | `readonly` | readonly (`"input"` \| `"output"`)[] | The stages this interceptor takes part in: `'input'` (it sees a call's arguments before the giver runs) and `'output'` (it may append content to the giver's result). Defaults to `['input']`. A declared stage must be implemented, or the call fails closed. |
+| <a id="property-stages"></a> `stages?` | `readonly` | readonly (`"input"` \| `"output"`)[] | The stages this interceptor takes part in: `'input'` (it sees a call's arguments before the giver runs, and may modify or block them) and `'output'` (it may append content to the giver's result). Defaults to `['output']`: seeing or changing arguments must be asked for explicitly. A declared stage must be implemented. An output interceptor that is not is skipped; an input interceptor that is not blocks the call. |
 | <a id="property-target"></a> `target` | `readonly` | `string` | Exposure name to intercept. |
 | <a id="property-version-2"></a> `version?` | `readonly` | `string` \| `number` | Major version of the target; defaults to 1. |
 

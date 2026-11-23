@@ -103,7 +103,7 @@ describe('Caged participants (I-07 parity)', () => {
     await bootComposition(await writeComposition(t, [
       {
         token: 'caged.guard',
-        interceptions: [{ target: POINT }],
+        interceptions: [{ target: POINT, stages: ['input'] }],
         intercept: "(call) => { (report.seen ??= []).push(call.caller.identity); return call.args[0] === 'forbidden' ? { verdict: 'block', reason: 'forbidden input' } : { verdict: 'allow' }; }",
       },
       caged('caged.giver', { ...exposure, interceptionPoints: [{ exposure: POINT, admit: ['caged.guard'] }] }, ECHO_GUEST),
@@ -121,7 +121,7 @@ describe('Caged participants (I-07 parity)', () => {
   it('a caged interceptor blocks a native giver\'s call', async (t) => {
     resetFixtureReports();
     await bootComposition(await writeComposition(t, [
-      caged('caged.guard', { interceptions: [{ target: POINT }] }, constantGuest('brud_intercept', '{"verdict":"block","reason":"caged says no"}')),
+      caged('caged.guard', { interceptions: [{ target: POINT, stages: ['input'] }] }, constantGuest('brud_intercept', '{"verdict":"block","reason":"caged says no"}')),
       {
         token: 'caged.native-giver',
         ...exposure,
@@ -284,7 +284,7 @@ describe('Caged participants (I-07 parity)', () => {
 
       await bootComposition(await writeComposition(t, [
         asyncGiver,
-        caged('caged.guard', { interceptions: [{ target: POINT }] }, wat),
+        caged('caged.guard', { interceptions: [{ target: POINT, stages: ['input'] }] }, wat),
         {
           token: 'caged.native-giver',
           ...exposure,

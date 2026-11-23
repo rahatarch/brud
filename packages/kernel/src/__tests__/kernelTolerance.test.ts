@@ -78,7 +78,7 @@ describe('a loaded participant that cannot start never stops the kernel', () => 
 
   it('leaves out a participant that depends on one that was left out', async (t) => {
     const composition = await writeComposition(t, [
-      pkg('tol.guard', { requests: { capabilities: [] }, interceptions: [{ target: 'tol.point' }] }),
+      pkg('tol.guard', { requests: { capabilities: [] }, interceptions: [{ target: 'tol.point', stages: ['input'] }] }),
       pkg('tol.giver', { exposures: [{ name: 'tol.point', version: 1, scope: 'any' }], interceptionPoints: [{ exposure: 'tol.point', version: 1, admit: ['tol.guard'] }] }),
       pkg('tol.bystander'),
     ]);

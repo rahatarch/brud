@@ -19,7 +19,7 @@ Read [Interception](../03-concepts/interception.md). Interception needs two part
 3. **Declare the interception on the interceptor.**
 
    ```js
-   interceptions: [{ target: 'acme.greet', version: 1 }]
+   interceptions: [{ target: 'acme.greet', version: 1, stages: ['input'] }]
    ```
 
 4. **Implement `intercept(call)`** on the interceptor's instance. Return one of:

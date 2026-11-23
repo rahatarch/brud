@@ -17,7 +17,7 @@ const ORDER = '(globalThis.__icptOrder ??= [])';
 
 /** An interceptor participant declaring an interception of the point. */
 function interceptor(token: string, intercept: string, target = POINT): FixtureParticipant {
-  return { token, interceptions: [{ target }], intercept };
+  return { token, interceptions: [{ target, stages: ['input'] }], intercept };
 }
 
 /**

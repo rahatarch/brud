@@ -208,7 +208,7 @@ async function boot(t: Parameters<typeof writeComposition>[0]): Promise<BrudKern
     },
     {
       token: 'acme.icpt',
-      interceptions: [{ target: POINT }],
+      interceptions: [{ target: POINT, stages: ['input'] }],
       intercept: `(call) => { ${SHAPE} (globalThis.__eventsDeclarationFixture['acme.icpt'] ??= {}).seen = shape(call.caller.capabilities); return { verdict: 'allow' }; }`,
     },
     { token: 'acme.shop', source: kindOwner },

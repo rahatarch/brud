@@ -49,7 +49,7 @@ export interface InterceptionParticipant {
 interface AdmittedInterceptor {
   readonly token: string;
   readonly identity: string;
-  /** The stages it declared; `input` unless it said otherwise. */
+  /** The stages it declared; `output` unless it said otherwise. */
   readonly stages: readonly InterceptionStage[];
 }
 
@@ -204,7 +204,7 @@ export class InterceptionService implements IInterceptionService {
 
           const declared = interceptor.manifest.interceptions.find((entry) => pointKey(entry.target, entry.version) === key);
 
-          return Object.freeze({ token, identity: interceptor.identity, stages: Object.freeze([...(declared?.stages ?? ['input'])]) });
+          return Object.freeze({ token, identity: interceptor.identity, stages: Object.freeze([...(declared?.stages ?? ['output'])]) });
         });
 
         this.#points.set(key, Object.freeze({
@@ -433,7 +433,7 @@ export class InterceptionService implements IInterceptionService {
         const instance = authority.instanceOf(interceptor.identity);
 
         if (!isResultInterceptor(instance)) {
-          throw new Error('the interceptor does not implement interceptResult');
+          throw new Error('the interceptor does not implement interceptResult (an interceptor that means to see arguments must declare the input stage)');
         }
 
         verdict = authority.runAs(interceptor.identity, () => instance.interceptResult(call));
