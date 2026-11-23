@@ -31,9 +31,9 @@
     "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "peerDependencies": {
-    "@brud/daemon": "^0.0.1",
-    "@brud/kernel": "^0.0.1",
-    "@brud/sdk": "^0.0.1"
+    "@brud/daemon": "^0.0.2",
+    "@brud/kernel": "^0.0.2",
+    "@brud/sdk": "^0.0.2"
   },
   "peerDependenciesMeta": {
     "@brud/daemon": {

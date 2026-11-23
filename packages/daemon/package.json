@@ -1,6 +1,6 @@
 {
   "name": "@brud/daemon",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Brud daemon: a neutral local host for BrudOS kernels",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -28,8 +28,8 @@
     "test": "node --import tsx --test \"src/__tests__/*.test.ts\""
   },
   "dependencies": {
-    "@brud/kernel": "^0.0.1",
-    "@brud/protocol": "^0.0.1",
+    "@brud/kernel": "^0.0.2",
+    "@brud/protocol": "^0.0.2",
     "@cotal-ai/seat": "0.160.4"
   },
   "devDependencies": {
