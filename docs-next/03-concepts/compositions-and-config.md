@@ -57,6 +57,11 @@ Hardcore pins are compiled into the kernel. For your own official participants, 
 
 The config is frozen once the kernel boots. A change to it while the kernel is running is refused, and the root config file is protected from deletion. A change between boots is a new trust decision.
 
+Two consequences follow for a host application:
+
+- It cannot edit its own root config while the kernel runs. A write fails with `CONFIG_INTEGRITY`.
+- The kernel remembers the config's content for the life of the process. If the file changes and the same process boots that path again, the boot is refused with `CONFIG_INTEGRITY`, even after the first kernel has shut down. To apply a changed composition, write it to a different config path, or restart the process. Plugin uploads work this way: they write a separate composition file and restart.
+
 ## Errors you may see while loading
 
 | Code | Meaning |
