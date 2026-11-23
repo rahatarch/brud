@@ -16,7 +16,10 @@ import type { ChainParticipant } from '../engine/callChain.js';
 import type { KernelLogger, IServiceLifecycle } from '../contracts/lifecycle.js';
 import type { KernelBootOptions } from '../contracts/kernel.js';
 import { BrudKernel } from '../engine/BrudKernel.js';
+import { LifecycleStateError } from '../engine/errors.js';
+import { KernelReloadError, refuseFrozenChange, type ReloadableKernel, type ReloadOptions } from './reload.js';
 import {
+  acceptConfigChange,
   protectConfigFile,
   recordConfigRead,
   releaseConfigProtection,
@@ -96,7 +99,7 @@ function registerBootRegistrantsHook(
 export async function bootKernel(
   configPath: string,
   options: BootKernelOptions,
-): Promise<BrudKernel> {
+): Promise<ReloadableKernel> {
   const kernel = createDeferredKernel(configPath, options);
 
   await kernel.boot({
@@ -118,7 +121,32 @@ export async function bootKernel(
 export function createDeferredKernel(
   configPath: string,
   options: ComposeKernelOptions,
-): BrudKernel {
+): ReloadableKernel {
+  return assembleKernel(configPath, options, undefined).kernel;
+}
+
+/** A kernel being assembled, with the steps a reload runs on it before the old kernel stops. */
+interface AssembledKernel {
+  readonly kernel: ReloadableKernel;
+  /** Reads, checks and composes the config without starting anything. */
+  validate(bootOptions: KernelBootOptions): Promise<void>;
+  /** Releases the config protection of a kernel that will never boot. */
+  abandon(): void;
+}
+
+/**
+ * Builds a kernel and the handles a reload needs.
+ *
+ * @param baseline - The booted config this one replaces, when it is a reload's
+ *   successor: its read supersedes the recorded config digest, and its frozen
+ *   part must match the baseline.
+ */
+function assembleKernel(
+  configPath: string,
+  options: ComposeKernelOptions,
+  baseline: BrudConfig | undefined,
+): AssembledKernel {
+  let lastBootOptions: KernelBootOptions = {};
   let loadedServices: readonly LoadedService[] = [];
   let serviceContext: KernelServiceModuleContext | undefined;
   let hardcoreBootEntries: readonly HardcoreBootEntry[] = [];
@@ -189,7 +217,7 @@ export function createDeferredKernel(
         }
       }
     },
-  });
+  }) as ReloadableKernel;
 
   let composition: Promise<void> | undefined;
   let protectedThisKernel = false;
@@ -197,10 +225,16 @@ export function createDeferredKernel(
   const compose = (bootOptions: KernelBootOptions): Promise<void> => {
     composition ??= (async (): Promise<void> => {
       const raw = await readConfig(configPath);
+      const config = parseBrudConfig(raw, configPath);
+
+      if (baseline !== undefined) {
+        refuseFrozenChange(baseline, config, configPath);
+        acceptConfigChange(configPath);
+      }
+
       recordConfigRead(configPath, raw);
       protectConfigFile(configPath);
       protectedThisKernel = true;
-      const config = parseBrudConfig(raw, configPath);
       composedConfig = config;
       const services = await loadServiceModules(config.services, configPath, raw);
       const contextOptions: Record<string, unknown> = {
@@ -266,6 +300,8 @@ export function createDeferredKernel(
 
   const boot = kernel.boot.bind(kernel);
   kernel.boot = async (bootOptions: KernelBootOptions): Promise<void> => {
+    lastBootOptions = bootOptions;
+
     try {
       await compose(bootOptions);
 
@@ -309,7 +345,54 @@ export function createDeferredKernel(
     }
   };
 
-  return kernel;
+  const abandon = (): void => {
+    if (protectedThisKernel) {
+      protectedThisKernel = false;
+      releaseConfigProtection(configPath);
+    }
+  };
+
+  const validate = async (bootOptions: KernelBootOptions): Promise<void> => {
+    try {
+      await compose(bootOptions);
+    } catch (error: unknown) {
+      abandon();
+
+      throw error;
+    }
+  };
+
+  kernel.reload = async (reloadOptions: ReloadOptions = {}): Promise<ReloadableKernel> => {
+    if (kernel.lifecycleState !== 'RUNNING') {
+      throw new LifecycleStateError('reload', kernel.lifecycleState, 'RUNNING');
+    }
+
+    const target = reloadOptions.configPath ?? configPath;
+    const bootOptions = lastBootOptions;
+    const successor = assembleKernel(target, options, composedConfig);
+
+    // Everything that can be checked without running anything is checked
+    // here, while this kernel still runs. A refusal changes nothing.
+    await successor.validate(bootOptions);
+
+    try {
+      await kernel.shutdown();
+    } catch (error: unknown) {
+      successor.abandon();
+
+      throw error;
+    }
+
+    try {
+      await successor.kernel.boot(bootOptions);
+    } catch (error: unknown) {
+      throw new KernelReloadError(target, error);
+    }
+
+    return successor.kernel;
+  };
+
+  return { kernel, validate, abandon };
 }
 
 /**

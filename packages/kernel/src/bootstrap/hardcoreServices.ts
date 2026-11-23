@@ -24,9 +24,9 @@ import type { HardcoreBootContext, HardcoreService } from './hardcore.js';
 
 /** Pinned digests of the identity registry package. */
 const IDENTITY_REGISTRY_SOURCE_HASH =
-  'e3bb1328202c40ebb4fa07c809b30a45615ce1cf9272c57bf3d54f395ec6ef00';
+  '61c3e8b2315ea32c1636206c3b3d996a1fc42861c30f1d91dacf5572dc194d2d';
 const IDENTITY_REGISTRY_BUILT_HASH =
-  'a0cf63cf7868cc5c2712fa9072a321f52df551a550899a82e74b3df839185935';
+  'd30ee7fecfca06ad1f661a9125bb0eafa1d7750467c369ea59bd553bfe107fa1';
 
 /** Pinned digests of the exposed API registry package. */
 const EXPOSED_API_REGISTRY_SOURCE_HASH =

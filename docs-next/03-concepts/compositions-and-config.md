@@ -60,7 +60,21 @@ The config is frozen once the kernel boots. A change to it while the kernel is r
 Two consequences follow for a host application:
 
 - It cannot edit its own root config while the kernel runs. A write fails with `CONFIG_INTEGRITY`.
-- The kernel remembers the config's content for the life of the process. If the file changes and the same process boots that path again, the boot is refused with `CONFIG_INTEGRITY`, even after the first kernel has shut down. To apply a changed composition, write it to a different config path, or restart the process. Plugin uploads work this way: they write a separate composition file and restart.
+- The kernel remembers the config's content for the life of the process. If the file changes and the same process boots that path again, the boot is refused with `CONFIG_INTEGRITY`, even after the first kernel has shut down. To apply a changed composition, call `reload` on the kernel the host holds (see below), or restart the process.
+
+## Reloading a composition
+
+`bootKernel` returns a kernel with a `reload` method. Only the host holds that kernel; no participant ever receives it.
+
+```js
+const next = await kernel.reload({ configPath: './brud.config.next.json' });
+```
+
+`reload` checks the new config, composes it, stops the current kernel and boots the new one with the same options. It returns the new running kernel, and the old one is disposed. `configPath` defaults to the path the kernel booted from, so a host can edit its config file while no kernel runs it, then reload.
+
+What a reload may change is every participant that is not official: which exist, their packages and their options. What it may not change is what the build froze: the official participants, in order, and the exposure owners. A config that changes those is refused with `CONFIG_RELOAD_FROZEN`; rebuild to change them. The hardcore services are re-verified against their compiled-in pins on every boot, reload included.
+
+A reload refused before the old kernel stops, because the config is invalid or touches the frozen part, changes nothing. If the new composition passes those checks but then fails to boot, the old kernel is already stopped: `reload` throws `KERNEL_RELOAD_FAILED` with the cause and the host has no running kernel. The kernel does not restart the old composition. Handles that participants resolved before the reload stop working, and the new participants get new identities. Shutdown does not wait for calls in flight.
 
 ## Errors you may see while loading
 
@@ -70,6 +84,8 @@ Two consequences follow for a host application:
 | `CONFIG_PARSE` | The file is not valid JSON |
 | `CONFIG_SCHEMA` | The shape is wrong (unknown key, missing `services`) |
 | `CONFIG_INTEGRITY` | A protected config or state path was touched |
+| `CONFIG_RELOAD_FROZEN` | A reload tried to change an official participant or an exposure owner |
+| `KERNEL_RELOAD_FAILED` | The new composition failed to boot after the old kernel was stopped |
 | `MODULE_RESOLVE` | A module could not be found or imported, or a participant package failed its digest check |
 | `MODULE_CONTRACT` | A module does not export a valid `createService` |
 | `PARTICIPANT_TIER` | A participant claims a tier it may not have, or a plain module is not declared official |

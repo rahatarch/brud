@@ -53,6 +53,20 @@ export function recordConfigRead(configPath: string, raw: string): void {
 }
 
 /**
+ * Forgets the recorded digest of a config path, so the next read is recorded
+ * as the new baseline.
+ *
+ * Only a reload the host asked for calls this: it is the host's explicit
+ * decision to run a changed composition. An ordinary boot never does, so a
+ * config that changed outside a reload is still refused.
+ *
+ * @param configPath - Path whose digest is forgotten.
+ */
+export function acceptConfigChange(configPath: string): void {
+  CONFIG_DIGESTS.delete(resolvePath(configPath));
+}
+
+/**
  * Marks the root config read-only for the lifetime of one kernel.
  *
  * Both the declared path and its real path are protected so an alias cannot

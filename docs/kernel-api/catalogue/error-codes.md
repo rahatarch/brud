@@ -40,6 +40,7 @@ Every stable, machine-readable `code` a kernel error class carries. Match on `co
 | `INTERCEPTION_BLOCKED` | `InterceptionBlockedError` | `packages/kernel/services/Interception/contracts/errors.ts` |
 | `INTERCEPTION_DECLARATION_INVALID` | `InterceptionDeclarationError` | `packages/kernel/services/Interception/contracts/errors.ts` |
 | `INVALID_LIFECYCLE_STATE` | `LifecycleStateError` | `packages/kernel/src/engine/errors.ts` |
+| `KERNEL_RELOAD_FAILED` | `KernelReloadError` | `packages/kernel/src/bootstrap/reload.ts` |
 | `MISSING_DEPENDENCY` | `MissingDependencyError` | `packages/kernel/src/engine/errors.ts` |
 | `NOT_IN_ALLOWLIST` | `AllowlistViolationError` | `packages/kernel/src/contracts/policy.ts` |
 | `OPERATION_LIMIT_EXCEEDED` | `OperationLimitExceededError` | `packages/kernel/services/Parser/contracts/errors.ts` |
