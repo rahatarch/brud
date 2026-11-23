@@ -38,6 +38,16 @@ The rule that the kernel knows nothing outside its own directory refers to repos
 
 The kernel does not know which packages exist outside its folder. It does not name them, import them, reach into them, or look them up. The kernel knows only what lives inside its own folder and what is handed to it by the host as a value.
 
+## A composition has three layers
+
+Every participant in a composition belongs to exactly one of three layers, and the layer decides who may change it and what happens when it fails.
+
+The hardcore layer is shipped and locked by the Brud Foundation. The composed layer is shipped and locked by the builder of the composition, sealed once per build, which is one release. The loaded layer belongs to the end user: it can be changed while the product is in use, by reloading the kernel, and it always runs inside the WASM cage.
+
+Hardcore and composed participants are the build. Changing either needs a rebuild. A failure in either refuses the boot, because the product cannot be what its builder shipped without them.
+
+A loaded participant is never part of the build. It can never be official. A loaded participant that is invalid, that fails to start, or that depends on one that did, is left out, and the kernel boots with everything else. If every loaded participant fails, the kernel boots as the build shipped it. A participant that was left out is always named, with the reason. It is never left out silently.
+
 ## The kernel has zero capabilities on its own
 
 Everything is a service. There is no functionality inside the kernel that is not a service. The kernel's job is to route, enforce, and hold the invariants; the capabilities are the services.
@@ -52,7 +62,9 @@ Their location alongside the kernel is a directory convention — they ship with
 
 Hardcore is decided by the Brud Foundation and compiled into the kernel release. Every composition gets the same hardcore set. A product owner cannot remove, replace, or re-pin a hardcore service, and the kernel refuses to boot without each one.
 
-Official is decided by the product owner of each composition in that composition's own frozen config. The two are independent: hardcore is the floor the Brud Foundation guarantees for every composition; official is what each composition's owner declares on top of that floor.
+Official is decided by the builder of each composition, once per build, and sealed with that build. The two are independent: hardcore is the floor the Brud Foundation guarantees for every composition; official is what each composition's builder declares on top of that floor.
+
+The guarantee holds for the published release. Someone who rebuilds the kernel with their own pins has made a different build. The kernel does not try to prevent that, and the one who rebuilds is the authority for the build they made. What the pins and the seal protect against is anyone with less authority than the builder: a person who can edit files on disk but cannot rebuild.
 
 ## No participant calls another participant through direct imports
 
@@ -70,17 +82,17 @@ The kernel routes every call to the giver and enforces the giver's answer. It do
 
 The trust root for package contents is a SHA-256 content hash. There are two kinds of pins, and they belong to different authorities.
 
-Hardcore pins are compiled into the kernel release by the Brud Foundation, so every composition gets the same root primitives; a product owner cannot remove, replace, or re-pin them. Official composed package pins are set by the product owner of each composition in that composition's frozen configuration.
+Hardcore pins are compiled into the kernel release by the Brud Foundation, so every composition built from the release gets the same root primitives; a product owner cannot remove, replace, or re-pin them without rebuilding. Composed pins are set by the builder of each composition when the build is sealed, and the seal itself is anchored in the built product, not in a file an end user can edit.
 
-In both cases, there is no publisher signature, no marketplace, and no external trust chain. The act of pinning — compiled into the kernel for hardcore, configured by the composition's owner for official composed — is the trust decision.
+In both cases, there is no publisher signature, no marketplace, and no external trust chain. The act of pinning — compiled into the kernel for hardcore, sealed by the builder for composed — is the trust decision.
 
 ## Official status is a per-composition declaration
 
-Official status is a per-composition declaration, made by the product owner of that composition in that composition's frozen configuration. The BrudOS repository declares its own officials for its own composition; it does not declare officials for anyone else. No package carries official as an intrinsic property.
+Official status is a per-composition declaration, made by the builder of that composition and sealed with the build. The BrudOS repository declares its own officials for its own composition; it does not declare officials for anyone else. No package carries official as an intrinsic property.
 
 The @brud scope is reputation, not authority: it indicates the package was made by the Brud Foundation team, and it does not confer official status. A product owner decides, in their own configuration, which packages are official in their system, @brud-scoped or not.
 
-Official status is conferred by the composition's owner at boot, verified by content hash, and enforced through the brand mechanism. It is never conferred by a naming convention, a tier, a scope, or a manifest field that any package can set on its own.
+Official status is conferred by the composition's builder at build time, verified by content hash at every boot, and enforced through the brand mechanism. It is never conferred by a naming convention, a tier, a scope, or a manifest field that any package can set on its own.
 
 ## Code the composition has not declared official runs only inside the WASM cage
 
@@ -88,7 +100,7 @@ Code the composition has not declared official runs only inside the WASM cage. T
 
 The composition's declaration of official is what determines whether a participant runs caged or uncaged, not who authored the code. A package authored by the Brud Foundation may be official in one composition and not in another. A package authored by a third party may be official in one composition and not in another.
 
-What matters is what the composition's owner has declared, in that composition's frozen configuration, verified by content hash, and enforced through the brand mechanism.
+What matters is what the composition's builder has declared and sealed, verified by content hash, and enforced through the brand mechanism.
 
 ## A root primitive is one that nothing else can exist without
 
@@ -97,6 +109,8 @@ A root primitive cannot depend on what it is meant to resolve. Identity is the i
 ## The kernel boot is one sequence
 
 Hardcore services construct and initialize before composed services. If a hardcore service is missing or broken, composed services never start. If a composed service fails, everything rolls back and the boot fails.
+
+A loaded participant is the exception to all of this: it is left out and reported, and the boot continues.
 
 Admission and initialization fail differently, by design. During admission, a service or plugin that nothing depends on, and an unofficial plugin, are pruned and boot continues. During construction and initialization, any failure rolls back every service that had already initialized, hardcore included. Admission decides what participates; initialization decides whether the participating set can complete.
 
@@ -116,7 +130,7 @@ Tools are AI-callable operations. Actions are human-only operations. The classif
 
 ## The operator's configuration is frozen at boot
 
-A config change during a running kernel is refused. A config change between boots is a new trust decision.
+A config change during a running kernel is refused. A config change between boots is a new trust decision. A host may ask the kernel to reload, which stops it and boots it again with a changed set of loaded participants. A reload can never change what the build sealed.
 
 ## Identity is issued by the kernel
 
