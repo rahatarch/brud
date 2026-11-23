@@ -11,14 +11,14 @@ function run(argv: readonly string[], isTty: boolean, env: NodeJS.ProcessEnv = {
   return main(argv, io).then((code) => ({ code, out }));
 }
 
-test('--version at a terminal shows the brand, the version, the licence and the credits', async () => {
+test('--version at a terminal shows the brand, the version, the licence and the copyright', async () => {
   const { code, out } = await run(['--version'], true, { NO_COLOR: '1' });
 
   assert.equal(code, 0);
   assert.match(out, /\|____\/ \|_\| \\_\\ /u);
   assert.match(out, /Brud CLI \d+\.\d+\.\d+/u);
   assert.match(out, /License: Apache-2\.0/u);
-  assert.match(out, /Credits: built by the Brud Foundation/u);
+  assert.match(out, /© 2026 Brud Foundation\. All rights reserved\./u);
   assert.doesNotMatch(out, /\x1b\[/u, 'NO_COLOR keeps it plain');
 });
 

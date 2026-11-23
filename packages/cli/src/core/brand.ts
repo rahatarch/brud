@@ -36,7 +36,7 @@ export function about(): string {
   return [
     `Brud CLI ${pkg.version}`,
     `License: ${pkg.license ?? 'see the package'}`,
-    'Credits: built by the Brud Foundation',
+    '© 2026 Brud Foundation. All rights reserved.',
     ...(pkg.homepage === undefined ? [] : [pkg.homepage]),
     '',
   ].join('\n');
