@@ -1,3 +1,4 @@
+import { builtinModules } from 'node:module';
 import { CommandError } from '../../../core/errors.js';
 import { loadPackage } from '../../../core/project.js';
 
@@ -15,6 +16,19 @@ const EXPORT_NAME = '__brud_module';
 /** What the guest exposes as its handler: the default export, or a named `handler` export. */
 const EPILOGUE = `\n;globalThis.handler = typeof ${EXPORT_NAME}.default === "function" ? ${EXPORT_NAME}.default : ${EXPORT_NAME}.handler;\n`;
 
+const BUILTINS = new Set(builtinModules);
+const UNRESOLVED = /^Could not resolve "([^"]+)"/u;
+
+/** Says why a Node built-in import fails, or `undefined` when the message is about anything else. */
+function explainBuiltin(text: string): string | undefined {
+  const name = UNRESOLVED.exec(text)?.[1];
+  const base = name?.replace(/^node:/u, '').split('/')[0];
+
+  return name === undefined || base === undefined || !BUILTINS.has(base)
+    ? undefined
+    : `"${name}" is a Node module, and the cage has no Node modules. Remove the import and use what the guest runtime offers instead`;
+}
+
 function describeFailure(error: unknown): string {
   const messages = (error as { errors?: readonly EsbuildMessage[] }).errors;
 
@@ -22,7 +36,7 @@ function describeFailure(error: unknown): string {
     return (error as Error).message;
   }
 
-  return messages.slice(0, 4).map((message) => `${message.location === null || message.location === undefined ? '' : `${message.location.file}:${message.location.line}: `}${message.text}`).join(' | ');
+  return messages.slice(0, 4).map((message) => `${message.location === null || message.location === undefined ? '' : `${message.location.file}:${message.location.line}: `}${explainBuiltin(message.text) ?? message.text}`).join(' | ');
 }
 
 /**

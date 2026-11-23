@@ -79,7 +79,7 @@ export default function handler(request) {
 }
 ```
 
-Return any JSON value; throw to refuse (a `code` on the error is kept). `brud.call(name, method, args)` asks the kernel to call another exposure as this participant, with exactly what its manifest requested and the givers allow. There is no Node in the cage: no `process`, files, network, `console` or clock, and importing a Node built-in fails the build. Handlers are synchronous. Types are removed, not checked (run `tsc --noEmit`). The bundled script may be up to 256 KiB.
+Return any JSON value; throw to refuse (a `code` on the error is kept). `brud.call(name, method, args)` asks the kernel to call another exposure as this participant, with exactly what its manifest requested and the givers allow. There is no Node in the cage: no `process`, files, network, `console` or clock, and importing a Node built-in such as `fs` fails the build with `PACK_COMPILE_FAILED`, and the message says the cage has no Node modules. Handlers are synchronous. Types are removed, not checked (run `tsc --noEmit`). The bundled script may be up to 256 KiB.
 
 What it costs, measured in the real cage on one Linux x64 machine (Node 22; your numbers will differ):
 

@@ -115,7 +115,15 @@ test('a TypeScript guest is bundled with its imports and its types removed', asy
 test('pack explains JavaScript build problems and writes no package when they happen', async (t) => {
   const node = guest(t, { 'src/index.js': "import { readFileSync } from 'node:fs';\nexport default () => readFileSync;\n" });
 
-  assert.match((await brud(node.dir, ['pack'])).err, /PACK_COMPILE_FAILED.*node:fs/u);
+  assert.match((await brud(node.dir, ['pack'])).err, /PACK_COMPILE_FAILED.*"node:fs" is a Node module, and the cage has no Node modules\. Remove the import/u);
+
+  const bare = guest(t, { 'src/index.js': "import { join } from 'path/posix';\nexport default () => join;\n" });
+
+  assert.match((await brud(bare.dir, ['pack'])).err, /"path\/posix" is a Node module/u);
+
+  const missing = guest(t, { 'src/index.js': "import x from './nowhere.js';\nexport default () => x;\n" });
+
+  assert.doesNotMatch((await brud(missing.dir, ['pack'])).err, /Node module/u);
 
   const syntax = guest(t, { 'src/index.js': 'export default function ( {\n' });
 
