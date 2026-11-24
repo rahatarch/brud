@@ -12,7 +12,9 @@ test('brud seal writes the seal and prints the digest the built product must hol
   const made = makeProject();
 
   t.after(made.cleanup);
-  writeFileSync(join(made.dir, 'brud.config.json'), JSON.stringify({ services: [...HARDCORES, { path: './loaded.json' }] }));
+  const bundled = join(made.dir, 'bundled.json');
+  writeFileSync(bundled, JSON.stringify({ name: 'bundled', brud: { role: 'participant' } }));
+  writeFileSync(join(made.dir, 'brud.config.json'), JSON.stringify({ services: [...HARDCORES, { path: './bundled.json' }] }));
 
   const result = await brud(made.dir, ['seal', '--json']);
 
@@ -22,7 +24,10 @@ test('brud seal writes the seal and prints the digest the built product must hol
   const text = readFileSync(report.seal, 'utf8');
 
   assert.equal(report.digest, createHash('sha256').update(text).digest('hex'));
-  assert.deepEqual((JSON.parse(text) as { participants: { path: string }[] }).participants.map((entry) => entry.path), HARDCORES.map((entry) => entry.path));
+  assert.deepEqual(
+    (JSON.parse(text) as { participants: { path: string }[] }).participants.map((entry) => entry.path),
+    [...HARDCORES.map((entry) => entry.path), './bundled.json'],
+  );
 });
 
 test('brud seal says what is wrong when the config is missing', async (t) => {

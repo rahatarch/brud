@@ -48,10 +48,10 @@ export class KernelReloadError extends Error {
   }
 }
 
-/** What a reload may not change: official entries in order, and exposure owners. */
+/** What a reload may not change: composed/official entries in order, and exposure owners. */
 function frozenPart(config: BrudConfig, sealed: ReadonlySet<string> | undefined): { readonly official: readonly string[]; readonly owners: Readonly<Record<string, string>> } {
   return {
-    official: config.services.filter((entry) => entry.official === true && (sealed === undefined || sealed.has(entry.path))).map((entry) => entry.path),
+    official: config.services.filter((entry) => (sealed !== undefined ? sealed.has(entry.path) : entry.official === true)).map((entry) => entry.path),
     owners: Object.fromEntries(Object.entries(config.exposureOwners ?? {}).sort(([a], [b]) => a.localeCompare(b))),
   };
 }

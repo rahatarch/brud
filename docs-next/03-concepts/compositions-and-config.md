@@ -63,7 +63,7 @@ The pins guarantee the published release. Someone who clones the repository, cha
 
 ## The build seal
 
-The **seal** is how the builder fixes the composed layer, once per release. It lists every official participant in order, each with a content hash. Generate it after the build is final:
+The **seal** is how the builder fixes the composed layer, once per release. It lists every participant the builder ships in the composition (both official and unofficial), each with its content hash and official declaration. Generate it after the build is final:
 
 ```sh
 npx brud seal ./brud.config.json
@@ -78,19 +78,19 @@ const kernel = await bootKernel('./brud.config.json', {
 });
 ```
 
-Keep the digest inside the built product, not in a file next to the config. A person who can edit files can edit the seal too, but cannot change the digest the product carries, so they cannot promote a participant of their own to official.
+Keep the digest inside the built product, not in a file next to the config. A person who can edit files can edit the seal too, but cannot change the digest the product carries, so they cannot promote a participant of their own to official or tamper with bundled participants.
 
 With a seal, the kernel checks at every boot, reload included:
 
 - The seal file matches its digest, or the boot is refused with `SEAL_MISMATCH`.
-- Every sealed participant is in the config, in order, with the content the build sealed, or the boot is refused with `SEAL_VIOLATION`.
-- An entry that declares itself official without being sealed is not part of the build. It is left out with `PARTICIPANT_NOT_SEALED`: only a rebuild can make a participant official.
+- Every sealed participant is in the config, in order, with the content and official status the build sealed, or the boot is refused with `SEAL_VIOLATION`.
+- An entry in `brud.config.json` that was not sealed is recognized as a loaded participant. If it declares itself official without being sealed as official, it is left out with `PARTICIPANT_NOT_SEALED`: only a rebuild can make a participant official.
 
 Without a seal, the config's own `official` flags stand. That suits development, and it means any entry in the file can claim to be official.
 
 ## Loaded participants
 
-An entry that is not declared official is a **loaded participant**. It always runs in the [WASM cage](the-wasm-cage.md) and it is never official. It is also the part of a composition an end user can change, by editing the config and [reloading](#reloading-a-composition).
+A participant that was not part of the build seal (or when running without a seal, an entry not declared official) is a **loaded participant**. It always runs in the [WASM cage](the-wasm-cage.md) and it is never official. It is also the part of a composition an end user can change, by editing the config and [reloading](#reloading-a-composition), or by uploading an extension into a user directory.
 
 A loaded participant never stops the kernel. If it cannot be loaded (its path does not resolve, its package is not valid, its module does not match its digest), cannot be admitted (its manifest is invalid, it needs a boot option that was not supplied, it needs to be official), or cannot start, the kernel leaves it out and boots without it. If every loaded participant fails, the kernel boots as the build shipped it.
 

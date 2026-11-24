@@ -16,10 +16,10 @@ interface SealingKernel {
  * `brud seal [config]`: generates the build seal for a composition.
  *
  * A builder runs it once per release, after the build is final. The seal lists
- * every official participant with a content hash. The command prints the
- * seal's digest, which the built product passes to the kernel at boot together
- * with the seal file. The kernel then runs only the official participants the
- * seal lists; anything added later is a loaded participant.
+ * every composed participant in the build with its content hash and declared
+ * trust status. The command prints the seal's digest, which the built product
+ * passes to the kernel at boot together with the seal file. Anything added
+ * later at runtime or in user config is a loaded participant.
  */
 export async function runSeal(io: Io, style: Style, args: ParsedArgs): Promise<number> {
   const configPath = resolve(io.cwd, args.positionals[0] ?? 'brud.config.json');

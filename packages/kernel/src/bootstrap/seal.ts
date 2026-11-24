@@ -10,6 +10,7 @@ import { BrudConfigError, type BrudConfig } from './config/types.js';
 
 interface SealedEntry {
   readonly path: string;
+  readonly official?: boolean;
   /** Content hash of the participant. Absent for a `kernel:` entry, whose pin is compiled into the kernel. */
   readonly sha256?: string;
 }
@@ -75,17 +76,21 @@ function sealHash(declared: string, configPath: string): string {
 }
 
 /**
- * Generates the seal for the official participants a config declares.
+ * Generates the seal for the composed participants a config declares.
  *
- * A builder runs this once per release, after the build is final.
+ * A builder runs this once per release, after the build is final. The seal
+ * lists every participant in the build's composition (both official and
+ * unofficial), each with its content hash and declared official status.
  *
  * @param configPath - The composition's config.
  */
 export function createSeal(configPath: string): CreatedSeal {
   const config = parseBrudConfig(readFileSync(configPath, 'utf8'), configPath);
-  const participants = config.services
-    .filter((entry) => entry.official === true)
-    .map((entry): SealedEntry => (entry.path.startsWith('kernel:') ? { path: entry.path } : { path: entry.path, sha256: sealHash(entry.path, configPath) }));
+  const participants = config.services.map((entry): SealedEntry => ({
+    path: entry.path,
+    ...(entry.official === true ? { official: true } : {}),
+    ...(entry.path.startsWith('kernel:') ? {} : { sha256: sealHash(entry.path, configPath) }),
+  }));
   const text = `${JSON.stringify({ format: 1, participants } satisfies SealDocument, null, 2)}\n`;
 
   return { text, digest: digestOf(text) };
@@ -97,6 +102,8 @@ export interface SealCheck {
   readonly unsealed: ReadonlySet<string>;
   /** Paths the build sealed. */
   readonly sealed: ReadonlySet<string>;
+  /** Map of sealed path to whether it was sealed as official. */
+  readonly sealedOfficial: ReadonlyMap<string, boolean>;
 }
 
 /**
@@ -104,7 +111,7 @@ export interface SealCheck {
  *
  * @throws {BrudConfigError} `SEAL_MISMATCH` when the seal file is not the one
  *   the built product holds the digest of; `SEAL_VIOLATION` when a sealed
- *   participant is missing, out of order, or its content changed.
+ *   participant is missing, repeated, out of order, its content changed, or its official status differs.
  */
 export function checkSeal(seal: SealReference, config: BrudConfig, configPath: string): SealCheck {
   let text: string;
@@ -120,16 +127,23 @@ export function checkSeal(seal: SealReference, config: BrudConfig, configPath: s
   }
 
   const document = JSON.parse(text) as SealDocument;
-  const sealed = new Set(document.participants.map((entry) => entry.path));
-  const official = config.services.filter((entry) => entry.official === true && sealed.has(entry.path));
+  const sealedMap = new Map(document.participants.map((entry) => [entry.path, entry]));
+  const sealed = new Set(sealedMap.keys());
+  const composed = config.services.filter((entry) => sealed.has(entry.path));
   const problems: string[] = [];
 
-  if (official.map((entry) => entry.path).join('\n') !== document.participants.map((entry) => entry.path).join('\n')) {
+  if (composed.map((entry) => entry.path).join('\n') !== document.participants.map((entry) => entry.path).join('\n')) {
     problems.push('the sealed participants are missing, repeated or out of order in the config');
   } else {
     for (const entry of document.participants) {
       if (entry.sha256 !== undefined && sealHash(entry.path, configPath) !== entry.sha256) {
         problems.push(`"${entry.path}" no longer matches the content the build sealed`);
+      }
+      const configEntry = composed.find((c) => c.path === entry.path);
+      const isOfficialInConfig = configEntry?.official === true;
+      const isOfficialInSeal = entry.official === true;
+      if (isOfficialInConfig !== isOfficialInSeal) {
+        problems.push(`"${entry.path}" official status in config (${String(isOfficialInConfig)}) does not match build seal (${String(isOfficialInSeal)})`);
       }
     }
   }
@@ -138,8 +152,15 @@ export function checkSeal(seal: SealReference, config: BrudConfig, configPath: s
     throw new BrudConfigError('SEAL_VIOLATION', `The composition does not match its build seal: ${problems.join('; ')}.`, configPath);
   }
 
+  const unsealed = new Set(
+    config.services
+      .filter((entry) => entry.official === true && (!sealed.has(entry.path) || sealedMap.get(entry.path)?.official !== true))
+      .map((entry) => entry.path),
+  );
+
   return {
     sealed,
-    unsealed: new Set(config.services.filter((entry) => entry.official === true && !sealed.has(entry.path)).map((entry) => entry.path)),
+    unsealed,
+    sealedOfficial: new Map(document.participants.map((entry) => [entry.path, entry.official === true])),
   };
 }
