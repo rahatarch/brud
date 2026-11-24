@@ -1,0 +1,48 @@
+{
+  "name": "@brud/db",
+  "version": "0.0.1",
+  "description": "Storage and secrets participant for BrudOS",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./participant": {
+      "types": "./dist/participant.d.ts",
+      "import": "./dist/participant.js",
+      "default": "./dist/participant.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test \"__tests__/**/*.test.ts\""
+  },
+  "peerDependencies": {
+    "@brud/kernel": "^0.0.2",
+    "@brud/sdk": "^0.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.x",
+    "tsx": "^4.23.13",
+    "typescript": "^5.9.3"
+  },
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "brud": {
+    "role": "participant"
+  }
+}
